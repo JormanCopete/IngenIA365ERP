@@ -334,6 +334,12 @@
       "tercero": true
     },
     {
+      "codigo": "26480501",
+      "nombre": "Fondo de bienestar social (descuento condicionado)",
+      "naturaleza": "Credit",
+      "tercero": true
+    },
+    {
       "codigo": "13059501",
       "nombre": "Puente de ventas a crédito con Cartera",
       "naturaleza": "Debit",
@@ -769,6 +775,11 @@
       "rol": "DesembolsoPorGirar",
       "cuenta": "24959502",
       "motivo": "ThirdPartyPayment"
+    },
+    {
+      "rol": "FondoQueSubsidia",
+      "cuenta": "26480501",
+      "motivo": "FONDOSOAT"
     },
     {
       "rol": "PuenteComercial",

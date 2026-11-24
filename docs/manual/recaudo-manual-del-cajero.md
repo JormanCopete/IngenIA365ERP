@@ -114,7 +114,9 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
 - **Lo que puede pagar sale agrupado**: Cartera (créditos), aportes y ahorros, Contabilidad y Comercial (facturas) y conceptos varios. Cada crédito
   tiene «Detalle» (o **F3** sobre el marcado): lo exigible, lo vencido, lo que vale cancelarlo, el anticipo, los saldos por concepto y sus cuotas,
   con el tamaño de texto y los centavos que cada usuario eligió en el estado de cuenta.
-- **Al elegir la persona entra solo lo exigible** (lo causado y vencido); F4 lo vuelve a traer si se quitó.
+- **Al elegir la persona ya no entra solo lo exigible** (desde el 2026-11-23): la caja muestra lo que puede pagar y lo exigible entra con
+  **«Lo exigible (F4)»** o con **«Todo para cancelar (F7)»**. Si la cooperativa quiere el comportamiento anterior, enciende
+  `Caja.CargarExigibleAlElegir` en los parámetros de Recaudo.
 - **Todo para cancelar (F7)** (2026-11-18): reemplaza «Qué paga» por todo lo que la persona debe: cada crédito por su valor de cancelación, las
   cuotas pendientes de sus cuentas y el saldo de sus facturas. Los conceptos varios y las consignaciones libres no entran.
 - **Con cuotas vencidas sólo se paga lo exigible o se cancela** (`Caja.ConMoraSoloExigible`, de fábrica Sí): sobre esa obligación no se abona a
@@ -180,3 +182,18 @@ El desglose sale de la simulación que se confirmó; un recibo anterior a este c
   busca el ítem por su identificador, y un error de una acción se avisa sin tumbar la pantalla.
 - **Concurrencia:** dos simulaciones al tiempo chocaban en el servidor. Ahora va una a la vez.
 - **Sesión vencida:** si la consulta de la caja falla por algo distinto de «no tiene caja abierta», la pantalla dice el motivo.
+
+## 11. La caja desde el 2026-11-23 (pedido del dueño)
+
+- **Un solo cobro a la vez.** Al pulsar F10 (o «Confirmar el recibo») el botón se apaga y se ve «Procesando el pago…» hasta que termina:
+  simular, registrar los medios y confirmar son un solo paso. Una segunda pulsación, o F10 sostenido, no hace nada.
+- **Lo exigible no entra solo** al elegir la persona (ver §10): se agrega con F4 o F7, o uno a uno desde la lista.
+- **Quitar todo (Ctrl+Supr)** vacía «Qué paga» y conserva a la persona y la lista de lo que puede pagar. El mismo crédito o la misma cuenta
+  no entra dos veces: si ya está, la caja lo dice y su valor se cambia en «Qué paga».
+- **Pago registrado.** Al confirmar se abre una ventana con el número del recibo en grande, lo pagado, lo recibido y las vueltas, con los
+  botones de tirilla, carta y nueva operación. Enter abre la siguiente operación, pero no en el primer segundo y medio, para que el Enter
+  que confirmó no la cierre. «Ver el pago» la vuelve a abrir.
+- **Impresión por usuario.** En la barra, «Al confirmar» elige cómo sale el recibo: «Sólo mostrar los botones» (de fábrica), «Imprimir
+  tirilla» o «Imprimir carta». Se guarda para el usuario en esa cooperativa. Con tirilla o carta, al confirmar se abre el diálogo de
+  impresión con el recibo, sin descargar el PDF; los botones Tirilla (Ctrl+P) y Carta (Ctrl+Shift+P) también imprimen en vez de
+  descargar. Si el navegador no deja imprimir desde la pantalla, el recibo se descarga como antes.

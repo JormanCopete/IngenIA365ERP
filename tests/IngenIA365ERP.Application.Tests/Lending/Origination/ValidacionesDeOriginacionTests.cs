@@ -148,6 +148,56 @@ public sealed class ValidacionesDeOriginacionTests : IAsyncLifetime
         v.Hallazgos.Should().Equal(MotivoNoExceptuable.PaymentCapacity);
     }
 
+    /// <summary>2026-11-23: <c>Originacion.ValidarIngresosYGastos</c> en «No» (general): lo que no alcanza no bloquea, sólo se avisa.</summary>
+    [Fact]
+    public async Task Sin_validar_ingresos_y_gastos_la_capacidad_que_no_alcanza_no_bloquea_y_se_avisa()
+    {
+        await ParametroAsync(Domain.Lending.Parameters.ParametrosDeCartera.OriginacionValidarIngresosYGastos, "false");
+
+        var (v, c) = await Evaluar(_o.Solicitud() with { ApplicantCapacity = new CapacityInput(1_000_000m, 900_000m, 50_000m) });
+
+        var cap = De(v, ApplicationCheckKind.PaymentCapacity, c.Solicitante.Id);
+        cap.Resultado.Should().Be(CheckOutcome.NotApplicable);
+        cap.Exceptuable.Should().BeTrue();
+        cap.Bloquea.Should().BeFalse();
+        cap.Codigo.Should().Be(ErroresDeOriginacion.CodigoCapacidadNoValidada);
+        var detalle = Detalle(cap);
+        detalle.GetProperty("validated").GetBoolean().Should().BeFalse();
+        detalle.GetProperty("insufficient").GetBoolean().Should().BeTrue();
+        v.Hallazgos.Should().NotContain(MotivoNoExceptuable.PaymentCapacity);
+        v.ConAlertas.Should().BeFalse("no validar no sube de nivel");
+    }
+
+    /// <summary>2026-11-23: en «No» por línea, una solicitud sin ingresos declarados ya no queda «No disponible»; en las demás líneas sí.</summary>
+    [Fact]
+    public async Task Sin_validar_ingresos_por_linea_una_solicitud_sin_ingresos_pasa()
+    {
+        var (antes, c0) = await Evaluar(_o.Solicitud() with { ApplicantCapacity = null });
+        De(antes, ApplicationCheckKind.PaymentCapacity, c0.Solicitante.Id).Resultado.Should().Be(CheckOutcome.Unavailable);
+
+        var linea = await _o.Db.CreditLines.AsNoTracking().SingleAsync(l => l.Code == "CONLIB");
+        await ParametroAsync(Domain.Lending.Parameters.ParametrosDeCartera.OriginacionValidarIngresosYGastos, "false", linea.Id);
+
+        var (v, c) = await Evaluar(_o.Solicitud() with { ApplicantCapacity = null });
+        var cap = De(v, ApplicationCheckKind.PaymentCapacity, c.Solicitante.Id);
+        cap.Resultado.Should().Be(CheckOutcome.NotApplicable);
+        cap.Codigo.Should().Be(ErroresDeOriginacion.CodigoCapacidadNoValidada);
+        Detalle(cap).GetProperty("insufficient").GetBoolean().Should().BeFalse();
+        v.Bloqueante(ApplicationCheckKind.PaymentCapacity).Should().BeNull();
+    }
+
+    private async Task ParametroAsync(string clave, string valor, int? linea = null)
+    {
+        _o.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = clave,
+            ScopeKind = linea is null ? Domain.Enums.Parameters.ParameterScopeKind.None : Domain.Enums.Parameters.ParameterScopeKind.CreditLine,
+            ScopeId = linea ?? 0, Value = valor, ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba", CreatedAt = _o.G.UtcNow.AddDays(-10),
+        });
+        await _o.Db.SaveChangesAsync();
+        _o.Db.ChangeTracker.Clear();
+    }
+
     [Fact]
     public async Task La_capacidad_de_descuento_en_nomina_propia_contra_el_limite_nacional()
     {

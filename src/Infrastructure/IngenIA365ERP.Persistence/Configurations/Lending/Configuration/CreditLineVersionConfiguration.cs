@@ -67,6 +67,7 @@ public class CreditLineVersionConfiguration : IEntityTypeConfiguration<CreditLin
         builder.Property(e => e.NoteRecalculation).HasConversion<int>().IsRequired();
 
         builder.Property(e => e.RepaymentChannels).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.DiscountOptions);
         builder.Property(e => e.DefaultRepaymentChannel).HasConversion<int>().IsRequired();
 
         builder.Property(e => e.ContributionsMultiple).Fraccion();

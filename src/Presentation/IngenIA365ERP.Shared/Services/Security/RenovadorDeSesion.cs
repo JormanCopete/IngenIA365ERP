@@ -265,7 +265,7 @@ public sealed class RenovadorDeSesion
             var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePolitica>(cancellationToken: ct);
             if (cuerpo is null || cuerpo.InactivityMinutes < 1 || cuerpo.MaxDurationHours < 1) return;
             Politica = new PoliticaDeSesion(
-                TimeSpan.FromMinutes(cuerpo.InactivityMinutes),
+                _inactividadDeLaCooperativa ?? TimeSpan.FromMinutes(cuerpo.InactivityMinutes),
                 TimeSpan.FromHours(cuerpo.MaxDurationHours));
             _politicaLeida = true;
         }
@@ -291,6 +291,18 @@ public sealed class RenovadorDeSesion
 
     private bool _politicaDeLaCooperativaLeida;
     private DateTime _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
+
+    /// <summary>
+    /// 2026-11-23: los minutos de inactividad de la cooperativa activa (su política de identidad, de 15 a 120), los mismos que el
+    /// refresh hace cumplir. Nulo mientras no se lean o si la API no los publica: rige el general.
+    /// </summary>
+    private TimeSpan? _inactividadDeLaCooperativa;
+
+    private void AplicarInactividadDeLaCooperativa(int? minutos)
+    {
+        _inactividadDeLaCooperativa = minutos is >= 2 and <= 24 * 60 ? TimeSpan.FromMinutes(minutos.Value) : null;
+        if (_inactividadDeLaCooperativa is { } propia) Politica = Politica with { Inactividad = propia };
+    }
 
     /// <summary>
     /// Lee de la cooperativa activa si cuenta el uso del computador. Una vez por ingreso o cambio de cooperativa; si falla,
@@ -320,6 +332,7 @@ public sealed class RenovadorDeSesion
             var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePoliticaDeLaCooperativa>(cancellationToken: ct);
             ContarActividadDelEquipo = cuerpo?.CountDeviceActivity == true;
             VentanasHeredanSesion = cuerpo?.NewWindowInheritsSession ?? true;
+            AplicarInactividadDeLaCooperativa(cuerpo?.InactivityMinutes);
             _politicaDeLaCooperativaLeida = true;
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
@@ -765,7 +778,8 @@ public sealed class RenovadorDeSesion
 
     private sealed record RespuestaDePolitica(int InactivityMinutes, int MaxDurationHours);
 
-    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity, bool? NewWindowInheritsSession = null);
+    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity, bool? NewWindowInheritsSession = null,
+        int? InactivityMinutes = null);
 }
 
 /// <summary>Los dos límites de una sesión, tal como los hace cumplir el servidor.</summary>

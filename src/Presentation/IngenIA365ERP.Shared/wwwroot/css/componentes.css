@@ -1161,6 +1161,19 @@ input[type="checkbox"], input[type="radio"] {
 .ventana-pie .barra-atajos { border-radius: 0 0 var(--radio-sm) var(--radio-sm); }
 .ventana-pie-errores { max-height: 22vh; overflow-y: auto; padding: var(--pad-sm) var(--pad-md) var(--pad-sm) var(--pad-xl); border-bottom: 1px solid var(--borde); background: var(--superficie-0); }
 .estado-guardado { font-weight: var(--peso-normal, 400); font-size: var(--texto-sm); }
+/* 2026-11-23 (pedido del dueño): las ventanas transaccionales de Comercial (factura, cotización, pedido, remisión, notas, compras) usan el mismo
+   marco del comprobante: encabezado compacto con «Más datos», las líneas con su propio desplazamiento y el pie fijo con totales y comandos. */
+.encabezado-comercial { margin-bottom: 0; }
+.mas-datos { border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-0); }
+.mas-datos > summary { cursor: pointer; padding: var(--pad-xs) var(--pad-md); font-size: var(--texto-sm); color: var(--texto-secundario); }
+.mas-datos[open] > summary { border-bottom: 1px solid var(--borde); }
+.mas-datos > .form-grid { padding: var(--pad-sm) var(--pad-md); margin-bottom: 0; }
+.lineas-comerciales tr.fila-activa > td { background: var(--acento-suave); }
+.ventana-comercial .ventana-pie-fila .pos-a-pagar { font-size: var(--texto-lg); }
+.pestanas { display: flex; gap: var(--gap-xs); margin-bottom: var(--gap-sm); }
+.tabla-de-dialogo { max-height: 50vh; overflow: auto; }
+.tabla-de-dialogo tr.fila-elegida > td { background: var(--acento-suave); }
+.tabla-de-dialogo tbody tr { cursor: pointer; }
 .guia-del-comprobante { display: flex; flex-direction: column; gap: var(--gap-sm); }
 @media (min-width: 900px) {
     .erp-layout .erp-main:has(.ventana-transaccional) { height: 100vh; height: 100dvh; min-height: 0; }
@@ -1489,6 +1502,17 @@ input[type="checkbox"], input[type="radio"] {
 .caja-disposicion .pos-boton-barra { gap: var(--gap-xs); }
 .caja-disposicion .pos-boton-barra.activo { border-color: var(--acento); color: var(--texto-primario); background: var(--acento-suave); }
 .caja-disposicion-texto { font-size: var(--texto-sm); }
+/* 2026-11-23 (pedido del dueño): la impresión del recibo por usuario, en la barra, y el «Pago registrado» claro tras confirmar. */
+.caja-impresion { display: inline-flex; align-items: center; gap: var(--gap-xs); }
+.caja-impresion select.e-input { width: auto; min-width: 12rem; }
+.caja-recibo-confirmado { font-size: var(--texto-lg); }
+.caja-recibo-confirmado b { font-size: var(--texto-xl); }
+.pago-registrado { display: flex; flex-direction: column; align-items: center; gap: var(--gap-xs); text-align: center; }
+.pago-registrado .pos-total { width: 100%; }
+.pago-registrado-icono { font-size: calc(var(--texto-2xl) * 1.6); color: var(--exito); }
+.pago-registrado-titulo { margin: 0; font-size: var(--texto-lg); font-weight: var(--peso-fuerte); color: var(--exito-texto); }
+.pago-registrado-recibo { margin: 0; font-size: var(--texto-xl); }
+.pago-registrado-recibo strong { font-size: var(--texto-2xl); font-variant-numeric: tabular-nums; }
 @media (max-width: 1200px) {
     .caja-recaudo.caja-columnas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto;
         grid-template-areas: "persona paga" "medios medios"; }

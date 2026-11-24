@@ -13,6 +13,25 @@
    y la reserva se libera sola al vencer. Cada línea muestra físico, reservado y disponible, y confirmada lo pendiente por despachar o
    facturar; «Remisionar» abre la remisión y «Facturar» la factura desde el pedido, que consumen la reserva. Anular libera la reserva. (nuevo) *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+@* 2026-11-23 (pedido del dueño): el pedido abierto es la ventana transaccional común, a pantalla completa; se vuelve a la lista con Esc. *@
+@if (_editando)
+{
+    <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Pedidos" Clases="@([TextosDeVentas.ClasePedido])" Nombre="pedido" Masculino="true" Documento="@Documento"
+                    ConExistencias="true" ConPdf="true" Volver="@Volver" TextoVolver="Volver a los pedidos" Nuevo="@Nuevo" EtiquetaPendiente="Pendiente por despachar o facturar"
+                    AvisoDeAnulacion="Anular el pedido libera lo que todavía tiene reservado; lo ya remisionado o facturado queda como está." Cambio="@CambioAsync">
+        <Acciones Context="doc">
+            @if (doc.Lines.Any(l => l.Pending is > 0))
+            {
+                <PermissionGate Required="Inventory.Sales.Create">
+                    <a class="e-btn e-outline" href="@($"/ventas/remisiones?pedido={doc.DocumentPublicId}")">Remisionar</a>
+                    <a class="e-btn e-primary" href="@($"/ventas/facturas/nueva?pedido={doc.DocumentPublicId}")">Facturar</a>
+                </PermissionGate>
+            }
+        </Acciones>
+    </EditorDelCiclo>
+}
+else
+{
 <div class="pagina">
     <div class="page-header">
         <h3>Pedidos</h3>
@@ -31,22 +50,6 @@
         </div>
     </div>
 
-    @if (_editando)
-    {
-        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Pedidos" Clases="@([TextosDeVentas.ClasePedido])" Nombre="pedido" Masculino="true" Documento="@Documento"
-                        ConExistencias="true" EtiquetaPendiente="Pendiente por despachar o facturar"
-                        AvisoDeAnulacion="Anular el pedido libera lo que todavía tiene reservado; lo ya remisionado o facturado queda como está." Cambio="@CambioAsync">
-            <Acciones Context="doc">
-                @if (doc.Lines.Any(l => l.Pending is > 0))
-                {
-                    <PermissionGate Required="Inventory.Sales.Create">
-                        <a class="e-btn e-outline" href="@($"/ventas/remisiones?pedido={doc.DocumentPublicId}")">Remisionar</a>
-                        <a class="e-btn e-primary" href="@($"/ventas/facturas/nueva?pedido={doc.DocumentPublicId}")">Facturar</a>
-                    </PermissionGate>
-                }
-            </Acciones>
-        </EditorDelCiclo>
-    }
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         <div class="tabla-desplazable">
@@ -70,6 +73,7 @@
         <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
     </IndicadorDeCarga>
 </div>
+}
 </PermissionGate>
 
 @code {
@@ -109,6 +113,12 @@
     {
         _editando = true;
         _clave = Guid.NewGuid();
+        Nav.NavigateTo("/ventas/pedidos", replace: true);
+    }
+
+    private void Volver()
+    {
+        _editando = false;
         Nav.NavigateTo("/ventas/pedidos", replace: true);
     }
 

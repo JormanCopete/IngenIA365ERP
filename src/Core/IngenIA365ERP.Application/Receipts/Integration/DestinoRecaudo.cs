@@ -21,6 +21,8 @@ public sealed class DestinoRecaudo(ISender sender, IMensajesEntrantes entrantes,
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionReversadaPorCarteraV1.Type, 1),
         (DescuentosPorPagaduriaV1.Type, 1),
         (DescuentosPorPagaduriaV2.Type, 2),
+        // 2026-11-23: la obligación nacida de una venta, para el cruce automático del anticipo (CruceAutomaticoDeAnticipos).
+        (ObligacionCreadaV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Receipts;
@@ -41,9 +43,12 @@ public sealed class DestinoRecaudo(ISender sender, IMensajesEntrantes entrantes,
                     resultados.Add(new ResultadoDeUnidad(unidad, new ResultadoDeConsumo.Rejected(leidos.Error.Code, leidos.Error.Message)));
                     continue;
                 }
-                var r = leidos.Value[0].Type == DescuentosPorPagaduriaV1.Type
+                var tipo = leidos.Value[0].Type;
+                var r = tipo == DescuentosPorPagaduriaV1.Type
                     ? await sender.Send(new IngenIA365ERP.Application.Receipts.Paymasters.ConsumePayrollDeductionFileCommand(unidad.MessagePublicIds), ct)
-                    : await sender.Send(new ConsumeLendingPaymentReversalCommand(unidad.MessagePublicIds), ct);
+                    : tipo == ObligacionCreadaV1.Type
+                        ? await sender.Send(new ConsumeObligationCreatedCommand(unidad.MessagePublicIds), ct)
+                        : await sender.Send(new ConsumeLendingPaymentReversalCommand(unidad.MessagePublicIds), ct);
                 resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

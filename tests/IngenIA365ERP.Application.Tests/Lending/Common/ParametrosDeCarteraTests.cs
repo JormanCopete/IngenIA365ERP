@@ -63,6 +63,8 @@ public class ParametrosDeCarteraTests
         // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto; de fábrica, como siempre.
         { "Contabilidad.CausacionSeparadaPorConcepto", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.DiasVigenciaDeAprobacion", "30", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-23 (pedido del dueño): no validar ingresos y gastos en las solicitudes; de fábrica, se validan.
+        { "Originacion.ValidarIngresosYGastos", "true", [N, L], EntregaDeCartera.K1 },
         { "Reservas.DiasDeVigencia", "5", [N], EntregaDeCartera.K1 },
         { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },
         { "Cupo.MoraMaximaParaVender", "0", [N, L], EntregaDeCartera.K1 },
@@ -72,8 +74,8 @@ public class ParametrosDeCarteraTests
         { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", [N], EntregaDeCartera.K1 },
         // 2026-11-17 (pedido del dueño, COOFLOPAL): quien radica una solicitud de crédito también la decide; de fábrica, no.
         { "Segregacion.QuienRadicaDecide", "false", [N], EntregaDeCartera.K1 },
-        // 2026-11-23 (pedido del dueño): qué se corrige en una solicitud devuelta; de fábrica, todo menos la línea y la oficina.
-        { "Originacion.GruposEditablesAlDevolver", "Condiciones,Destino,FormaDePago,Seguros,Capacidad,Codeudores,Recogidas,ExcepcionDePolitica,PreferenciaDeAbono,Documentos,Garantias", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-23 (pedido del dueño): qué se corrige en una solicitud devuelta; de fábrica, todo (desde el 2026-11-24).
+        { "Originacion.GruposEditablesAlDevolver", "Condiciones,Linea,Oficina,Destino,FormaDePago,Seguros,Capacidad,Codeudores,Recogidas,ExcepcionDePolitica,PreferenciaDeAbono,Documentos,Garantias", [N, L], EntregaDeCartera.K1 },
         { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
         { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
         { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },

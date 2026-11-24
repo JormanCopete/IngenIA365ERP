@@ -56,7 +56,8 @@ public class PlantillasDePuestaEnMarchaDeRecaudoTests
     {
         P.Todas.Keys.Should().BeEquivalentTo(
             [P.PuntosYCajas, P.CajerosYAlcances, P.MediosPorPunto, P.BovedasAlCorte, P.PartidasAlCorte, P.ChequesEnCanje, P.CifrasDeReferencia,
-             P.Convenios, P.Parametros]); // R2 (fase 38) suma la de convenios; la segunda ronda del 2026-10-27 (D-l), la de parámetros.
+             P.Convenios, P.Parametros, P.AnticiposAlCorte]); // R2 (fase 38) suma la de convenios; la segunda ronda del 2026-10-27 (D-l), la de parámetros;
+                                                            // 2026-11-23, la de anticipos de concepto.
         P.Todas.Values.Should().OnlyContain(d => d.EsDeUnaHoja && d.Hojas[0].Nombre == "Datos");
         P.Por(P.PartidasAlCorte)!.Hojas[0].Columna(P.Fecha)!.Obligatoria.Should().BeTrue("una partida sin fecha se rechaza (Edge Cases)");
     }

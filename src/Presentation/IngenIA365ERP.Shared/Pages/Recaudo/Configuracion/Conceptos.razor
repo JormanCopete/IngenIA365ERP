@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject ConfiguracionDeRecaudoClient Configuracion
+@inject IngenIA365ERP.Shared.Services.Core.MediosDePagoClient MediosDePago
 @inject INotificationService Notification
 
 <PageTitle>Conceptos varios - IngenIA365ERP</PageTitle>
@@ -34,12 +35,13 @@
         {
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Código</th><th>Nombre</th><th>Sentido</th><th>Tercero contable</th><th>Cuenta</th><th>Valor sugerido</th><th>Documento cruce</th><th>Factura</th><th>Aprobación</th><th>Máximo</th><th>Del sistema</th><th>Estado</th><th></th></tr></thead>
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Sentido</th><th>Tercero contable</th><th>Uso</th><th>Cuenta</th><th>Valor sugerido</th><th>Documento cruce</th><th>Factura</th><th>Aprobación</th><th>Máximo</th><th>Del sistema</th><th>Estado</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var c in _conceptos)
                         {
                             <tr>
                                 <td>@c.Code</td><td>@c.Name</td><td>@(c.Direction == 2 ? "Egreso" : "Ingreso")</td><td>@ModoDeTercero(c)</td>
+                                <td>@(c.CollectedForThirdParty ? "Recaudo para terceros" : c.IsAdvance ? $"Anticipo · se cruza con {c.AdvanceMeansCode}{(c.AdvanceCreditLineCode is { } l ? $" · solo en la línea {l}" : "")}" : "")</td>
                                 <td class="@(c.AccountCode is null ? "texto-alerta" : null)">@(c.AccountCode is { } cuenta ? $"{cuenta} · {c.AccountName}" : "Sin cuenta en la matriz")</td>
                                 <td class="numero">@c.SuggestedAmount?.ToString("N0")</td>
                                 <td>@SiNo(c.RequiresCrossDocument)</td><td>@SiNo(c.RequiresInvoice)</td><td>@SiNo(c.RequiresApproval)</td>
@@ -101,7 +103,43 @@
                     <div><label><input type="checkbox" @bind="_factura" /> Exige factura (concepto gravado)</label></div>
                     <div><label><input type="checkbox" @bind="_aprobacion" /> Exige aprobación</label></div>
                     <div><label>Valor máximo (opcional)</label><SfNumericTextBox TValue="decimal?" @bind-Value="_maximo" Format="N0" Min="0" /></div>
+                    @* 2026-11-23 (pedido del dueño): recaudo para terceros (el «solidario») y anticipo de concepto (la administración pagada antes de causarse). *@
+                    <div class="campo-ancho"><label><input type="checkbox" checked="@_paraTerceros" @onchange="@(e => { _paraTerceros = e.Value is true; if (_paraTerceros) { _anticipo = false; _modoDeTercero = 2; _cruce = true; } })" />
+                        Recaudo para terceros: lo recibido es del tercero fijo y se le paga después</label></div>
+                    <div class="campo-ancho"><label><input type="checkbox" checked="@_anticipo" @onchange="@(e => { _anticipo = e.Value is true; if (_anticipo) { _paraTerceros = false; _modoDeTercero = 1; _factura = false; } })" />
+                        Anticipo: queda como saldo a favor del asociado en este concepto y se cruza después en la caja</label></div>
+                    @if (_anticipo)
+                    {
+                        <div class="campo-ancho">
+                            <label>Medio de pago con que la caja cruza el anticipo (clase «otro»)</label>
+                            <select class="form-control" value="@(_medioDelAnticipo?.ToString() ?? "")" @onchange="@(e => _medioDelAnticipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                <option value="">Elija…</option>
+                                @foreach (var m in _mediosOtro) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name</option> }
+                            </select>
+                        </div>
+                        @* 2026-11-23 (cruce automático): con la línea, el anticipo se cruza solo cuando nace una obligación de esa línea. *@
+                        <div>
+                            <label>Línea de Cartera que cubre (opcional)</label>
+                            <input class="form-control" maxlength="20" placeholder="Código de la línea" value="@_lineaQueCubre"
+                                   @onchange="@(e => _lineaQueCubre = e.Value?.ToString()?.Trim().ToUpperInvariant())" />
+                        </div>
+                    }
                 </div>
+                @if (_paraTerceros)
+                {
+                    <p class="hint">Recaudo para terceros: la caja propone el documento cruce del período ({código}-{aaaamm}). En la matriz de Recaudo el rol «Concepto vario»
+                        con este código va a la cuenta por pagar al tercero (p. ej. 24109505), exigiendo tercero y documento cruce. Se liquida en Recaudo → Recaudo para
+                        terceros, que crea la orden de pago en Tesorería.</p>
+                }
+                @if (_anticipo)
+                {
+                    <p class="hint">Anticipo: en la matriz de Recaudo el rol «Concepto vario» con este código y el rol «Medio por cobrar» con el medio elegido van a la cuenta
+                        del anticipo (p. ej. 272095001). El medio tiene que estar habilitado en los puntos de recaudo. Los saldos del sistema anterior se cargan con la
+                        plantilla «Anticipos de concepto al corte».</p>
+                    <p class="hint">Con la línea de Cartera, cuando se factura un cargo a crédito de esa línea (por ejemplo, la administración del vehículo), el anticipo se
+                        cruza solo contra la cuota, hasta lo disponible, con un recibo «Cruce de anticipo» (cree en Tipos de documento uno de esa clase). Si no se puede,
+                        llega la alerta «Anticipo por cruzar en la caja». Sin línea, el anticipo se cruza a mano en la caja.</p>
+                }
                 <p class="hint">Un concepto que exige factura exige también el tercero y el documento cruce. La cuenta contable se configura en la matriz de
                     Recaudo de Contabilidad con el rol «Concepto vario» y este código.</p>
                 @if (_editando is { AccountCode: null })
@@ -138,6 +176,12 @@
     };
     private bool _tercero, _cruce, _factura, _aprobacion, _visible, _duplicado;
 
+    // 2026-11-23: recaudo para terceros y anticipo con su medio (los medios de la clase «otro», 99).
+    private bool _paraTerceros, _anticipo;
+    private Guid? _medioDelAnticipo;
+    private string? _lineaQueCubre;
+    private IReadOnlyList<IngenIA365ERP.Shared.Services.Core.MedioDePagoDto> _mediosOtro = [];
+
     private static string SiNo(bool v) => v ? "Sí" : "No";
 
     protected override Task OnInitializedAsync() => CargarAsync();
@@ -145,6 +189,11 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
+        if (_mediosOtro.Count == 0)
+        {
+            var medios = await MediosDePago.ListarAsync(clase: 99, activos: true);
+            if (medios.IsSuccess && medios.Value is not null) _mediosOtro = medios.Value;
+        }
         var r = await Configuracion.ConceptosAsync();
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conceptos."); return; }
         _conceptos = r.Value;
@@ -162,6 +211,10 @@
         _aprobacion = c?.RequiresApproval ?? false;
         _maximo = c?.MaxAmount;
         _sugerido = c?.SuggestedAmount;
+        _paraTerceros = c?.CollectedForThirdParty ?? false;
+        _anticipo = c?.IsAdvance ?? false;
+        _medioDelAnticipo = c?.AdvanceMeansPublicId;
+        _lineaQueCubre = c?.AdvanceCreditLineCode;
         _modoDeTercero = c?.ThirdPartyMode ?? 1;
         _terceroFijo = c?.DefaultThirdPartyPublicId is { } fijo
             ? new PersonSearchPicker.PersonSearchItem { PublicId = fijo, FullName = c.DefaultThirdPartyName ?? "Tercero", IdentificationNumber = string.Empty }
@@ -182,12 +235,12 @@
         {
             if (string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Escriba el código."); return; }
             r = await Configuracion.CrearConceptoAsync(new CrearConceptoRequest(_codigo, _nombre.Trim(), _sentido, _tercero, _cruce, _factura, _aprobacion, _maximo,
-                _modoDeTercero, fijo, _sugerido), _clave);
+                _modoDeTercero, fijo, _sugerido, _paraTerceros, _anticipo, _anticipo ? _medioDelAnticipo : null, _anticipo ? _lineaQueCubre : null), _clave);
         }
         else
         {
             r = await Configuracion.EditarConceptoAsync(_editando.PublicId, new EditarConceptoRequest(_nombre.Trim(), _tercero, _cruce, _factura, _aprobacion, _maximo,
-                _modoDeTercero, fijo, _sugerido), _clave);
+                _modoDeTercero, fijo, _sugerido, _paraTerceros, _anticipo, _anticipo ? _medioDelAnticipo : null, _anticipo ? _lineaQueCubre : null), _clave);
         }
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el concepto."); return; }
         _visible = false;

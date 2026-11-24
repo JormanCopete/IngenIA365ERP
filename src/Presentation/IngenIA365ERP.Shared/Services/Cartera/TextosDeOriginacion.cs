@@ -76,6 +76,24 @@ public static class TextosDeOriginacion
         _ => v.ToString(CultureInfo.InvariantCulture),
     };
 
+    /// <summary>
+    /// 2026-11-23: la nota de una validación que no se hizo por parámetro (<c>Originacion.ValidarIngresosYGastos</c> = «No»): lo dice y, si los
+    /// ingresos declarados no alcanzan, lo avisa. Vacío para las demás.
+    /// </summary>
+    public static string NotaDeValidacion(string? errorCode, System.Text.Json.JsonElement? detalle)
+    {
+        if (!string.Equals(errorCode, CodigosDeValidacion.CapacidadNoValidada, StringComparison.Ordinal)) return "";
+        var noAlcanza = detalle is { ValueKind: System.Text.Json.JsonValueKind.Object } d
+            && d.TryGetProperty("insufficient", out var i) && i.ValueKind == System.Text.Json.JsonValueKind.True;
+        return noAlcanza
+            ? " · no se validan ingresos y gastos en esta línea; atención: los ingresos declarados no alcanzan"
+            : " · no se validan ingresos y gastos en esta línea";
+    }
+
+    /// <summary>La clase de aviso del sistema de diseño para una validación: «No aplica» que avisa que lo declarado no alcanza va como alerta.</summary>
+    public static string ClaseDeAviso(int resultado, string? errorCode, System.Text.Json.JsonElement? detalle) =>
+        NotaDeValidacion(errorCode, detalle).Contains("no alcanzan", StringComparison.Ordinal) ? "aviso aviso-alerta" : ClaseDeAviso(resultado);
+
     /// <summary>La clase de aviso del sistema de diseño para un resultado.</summary>
     public static string ClaseDeAviso(int resultado) => resultado switch
     {

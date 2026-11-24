@@ -94,6 +94,12 @@ Mi Cooperativa → «Política de identidad»:
 - **Exigir desde**: la fecha desde la cual quien no registró su documento ya no puede entrar sin hacerlo.
   Vacía, no se exige nunca.
 - **Intentos para confirmar el documento** al activar la invitación (de 1 a 10; por defecto 3).
+- **Cierre de sesión por inactividad** (2026-11-23): los minutos sin usar el ERP tras los cuales se cierra la
+  sesión en esta cooperativa, de 15 a 120. Vacío usa el general del servidor (30). Cinco minutos antes aparece
+  «Seguir trabajando». El servidor y la pantalla cuentan los mismos minutos: el refresh rechaza con
+  `Identity.RefreshToken.InactivityExpired` la sesión que pasó ese tiempo sin rotar. La duración máxima de la
+  sesión (12 horas) no cambia. Rige desde la siguiente renovación de cada sesión abierta; el maestro sin
+  cooperativa sigue con el general. Lo cambian el administrador de la cooperativa o el maestro.
 
 ## Para soporte de la plataforma
 

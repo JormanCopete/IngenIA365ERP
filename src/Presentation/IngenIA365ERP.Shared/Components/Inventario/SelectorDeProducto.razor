@@ -130,6 +130,12 @@
     [Parameter] public bool AutoEnfocar { get; set; }
 
     /// <summary>
+    /// 2026-11-23 (pedido del dueño): el campo agrega líneas a un documento (remisión, cotización, venta, compra). Elegido el producto —digitado y
+    /// Enter, de la lista o de la ventana—, la pantalla lleva el foco a su cantidad (<see cref="ProductoElegido.PideCantidad"/>), salvo con «3*».
+    /// </summary>
+    [Parameter] public bool FlujoDeLinea { get; set; }
+
+    /// <summary>
     /// 2026-11-12: el modo de buscar. Nulo (el de toda pantalla que registra productos) = el de la cooperativa
     /// (<c>Comercial.BusquedaDeProductos</c>); las consultas lo fijan en <see cref="ModoDeBusquedaDeProductos.EnElCampo"/>.
     /// </summary>
@@ -408,7 +414,9 @@
         _mensaje = null;
         _texto = ConservarElegido ? $"{producto.Code} · {producto.Name}" : "";
         // C3: elegido de la lista en «EnElCampo» (y sin «3*»), la pantalla lleva el foco a la cantidad; si no, vuelve a este campo.
-        var pideCantidad = desdeLaLista && ModoEfectivo == ModoDeBusquedaDeProductos.EnElCampo && cantidad is null;
+        // 2026-11-23 (pedido del dueño): en las líneas de un documento (FlujoDeLinea) siempre a la cantidad salvo con «3*», digitado y Enter o
+        // elegido en la ventana; la ráfaga del lector que cae en la cantidad vuelve sola al producto (data-lector).
+        var pideCantidad = cantidad is null && (FlujoDeLinea || (desdeLaLista && ModoEfectivo == ModoDeBusquedaDeProductos.EnElCampo));
         await Elegido.InvokeAsync(new ProductoElegido(producto, empaque, cantidad, pideCantidad));
         if (!pideCantidad && !ConservarElegido) _enfocar = true;
         StateHasChanged();

@@ -50,14 +50,25 @@ public static class VentanasConSesion
 /// <summary>Lo que la pestaña necesita saber de la cooperativa activa para contar la inactividad.</summary>
 public sealed record PoliticaDeSesionDeLaCooperativaQuery : IRequest<Result<PoliticaDeSesionDeLaCooperativaDto>>;
 
-public sealed record PoliticaDeSesionDeLaCooperativaDto(bool CountDeviceActivity, bool NewWindowInheritsSession = true);
+/// <param name="InactivityMinutes">2026-11-23: los minutos de inactividad de la cooperativa (su política de identidad o el general):
+/// la pestaña cuenta los mismos que el refresh hace cumplir. Nulo si no se pudo leer (la pestaña sigue con el general).</param>
+public sealed record PoliticaDeSesionDeLaCooperativaDto(bool CountDeviceActivity, bool NewWindowInheritsSession = true, int? InactivityMinutes = null);
 
-public sealed class PoliticaDeSesionDeLaCooperativaQueryHandler(IApplicationDbContext db)
+public sealed class PoliticaDeSesionDeLaCooperativaQueryHandler(
+    IApplicationDbContext db,
+    ICurrentTenantService? tenant = null,
+    Identity.Politica.IInactividadDeLaCooperativa? inactividad = null)
     : IRequestHandler<PoliticaDeSesionDeLaCooperativaQuery, Result<PoliticaDeSesionDeLaCooperativaDto>>
 {
     public async Task<Result<PoliticaDeSesionDeLaCooperativaDto>> Handle(
-        PoliticaDeSesionDeLaCooperativaQuery request, CancellationToken ct) =>
-        Result.Success(new PoliticaDeSesionDeLaCooperativaDto(
+        PoliticaDeSesionDeLaCooperativaQuery request, CancellationToken ct)
+    {
+        int? minutos = null;
+        if (inactividad is not null && Guid.TryParse(tenant?.TenantId, out var cooperativa))
+            minutos = (int)Math.Round((await inactividad.DeAsync(cooperativa, ct)).TotalMinutes);
+        return Result.Success(new PoliticaDeSesionDeLaCooperativaDto(
             await ActividadDelEquipoEnLaSesion.ActivaAsync(db, ct),
-            await VentanasConSesion.HeredanAsync(db, ct)));
+            await VentanasConSesion.HeredanAsync(db, ct),
+            minutos));
+    }
 }

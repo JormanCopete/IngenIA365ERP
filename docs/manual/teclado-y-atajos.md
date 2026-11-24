@@ -77,20 +77,47 @@ Conserva sus teclas: F2 buscar, F3 cantidad, F4 cliente, F6 vendedor, F7 descuen
 - La lista de productos muestra el precio que aplica, el disponible y los empaques.
 - Los diálogos se aplican con Enter.
 
-## Factura de oficina
+## Ventanas de Comercial (factura, cotización, pedido, remisión, nota débito)
+
+Desde el 2026-11-23 (pedido del dueño) todas usan la misma ventana, la del comprobante contable. Arriba va un encabezado
+compacto; lo secundario (vencimiento, referencia, descuento al total, notas y campos de la cooperativa) queda en «Más
+datos». Las líneas se desplazan solas y el pie, con los totales, los botones y la barra de atajos, siempre se ve. Cada
+atajo es también un botón de la barra; si no aplica en ese momento sale gris, con el motivo al pasar el ratón.
 
 | Tecla | Qué hace |
 |---|---|
-| F2 | Ir al buscador de productos |
-| F4 | Ir al cliente |
-| F10 | Ir a los pagos; con los pagos completos, confirmar |
-| Ctrl+Supr | Quitar la línea |
-| Enter | Tras confirmar, abrir una factura nueva |
-| Ctrl+P | Tras confirmar, imprimir en carta |
+| F1 | Ayuda del campo |
+| F2 | Buscar producto (según `Comercial.BusquedaDeProductos`: la ventana por nombre o el campo) |
+| F3 | Ir al campo de producto para una línea nueva |
+| F4 | Buscar el cliente en una ventana: se escribe el documento o el nombre, ↑ ↓ recorren y Enter elige |
+| F8 | Traer documento (factura): remisiones por facturar del cliente o una cotización |
+| F9 | Guardar el borrador (la factura además se guarda sola) |
+| F10 | Medios de pago y, con los pagos completos, confirmar. Sin pagos (cotización, pedido, remisión), confirmar |
+| Ctrl+Supr | Quitar la línea donde está el cursor |
+| Ctrl+P | Imprimir: la factura confirmada; la cotización, el pedido y la remisión, en cualquier momento |
+| Esc | En cotizaciones, pedidos, remisiones y notas débito, volver a la lista |
 
-- Al elegir un producto, el cursor va a la cantidad. Enter pasa al precio, al descuento y de vuelta al buscador.
-- El borrador se guarda solo.
-- Tipo, bodega y vendedor se proponen como en la última factura del equipo.
+**Las líneas.** El recorrido es el mismo en todas: producto → (placa, si el producto la pide) → cantidad → precio →
+descuento → otra vez el producto. Enter y Tab hacen lo mismo; Shift+Tab devuelve.
+
+- Al elegir el producto (digitado y Enter, de la lista o de la ventana F2), el cursor va a su cantidad. Con «3*código»
+  la cantidad ya va y el cursor se queda en el producto.
+- La lectura del lector de códigos que cae en una cantidad vuelve sola al campo de producto.
+- Si el mismo producto vuelve a entrar con la misma unidad y el mismo precio, y no pide lote, serie ni placa, se suma
+  su cantidad a la línea que ya lo tiene. Si no, va en una línea nueva.
+
+**Factura desde remisiones o cotización.** «Traer el pedido» se retiró. La factura trae documentos con **F8**:
+
+- **Remisiones por facturar.** Se eligen una o varias del mismo cliente y se abre la factura desde remisiones, que
+  trae lo pendiente de cada línea. Para facturar en parte se baja la cantidad (al precio de la remisión); subirla
+  sobre lo pendiente no se puede. Si la factura en curso ya tenía líneas, queda guardada como borrador.
+- **Cotizaciones.** La de siempre: vigente con sus precios, vencida con los de hoy.
+
+La remisión confirmada tiene **Imprimir** y **Facturar** (mientras tenga algo por facturar). Los pedidos siguen su
+camino: pedido → remisión → factura.
+
+**Factura de oficina, además:** el borrador se guarda solo y el título dice si quedó guardado. Tipo, bodega y vendedor se
+proponen como en la última factura del equipo. Al confirmar, Enter abre una nueva y Ctrl+P imprime en carta.
 
 ## Comprobante contable
 
@@ -101,7 +128,8 @@ Conserva sus teclas: F2 buscar, F3 cantidad, F4 cliente, F6 vendedor, F7 descuen
 | F1 | Ayuda del campo donde está el cursor |
 | F2 | Buscar en el campo: cuenta, tercero, tipo de documento cruce, centro, sucursal o tipo de comprobante |
 | F3 | Línea nueva debajo de la activa; repite tercero, centro, sucursal y detalle |
-| F4 | Duplicar la línea activa, sin los importes |
+| F4 | Buscar el tercero de la línea activa (en el campo o en la ventana, según el parámetro) |
+| Ctrl+D | Duplicar la línea activa, sin los importes (hasta el 2026-11-23 era F4) |
 | F6 | Balancear: poner en la línea activa lo que falta para cuadrar |
 | Ctrl+Supr | Quitar las líneas seleccionadas o, si no hay selección, la activa. Si son varias, pide confirmación |
 | F9 | Guardar el borrador. Desde ese momento cada cambio se guarda solo |

@@ -34,6 +34,7 @@ public class DisbursementOrderConfiguration : IEntityTypeConfiguration<Disbursem
         builder.Property(e => e.GrossAmount).Monto().IsRequired();
         builder.Property(e => e.PayoffAmount).Monto().IsRequired();
         builder.Property(e => e.NetAmount).Monto().IsRequired();
+        builder.Property(e => e.SubsidyAmount).Monto().IsRequired().HasDefaultValue(0m);
         builder.Property(e => e.ScheduledDate).IsRequired();
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
         builder.Property(e => e.IssuedAt).IsRequired();

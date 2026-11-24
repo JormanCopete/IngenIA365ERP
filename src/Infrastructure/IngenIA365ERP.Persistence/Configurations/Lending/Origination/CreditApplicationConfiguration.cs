@@ -26,6 +26,8 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
         builder.Property(e => e.DebtorKind).HasConversion<int>().IsRequired();
         builder.Property(e => e.RequestedAmount).Monto().IsRequired();
+        builder.Property(e => e.AssetValue).Monto();
+        builder.Property(e => e.DiscountOptionCode).HasMaxLength(10);
         builder.Property(e => e.Periodicity).HasConversion<int?>();
         builder.Property(e => e.AmortizationSystem).HasConversion<int?>();
         builder.Property(e => e.GraceKind).HasConversion<int?>();
@@ -51,6 +53,7 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.CancelReason).HasMaxLength(500);
 
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.ApplicantPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.SupplierPersonId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLineVersion>().WithMany().HasForeignKey(e => e.CreditLineVersionId).OnDelete(DeleteBehavior.Restrict);

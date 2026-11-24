@@ -101,9 +101,9 @@ public sealed class CooperativasClient(HttpClient http, CentralAuthClient auth)
 
     public async Task<InvitationApiResult<PoliticaDeIdentidad>> GuardarPoliticaDeIdentidadAsync(
         Guid tenantPublicId, IReadOnlyList<string> tiposAceptados, DateOnly? documentoExigidoDesde, int intentosAlActivar,
-        CancellationToken ct = default) =>
+        int? minutosDeInactividad = null, CancellationToken ct = default) =>
         await EnviarAsync<PoliticaDeIdentidad>(HttpMethod.Put, $"/api/tenants/{tenantPublicId}/identity-policy",
-            new { tiposAceptados, documentoExigidoDesde, intentosAlActivar }, ct);
+            new { tiposAceptados, documentoExigidoDesde, intentosAlActivar, minutosDeInactividad }, ct);
 
     // -------------------------------------------------------------- envio --
 
@@ -178,7 +178,9 @@ public sealed record PoliticaDeIdentidad(
     IReadOnlyList<string> TiposAceptados,
     IReadOnlyList<TipoDeDocumentoDeAcceso> Catalogo,
     DateOnly? DocumentoExigidoDesde,
-    int IntentosAlActivar);
+    int IntentosAlActivar,
+    int? MinutosDeInactividad = null,
+    int MinutosDeInactividadGeneral = 30);
 
 public sealed record TipoDeDocumentoDeAcceso(string Codigo, string Nombre, string Prefijo, bool AdmiteLetras);
 

@@ -1,11 +1,14 @@
 @page "/compras/recepciones/nueva"
 @page "/compras/recepciones/{Id:guid}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Teclado
 @using IngenIA365ERP.Shared.Components.Compras
 @using IngenIA365ERP.Shared.Models.Compras
 @using IngenIA365ERP.Shared.Services.Compras
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 @inject ComprasClient Compras
 @inject InventarioClient Inventario
 @inject INotificationService Notification
@@ -23,7 +26,7 @@
    pantalla con ?order= prellenada. Lo recibido de más sólo entra dentro de la tolerancia (lo decide el servidor). I5 (T847): con fecha
    anterior, el impacto en costos antes de confirmar. *@
 <PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
-<div class="pagina">
+<div class="ventana-transaccional ventana-comercial">
     <div class="page-header">
         <h3>@Titulo</h3>
         <div class="toolbar">
@@ -91,56 +94,58 @@
                         <SfButton CssClass="e-outline" Disabled="@(_orden is null)" OnClick="@(() => TraerOrdenAsync(_orden!.Value))">Recibir lo pendiente de la orden</SfButton>
                     </div>
                 }
-                <SelectorDeProducto Operacion="OperacionDeLaLinea.Compra" Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto @ref="_selector" Operacion="OperacionDeLaLinea.Compra" IdCampo="compra-producto" Etiqueta="Agregar producto (F2)" Bodega="@_bodega" FlujoDeLinea="true" Elegido="@AgregarLineaAsync" />
             </div>
         }
 
-        <div class="tabla-desplazable">
-            <table class="data-grid">
-                <thead>
-                    <tr>
-                        <th>#</th><th>Producto</th><th>Unidad</th><th>Orden</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
-                        @if (ConSeguimiento) { <th>Lote / serie</th> }
-                        @if (_doc?.Document.Lines.Any(l => l.UnitCost is not null) == true) { <th class="numero">Costo unitario</th> }
-                        @if (_doc?.LineBalances.Count > 0) { <th class="numero">Por facturar</th><th class="numero">Devuelto</th> }
-                        @if (Editable) { <th></th> }
-                    </tr>
-                </thead>
-                <tbody>
-                    @for (var i = 0; i < _lineas.Count; i++)
-                    {
-                        var indice = i;
-                        var l = _lineas[i];
-                        var guardada = _doc?.Document.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
-                        var saldo = _doc?.LineBalances.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+        <div class="lineas-del-comprobante lineas-comerciales">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
                         <tr>
-                            <td>@(indice + 1)</td>
-                            <td>@l.Producto</td>
-                            <td>@l.Unidad</td>
-                            <td>@l.Orden</td>
-                            <td class="numero">@CampoNumero(l.Cantidad, v => { l.Cantidad = v; Reestimar(l); })</td>
-                            <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
-                            <td class="numero">@CampoNumero(l.Precio, v => { l.Precio = v; Reestimar(l); })</td>
-                            <td class="numero" title="@(l.DescuentoDeLaOrden && l.TasaDeLaOrden > 0m ? $"El de la orden: {l.TasaDeLaOrden:P2} de lo que se recibe." : null)">@CampoNumero(l.Descuento, v => { l.Descuento = v; l.DescuentoDeLaOrden = false; })</td>
-                            @if (ConSeguimiento)
-                            {
-                                <td>
-                                    @if (Editable && (l.ControlaLote || l.ControlaSerie))
-                                    {
-                                        @* I6 (T938): la recepción es una entrada: pide lote y vencimiento; la serie con el lector, una unidad por serie. *@
-                                        <SelectorDeLote Producto="@l.ProductPublicId" Entrada="true" ControlaLote="@l.ControlaLote" ControlaVencimiento="@l.ControlaVencimiento"
-                                                        ControlaSerie="@l.ControlaSerie" @bind-Lote="l.Lote" @bind-Vencimiento="l.Vencimiento" @bind-Serie="l.Serie" />
-                                    }
-                                    else { @string.Join(" · ", new[] { l.Lote, l.Vencimiento?.ToString("dd/MM/yyyy"), l.Serie }.Where(x => !string.IsNullOrEmpty(x))) }
-                                </td>
-                            }
-                            @if (_doc?.Document.Lines.Any(x => x.UnitCost is not null) == true) { <td class="numero">@guardada?.UnitCost?.ToString("N6")</td> }
-                            @if (_doc?.LineBalances.Count > 0) { <td class="numero">@saldo?.PendingToInvoice.ToString("N4")</td><td class="numero">@saldo?.Returned.ToString("N4")</td> }
-                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
+                            <th>#</th><th>Producto</th><th>Unidad</th><th>Orden</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
+                            @if (ConSeguimiento) { <th>Lote / serie</th> }
+                            @if (_doc?.Document.Lines.Any(l => l.UnitCost is not null) == true) { <th class="numero">Costo unitario</th> }
+                            @if (_doc?.LineBalances.Count > 0) { <th class="numero">Por facturar</th><th class="numero">Devuelto</th> }
+                            @if (Editable) { <th></th> }
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _lineas.Count; i++)
+                        {
+                            var indice = i;
+                            var l = _lineas[i];
+                            var guardada = _doc?.Document.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+                            var saldo = _doc?.LineBalances.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+                            <tr class="@(indice == _lineaActiva ? "fila-activa" : null)" data-zona-teclado data-linea data-siguiente="#compra-producto" data-enter="avanza" @onfocusin="@(() => _lineaActiva = indice)">
+                                <td>@(indice + 1)</td>
+                                <td>@l.Producto</td>
+                                <td>@l.Unidad</td>
+                                <td>@l.Orden</td>
+                                <td class="numero">@CampoNumero(l.Cantidad, v => { l.Cantidad = v; Reestimar(l); }, $"compra-linea-{indice}-cantidad")</td>
+                                <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
+                                <td class="numero">@CampoNumero(l.Precio, v => { l.Precio = v; Reestimar(l); })</td>
+                                <td class="numero" title="@(l.DescuentoDeLaOrden && l.TasaDeLaOrden > 0m ? $"El de la orden: {l.TasaDeLaOrden:P2} de lo que se recibe." : null)">@CampoNumero(l.Descuento, v => { l.Descuento = v; l.DescuentoDeLaOrden = false; })</td>
+                                @if (ConSeguimiento)
+                                {
+                                    <td>
+                                        @if (Editable && (l.ControlaLote || l.ControlaSerie))
+                                        {
+                                            @* I6 (T938): la recepción es una entrada: pide lote y vencimiento; la serie con el lector, una unidad por serie. *@
+                                            <SelectorDeLote Producto="@l.ProductPublicId" Entrada="true" ControlaLote="@l.ControlaLote" ControlaVencimiento="@l.ControlaVencimiento"
+                                                            ControlaSerie="@l.ControlaSerie" @bind-Lote="l.Lote" @bind-Vencimiento="l.Vencimiento" @bind-Serie="l.Serie" />
+                                        }
+                                        else { @string.Join(" · ", new[] { l.Lote, l.Vencimiento?.ToString("dd/MM/yyyy"), l.Serie }.Where(x => !string.IsNullOrEmpty(x))) }
+                                    </td>
+                                }
+                                @if (_doc?.Document.Lines.Any(x => x.UnitCost is not null) == true) { <td class="numero">@guardada?.UnitCost?.ToString("N6")</td> }
+                                @if (_doc?.LineBalances.Count > 0) { <td class="numero">@saldo?.PendingToInvoice.ToString("N4")</td><td class="numero">@saldo?.Returned.ToString("N4")</td> }
+                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <ImpuestosDeCompra Renglones="@(_doc?.Document.TaxLines ?? [])" Totales="@_doc?.Document.Totals" />
@@ -156,6 +161,10 @@
             </ul>
         }
     </IndicadorDeCarga>
+    <div class="ventana-pie">
+        <BarraDeAtajos Comandos="@_comandos" Ejecutar="@Tecla" />
+    </div>
+    <VentanaDeTercero @bind-Visible="_buscarProveedor" Titulo="Buscar proveedor (F4)" FiltroRol="supplier" Elegido="@(p => { _proveedor = p; _enfocar = "#compra-producto"; })" />
 </div>
 
 <SfDialog @bind-Visible="_mostrarMotivo" Header="@(_anular ? "Anular la recepción" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
@@ -175,6 +184,92 @@
 </PermissionGate>
 
 @code {
+    // 2026-11-23 (pedido del dueño): la ventana transaccional común —encabezado, líneas que se desplazan y pie fijo con la barra de comandos
+    // clicable— y el mapa único de teclas: F2 producto, F3 línea nueva, F4 proveedor, F9 guardar, F10 confirmar, Ctrl+Supr quitar la línea,
+    // Esc volver a la lista.
+    private TablaDeComandos? _comandos;
+    private DotNetObjectReference<Recepcion>? _referenciaNet;
+    private int? _registroDeTeclas;
+    private SelectorDeProducto? _selector;
+    private int _lineaActiva = -1;
+    private bool _buscarProveedor;
+
+    private bool HayVentanaAbierta => _selector?.VentanaAbierta == true || _buscarProveedor;
+
+    private TablaDeComandos ArmarComandos() => new(
+    [
+        new("F2", "producto", () => _selector?.TeclaF2Async() ?? Task.CompletedTask, () => Editable && _selector is not null && !HayVentanaAbierta),
+        new("F3", "línea nueva", () => { _enfocar = "#compra-producto"; return Task.CompletedTask; }, () => Editable && !HayVentanaAbierta),
+        new("F4", "proveedor", () => { _buscarProveedor = true; return Task.CompletedTask; }, () => Editable && !HayVentanaAbierta),
+        new("F9", "guardar", () => GuardarAsync(false), () => Editable && !_guardado.Activa && !HayVentanaAbierta),
+        new("F10", "confirmar", ConfirmarAsync, () => Puede("Confirm") && !_guardado.Activa && !HayVentanaAbierta,
+            PorQueNo: () => _doc is null ? "Guarde primero el borrador (F9)." : null),
+        new("Ctrl+Delete", "quitar línea", () => { QuitarLineaActiva(); return Task.CompletedTask; }, () => Editable && _lineaActiva >= 0 && _lineaActiva < _lineas.Count,
+            TeclaVisible: "Ctrl+Supr", PorQueNo: () => Editable ? "Elija primero una línea." : null),
+        new("Escape", "volver a la lista", () => { Nav.NavigateTo("/compras/recepciones"); return Task.CompletedTask; }, () => !HayVentanaAbierta, TeclaVisible: "Esc"),
+    ]);
+
+    private void QuitarLineaActiva()
+    {
+        if (_lineaActiva < 0 || _lineaActiva >= _lineas.Count) return;
+        _lineas.RemoveAt(_lineaActiva);
+        _lineaActiva = -1;
+        _enfocar = "#compra-producto";
+    }
+
+    /// <summary>Lo que avisa teclado.js (o un botón de la barra): una tecla de la tabla de comandos.</summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        _comandos ??= ArmarComandos();
+        try
+        {
+            var r = await _comandos.EjecutarAsync(tecla);
+            if (r.Aviso is { } aviso) await Notification.WarningAsync(aviso);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await Notification.ErrorAsync($"No se pudo completar la acción ({ex.Message}). Intente de nuevo.");
+        }
+        StateHasChanged();
+    });
+
+    private async Task RegistrarTeclasAsync()
+    {
+        if (_registroDeTeclas is not null) return;
+        _comandos ??= ArmarComandos();
+        _referenciaNet = DotNetObjectReference.Create(this);
+        try
+        {
+            _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet,
+                new[] { "F2", "F3", "F4", "F9", "F10", "Ctrl+Delete", "Escape" });
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas del documento no se registraron"); _registroDeTeclas = -1; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referenciaNet?.Dispose();
+    }
+
+    /// <summary>2026-11-23 (pedido del dueño): a dónde lleva el foco el próximo render (la cantidad de la línea recién agregada).</summary>
+    private string? _enfocar;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (true) await RegistrarTeclasAsync();
+        if (_enfocar is not { } selector) return;
+        _enfocar = null;
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+    }
+
     private sealed class LineaForm
     {
         public Guid? LinePublicId { get; set; }
@@ -404,13 +499,28 @@
         var p = producto.Value;
         var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
         _seguimiento[p.PublicId] = (p.TracksLot, p.TracksExpiry, p.TracksSerial);
-        _lineas.Add(new LineaForm
+        var unidad = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId;
+        // 2026-11-23 (decisión del dueño): el mismo producto y unidad, sin lote ni serie y sin línea de la orden, suma su cantidad.
+        var indice = p.TracksLot || p.TracksSerial ? -1
+            : _lineas.FindIndex(x => x.ProductPublicId == p.PublicId && x.UnitPublicId == unidad && x.OrderLinePublicId is null && !x.ControlaLote && !x.ControlaSerie);
+        if (indice >= 0)
         {
-            ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
-            UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
-            ControlaLote = p.TracksLot, ControlaVencimiento = p.TracksExpiry, ControlaSerie = p.TracksSerial,
-            Cantidad = elegido.Cantidad ?? 1m,
-        });
+            _lineas[indice].Cantidad += elegido.Cantidad ?? 1m;
+            Reestimar(_lineas[indice]);
+        }
+        else
+        {
+            _lineas.Add(new LineaForm
+            {
+                ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
+                UnitPublicId = unidad, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+                ControlaLote = p.TracksLot, ControlaVencimiento = p.TracksExpiry, ControlaSerie = p.TracksSerial,
+                Cantidad = elegido.Cantidad ?? 1m,
+            });
+            indice = _lineas.Count - 1;
+        }
+        // 2026-11-23: elegido el producto, el foco va a la cantidad de su línea (con «3*» se queda en el producto).
+        if (elegido.PideCantidad) _enfocar = $"#compra-linea-{indice}-cantidad";
         if (_doc is not null) await GuardarAsync(true);
     }
 
@@ -420,11 +530,11 @@
         if (_doc is not null) await GuardarAsync(true);
     }
 
-    private RenderFragment CampoNumero(decimal valor, Action<decimal> fijar) => __builder =>
+    private RenderFragment CampoNumero(decimal valor, Action<decimal> fijar, string? id = null) => __builder =>
     {
         if (Editable)
         {
-            <input class="e-input numero" type="number" min="0" step="any" value="@valor.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+            <input id="@id" data-lector="@(id is null ? null : "#compra-producto")" class="e-input numero" type="number" min="0" step="any" value="@valor.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="@(e => { if (decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v)) fijar(v); })"
                    @onblur="@(() => _doc is not null ? GuardarAsync(true) : Task.CompletedTask)" />
         }

@@ -61,6 +61,7 @@ public class LoanTermsVersionConfiguration : IEntityTypeConfiguration<LoanTermsV
         builder.Property(e => e.NoteRecalculation).HasConversion<int>().IsRequired();
 
         builder.Property(e => e.Insurances).IsRequired();
+        builder.Property(e => e.SubsidizedPurchase);
         builder.Property(e => e.ResultingEffectiveRate).TasaEquivalente();
         builder.Property(e => e.ChargesSpread).TasaEquivalente();
         builder.Property(e => e.InputsSha256).HasMaxLength(EntidadDeCartera.Huella).IsRequired();

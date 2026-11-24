@@ -18,6 +18,9 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
     public const string ChequesEnCanje = "recaudo.cheques-en-canje";
     public const string CifrasDeReferencia = "recaudo.cifras-de-referencia";
 
+    /// <summary>2026-11-23 (pedido del dueño): los anticipos de concepto que vienen del sistema anterior (la administración pagada por adelantado).</summary>
+    public const string AnticiposAlCorte = "recaudo.anticipos-al-corte";
+
     /// <summary>Feature 015, R2 (fase 38, T0434; FR-157 parte R2): los convenios de recaudo con su primera versión.</summary>
     public const string Convenios = "recaudo.convenios";
 
@@ -138,6 +141,13 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
             new(VigenteDesde, TipoDeValor.Fecha, Reglas: "vacío = hoy")),
         [Parametros] = Una(Parametros, "Parámetros de Recaudo",
             IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Columnas("Caja.EgresosVarios", "false")),
+        [AnticiposAlCorte] = Una(AnticiposAlCorte, "Anticipos de concepto al corte",
+            new(Documento, TipoDeValor.Persona, Obligatoria: true, Largo: 20, Reglas: "documento del asociado dueño del anticipo", Ejemplo: "1098765432"),
+            new(Concepto, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "código de un concepto vario marcado «anticipo»", Ejemplo: "ANTADM"),
+            new(Oficina, TipoDeValor.Sucursal, Obligatoria: true, Ejemplo: "001"),
+            new(Fecha, TipoDeValor.Fecha, Obligatoria: true, Reglas: "fecha en que se recibió el anticipo; no futura"),
+            new(Valor, TipoDeValor.Monto, Obligatoria: true, Reglas: "el saldo del anticipo, mayor que cero", Ejemplo: "150000"),
+            new(Referencia, TipoDeValor.Texto, Largo: 30, Reglas: "el documento del sistema anterior (vacío = CARGA-INICIAL)")),
         [CifrasDeReferencia] = Una(CifrasDeReferencia, "Cifras de referencia de Recaudo",
             new(FechaDeCorte, TipoDeValor.Fecha, Obligatoria: true),
             new(Concepto, TipoDeValor.Codigo, Obligatoria: true, Largo: 40, Reglas: "Boveda, PartidasPorIdentificar, ChequesEnCanje o SaldoAFavorDePagadores (o un concepto propio para el paralelo)"),

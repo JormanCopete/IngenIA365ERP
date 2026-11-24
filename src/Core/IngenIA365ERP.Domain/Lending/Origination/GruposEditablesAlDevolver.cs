@@ -3,7 +3,7 @@ namespace IngenIA365ERP.Domain.Lending.Origination;
 /// <summary>
 /// Los grupos de datos de una solicitud de crédito que se pueden corregir cuando se devuelve para corregir (pedido del dueño del
 /// 2026-11-23). Cada cooperativa —o cada línea— elige cuáles con el parámetro <c>Originacion.GruposEditablesAlDevolver</c>; lo sensible
-/// (la línea, la oficina) queda fijo por defecto. El solicitante nunca cambia: para otra persona, otra solicitud. (nuevo)
+/// se puede dejar fijo con el parámetro; de fábrica todo se corrige. El solicitante nunca cambia: para otra persona, otra solicitud. (nuevo)
 /// </summary>
 [Flags]
 public enum GrupoEditableAlDevolver
@@ -69,9 +69,11 @@ public static class GruposEditablesAlDevolver
         nameof(GrupoEditableAlDevolver.Documentos), nameof(GrupoEditableAlDevolver.Garantias),
     ];
 
-    /// <summary>El defecto (decisión del dueño del 2026-11-23): todo menos la línea y la oficina.</summary>
-    public static GrupoEditableAlDevolver PorDefecto { get; } =
-        GrupoEditableAlDevolver.Todos & ~GrupoEditableAlDevolver.Linea & ~GrupoEditableAlDevolver.Oficina;
+    /// <summary>
+    /// El defecto: todo (pedido del dueño del 2026-11-24, «que puedan digitar todos los campos al modificar la solicitud»). Hasta ese día
+    /// dejaba fijas la línea y la oficina; quien las quiera fijas lo dice en el parámetro.
+    /// </summary>
+    public static GrupoEditableAlDevolver PorDefecto { get; } = GrupoEditableAlDevolver.Todos;
 
     public static string Defecto { get; } = Escribir(PorDefecto);
 

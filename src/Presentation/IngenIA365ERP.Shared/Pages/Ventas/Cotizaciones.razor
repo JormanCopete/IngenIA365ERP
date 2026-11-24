@@ -24,52 +24,39 @@
    precios, vencida toma los del día. La lista dice el estado —«Vencida» si pasó su vigencia, derivado—, filtra por él, pagina y cuenta en
    cuántas ventas o pedidos se usó cada una. «Convertir en pedido» deja elegir el tipo del pedido. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+@* 2026-11-18 (pedido del dueño): la pantalla abre en la lista de cotizaciones con sus filtros (número, cliente, usuario que la hizo,
+   fechas y estado); clic o Enter en una fila abre su detalle, y «Nueva cotización» abre el editor solo, como la factura o la compra.
+   Del detalle se vuelve a la lista con «Volver a las cotizaciones» (o Escape), como en la venta y la compra, sin perder los filtros.
+   2026-11-23: el detalle es la ventana transaccional común (EditorDelCiclo), a pantalla completa. *@
+@if (_editando)
+{
+    <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Cotizaciones" Clases="@([TextosDeVentas.ClaseCotizacion])" Nombre="cotización" Documento="@Documento"
+                    ConVigencia="true" ConPdf="true" Volver="@VolverAsync" TextoVolver="Volver a las cotizaciones" Nuevo="@Nueva"
+                    AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
+        <Acciones Context="doc">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_pdf.Activa" OnClick="@(() => VerPdfAsync(doc))">Ver PDF</SfButton>
+            <PermissionGate Required="Inventory.Sales.SendQuote">
+                <SfButton CssClass="e-outline" Disabled="@_pdf.Activa" OnClick="@(() => AbrirEnvio(doc))">Enviar al cliente</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Sales.Create">
+                <SfButton CssClass="e-outline" Disabled="@_convertir.Activa" title="Carga la cotización en una factura nueva: vigente, con sus precios; vencida, con los de hoy."
+                          OnClick="@(() => Nav.NavigateTo($"/ventas/facturas/nueva?cotizacion={doc.DocumentPublicId}"))">Facturar</SfButton>
+                @if (_tiposDePedido.Count > 1)
+                {
+                    <select class="e-input" aria-label="Tipo del pedido" value="@(_tipoDePedido?.ToString() ?? "")" @onchange="@(e => _tipoDePedido = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        @foreach (var t in _tiposDePedido) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                }
+                <SfButton CssClass="e-primary" Disabled="@(_convertir.Activa || Vencida(doc.Status, doc.ValidUntil))"
+                          title="@(Vencida(doc.Status, doc.ValidUntil) ? "La cotización venció: no se convierte en pedido." : "")"
+                          OnClick="@(() => ConvertirAsync(doc))">Convertir en pedido</SfButton>
+            </PermissionGate>
+        </Acciones>
+    </EditorDelCiclo>
+}
+else
+{
 <div class="pagina">
-    @* 2026-11-18 (pedido del dueño): la pantalla abre en la lista de cotizaciones con sus filtros (número, cliente, usuario que la hizo,
-       fechas y estado); clic o Enter en una fila abre su detalle, y «Nueva cotización» abre el editor solo, como la factura o la compra.
-       Del detalle se vuelve a la lista con «Volver a las cotizaciones» (o Escape), como en la venta y la compra, sin perder los filtros. *@
-    @if (_editando)
-    {
-        <div class="page-header">
-            <h3>@(Documento is null ? "Nueva cotización" : "Cotización")</h3>
-            <div class="toolbar">
-                <SfButton CssClass="e-outline" title="Volver a la lista (Esc)" OnClick="@VolverAsync">Volver a las cotizaciones</SfButton>
-                <PermissionGate Required="Inventory.Sales.Create">
-                    @if (Documento is not null)
-                    {
-                        <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
-                    }
-                </PermissionGate>
-            </div>
-        </div>
-        <div data-enter="avanza" @onkeydown="@(e => e.Key == "Escape" ? VolverAsync() : Task.CompletedTask)">
-        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Cotizaciones" Clases="@([TextosDeVentas.ClaseCotizacion])" Nombre="cotización" Documento="@Documento"
-                        ConVigencia="true" AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
-            <Acciones Context="doc">
-                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_pdf.Activa" OnClick="@(() => VerPdfAsync(doc))">Ver PDF</SfButton>
-                <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_pdf.Activa" OnClick="@(() => ImprimirAsync(doc))">Imprimir</SfButton>
-                <PermissionGate Required="Inventory.Sales.SendQuote">
-                    <SfButton CssClass="e-outline" Disabled="@_pdf.Activa" OnClick="@(() => AbrirEnvio(doc))">Enviar al cliente</SfButton>
-                </PermissionGate>
-                <PermissionGate Required="Inventory.Sales.Create">
-                    <SfButton CssClass="e-outline" Disabled="@_convertir.Activa" title="Carga la cotización en una factura nueva: vigente, con sus precios; vencida, con los de hoy."
-                              OnClick="@(() => Nav.NavigateTo($"/ventas/facturas/nueva?cotizacion={doc.DocumentPublicId}"))">Facturar</SfButton>
-                    @if (_tiposDePedido.Count > 1)
-                    {
-                        <select class="e-input" aria-label="Tipo del pedido" value="@(_tipoDePedido?.ToString() ?? "")" @onchange="@(e => _tipoDePedido = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
-                            @foreach (var t in _tiposDePedido) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
-                        </select>
-                    }
-                    <SfButton CssClass="e-primary" Disabled="@(_convertir.Activa || Vencida(doc.Status, doc.ValidUntil))"
-                              title="@(Vencida(doc.Status, doc.ValidUntil) ? "La cotización venció: no se convierte en pedido." : "")"
-                              OnClick="@(() => ConvertirAsync(doc))">Convertir en pedido</SfButton>
-                </PermissionGate>
-            </Acciones>
-        </EditorDelCiclo>
-        </div>
-    }
-    else
-    {
         <div class="page-header">
             <h3>Cotizaciones</h3>
             <div class="toolbar">
@@ -106,8 +93,8 @@
             </div>
             <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
         </IndicadorDeCarga>
-    }
 </div>
+}
 
 <SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar la cotización al cliente" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>

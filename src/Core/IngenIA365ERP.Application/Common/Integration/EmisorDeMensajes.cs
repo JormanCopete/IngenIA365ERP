@@ -271,7 +271,8 @@ public sealed class EmisorDeMensajes(
             throw new InvalidOperationException("No se puede emitir un mensaje sin la identidad central de quien confirma.");
         }
 
-        if (solicitud.UsuarioDeOrigen is { CentralUserId: { } delOrigen } usuario)
+        // 2026-11-23: sin usuario en la solicitud, el del mensaje que se está consumiendo (OrigenDelConsumo), si el consumidor lo fijó.
+        if ((solicitud.UsuarioDeOrigen ?? OrigenDelConsumo.Actual) is { CentralUserId: { } delOrigen } usuario)
             return new UsuarioDeOrigenResuelto(ActorKind.Person, delOrigen, Recortar(usuario.Name, 150));
 
         var sinProceso = contenidos.Where(c => !c.Tipo.AdmiteProcesoPara(c.Record)).Select(c => c.Tipo.Type).Distinct(StringComparer.Ordinal).ToList();

@@ -44,7 +44,8 @@ public sealed record DesembolsoAEmitir(
     LoanPlanSummaryV1 Plan,
     PrevalidationOutcome ValidacionPrevia,
     Guid? OrdenAnteriorPublicId = null,
-    string? NumeroDeOrdenAnterior = null);
+    string? NumeroDeOrdenAnterior = null,
+    SubsidyV1? Subsidio = null);
 
 /// <summary>El reverso de un desembolso tal como se emite (mensajes.md §10.2, §10.5). (nuevo)</summary>
 public sealed record ReversoAEmitir(
@@ -131,9 +132,10 @@ public sealed partial class EmisionDeCartera
             PayeePersonPublicId = d.Orden is null ? null : d.Beneficiario.PersonPublicId,
             GrossAmount = d.Bruto,
             PayoffDeductions = d.Recogidas,
-            NetToDisburse = d.Orden is null ? 0m : neto,
+            NetToDisburse = d.Orden is null ? 0m : neto + (d.Subsidio?.Amount ?? 0m),
             DisbursementOrderPublicId = d.Orden?.PublicId,
             Plan = d.Plan,
+            Subsidy = d.Subsidio,
         };
         var modo = await modoDePaso.ResolverAsync(CreditoDesembolsadoV1.Type, h.FechaContable, ct);
         if (modo.IsFailure) return Result.Failure<IReadOnlyList<IntegrationMessage>>(modo.Error);
@@ -217,6 +219,8 @@ public sealed partial class EmisionDeCartera
             PayeePersonPublicId = r.BeneficiarioPublicId,
             LoanStatusAfter = r.EstadoDespues.ToString(),
             PayoffReversals = r.ReversosDeRecogidas,
+            // 2026-11-23 (descuento condicionado): el fondo vuelve como estaba, con la compra que sellaron las condiciones.
+            Subsidy = Disbursements.CompraSubsidiada.Leer(h.Condiciones.SubsidizedPurchase)?.ComoHecho(),
         };
         List<object> contenidos = [contenido];
         if (r.AjusteDeCausacion.Count > 0)

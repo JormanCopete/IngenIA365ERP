@@ -60,12 +60,23 @@ public sealed record CotizacionImprimible(
     decimal AmountDue,
     string? Notas,
     string? Condiciones,
-    string? ElaboradaPor)
+    string? ElaboradaPor,
+    string Titulo = "Cotización")
 {
-    /// <summary>El nombre del archivo: <c>cotizacion-{número}.pdf</c> o, sin número, <c>cotizacion-borrador-…</c>.</summary>
-    public string NombreDelArchivo => DisplayNumber is { } n
-        ? $"cotizacion-{n}.pdf"
-        : $"cotizacion-borrador-{PublicId.ToString("N", CultureInfo.InvariantCulture)[..8]}.pdf";
+    /// <summary>2026-11-23: el documento es una cotización (las otras clases del ciclo —pedido, remisión— salen con el mismo molde y su título).</summary>
+    public bool EsCotizacion => Titulo == "Cotización";
+
+    /// <summary>El nombre del archivo: <c>cotizacion-{número}.pdf</c> (o <c>remision-…</c>, <c>pedido-…</c>) o, sin número, <c>…-borrador-…</c>.</summary>
+    public string NombreDelArchivo
+    {
+        get
+        {
+            var prefijo = Titulo switch { "Remisión" => "remision", "Pedido" => "pedido", _ => "cotizacion" };
+            return DisplayNumber is { } n
+                ? $"{prefijo}-{n}.pdf"
+                : $"{prefijo}-borrador-{PublicId.ToString("N", CultureInfo.InvariantCulture)[..8]}.pdf";
+        }
+    }
 }
 
 /// <summary>
@@ -139,8 +150,10 @@ public sealed class ModeloDeCotizacion(IApplicationDbContext db, CalculoTributar
             .GroupBy(r => (r.Kind, r.Rate)).Select(g => new RenglonDeLaCotizacion($"Retención {Etiqueta(g.Key.Kind)}", g.Key.Rate, g.Sum(r => r.Base), g.Sum(r => r.Amount)))
             .ToList();
 
-        var condiciones = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ComercialCondicionesDeLaCotizacion,
-            cotizacion.OperationDate, ct: ct);
+        // 2026-11-23: las condiciones son de la cotización; el pedido y la remisión salen sin ellas.
+        var condiciones = cotizacion.Class == DocumentClass.SalesQuote
+            ? await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ComercialCondicionesDeLaCotizacion, cotizacion.OperationDate, ct: ct)
+            : null;
         var elaboro = (usuarios is null ? null : await usuarios.DeUsuarioAsync(cotizacion.CreatedByUserId, ct)) ?? await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == cotizacion.CreatedByUserId).Select(u => u.Username).FirstOrDefaultAsync(ct);
 
         return new CotizacionImprimible(cotizacion.PublicId, VistaDeDocumentos.NumeroVisible(cotizacion.Prefix, cotizacion.Number), tipo.Name,
@@ -148,9 +161,17 @@ public sealed class ModeloDeCotizacion(IApplicationDbContext db, CalculoTributar
             vendedor is null ? null : BorradorDelPos.Nombre(vendedor.Person), lineas, impuestos, retenciones,
             cotizacion.Subtotal, cotizacion.DiscountTotal, cotizacion.TaxTotal, cotizacion.WithholdingTotal, cotizacion.Total, cotizacion.AmountDue,
             string.IsNullOrWhiteSpace(cotizacion.Notes) ? null : cotizacion.Notes,
-            condiciones.IsSuccess && !string.IsNullOrWhiteSpace(condiciones.Value.Texto) ? condiciones.Value.Texto.Trim() : null,
-            elaboro);
+            condiciones is { IsSuccess: true } && !string.IsNullOrWhiteSpace(condiciones.Value.Texto) ? condiciones.Value.Texto.Trim() : null,
+            elaboro, TituloDe(cotizacion.Class));
     }
+
+    /// <summary>2026-11-23: el título del documento impreso según su clase.</summary>
+    public static string TituloDe(DocumentClass clase) => clase switch
+    {
+        DocumentClass.Shipment => "Remisión",
+        DocumentClass.SalesOrder => "Pedido",
+        _ => "Cotización",
+    };
 
     private static string Etiqueta(TaxKind kind) => kind switch
     {
@@ -196,6 +217,33 @@ public sealed class GetSalesQuotePdfQueryHandler(VistaDeDocumentos vista, Modelo
         var cotizacion = await vista.BuscarAsync(request.QuotePublicId, DocumentClassGroup.Sales, seguir: false, ct);
         if (cotizacion is null || cotizacion.Class != DocumentClass.SalesQuote) return Result.Failure<CotizacionEnPdfDto>(InventoryErrors.DocumentNotFound());
         return await CotizacionesEnPdf.GenerarAsync(cotizacion, modelo, generadores, ct);
+    }
+}
+
+/// <summary>
+/// 2026-11-23 (pedido del dueño): el pedido y la remisión en PDF, con el molde de la cotización y su título (<c>GET /api/inventory/sales/orders/{id}/pdf</c>
+/// y <c>…/shipments/{id}/pdf</c>, <c>Inventory.Sales.View</c>): la remisión se imprime para que la firme quien recibe. Con alcance: fuera de él, o si
+/// el documento no es de la clase de la ruta, el 404 del documento. (nuevo)
+/// </summary>
+public sealed record GetSalesCycleDocumentPdfQuery(Guid DocumentPublicId, DocumentClass Clase) : IRequest<Result<CotizacionEnPdfDto>>;
+
+public sealed class GetSalesCycleDocumentPdfQueryValidator : AbstractValidator<GetSalesCycleDocumentPdfQuery>
+{
+    public GetSalesCycleDocumentPdfQueryValidator()
+    {
+        RuleFor(x => x.DocumentPublicId).NotEmpty();
+        RuleFor(x => x.Clase).Must(c => c is DocumentClass.SalesOrder or DocumentClass.Shipment);
+    }
+}
+
+public sealed class GetSalesCycleDocumentPdfQueryHandler(VistaDeDocumentos vista, ModeloDeCotizacion modelo, IEnumerable<ICotizacionEnPdf> generadores)
+    : IRequestHandler<GetSalesCycleDocumentPdfQuery, Result<CotizacionEnPdfDto>>
+{
+    public async Task<Result<CotizacionEnPdfDto>> Handle(GetSalesCycleDocumentPdfQuery request, CancellationToken ct)
+    {
+        var documento = await vista.BuscarAsync(request.DocumentPublicId, DocumentClassGroup.Sales, seguir: false, ct);
+        if (documento is null || documento.Class != request.Clase) return Result.Failure<CotizacionEnPdfDto>(InventoryErrors.DocumentNotFound());
+        return await CotizacionesEnPdf.GenerarAsync(documento, modelo, generadores, ct);
     }
 }
 

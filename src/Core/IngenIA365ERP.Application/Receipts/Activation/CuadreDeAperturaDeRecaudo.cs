@@ -46,7 +46,9 @@ public sealed class LineasDelCuadreDeRecaudo(IApplicationDbContext db, IContabil
             .Where(c => c.Status == ReceivedCheckState.Received || c.Status == ReceivedCheckState.InCustody || c.Status == ReceivedCheckState.Deposited
                         || c.Status == ReceivedCheckState.InClearing)
             .GroupBy(c => c.BranchId).Select(g => new { BranchId = g.Key, Total = g.Sum(x => x.Amount) }).ToListAsync(ct);
-        var saldos = await db.PayerCreditBalances.AsNoTracking().Where(s => s.Status == PayerCreditBalanceState.Open && s.OpenedOn <= corte)
+        // 2026-11-23: los anticipos de concepto son otra cuenta (la del anticipo), no el saldo a favor de pagadores.
+        var saldos = await db.PayerCreditBalances.AsNoTracking().Where(s => s.Status == PayerCreditBalanceState.Open && s.OpenedOn <= corte
+                                                                            && s.Origin != PayerCreditBalanceOrigin.ConceptAdvance && s.Origin != PayerCreditBalanceOrigin.MigratedAdvance)
             .GroupBy(s => s.BranchId).Select(g => new { BranchId = g.Key, Total = g.Sum(x => x.Balance) }).ToListAsync(ct);
 
         var cargado = new Dictionary<(string, int), decimal>();

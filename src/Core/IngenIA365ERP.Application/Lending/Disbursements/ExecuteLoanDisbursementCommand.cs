@@ -180,7 +180,9 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             if (puestaAlDia.IsFailure) return Falla(puestaAlDia.Error);
 
             // La orden por el neto (nunca en especie: el validador lo impide).
-            var orden = await tramos.EmitirOrdenAsync(credito, operacion, r.Beneficiario!, r.Bruto, r.Recogido, e.PaidByFile, null, ct);
+            // 2026-11-23 (descuento condicionado): al proveedor se le gira el valor del bien: el capital más lo que paga el fondo.
+            var orden = await tramos.EmitirOrdenAsync(credito, operacion, r.Beneficiario!, r.Bruto + r.Subsidio, r.Recogido, e.PaidByFile, null, ct);
+            orden.SubsidyAmount = r.Subsidio;
 
             if (r.EsElPrimero)
             {
@@ -207,7 +209,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 Amount = a.Comprobante.AppliedAmount,
             }).ToList();
             var emitidos = await emision.DesembolsoAsync(new DesembolsoAEmitir(hecho, operacion, r.Tramo, r.EsElUltimo, r.Forma, r.Beneficiario!.ComoPayee(),
-                r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan, planDelTramo), r.Prevalidacion.Outcome), ct);
+                r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan, planDelTramo), r.Prevalidacion.Outcome,
+                Subsidio: r.Compra?.ComoHecho()), ct);
             if (emitidos.IsFailure) return Falla(emitidos.Error);
             await requisitos.AlertarNoContabilizableAsync(r, operacion.Number, ct);
 
