@@ -13,7 +13,7 @@
    Feature 008, fase 2: si el tercero no existe y el usuario tiene Core.People.Create, el buscador ofrece crearlo en el
    diálogo compartido de personas con la marca «Tercero» premarcada; al guardar queda elegido en la línea.
    2026-11-16 (pedido del dueño, ventana transaccional como Comercial y Recaudo): las teclas las registra la página en teclado.js y
-   llama a los métodos públicos de aquí (F2 buscar en el campo, F3 línea nueva, F4 duplicar, F6 balancear, Ctrl+Supr quitar la
+   llama a los métodos públicos de aquí (F2 buscar en el campo, F3 línea nueva, F4 tercero, Ctrl+D duplicar, F6 balancear, Ctrl+Supr quitar la
    selección). Enter avanza de campo en campo (la grilla ya no apaga el Enter de teclado.js) y, al elegir una cuenta o un tercero, el
    foco sigue al campo siguiente. La línea activa se marca con una barra y se seleccionan varias como en Excel: clic, Shift+clic (rango),
    Ctrl+clic (suelta), Shift+↑/↓ (extiende). La sucursal arranca con la propuesta; centro y tipo de cruce se ponen solos si hay uno. *@
@@ -462,6 +462,21 @@
     private string? _terminoDeVentana;
     private int _lineaDeVentana;
     private IReadOnlyList<VentanaDeBusquedaContable.Opcion> _opcionesDeVentana = [];
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): F4, como en todas las ventanas transaccionales, busca el tercero —aquí el de la línea activa—, en el campo o
+    /// en la ventana según el parámetro. Sin línea activa va a la primera.
+    /// </summary>
+    public async Task BuscarTerceroAsync()
+    {
+        if (SoloLectura) return;
+        if (!HayActiva) { await EnfocarPrimeraAsync(); return; }
+        var i = _activa;
+        var l = Lineas[i];
+        if (BuscaEnVentana) { await AbrirVentanaAsync(i, "Person", null); return; }
+        if (_terceros.TryGetValue(l.Clave, out var p)) await p.EnfocarAsync(limpiar: true);
+        else await Notification.WarningAsync("Esta línea no pide tercero: elija primero una cuenta que lo exija.");
+    }
 
     /// <summary>
     /// F2: busca lo que corresponde al campo donde está el cursor —cuenta, tercero, tipo de documento cruce, centro o sucursal—, en el

@@ -147,7 +147,7 @@ public static partial class MapaDelMenu
         new("Compras", null, "Cruce a tres vías", "/compras/cruce", ["Inventory.Purchases.View"], ["Inventory.Purchases.View"], []),
         new("Compras", null, "Costos adicionales", "/compras/costos-adicionales", ["Inventory.Purchases.View"], ["Inventory.Purchases.View"], ["Inventory.Purchases.Create"]),
         new("Ventas", null, "Documentos de venta", "/ventas/documentos", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),
-        new("Ventas", null, "Cotizaciones", "/ventas/cotizaciones", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create", "Inventory.Sales.SendQuote"]),
+        new("Ventas", null, "Cotizaciones", "/ventas/cotizaciones", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.SendQuote", "Inventory.Sales.Create"]),
         new("Ventas", null, "Pedidos", "/ventas/pedidos", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),
         new("Ventas", null, "Remisiones", "/ventas/remisiones", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),
         new("Ventas", null, "Notas débito", "/ventas/notas-debito", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),

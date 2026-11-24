@@ -137,6 +137,31 @@ public static class FormularioDelCiclo
     public static string Promociones(LineaDeVentaDto? linea) =>
         linea is null ? "" : string.Join("; ", linea.Discounts.Where(d => d.EsPromocion).Select(d => $"{d.PromotionName ?? "Promoción"} · {d.Amount:N0}"));
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): el mismo producto digitado otra vez suma su cantidad a la línea que ya lo tiene, si coinciden producto,
+    /// unidad, precio y descuento y ni la línea ni el producto piden lote, serie o placa (cada uno de esos va en su línea); si no, la línea nueva
+    /// se agrega al final. Una línea que nace de otro documento (<see cref="LineaDelCiclo.OriginLinePublicId"/>) nunca recibe la suma. Devuelve
+    /// el índice de la línea que quedó con el producto.
+    /// </summary>
+    public static int AgregarOSumar(List<LineaDelCiclo> lineas, LineaDelCiclo nueva, bool pideReferencia = false)
+    {
+        ArgumentNullException.ThrowIfNull(lineas);
+        ArgumentNullException.ThrowIfNull(nueva);
+        if (!pideReferencia && !nueva.ControlaLote && !nueva.ControlaSerie && nueva.OriginLinePublicId is null)
+        {
+            var indice = lineas.FindIndex(l => l.ProductPublicId == nueva.ProductPublicId && l.UnitPublicId == nueva.UnitPublicId
+                && l.Precio == nueva.Precio && (l.Descuento ?? 0m) == (nueva.Descuento ?? 0m) && !l.ConPromocion
+                && !l.ControlaLote && !l.ControlaSerie && l.Referencia is null && l.OriginLinePublicId is null);
+            if (indice >= 0)
+            {
+                lineas[indice].Cantidad += nueva.Cantidad;
+                return indice;
+            }
+        }
+        lineas.Add(nueva);
+        return lineas.Count - 1;
+    }
+
     /// <summary>Los días desde la fecha del documento hasta <paramref name="hoy"/> (una remisión sin facturar, FR-052).</summary>
     public static int DiasDesde(DateOnly fecha, DateOnly hoy) => Math.Max(0, hoy.DayNumber - fecha.DayNumber);
 

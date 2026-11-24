@@ -51,6 +51,13 @@ public sealed partial class VentasClient
     public Task<InvitationApiResult<ArchivoDescargado>> CotizacionEnPdfAsync(Guid cotizacion, CancellationToken ct = default) =>
         Descargar($"{Rutas.Cotizaciones}/{cotizacion}/pdf", $"cotizacion-{cotizacion:N}.pdf", ct);
 
+    /// <summary>
+    /// 2026-11-23: el PDF de un documento del ciclo —cotización, pedido o remisión— por la ruta de su clase (<c>{ruta}/{id}/pdf</c>,
+    /// <c>Inventory.Sales.View</c>).
+    /// </summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> PdfDelCicloAsync(string ruta, Guid documento, CancellationToken ct = default) =>
+        Descargar($"{ruta}/{documento}/pdf", $"documento-{documento:N}.pdf", ct);
+
     /// <summary>Envía la cotización confirmada al cliente en PDF (<c>POST /sales/quotes/{id}/send</c>, <c>Inventory.Sales.SendQuote</c>).</summary>
     public Task<ResultadoDeInventario<EmptyResponse>> EnviarCotizacionAsync(Guid cotizacion, string? correo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{Rutas.Cotizaciones}/{cotizacion}/send",

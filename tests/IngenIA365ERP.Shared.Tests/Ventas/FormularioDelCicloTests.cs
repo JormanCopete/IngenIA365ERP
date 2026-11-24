@@ -19,6 +19,41 @@ public class FormularioDelCicloTests
         Guid.NewGuid(), 1, new ReferenciaDeInventarioDto(Guid.NewGuid(), "ARZ-1", "Arroz"), new UnidadDeLineaDto(Guid.NewGuid(), "UND"), 1m, 3m, 3m, 0m,
         2000m, 2000m, false, null, descuentos, [], 4000m, 4000m, false, Origen, 3m);
 
+    private static LineaDelCiclo Nueva(Guid producto, Guid unidad, decimal cantidad = 1m, decimal? precio = null) =>
+        new() { ProductPublicId = producto, UnitPublicId = unidad, Producto = "ARZ-1 · Arroz", Unidad = "UND", Cantidad = cantidad, Precio = precio };
+
+    /// <summary>2026-11-23: el mismo producto, unidad y precio suma la cantidad; otra unidad, otro precio, lote o placa van en otra línea.</summary>
+    [Fact]
+    public void El_producto_repetido_suma_la_cantidad_si_es_la_misma_unidad_y_precio()
+    {
+        var (arroz, und, caja) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var lineas = new List<LineaDelCiclo>();
+
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, und, 2m)).Should().Be(0);
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, und, 3m)).Should().Be(0);
+        lineas.Should().ContainSingle().Which.Cantidad.Should().Be(5m);
+
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, caja)).Should().Be(1, "otra unidad es otra línea");
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, und, 1m, 1500m)).Should().Be(2, "otro precio es otra línea");
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, und), pideReferencia: true).Should().Be(3, "la placa va en su línea");
+        var conLote = Nueva(arroz, und);
+        conLote.ControlaLote = true;
+        FormularioDelCiclo.AgregarOSumar(lineas, conLote).Should().Be(4, "el lote va en su línea");
+        lineas.Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void La_linea_que_nace_de_otro_documento_no_recibe_la_suma()
+    {
+        var (arroz, und) = (Guid.NewGuid(), Guid.NewGuid());
+        var deLaRemision = Nueva(arroz, und, 4m);
+        deLaRemision.OriginLinePublicId = Guid.NewGuid();
+        var lineas = new List<LineaDelCiclo> { deLaRemision };
+
+        FormularioDelCiclo.AgregarOSumar(lineas, Nueva(arroz, und)).Should().Be(1);
+        deLaRemision.Cantidad.Should().Be(4m);
+    }
+
     [Fact]
     public void Releer_conserva_el_origen_y_no_toma_la_promocion_como_manual()
     {

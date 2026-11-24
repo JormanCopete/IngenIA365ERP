@@ -18,6 +18,9 @@
 //   en el campo de producto con su Enter. Así la segunda lectura no queda como una cantidad enorme si el foco se quedó en la línea.
 // - Atajos de pantalla: registrar(ref, teclas) apila; el último registro decide primero. Las F y las combinaciones con Ctrl se
 //   avisan siempre; Enter y Supr sólo fuera de un campo editable; Esc sólo si no hay una lista, un diálogo o la ayuda abiertos.
+// - Líneas de un documento (2026-11-23, pedido del dueño): en una zona con data-linea y data-siguiente (la fila de remisiones,
+//   cotizaciones, ventas y compras), Tab en el último campo hace lo mismo que Enter: vuelve al campo de producto. Así el recorrido
+//   producto → cantidad → precio → descuento → producto es igual con Enter y con Tab; Shift+Tab sigue devolviendo.
 // El interop se prueba a mano: no hay pruebas de navegador en el repositorio.
 (function () {
     const CAMPOS = 'input, select, textarea, [contenteditable="true"], [role="combobox"], [role="spinbutton"], [role="textbox"]';
@@ -349,6 +352,20 @@
     }, true);
 
     window.addEventListener('keydown', alPulsarEnter, false);
+
+    // 2026-11-23: Tab en el último campo de una línea (data-linea) va a donde va Enter (data-siguiente: el campo de producto).
+    function alPulsarTabEnLinea(e) {
+        if (e.key !== 'Tab' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+        const el = e.target;
+        if (!(el instanceof Element) || !esCampo(el)) return;
+        const zona = el.closest('[data-zona-teclado][data-linea]');
+        if (!zona || !zona.getAttribute('data-siguiente')) return;
+        const campos = camposDe(zona);
+        if (campos.length === 0 || campos[campos.length - 1] !== el) return;
+        const destino = destinoAlTerminar(zona);
+        if (destino && enfocarElemento(destino)) e.preventDefault();
+    }
+    window.addEventListener('keydown', alPulsarTabEnLinea, true);
 
     window.addEventListener('pointerdown', function () { porTeclado = false; }, true);
 
