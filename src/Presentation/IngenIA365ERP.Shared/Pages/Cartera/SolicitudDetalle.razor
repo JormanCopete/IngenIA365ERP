@@ -23,6 +23,15 @@
         <h3>Solicitud @(_s?.Number ?? "en borrador")</h3>
         <div class="toolbar">
             <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes"))">Volver</SfButton>
+            @if (_s is { Status: 1 or 4 } && _s.EditableGroups.Any(g => g is not ("Documentos" or "Garantias")))
+            {
+                @* 2026-11-23: corregir el borrador o la devuelta, en lo que el parámetro de su línea deja. *@
+                <PermissionGate Required="Lending.Applications.Create">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{Id}/corregir"))">
+                        @(_s.Status == 4 ? "Corregir datos" : "Editar")
+                    </SfButton>
+                </PermissionGate>
+            }
             @if (_s is { Status: 1 or 4 })
             {
                 <PermissionGate Required="Lending.Applications.Submit">
@@ -68,6 +77,22 @@
             {
                 <p class="aviso aviso-alerta">La aprobación venció: hay que decidir de nuevo antes de desembolsar.</p>
             }
+            @if (s.ChangesSinceReturn.Count > 0)
+            {
+                @* 2026-11-23: lo que se corrigió desde la última devolución, para quien decide. *@
+                <div class="info-card">
+                    <h4>Qué cambió desde la devolución</h4>
+                    <table class="data-grid">
+                        <thead><tr><th>Grupo</th><th>Dato</th><th>Antes</th><th>Ahora</th></tr></thead>
+                        <tbody>
+                            @foreach (var cambio in s.ChangesSinceReturn)
+                            {
+                                <tr><td>@cambio.Group</td><td>@cambio.Field</td><td>@(cambio.Before ?? "—")</td><td>@(cambio.After ?? "—")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
             <div class="kpi-grid">
                 <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@TextosDeOriginacion.EstadoDeSolicitud(s.Status)</span></div>
                 <div class="kpi-card"><span class="kpi-label">Monto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(s.Amount)</span></div>
@@ -104,7 +129,7 @@
                         }
                     </tbody>
                 </table>
-                @if (s.Status is 1 or 4)
+                @if (s.Status is 1 || s.Status == 4 && s.Edita("Documentos"))
                 {
                     <PermissionGate Required="Lending.Applications.Create">
                         <SubirSoporte OwnerEntityType="@OriginacionClient.DuenoDeDocumentos" OwnerEntityPublicId="@s.PublicId" OnSubido="@CargarAdjuntosAsync" />
@@ -283,7 +308,9 @@
             case 1 or 4:
                 var faltan = s.Requirements.Where(r => r.Mandatory && !s.Documents.Any(d => d.RequirementCode == r.Code && d.RejectionReason is null))
                     .Select(r => r.Name).ToList();
-                if (s.Status == 4) lista.Add("La solicitud fue devuelta: corrija lo indicado en la decisión y vuelva a radicarla.");
+                if (s.Status == 4) lista.Add(s.EditableGroups.Count > 0
+                    ? $"La solicitud fue devuelta: corrija lo indicado en la decisión ({string.Join(", ", s.EditableGroups.Select(TextosDeOriginacion.GrupoEditable))}) con «Corregir datos» y vuelva a radicarla."
+                    : "La solicitud fue devuelta: corrija lo indicado en la decisión y vuelva a radicarla.");
                 lista.Add(faltan.Count > 0
                     ? $"Adjunte los documentos obligatorios que faltan: {string.Join(", ", faltan)}."
                     : "Los documentos obligatorios están completos.");

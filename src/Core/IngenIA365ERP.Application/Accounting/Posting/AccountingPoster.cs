@@ -219,7 +219,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         if (!voucher.IsActive) return Fallo(AccountingErrors.VoucherTypeInactive(voucher.Code));
         original.VoucherType ??= voucher;
 
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         if (origin.EsContabilidad && date > hoy && original.Kind is not (DocumentKind.Closing or DocumentKind.Opening)) return Fallo(AccountingErrors.DateInFuture(date));
 
         var fecha = date;
@@ -469,7 +469,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             // «Posterior a hoy» sólo se rechaza al digitar: un módulo fecha según su operación (la
             // nómina, al último día del período, que se aprueba unos días antes), y el período tiene
             // que existir y estar abierto de todos modos.
-            if (request.Origin.EsContabilidad && request.Date > clock.TodayUtc) return Result.Failure<Analisis>(AccountingErrors.DateInFuture(request.Date));
+            if (request.Origin.EsContabilidad && request.Date > clock.HoyLocal) return Result.Failure<Analisis>(AccountingErrors.DateInFuture(request.Date));
             periodo = r.PeriodoDe(request.Date);
             if (periodo is null) return Result.Failure<Analisis>(AccountingErrors.PeriodNotFound(request.Date));
             if (periodo.Status != PeriodStatus.Open) return Result.Failure<Analisis>(AccountingErrors.PeriodClosed(request.Date));

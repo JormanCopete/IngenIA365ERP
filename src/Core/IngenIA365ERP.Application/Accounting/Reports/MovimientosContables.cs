@@ -101,7 +101,7 @@ public static class MovimientosContables
         IApplicationDbContext db, AlcanceDeSucursales alcance, IDateTimeService clock, FiltrosDeInforme f, CancellationToken ct,
         int rangoMaximoEnAnios = RangoMaximoEnAnios)
     {
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         var desde = f.Desde(hoy);
         var hasta = f.Hasta(hoy);
         if (hasta < desde) return Result.Failure<Contexto>(RangoInvalido);

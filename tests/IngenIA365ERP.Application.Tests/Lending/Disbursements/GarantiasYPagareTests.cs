@@ -74,8 +74,9 @@ public sealed class GarantiasYPagareTests : IAsyncLifetime
         Substitute.For<ICredencialesDeCanalExterno>(), _tenant, Options.Create(_d.O.Opciones));
 
     private RegisterCollateralCommandHandler Registrar() =>
-        new(_d.Db, _d.O.Autorizaciones, _d.Emision(), _d.FechaContable(), _d.G.Alcance, _d.G.Auditoria, _d.G.Reloj);
-    private UpdateCollateralCommandHandler Actualizar() => new(_d.Db, _d.Emision(), _d.FechaContable(), _d.G.Alcance, _d.G.Auditoria, _d.G.Reloj);
+        new(_d.Db, _d.O.Autorizaciones, _d.Emision(), _d.FechaContable(), _d.G.Alcance, _d.G.Auditoria, _d.G.Reloj, _d.O.Editables());
+    private UpdateCollateralCommandHandler Actualizar() =>
+        new(_d.Db, _d.Emision(), _d.FechaContable(), _d.G.Alcance, _d.G.Auditoria, _d.G.Reloj, _d.O.Editables());
     private ChangeCollateralStatusCommandHandler CambiarEstado() =>
         new(_d.Db, _d.Emision(), _d.FechaContable(), _d.G.Alcance, _d.G.Auditoria, _d.G.Reloj);
     private ReleaseCollateralCommandHandler Liberar() =>

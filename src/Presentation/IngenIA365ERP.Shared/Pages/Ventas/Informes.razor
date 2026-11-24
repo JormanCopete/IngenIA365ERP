@@ -4,9 +4,12 @@
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Reportes
 @using IngenIA365ERP.Shared.Services.Ventas
+@using IngenIA365ERP.Shared.Services.Core
 @using IngenIA365ERP.Shared.Components.Reportes
+@using IngenIA365ERP.Shared.Components.Comunes
 @inject InventarioClient Inventario
 @inject VentasClient Ventas
+@inject MediosDePagoClient Medios
 @inject PermisosDelUsuario Permisos
 @inject INotificationService Notification
 @inject NavigationManager Navigation
@@ -80,13 +83,24 @@
                         </select>
                     </label>
                 }
+                @if (UsaPropio("paymentMeans") && _medios.Count > 0)
+                {
+                    <div class="campo">Medios de pago
+                        <SeleccionMultiple Opciones="@_medios" Seleccionados="@Lista("paymentMeans")" SeleccionadosChanged="@(v => PonerLista("paymentMeans", v))" />
+                    </div>
+                }
                 @if (UsaPropio("class"))
                 {
-                    <label class="campo">Clase de medio
-                        <select class="e-input" value="@Otro("class")" @onchange="@(e => PonerOtro("class", e.Value?.ToString()))">
-                            <option value="">Todas</option>
-                            @foreach (var (v, t) in TextosDeVentas.ClasesDeMedio) { <option value="@TextosDeVentas.NombreDeClaseDeMedio(v)">@t</option> }
-                        </select>
+                    <div class="campo">Clase de medio
+                        <SeleccionMultiple Opciones="@ClasesDeMedio" Seleccionados="@Lista("class")" SeleccionadosChanged="@(v => PonerLista("class", v))"
+                                           TextoSinSeleccion="Todas" />
+                    </div>
+                }
+                @if (UsaPropio("allMeans"))
+                {
+                    <label class="campo-check" title="La venta que usó alguno de los medios elegidos muestra también los demás medios con que se pagó.">
+                        <input type="checkbox" checked="@(Otro("allMeans") == "true")" @onchange="@(e => PonerOtro("allMeans", e.Value is true ? "true" : null))" />
+                        Todos los medios de la venta
                     </label>
                 }
                 @if (UsaPropio("kind"))
@@ -149,11 +163,16 @@
 
 @code {
     /// <summary>Los filtros propios que la pantalla edita; los demás son «del enlace».</summary>
-    private static readonly HashSet<string> Editables = new(StringComparer.Ordinal) { "pointOfSale", "groupBy", "class", "kind", "treatment", "status", "operatingDate" };
+    private static readonly HashSet<string> Editables = new(StringComparer.Ordinal) { "pointOfSale", "groupBy", "class", "paymentMeans", "allMeans", "kind", "treatment", "status", "operatingDate" };
+
+    /// <summary>Las clases de medio en el orden de la pantalla de Ventas; viajan por nombre.</summary>
+    private static readonly IReadOnlyList<(string Valor, string Texto)> ClasesDeMedio =
+        [.. TextosDeVentas.ClasesDeMedio.Select(c => (TextosDeVentas.NombreDeClaseDeMedio(c.Key), c.Value))];
 
     private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
     private List<VistaDeInformeDto> _vistas = [];
     private List<PuntoDeVentaDto> _puntos = [];
+    private List<(string Valor, string Texto)> _medios = [];
     private VistaDeInformeDto? _vista;
     private FiltrosDeInformeDeInventarioModelo _filtros = new();
     private FiltrosDeInformeDeInventarioModelo _aplicados = new();
@@ -183,6 +202,12 @@
             _vistas = [.. (r.Value ?? []).Where(v => VistasDeVentas.EsDeVentas(v.Key)).OrderBy(v => VistasDeVentas.Claves.ToList().IndexOf(v.Key))];
             var puntos = await Ventas.ListarPuntosAsync();
             _puntos = puntos.IsSuccess ? [.. puntos.Value ?? []] : [];
+            // Sin Core.PaymentMeans.View no hay lista: se filtra por clase de medio y el medio llega sólo por el enlace.
+            var medios = await Medios.ListarAsync();
+            _medios = medios.IsSuccess
+                ? [.. (medios.Value ?? []).OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal)
+                    .Select(m => (m.PaymentMeansPublicId.ToString(), m.IsActive ? $"{m.Code} · {m.Name}" : $"{m.Code} · {m.Name} (inactivo)"))]
+                : [];
             // Con un solo punto no hay nada que elegir; el cierre del día, además, lo exige (2026-11-11).
             if (_puntos.Count == 1 && !_filtros.Otros.ContainsKey("pointOfSale")) _filtros.Otros["pointOfSale"] = _puntos[0].PointOfSalePublicId.ToString();
             if (!_filtros.Otros.ContainsKey("operatingDate")) _filtros.Otros["operatingDate"] = hoy.ToString("yyyy-MM-dd");
@@ -218,6 +243,12 @@
         if (string.IsNullOrWhiteSpace(valor)) _filtros.Otros.Remove(nombre);
         else _filtros.Otros[nombre] = valor;
     }
+
+    /// <summary>Un filtro de varios valores viaja separado por coma.</summary>
+    private IReadOnlyCollection<string> Lista(string nombre) =>
+        Otro(nombre).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private void PonerLista(string nombre, IReadOnlyList<string> valores) => PonerOtro(nombre, string.Join(",", valores));
 
     /// <summary>La tabla trae con qué profundizar: el documento de venta o la sesión.</summary>
     private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_documento" or "_sesion");

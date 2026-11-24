@@ -196,7 +196,26 @@ public sealed record SolicitudDto(
 {
     /// <summary>K6b: en una solicitud de vivienda, si el inmueble es VIS; nulo en las demás.</summary>
     public bool? IsSocialHousing { get; init; }
+
+    /// <summary>2026-11-23: los seguros elegidos (códigos).</summary>
+    public IReadOnlyList<string> Insurances { get; init; } = [];
+
+    public string? PolicyExceptionReason { get; init; }
+
+    /// <summary>2026-11-23: trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, recogidas, libranza).</summary>
+    public bool UsesAdvancedTerms { get; init; }
+
+    /// <summary>2026-11-23: lo que se puede corregir ahora (nombres de grupo); vacío si no se edita.</summary>
+    public IReadOnlyList<string> EditableGroups { get; init; } = [];
+
+    /// <summary>2026-11-23: lo que cambió desde la última devolución para corregir.</summary>
+    public IReadOnlyList<CambioDeSolicitudDto> ChangesSinceReturn { get; init; } = [];
+
+    public bool Edita(string grupo) => EditableGroups.Contains(grupo, StringComparer.Ordinal);
 }
+
+/// <summary>Un dato que cambió desde la devolución: grupo, campo y valores, ya legibles.</summary>
+public sealed record CambioDeSolicitudDto(string Group, string Field, string? Before, string? After);
 
 /// <summary>Una fila de la lista de solicitudes.</summary>
 public sealed record SolicitudEnListaDto(

@@ -6,6 +6,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
+using IngenIA365ERP.Domain.Lending.Origination;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Origination;
@@ -169,7 +170,28 @@ public sealed record CreditApplicationDto(
 {
     /// <summary>K6b (bloque 2; FR-024): en una solicitud de vivienda, si el inmueble es de interés social (VIS); nulo en las demás.</summary>
     public bool? IsSocialHousing { get; init; }
+
+    /// <summary>2026-11-23: los seguros elegidos (códigos), para volver a mandarlos al corregir.</summary>
+    public IReadOnlyList<string> Insurances { get; init; } = [];
+
+    /// <summary>2026-11-23: el motivo de la excepción a la política, si la pidió.</summary>
+    public string? PolicyExceptionReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-23: la solicitud trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, créditos que recoge, convenio de
+    /// libranza): la pantalla de corrección no la toca para no borrarlas.
+    /// </summary>
+    public bool UsesAdvancedTerms { get; init; }
+
+    /// <summary>2026-11-23: los grupos que se pueden corregir ahora (nombres de <c>GrupoEditableAlDevolver</c>); vacío si no se edita.</summary>
+    public IReadOnlyList<string> EditableGroups { get; init; } = [];
+
+    /// <summary>2026-11-23: lo que cambió desde la última devolución para corregir.</summary>
+    public IReadOnlyList<CreditApplicationChangeDto> ChangesSinceReturn { get; init; } = [];
 }
+
+/// <summary>Un dato que cambió desde la devolución: su grupo, el campo y los valores, ya legibles.</summary>
+public sealed record CreditApplicationChangeDto(string Group, string Field, string? Before, string? After);
 
 /// <summary>Una fila de la lista de solicitudes (api.md §4.2 <c>CreditApplicationListItemDto</c>).</summary>
 public sealed record CreditApplicationListItemDto(
@@ -245,7 +267,43 @@ public static class ConsultasDeSolicitudes
             listas, s.SubmittedAt, s.CreatedBy ?? string.Empty, s.CreatedAt)
         {
             IsSocialHousing = s.IsSocialHousing,
+            Insurances = s.SelectedInsurances is { } seguros ? JsonSerializer.Deserialize<List<string>>(seguros, Json) ?? [] : [],
+            PolicyExceptionReason = s.PolicyExceptionReason,
+            UsesAdvancedTerms = s.ExtraordinaryInstallments is not null || s.GraceKind is not null || s.PayoffRequest is not null
+                || s.PayrollAgreementId is not null,
+            ChangesSinceReturn = FotoDeSolicitud.Leer(s.ReturnSnapshot) is { } foto
+                ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes), ct)
+                : [],
         };
+    }
+
+    /// <summary>Las diferencias entre la foto de la devolución y la solicitud de ahora, con líneas, oficinas y personas por su nombre.</summary>
+    private static async Task<IReadOnlyList<CreditApplicationChangeDto>> CambiosAsync(IApplicationDbContext db, FotoDeSolicitud antes,
+        FotoDeSolicitud ahora, CancellationToken ct)
+    {
+        var diferencias = antes.Diferencias(ahora);
+        if (diferencias.Count == 0) return [];
+        var lineas = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.Id == antes.LineaId || l.Id == ahora.LineaId)
+            .ToDictionaryAsync(l => l.Id, l => $"{l.Code} · {l.Name}", ct);
+        var oficinas = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == antes.OficinaId || b.Id == ahora.OficinaId)
+            .ToDictionaryAsync(b => b.Id, b => b.Name, ct);
+        var personas = await ReferenciasDeGobierno.PersonasAsync(db, antes.Codeudores.Concat(ahora.Codeudores).Select(p => p.PersonId), ct);
+        string Partes(IReadOnlyList<ParteEnLaFoto> partes) => partes.Count == 0
+            ? "Ninguno"
+            : string.Join("; ", partes.Select(p => $"{(personas.TryGetValue(p.PersonId, out var r) ? r.FullName : "?")}"
+                + $"{(p.Role == CreditPartyRole.Guarantor ? " (avalista)" : "")}"
+                + $"{(p.Ingreso is { } i ? $", ingreso {i:N0}" : "")}{(p.Gasto is { } g ? $", gasto {g:N0}" : "")}"));
+
+        return diferencias.Select(d => d.Grupo switch
+        {
+            GrupoEditableAlDevolver.Linea => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo,
+                lineas.GetValueOrDefault(antes.LineaId), lineas.GetValueOrDefault(ahora.LineaId)),
+            GrupoEditableAlDevolver.Oficina => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo,
+                oficinas.GetValueOrDefault(antes.OficinaId), oficinas.GetValueOrDefault(ahora.OficinaId)),
+            GrupoEditableAlDevolver.Codeudores => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo,
+                Partes(antes.Codeudores), Partes(ahora.Codeudores)),
+            _ => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo, d.Antes, d.Despues),
+        }).ToList();
     }
 
     private static CreditApplicationScoreDto Puntaje(CreditScore p)

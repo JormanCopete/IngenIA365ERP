@@ -383,3 +383,39 @@ centrales necesita el canal real configurado (ver `docs/operaciones/canales-exte
   su canal simulado, listas y su liberación, cupos, bloqueos, saldos de aportes y el re-escaneo.
 - e2e en los dos motores: `OriginacionConAtribucionesTests` («Cartera e2e»), con cupos en una cooperativa sin
   activar y solicitudes en una activada para la prueba; el recorrido manual está en quickstart §3.5.
+
+## Corregir una solicitud devuelta (2026-11-23)
+
+Cuando quien decide pulsa «Devolver para corregir», la solicitud vuelve a quien la armó. En su detalle aparece **«Corregir datos»**, que abre
+la misma pantalla de la solicitud nueva con lo guardado (`/cartera/solicitudes/{id}/corregir`). Un borrador también se edita desde ahí
+(«Editar»), y en borrador se puede cambiar todo.
+
+**Qué se puede cambiar lo decide cada cooperativa**, y si quiere cada línea, con el parámetro de Cartera
+`Originacion.GruposEditablesAlDevolver` (Parámetros de Cartera → «Nueva vigencia», con casillas). Los grupos son:
+
+| Grupo | Qué incluye |
+|---|---|
+| Condiciones | monto, cuotas, periodicidad, sistema, fechas, gracia, cuotas extraordinarias y la marca de vivienda de interés social |
+| Línea | la línea de crédito |
+| Oficina | la oficina de la solicitud |
+| Destino | el destino del crédito |
+| Forma de pago | la forma de pago y, en libranza, el convenio |
+| Seguros | los seguros elegidos |
+| Capacidad | ingresos, gastos y cuotas externas del solicitante |
+| Codeudores | los codeudores y avalistas, con sus datos |
+| Créditos que recoge | los créditos que recoge |
+| Excepción a la política | la excepción y su motivo |
+| Preferencia de abono | la preferencia de abono a capital |
+| Documentos | adjuntar y quitar documentos |
+| Garantías | registrar o cambiar garantías |
+
+De fábrica se puede corregir todo **menos la línea y la oficina**. El solicitante no cambia nunca: para otra persona, otra solicitud.
+
+- **El servidor revisa cada grupo.** Si alguien cambia algo que el parámetro deja fijo, la respuesta es `Lending.Application.FieldNotEditable`
+  con la lista de grupos, y no se guarda nada.
+- **Al devolver queda una foto** de lo que decía la solicitud. Desde ahí el detalle muestra **«Qué cambió desde la devolución»**, dato por
+  dato, para que quien decide vea lo que se corrigió. Una devolución nueva reemplaza la foto anterior.
+- **Al radicar de nuevo se vuelve a validar todo**, como la primera vez: la simulación con la línea vigente, la usura, los documentos y el
+  nivel de atribución.
+- **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia, créditos que recoge o convenio de libranza, porque no
+  maneja esos datos. Esas se corrigen por la integración, o se anulan y se radica otra.

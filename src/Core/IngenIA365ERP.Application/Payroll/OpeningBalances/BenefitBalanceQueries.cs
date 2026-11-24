@@ -84,7 +84,7 @@ public sealed class ListBenefitBalancesQueryHandler(IApplicationDbContext db, Pa
 {
     public async Task<Result<IReadOnlyList<BenefitBalanceSummaryDto>>> Handle(ListBenefitBalancesQuery request, CancellationToken ct)
     {
-        var asOf = request.AsOf ?? clock.TodayUtc;
+        var asOf = request.AsOf ?? clock.HoyLocal;
         var arranque = await BenefitBalanceRules.ArranqueAsync(db, politicas, asOf, ct);
         var arranqueDt = arranque?.ToDateTime(TimeOnly.MinValue);
 
@@ -151,7 +151,7 @@ public sealed class GetBenefitBalanceQueryHandler(IApplicationDbContext db, Payr
             .Where(b => b.EmployeeId == e.Id && !b.IsDeleted)
             .ToListAsync(ct);
         var publicIdPorId = filas.ToDictionary(f => f.Id, f => f.PublicId);
-        var arranque = await BenefitBalanceRules.ArranqueAsync(db, politicas, clock.TodayUtc, ct);
+        var arranque = await BenefitBalanceRules.ArranqueAsync(db, politicas, clock.HoyLocal, ct);
         var vigente = BenefitBalanceRules.Vigente(filas);
 
         BenefitBalanceRowDto Map(EmployeeBenefitOpeningBalance f) =>

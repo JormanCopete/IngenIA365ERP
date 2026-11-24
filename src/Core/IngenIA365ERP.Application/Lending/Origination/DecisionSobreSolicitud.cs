@@ -141,7 +141,8 @@ public sealed class DecisionSobreSolicitud(
                     s.Negar();
                     break;
                 default:
-                    s.Devolver();
+                    // 2026-11-23: lo que decía al devolverla, para mostrar después qué se corrigió.
+                    s.Devolver(await FotoDeSolicitud.SerializarAsync(db, s, ct));
                     break;
             }
             intervenciones.Registrar(verificada.Value, SubmitCreditApplicationCommandHandler.Expediente, s.PublicId);

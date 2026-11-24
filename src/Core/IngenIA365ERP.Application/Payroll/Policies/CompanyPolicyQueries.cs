@@ -53,7 +53,7 @@ public sealed class ListCompanyPoliciesQueryHandler(IApplicationDbContext db, ID
 
     public async Task<Result<IReadOnlyList<CompanyPolicyDto>>> Handle(ListCompanyPoliciesQuery request, CancellationToken ct)
     {
-        var asOf = request.AsOf ?? clock.TodayUtc;
+        var asOf = request.AsOf ?? clock.HoyLocal;
         var filas = await db.CompanyPolicies.AsNoTracking().Where(p => !p.IsDeleted).ToListAsync(ct);
         var porClave = filas.ToLookup(f => f.Key, StringComparer.Ordinal);
 
@@ -92,7 +92,7 @@ public sealed class GetPolicyVersionsQueryHandler(IApplicationDbContext db, IDat
         if (!CompanyPolicyKeys.Existe(clave))
             return Result.Failure<IReadOnlyList<CompanyPolicyVersionDto>>(CompanyPolicyErrors.KeyUnknown(clave));
 
-        var asOf = request.AsOf ?? clock.TodayUtc;
+        var asOf = request.AsOf ?? clock.HoyLocal;
         var versiones = await db.CompanyPolicies.AsNoTracking()
             .Where(p => p.Key == clave && !p.IsDeleted)
             .OrderByDescending(p => p.ValidFrom)

@@ -1,0 +1,62 @@
+@* Elegir varios valores de una lista corta (medios de pago, clases de medio…) en una barra de filtros. Sin nada elegido
+   el resumen dice «Todos»: el filtro no aplica. Pedido del dueño del 2026-11-23 para el detalle de ventas por medio de pago;
+   es el primer filtro de varios valores de las pantallas de informes, y sirve para los que sigan. *@
+
+<details class="seleccion-multiple" @attributes="Atributos">
+    <summary>@Resumen</summary>
+    <div class="seleccion-multiple-lista">
+        @if (Opciones.Count > 1)
+        {
+            <div class="seleccion-multiple-acciones">
+                <button type="button" class="enlace" @onclick="TodosAsync">Marcar todos</button>
+                <button type="button" class="enlace" @onclick="NingunoAsync">Quitar todos</button>
+            </div>
+        }
+        @foreach (var (valor, texto) in Opciones)
+        {
+            <label class="campo-check">
+                <input type="checkbox" checked="@Seleccionados.Contains(valor)" @onchange="@(e => CambiarAsync(valor, e.Value is true))" />
+                @texto
+            </label>
+        }
+    </div>
+</details>
+
+@code {
+    /// <summary>Las opciones: el valor que viaja y el texto que se ve.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Valor, string Texto)> Opciones { get; set; } = [];
+
+    [Parameter] public IReadOnlyCollection<string> Seleccionados { get; set; } = [];
+
+    [Parameter] public EventCallback<IReadOnlyList<string>> SeleccionadosChanged { get; set; }
+
+    /// <summary>Lo que dice el resumen cuando no hay nada elegido.</summary>
+    [Parameter] public string TextoSinSeleccion { get; set; } = "Todos";
+
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Atributos { get; set; }
+
+    private string Resumen
+    {
+        get
+        {
+            var elegidos = Opciones.Where(o => Seleccionados.Contains(o.Valor)).Select(o => o.Texto).ToList();
+            return elegidos.Count switch
+            {
+                0 => TextoSinSeleccion,
+                1 or 2 => string.Join(", ", elegidos),
+                _ => $"{elegidos.Count} elegidos",
+            };
+        }
+    }
+
+    private Task CambiarAsync(string valor, bool marcado)
+    {
+        var nuevos = Opciones.Select(o => o.Valor)
+            .Where(v => v == valor ? marcado : Seleccionados.Contains(v)).ToList();
+        return SeleccionadosChanged.InvokeAsync(nuevos);
+    }
+
+    private Task TodosAsync() => SeleccionadosChanged.InvokeAsync(Opciones.Select(o => o.Valor).ToList());
+
+    private Task NingunoAsync() => SeleccionadosChanged.InvokeAsync([]);
+}

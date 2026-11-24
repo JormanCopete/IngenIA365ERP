@@ -38,7 +38,8 @@ public sealed class UpdateCollateralCommandHandler(
     FechaContable fechaContable,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<UpdateCollateralCommand, Result<CollateralDto>>
+    IDateTimeService reloj,
+    Origination.GruposEditablesDeSolicitud editables) : IRequestHandler<UpdateCollateralCommand, Result<CollateralDto>>
 {
     public async Task<Result<CollateralDto>> Handle(UpdateCollateralCommand request, CancellationToken ct)
     {
@@ -47,6 +48,8 @@ public sealed class UpdateCollateralCommandHandler(
         var (g, dueno) = leida.Value;
         if (dueno.Decidido || g.LoanId is not null || g.Status is not (CollateralStatus.Constituted or CollateralStatus.Valid))
             return Falla(ErroresDeGarantias.DuenoDecidido(dueno.Clase));
+        if (await editables.ExigirAsync(dueno.EstadoDeLaSolicitud, dueno.CreditLineId, Domain.Lending.Origination.GrupoEditableAlDevolver.Garantias,
+                reloj.HoyLocal, ct) is { } fijo) return Falla(fijo);
 
         var e = request.Collateral;
         var avaluador = await PersonaAsync(e.AppraiserPersonPublicId, ct);

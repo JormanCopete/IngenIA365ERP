@@ -264,9 +264,11 @@ internal sealed class OriginacionDePrueba : IDisposable
     public ArmadoDeSolicitud Armado() => new(Db, Simulador(), G.Perfil, G.Alcance, G.Auditoria);
 
     public CreateCreditApplicationCommandHandler Crear() => new(Db, Armado(), Autorizaciones, G.Actor, G.Reloj);
-    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj);
-    public AttachCreditApplicationDocumentCommandHandler Adjuntar() => new(Db, G.Alcance, G.Auditoria, G.Reloj);
-    public RemoveCreditApplicationDocumentCommandHandler Quitar() => new(Db, G.Alcance, G.Auditoria);
+    public GruposEditablesDeSolicitud Editables() => new(Parametros());
+    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj, Editables());
+    public AttachCreditApplicationDocumentCommandHandler Adjuntar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
+    public RemoveCreditApplicationDocumentCommandHandler Quitar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
+    public GetCreditApplicationQueryHandler Leer() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public SubmitCreditApplicationCommandHandler Radicar() =>
         new(Db, Evaluacion(), Enrutamiento(), G.Intervenciones(), new NumeradorDeCartera(Db, Cerrojo), Cerrojo, Autorizaciones, G.Alcance, G.Auditoria,
             G.Reloj);

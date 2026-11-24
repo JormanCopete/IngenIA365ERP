@@ -102,7 +102,7 @@ public sealed class AsuntoDeActaDeSolicitud(
                 return await ContingenteAsync(s, decision.Fecha, ct);
             case CreditDecisionOutcome.Return:
                 if (s.Status == CreditApplicationStatus.Approved && await ReenrutarVencidaAsync(s, decision.Fecha, ct) is { } sinRuta2) return Result.Failure(sinRuta2);
-                s.Devolver();
+                s.Devolver(await FotoDeSolicitud.SerializarAsync(db, s, ct));
                 return await ContingenteAsync(s, decision.Fecha, ct);
         }
 

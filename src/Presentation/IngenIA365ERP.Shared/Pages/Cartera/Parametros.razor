@@ -146,6 +146,18 @@
                         {
                             <select class="e-input" @bind="_valor"><option value="true">Sí</option><option value="false">No</option></select>
                         }
+                        else if (p.MultipleValues is { Count: > 0 } opciones)
+                        {
+                            @* 2026-11-23: una lista de nombres (los grupos que se corrigen al devolver, los conceptos del certificado…) se elige con casillas. *@
+                            @foreach (var opcion in opciones)
+                            {
+                                var nombre = opcion;
+                                <label class="campo-check">
+                                    <input type="checkbox" checked="@Elegida(nombre)" @onchange="@(e => Marcar(opciones, nombre, e.Value is true))" />
+                                    @TextosDeOriginacion.GrupoEditable(nombre)
+                                </label>
+                            }
+                        }
                         else
                         {
                             <input class="e-input" @bind="_valor" />
@@ -188,6 +200,14 @@
     private bool _mostrarNueva, _riesgo, _documentos;
     private string _buscar = string.Empty;
     private string? _valor, _motivo, _fuente, _error;
+
+    /// <summary>Una opción de una lista de nombres está en el valor que se va a registrar.</summary>
+    private bool Elegida(string nombre) =>
+        (_valor ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(nombre, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Marca o desmarca una opción y rehace el valor en el orden de las opciones.</summary>
+    private void Marcar(IReadOnlyList<string> opciones, string nombre, bool marcada) =>
+        _valor = string.Join(",", opciones.Where(o => o == nombre ? marcada : Elegida(o)));
     private Guid? _ambitoId;
     private int _ambito;
     private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
@@ -222,7 +242,7 @@
     private void AbrirNueva(ParametroDeCarteraDto p)
     {
         _editado = p;
-        _valor = p.Type == "Bool" ? p.Current.Value : null;
+        _valor = p.Type == "Bool" || p.MultipleValues is { Count: > 0 } ? p.Current.Value : null;
         _motivo = _fuente = _error = null;
         _ambitoId = null;
         _ambito = 0;

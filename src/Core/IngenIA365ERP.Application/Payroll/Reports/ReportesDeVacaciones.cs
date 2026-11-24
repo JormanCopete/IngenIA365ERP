@@ -51,7 +51,7 @@ public sealed class SaldosVacacionesReportQueryHandler(ISender sender, IDateTime
 {
     public async Task<Result<TablaExportable>> Handle(SaldosVacacionesReportQuery request, CancellationToken ct)
     {
-        var asOf = request.AsOf ?? clock.TodayUtc;
+        var asOf = request.AsOf ?? clock.HoyLocal;
         var saldos = await sender.Send(new GetVacationBalancesQuery(asOf, request.Search), ct);
         if (saldos.IsFailure) return Result.Failure<TablaExportable>(saldos.Error);
 

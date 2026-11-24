@@ -120,14 +120,17 @@ public sealed class GetCreditApplicationQueryHandler(
     IApplicationDbContext db,
     IAlcanceDeCartera alcanceDeLaPeticion,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<GetCreditApplicationQuery, Result<CreditApplicationDto>>
+    IDateTimeService reloj,
+    GruposEditablesDeSolicitud editables) : IRequestHandler<GetCreditApplicationQuery, Result<CreditApplicationDto>>
 {
     public async Task<Result<CreditApplicationDto>> Handle(GetCreditApplicationQuery request, CancellationToken ct)
     {
         var s = await SolicitudEnAlcance.LeerAsync(db, alcanceDeLaPeticion, auditoria, request.ApplicationPublicId, seguir: false, ct);
-        return s.IsFailure
-            ? Result.Failure<CreditApplicationDto>(s.Error)
-            : Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s.Value, reloj.HoyLocal, ct));
+        if (s.IsFailure) return Result.Failure<CreditApplicationDto>(s.Error);
+        var dto = await ConsultasDeSolicitudes.DtoAsync(db, s.Value, reloj.HoyLocal, ct);
+        // 2026-11-23: qué deja corregir el parámetro de su línea (todo en borrador; nada si ya no se edita).
+        var grupos = await editables.DeAsync(s.Value, reloj.HoyLocal, ct);
+        return Result.Success(dto with { EditableGroups = [.. Domain.Lending.Origination.GruposEditablesAlDevolver.Separar(grupos).Select(g => g.ToString())] });
     }
 }
 

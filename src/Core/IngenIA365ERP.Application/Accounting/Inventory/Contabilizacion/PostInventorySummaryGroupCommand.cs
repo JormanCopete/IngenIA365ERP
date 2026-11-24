@@ -86,7 +86,7 @@ public sealed class PostInventorySummaryGroupCommandHandler(
 
         // 1. cada documento como si fuera por documento, validados todos juntos.
         var comoMensajes = vivas.Select(v => (IReadOnlyList<MensajeDeUnidad>)v.Mensajes.Select(MensajeDeUnidad.De).ToList()).ToList();
-        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, comoMensajes, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, comoMensajes, reloj.HoyLocal, ct);
         var construidas = vivas.Select((v, i) => (v.Unidad, v.Mensajes, Construccion: ConstructorDeLineasDeInventario.Construir(comoMensajes[i], catalogos))).ToList();
 
         var excluidos = new HashSet<Guid>();

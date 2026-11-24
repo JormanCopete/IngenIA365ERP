@@ -44,7 +44,7 @@ public sealed class ListBankFileFormatsQueryHandler(IApplicationDbContext db, ID
         var ids = formatos.Select(f => f.Id).ToList();
         var archivos = await db.BankDisbursementFiles.AsNoTracking().Where(a => ids.Contains(a.FormatId))
             .GroupBy(a => a.FormatId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         return Result.Success<IReadOnlyList<BankFileFormatSummaryDto>>(formatos.Select(f => Map(f, archivos.GetValueOrDefault(f.Id), hoy)).ToList());
     }
 
@@ -71,7 +71,7 @@ public sealed class GetBankFileFormatQueryHandler(IApplicationDbContext db, IDat
             .FirstOrDefaultAsync(x => x.PublicId == request.FormatPublicId, ct);
         if (f is null) return Result.Failure<BankFileFormatDetailDto>(BankFileFormatErrors.NotFound);
         var archivos = await db.BankDisbursementFiles.AsNoTracking().CountAsync(a => a.FormatId == f.Id, ct);
-        return Result.Success(new BankFileFormatDetailDto(ListBankFileFormatsQueryHandler.Map(f, archivos, clock.TodayUtc), BankFileFormatDefinition.Desde(f)));
+        return Result.Success(new BankFileFormatDetailDto(ListBankFileFormatsQueryHandler.Map(f, archivos, clock.HoyLocal), BankFileFormatDefinition.Desde(f)));
     }
 }
 
