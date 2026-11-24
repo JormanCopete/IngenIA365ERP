@@ -1,6 +1,6 @@
 # 025 — Causación por período y tasa mensual en Cartera
 
-**Rama**: `025-causacion-por-periodo` · **Creada**: 2026-11-24 · **Estado**: borrador, esperando las decisiones D1–D3 del dueño
+**Rama**: `025-causacion-por-periodo` · **Creada**: 2026-11-24 · **Estado**: borrador con las decisiones D1–D3 del dueño (2026-11-24)
 **Base**: la 013 (motor de Cartera), la 024 (causación configurable) y la carga de cartera de la 016.
 
 ## Problema
@@ -38,13 +38,15 @@ El **cálculo** sigue siendo día a día (la 013 y la 024 no cambian en eso): as
 
 ## Historias de usuario
 
-### HU1 — Ajuste del corte en créditos ya cargados (P1)
+### HU1 — Recálculo de la carga desde el corte en créditos ya cargados (P1)
 
-La cooperativa que ya activó su cartera cobra el interés que la carga dejó por fuera en la primera cuota después del corte.
+La cooperativa que ya activó su cartera la recausa desde el corte, sin borrar nada, con los mismos pagos reales (D1, 2026-11-24):
+- La tasa queda corregida desde el corte (HU3).
+- El interés que la carga dejó por fuera en la primera cuota posterior al corte se cobra en la **primera cuota sin vencer, sin mora**.
 
 **Por qué primero**: es plata que hoy no se está cobrando y que se pierde cuota a cuota.
 
-**Prueba independiente**: sobre una cartera cargada y activa, el borrador del ajuste lista por crédito el interés que faltó. Puesto en firme, cada crédito afectado lo debe en la cuota que diga D1, y la contabilidad lo refleja.
+**Prueba independiente**: sobre una cartera cargada y activa, el borrador del ajuste lista por crédito el interés que faltó. Puesto en firme, cada crédito afectado lo debe en su primera cuota sin vencer, sin mora, y la contabilidad lo refleja.
 
 **Escenarios**:
 1. **Dado** un crédito cargado con corte 31/10, vencimiento el día 9 y 1,8 % MV sobre 10.000.000, **cuando** se arma el borrador, **entonces** propone ≈ 126.000: 21 días de interés, del 10/10 al 31/10 en 30/360. Son 125.664 si el crédito sigue sellado en E.A. compuesta, o 126.000,00 si ya pasó a MV.
@@ -67,13 +69,13 @@ La cooperativa pacta y digita la tasa como la conoce, 1,8 % MV. El ERP la guarda
 5. **Dado** una tasa MV, **cuando** se elige otra convención de días que no sea 30/360, **entonces** la versión se rechaza.
 6. **Dado** la plantilla de líneas o la de migración, **cuando** trae `tasaCorrienteMV` en lugar de `tasaCorrienteEA`, **entonces** se acepta. Traer las dos es un error.
 
-### HU3 — Corrección de la tasa de los créditos cargados (P2, depende de D2)
+### HU3 — Corrección de la tasa de los créditos cargados (P1, parte del recálculo de la HU1)
 
 La cooperativa corrige de una vez la tasa de los créditos que entraron con la E.A. redondeada, sin tocar el capital del plan.
 
 **Escenarios**:
 1. **Dado** créditos cuya E.A. sellada corresponde a una MV redonda con una diferencia menor a 0,005 puntos, **cuando** se arma el borrador, **entonces** propone pasarlos a esa MV, con el valor actual y el nuevo.
-2. **Dado** el borrador en firme, con aprobación de otra persona, **entonces** sella una versión de condiciones nueva por crédito, con la causa «Corrección de la carga» y vigencia desde la fecha que diga D2.
+2. **Dado** el borrador en firme, con aprobación de otra persona, **entonces** sella una versión de condiciones nueva por crédito, con la causa «Corrección de la carga» y vigencia **desde el corte**. El recálculo desde ahí usa los mismos pagos y asienta las diferencias como movimientos nuevos.
 
 ### HU4 — La carga causa completo el período en curso (P2)
 
@@ -111,7 +113,7 @@ La cooperativa trabaja como siempre: el día 1 (o el 16) queda causada la cuota 
 - **Febrero y meses de 31:** en 30/360 son de 30 días; la quincena del 16 al 28 o al 31 es de 15 días.
 - **Primera cuota de un desembolso nuevo:** días 30/360 del desembolso al primer vencimiento, prorrateados linealmente en MV (como la herramienta anterior). Sin cambios en E.A.
 - **Última cuota:** interés del período sobre el saldo que queda; el capital se topa al saldo. No hay regla de días especial.
-- **Créditos en mora:** el interés corriente sigue sobre el capital y la mora corre sobre lo vencido, como hoy. La HU1 no los excluye, pero si su primera cuota posterior al corte ya está vencida, el ajuste va donde diga D1.
+- **Créditos en mora:** el interés corriente sigue sobre el capital y la mora corre sobre lo vencido, como hoy. La HU1 no los excluye, pero si su primera cuota posterior al corte ya está vencida, el ajuste va a la primera cuota sin vencer, sin mora.
 - **Vivienda, UVR, castigados y suspendidos:** fuera de la HU1 y de la HU3. La HU2 no aplica a vivienda en UVR.
 - **Créditos de pago único (servicios, ventas a crédito):** la HU1 sólo considera créditos con plan periódico.
 - **Doble cobro:**
@@ -127,7 +129,7 @@ La cooperativa trabaja como siempre: el día 1 (o el 16) queda causada la cuota 
   - **interés del período completo** de su primera cuota con vencimiento posterior al corte: saldo de capital al corte × tasa del período, con la convención y la equivalencia selladas;
   - **lo que ya tiene**: lo causado desde el corte hasta ese vencimiento, más el interés que traía la cuota en la carga;
   - **el ajuste**: la diferencia, si es positiva y mayor a un peso.
-- **FR-004** El ajuste se registra en el libro como interés corriente (transacción de clase nueva `CutoverInterestAdjustment`) en la cuota que diga D1. Emite un hecho contable propio (`InteresDelCorte`) con los roles de la causación de interés corriente: cuenta por cobrar e ingreso.
+- **FR-004** El ajuste se registra en el libro como interés corriente (transacción de clase nueva `CutoverInterestAdjustment`) en la **primera cuota sin vencer** a la fecha de firma, sin mora ni efecto en la altura de mora ni en la calificación (D1). Emite un hecho contable propio (`InteresDelCorte`) con los roles de la causación de interés corriente: cuenta por cobrar e ingreso.
 - **FR-005** Un crédito ajustado queda marcado y no vuelve a entrar.
 - **FR-006** El reproceso de la 024 aplica igual: lo puesto en firme no se toca ni se reversa.
 
@@ -143,9 +145,10 @@ La cooperativa trabaja como siempre: el día 1 (o el 16) queda causada la cuota 
   - con MV, un campo «Tasa corriente (% MV)» de cuatro decimales y, a su lado, la E.A. calculada (y al revés con E.A.).
 - **FR-011** Plantillas de líneas y de migración: columna `tasaCorrienteMV`, excluyente con `tasaCorrienteEA`.
 - **FR-012** Documentos e informes: siempre la E.A. y, si la base es MV, también la mensual.
-- **FR-013** Corrección de la carga (HU3): otra clase del proceso de la 024.
+- **FR-013** Corrección de la carga (HU3, D2): parte del mismo recálculo de la HU1.
   - Propone la MV redonda más cercana cuando la diferencia en E.A. es menor a 0,005 puntos.
-  - Sella condiciones nuevas con la causa `CutoverCorrection` y vigencia desde la fecha de D2.
+  - Sella condiciones nuevas con la causa `CutoverCorrection` y **vigencia desde el corte**.
+  - Recalcula desde ahí con los mismos pagos: las diferencias se asientan como movimientos nuevos (ajuste de causación y redistribución de pagos, como la corrección por valor nacional).
   - No regenera el capital del plan.
   - **La tasa de mora no cambia de base:** sigue en E.A., topada por la usura.
 
@@ -165,11 +168,13 @@ La cooperativa trabaja como siempre: el día 1 (o el 16) queda causada la cuota 
     - qué muestra la caja como cuota del período;
     - la cuota del período que usan los descuentos por nómina y pagaduría.
   - El **monto** de la cuota no cambia: es el que da el plan.
-- **FR-017** Interés al cancelar o abonar dentro del período (D3): `Pagos.InteresesAlPagarAntesDelVencimiento` gana el valor `PeriodoCausado`.
-  - Cobra el interés de los períodos ya causados (reconocidos) y no pagados, y nada de un período que no ha empezado. Es lo que hacía la herramienta anterior.
-  - Lo causado día a día de un período sin empezar se devuelve con el mecanismo de devolución de la 024.
-  - Los valores `Corrido` (de fábrica) y `CuotaCompleta` siguen iguales.
-  - Ley 1555 y vivienda: como hoy, el modo distinto de «corrido» sólo aplica fuera del tope legal.
+- **FR-017** Interés al pagar dentro del período (D3, decidido el 2026-11-24).
+  - **Abono** (todo pago que no cancela la deuda): primero cubre **todo lo causado** del período, el reconocido completo, y después lo que diga su modalidad.
+  - **Cancelación total con interés ya causado:** lo decide `Pagos.InteresesAlPagarAntesDelVencimiento`, el parámetro que ya existe (general y por línea). No se crea otro para no tener dos que se contradigan. En pantalla se presenta como «¿Devuelve los días no corridos al cancelar?»:
+    - **Sí** (`Corrido`, de fábrica): se devuelven los días del período causado que no corrieron.
+    - **No** (`CuotaCompleta`): se cobra el período causado completo.
+  - Lo causado día a día de un período sin empezar nunca se cobra: se devuelve con el mecanismo de devolución de la 024.
+  - Ley 1555 y vivienda: como hoy, «No» sólo aplica fuera del tope legal del prepago.
 - **FR-018** Filtros del proceso manual: forma de pago (nómina, caja, todos), qué causa (todo, sin extras, sólo extras) y ciclo de descuento (primera o segunda quincena, década, semana del mes).
 
 ### Estado de cuenta (HU6)
@@ -180,9 +185,9 @@ La cooperativa trabaja como siempre: el día 1 (o el 16) queda causada la cuota 
 
 | # | Pregunta | Recomendación | Decisión |
 |---|---|---|---|
-| D1 | ¿Dónde se cobra el ajuste del corte (HU1)? | En la **siguiente cuota sin vencer**: la del período ya está pagada en la mayoría y ponerlo ahí los dejaría en mora. Alternativa: que lo asuma la cooperativa (no se corre la HU1). | pendiente |
-| D2 | ¿Se corrige la tasa de los créditos cargados (HU3)? ¿Desde cuándo? | Sí, desde la fecha en que se ponga en firme. La diferencia hacia atrás es menor a un peso por mes por millón y no amerita recalcular. | pendiente |
-| D3 | Con período calendario, ¿qué se cobra al cancelar o abonar a mitad del período? | `Corrido` de fábrica (cobra los días reales y es lo más defendible ante la Ley 1555); `PeriodoCausado` para quien quiera la regla de la herramienta anterior. | pendiente |
+| D1 | ¿Dónde se cobra el ajuste del corte (HU1)? | En la **siguiente cuota sin vencer**. Alternativa: que lo asuma la cooperativa. | **2026-11-24: recausar desde el 1/11** («borrando los registros ya realizados de pagos, causaciones, etc.»). Directo en producción, con respaldo previo; **sin borrar**: se recalcula con los mismos pagos reales y las diferencias van como movimientos nuevos; lo que falte de la cuota ya vencida va **sin mora** en la próxima cuota. |
+| D2 | ¿Se corrige la tasa de los créditos cargados (HU3)? | Sí, desde la fecha en que se ponga en firme. | **2026-11-24: sí.** Con D1, la tasa corregida rige desde el corte. |
+| D3 | ¿Qué se cobra al cancelar o abonar a mitad del período? | `Corrido` de fábrica; `PeriodoCausado` como opción. | **2026-11-24:** un abono, que no cancela, cobra **todo lo causado**. La cancelación total, con interés ya causado, devuelve o no los días según **un parámetro de la empresa en Cartera** (FR-017). |
 | D4 | ¿La tasa de mora también en MV? | No: la mora se topa con la usura, que es E.A. | propuesta |
 | D5 | Opción de la HU4 por defecto | Sí: es lo que corresponde a casi todas las herramientas de origen. | propuesta |
 
