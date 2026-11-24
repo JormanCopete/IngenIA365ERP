@@ -16,6 +16,7 @@
 @inject MediosDePagoClient CatalogoDeMedios
 @inject IngenIA365ERP.Shared.Services.Security.PreferenciasClient Preferencias
 @inject IJSRuntime JS
+@inject IngenIA365ERP.Shared.Services.IImpresionDeDocumentos Impresora
 @inject NavigationManager Navegacion
 @implements IAsyncDisposable
 
@@ -1297,6 +1298,9 @@
     private async Task ImprimirAsync(bool carta)
     {
         if (_recibo is null) return;
+        // 2026-11-24: la tirilla se imprime como imagen en una página de 80 mm. Como PDF, el diálogo del navegador la ajustaba a la hoja y en una
+        // carta salía casi tres veces más grande. Si no se puede, sigue el PDF de siempre.
+        if (!carta && await ImprimirTirillaAsync()) return;
         var r = await Cliente.DocumentoAsync(_recibo.PublicId, carta, copia: false);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el recibo."); return; }
         try
@@ -1309,6 +1313,18 @@
         {
             await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
         }
+    }
+
+    /// <summary>2026-11-24: la tirilla a tamaño real: la imagen de 80 mm del recibo dentro de una página de ese ancho.</summary>
+    private async Task<bool> ImprimirTirillaAsync()
+    {
+        var r = await Cliente.TirillaComoImagenAsync(_recibo!.PublicId, copia: false);
+        if (!r.IsSuccess || r.Value is null) return false;
+        var html = "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"><title>Recibo de caja</title><style>"
+            + "@page{size:80mm auto;margin:0}html,body{margin:0;padding:0}img{display:block;width:80mm;height:auto}"
+            + "</style></head><body><img alt=\"Recibo de caja\" src=\"data:image/png;base64,"
+            + Convert.ToBase64String(r.Value.Contenido) + "\"></body></html>";
+        return await Impresora.ImprimirAsync(html, "Recibo de caja");
     }
 
     /// <summary>2026-11-23: guarda en las preferencias del usuario cómo imprime el recibo al confirmar.</summary>

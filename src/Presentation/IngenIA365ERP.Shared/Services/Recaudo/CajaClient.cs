@@ -265,6 +265,11 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         EnvioDeVentas.DescargarAsync(http, auth, $"{Base}/receipts/{recibo}/document?format={(carta ? "letter" : "thermal")}&copy={(copia ? "true" : "false")}",
             "recibo.pdf", ct);
 
+    /// <summary>2026-11-24: la tirilla del recibo como imagen PNG de 80 mm, para imprimirla a tamaño real desde el navegador.</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> TirillaComoImagenAsync(Guid recibo, bool copia, CancellationToken ct = default) =>
+        EnvioDeVentas.DescargarAsync(http, auth, $"{Base}/receipts/{recibo}/document?format=thermal-image&copy={(copia ? "true" : "false")}",
+            "recibo.png", ct);
+
     /// <summary>Feature 015, R1 (T0365; FR-187): F4, todo lo exigible en una acción, con sus simulaciones.</summary>
     /// <summary>2026-11-16: el detalle de una obligación (cuotas, saldos por concepto y lo que cuesta anticipar cada cuota) a una fecha.</summary>
     public Task<ResultadoDeInventario<DetalleDeObligacionDto>> DetalleDeObligacionAsync(Guid obligacion, DateOnly? fecha = null, CancellationToken ct = default) =>

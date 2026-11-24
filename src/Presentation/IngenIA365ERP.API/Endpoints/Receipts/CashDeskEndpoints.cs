@@ -75,12 +75,17 @@ public class CashDeskEndpoints : ICarterModule
             .WithName("Receipts_Receipts_List").RequirePermission(Ver);
         recibos.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetReceiptQuery(id), ct))
             .WithName("Receipts_Receipts_Get").RequirePermission(Ver);
+        // 2026-11-24: format=thermal-image devuelve la tirilla como PNG de 80 mm, para que el navegador la imprima a tamaño real.
         recibos.MapGet("/{id:guid}/document", async (Guid id, string? format, bool? copy, ISender s,
                 Application.Receipts.Sessions.IDocumentosDeRecaudoEnPdf pdf, CancellationToken ct) =>
             {
                 var formato = string.Equals(format, "letter", StringComparison.OrdinalIgnoreCase) ? FormatoDeRecibo.Letter : FormatoDeRecibo.Thermal;
+                var imagen = string.Equals(format, "thermal-image", StringComparison.OrdinalIgnoreCase);
                 var r = await s.Send(new GetReceiptDocumentQuery(id, formato, copy ?? false), ct);
-                return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"recibo-{r.Value.Number}.pdf") : (object)r;
+                if (!r.IsSuccess) return (object)r;
+                return imagen
+                    ? Results.File(pdf.ReciboComoImagen(r.Value), "image/png", $"recibo-{r.Value.Number}.png")
+                    : Results.File(pdf.Recibo(r.Value), "application/pdf", $"recibo-{r.Value.Number}.pdf");
             })
             .WithName("Receipts_Receipts_Document").RequirePermission(Imprimir);
         // Feature 015, R1 (T0365; FR-020, FR-045): el recibo por correo, con la autorización del canal; SMS y mensajería simulados.
