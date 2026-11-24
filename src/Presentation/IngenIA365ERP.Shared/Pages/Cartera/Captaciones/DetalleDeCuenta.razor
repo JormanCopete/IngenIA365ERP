@@ -46,6 +46,12 @@
                     <div><dt>Abierta</dt><dd>@c.OpenedOn.ToString("dd/MM/yyyy")@(c.ActivatedOn is { } a ? $" · activa desde {a:dd/MM/yyyy}" : "")</dd></div>
                     <div><dt>Saldo del titular</dt><dd>@Pesos(c.Balances.Balance)</dd></div>
                     <div><dt>Exención del GMF</dt><dd>@(c.GmfExempt is { } g ? $"Exenta desde {g.Since:dd/MM/yyyy}" : "No está marcada")</dd></div>
+                    @if (c.ContributionInstallment is { } q)
+                    {
+                        @* 2026-11-24: la cuota propia de la cuenta de aportes y su canal de pago. *@
+                        <div><dt>Cuota</dt><dd>@TextoDeCuota(q)</dd></div>
+                        <div><dt>Canal de pago</dt><dd>@TextosDeCaptaciones.CanalDePago(q.PaymentChannel)</dd></div>
+                    }
                 </dl>
                 @if (c.Balances.ByConcept.Count > 0)
                 {
@@ -66,6 +72,12 @@
                     {
                         <PermissionGate Required="Lending.Accounts.Open">
                             <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AprobarAsync">Aprobar la apertura</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (c.ContributionInstallment is not null && c.Status != TextosDeCaptaciones.Cancelada)
+                    {
+                        <PermissionGate Required="Lending.Accounts.Open">
+                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@AbrirCorreccionDeCuotaAsync">Corregir la cuota</SfButton>
                         </PermissionGate>
                     }
                     @if (c.Marks.RequiresDataUpdate)
@@ -222,6 +234,47 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+
+@* 2026-11-24: corregir la cuota de una cuenta de aportes; rige para las cuotas que todavía no se generaron. *@
+<SfDialog @bind-Visible="_mostrarCuota" Header="Corregir la cuota" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaCuota.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando la cuota…" : "Leyendo la configuración…")">
+                <p class="texto-tenue">
+                    Las cuotas ya generadas no cambian: lo corregido rige para las que faltan. Queda en la auditoría con su motivo.
+                </p>
+                <div class="form-grid">
+                    @if (_cuotaPropia)
+                    {
+                        <label class="campo">Cuota * <input class="e-input numero" type="number" min="0" step="1" @bind="_correccion.Amount" /></label>
+                        <label class="campo">Periodicidad *
+                            <select class="e-input" @bind="_correccion.Periodicity">
+                                @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Fecha del primer pago * <input class="e-input" type="date" @bind="_correccion.FirstDueDate" /></label>
+                    }
+                    <label class="campo">Canal de pago@(_cuotaPropia ? " *" : "")
+                        <select class="e-input" @bind="_correccion.PaymentChannel">
+                            <option value="">@(_cuotaPropia ? "Elija el canal…" : "Sin canal fijo")</option>
+                            @foreach (var canal in TextosDeCaptaciones.CanalesDePagoDeAportes) { <option value="@canal.Valor">@canal.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_correccion.Reason" /></label>
+                </div>
+                @if (!_cuotaPropia)
+                {
+                    <p class="texto-tenue">La cuota, la periodicidad y el día de vencimiento son los de la línea («Aportes.OrigenDeLaCuota» en Parámetros de Cartera).</p>
+                }
+                @foreach (var e in _erroresDeCuota) { <p class="aviso aviso-error" role="alert">@e</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_correccion.Reason))" OnClick="@GuardarCuotaAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCuota = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -232,7 +285,11 @@
     /// <summary>2026-11-24: abierta dentro de otra pantalla (el producto del estado de cuenta, F9): sin «Volver».</summary>
     [Parameter] public bool EnPopup { get; set; }
 
-    private readonly EstadoDeCarga _carga = new(), _accion = new(), _guardado = new(), _cargaHistoria = new();
+    private readonly EstadoDeCarga _carga = new(), _accion = new(), _guardado = new(), _cargaHistoria = new(), _cargaCuota = new();
+    private CuotaDeLaCuentaDeAportesRequest _correccion = new();
+    private List<string> _erroresDeCuota = [];
+    private ClaveDeOperacion _claveDeCuota = new();
+    private bool _mostrarCuota, _cuotaPropia;
     private CuentaDto? _cuenta;
     private IReadOnlyList<ParteDeCuentaDto>? _historia;
     private IReadOnlyList<AdjuntoDto> _soportes = [];
@@ -290,6 +347,47 @@
         _reemplazar = false;
         _claveDeAccion = new ClaveDeOperacion();
         await Notification.SuccessAsync(exito);
+        await CargarAsync();
+    }
+
+    // -------------------------------------------------------------------------------- cuota de aportes (2026-11-24) --
+
+    private static string TextoDeCuota(CuotaDeLaCuentaDeAportesDto q) => q is { OwnInstallment: true, Amount: { } valor }
+        ? $"{Pesos(valor)} · {TextosDeCartera.Periodicidad(q.Periodicity ?? 0)}{(q.FirstDueDate is { } f ? $" · primer pago {f:dd/MM/yyyy}" : "")}"
+        : "La de la línea";
+
+    private async Task AbrirCorreccionDeCuotaAsync()
+    {
+        if (_cuenta?.ContributionInstallment is not { } q) return;
+        _correccion = new CuotaDeLaCuentaDeAportesRequest
+        {
+            Amount = q.Amount, Periodicity = q.Periodicity ?? 30, FirstDueDate = q.FirstDueDate, PaymentChannel = q.PaymentChannel,
+        };
+        _erroresDeCuota = [];
+        _claveDeCuota = new ClaveDeOperacion();
+        _cuotaPropia = q.OwnInstallment;
+        _mostrarCuota = true;
+        if (_cuotaPropia) return;
+        using var carga = _cargaCuota.Iniciar();
+        _cuotaPropia = (await Cliente.ModoDeCuotaDeAportesAsync()).Value?.DeLaCuenta == true;
+    }
+
+    private async Task GuardarCuotaAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _erroresDeCuota = [];
+        var pedido = new CuotaDeLaCuentaDeAportesRequest
+        {
+            Amount = _cuotaPropia ? _correccion.Amount : null,
+            Periodicity = _cuotaPropia ? _correccion.Periodicity : null,
+            FirstDueDate = _cuotaPropia ? _correccion.FirstDueDate : null,
+            PaymentChannel = _correccion.PaymentChannel,
+            Reason = _correccion.Reason?.Trim(),
+        };
+        var r = await Cliente.CorregirCuotaDeAportesAsync(Id, pedido, _claveDeCuota);
+        if (!r.IsSuccess) { _erroresDeCuota = [.. LineasDeCreditoClient.Explicar(r)]; return; }
+        _mostrarCuota = false;
+        await Notification.SuccessAsync("Cuota de la cuenta corregida.");
         await CargarAsync();
     }
 

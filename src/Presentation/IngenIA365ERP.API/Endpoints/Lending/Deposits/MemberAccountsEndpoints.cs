@@ -62,6 +62,23 @@ public class MemberAccountsEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Abrir);
 
+        // 2026-11-24: la cuota propia de una cuenta de aportes (Aportes.OrigenDeLaCuota): qué pide la apertura y la corrección con motivo.
+        cuentas.MapGet("/contribution-installment-mode", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetContributionInstallmentModeQuery(), ct))
+            .WithName("Lending_Accounts_ContributionInstallmentMode")
+            .RequirePermission(Abrir);
+
+        cuentas.MapPut("/{id:guid}/contribution-installment", async (Guid id, CuotaDeAportesRequest body, HttpContext http, ISender sender,
+                CancellationToken ct) =>
+                await sender.Send(new SetContributionInstallmentCommand(id,
+                    new ContributionAccountInstallmentInput(body.Amount, body.Periodicity, body.FirstDueDate, body.PaymentChannel), body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_Accounts_SetContributionInstallment")
+            .ConClaveDeOperacion()
+            .RequirePermission(Abrir);
+
         cuentas.MapPost("/{id:guid}/approve-opening", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ApproveMemberAccountOpeningCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Lending_Accounts_ApproveOpening")
@@ -191,3 +208,7 @@ public class MemberAccountsEndpoints : ICarterModule
         Guid? EvidenceAttachmentPublicId,
         string? Reason);
 }
+
+/// <summary>2026-11-24: el cuerpo de <c>PUT /api/lending/accounts/{id}/contribution-installment</c>. (nuevo)</summary>
+public sealed record CuotaDeAportesRequest(decimal? Amount, RepaymentPeriodicity? Periodicity, DateOnly? FirstDueDate, RepaymentChannel? PaymentChannel,
+    string? Reason);

@@ -42,6 +42,20 @@ public sealed class TramiteDeNovedadTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Varias_cuotas_en_pago_unico_se_rechazan_con_su_motivo_y_no_con_un_error_inesperado()
+    {
+        // 2026-11-24 (CR-000026 en producción): el generador lanzaba «El pago único tiene un solo vencimiento» y la pantalla decía «error inesperado».
+        var r = await _n.PedirAsync(NoveltyMechanism.Extension, new NewTermsInput(Installments: 6, Periodicity: RepaymentPeriodicity.SinglePayment),
+            NoveltyRequestMotive.DebtorRequest);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+
+        var s = await _n.Simular().Handle(new SimulateLoanNoveltyQuery(r.Value.PublicId), default);
+
+        s.Error.Code.Should().Be(ErroresDeNovedades.CodigoCondicionesInvalidas);
+        s.Error.Message.Should().Contain("pago único").And.Contain("periodicidad del plan nuevo");
+    }
+
+    [Fact]
     public async Task A_peticion_del_deudor_y_al_dia_es_modificacion()
     {
         var r = await _n.PedirAsync(NoveltyMechanism.PaymentDateChange, new NewTermsInput(PaymentDay: 10), NoveltyRequestMotive.DebtorRequest);

@@ -43,6 +43,10 @@ public class MemberAccountConfiguration : IEntityTypeConfiguration<MemberAccount
         // US6 (T170, research E135): la propuesta del CDAT que espera el fondeo.
         builder.Property(e => e.PendingTermsJson);
         builder.Property(e => e.MaturityInstructionJson);
+        // 2026-11-24: la cuota propia de una cuenta de aportes y su canal de pago (Aportes.OrigenDeLaCuota).
+        builder.Property(e => e.ContributionInstallmentAmount).Monto();
+        builder.Property(e => e.ContributionInstallmentPeriodicity).HasConversion<int?>();
+        builder.Property(e => e.ContributionPaymentChannel).HasConversion<int?>();
 
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.HolderPersonId).OnDelete(DeleteBehavior.Restrict);

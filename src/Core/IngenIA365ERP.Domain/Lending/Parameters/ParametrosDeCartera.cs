@@ -467,6 +467,18 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string AportesVariasCuentasPorAsociado = "Aportes.VariasCuentasPorAsociado";
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): de dónde sale la cuota periódica de una cuenta de aportes. «DeLaLinea» (de fábrica): la de la versión de la línea,
+    /// como siempre. «DeLaCuenta»: quien abre la cuenta digita su cuota, periodicidad, fecha del primer pago y canal de pago, y quedan en la cuenta. (nuevo)
+    /// </summary>
+    public const string AportesOrigenDeLaCuota = "Aportes.OrigenDeLaCuota";
+
+    /// <summary>La cuota de aportes la fija la versión de la línea.</summary>
+    public const string CuotaDeLaLinea = "DeLaLinea";
+
+    /// <summary>La cuota de aportes se digita al abrir cada cuenta.</summary>
+    public const string CuotaDeLaCuenta = "DeLaCuenta";
+
     /// <summary>Edad desde la que el titular menor pasa a manejar su cuenta (R22).</summary>
     public const string CaptacionesMayoriaDeEdadAnios = "Captaciones.MayoriaDeEdadAnios";
 
@@ -1251,6 +1263,11 @@ public static class ParametrosDeCartera
             + "documento y un número que se elige al abrirla (APORTES-16261749-2). El mínimo no reducible se exige sobre la suma de sus cuentas. Con "
             + "«No», una sola cuenta de aportes viva por asociado.",
             true, K7, General),
+        Eleccion(Modulo, AportesOrigenDeLaCuota,
+            "De dónde sale la cuota periódica de una cuenta de aportes: «DeLaLinea» toma la cuota, la periodicidad y el día de vencimiento de la línea, "
+            + "iguales para todas sus cuentas; «DeLaCuenta» los pide al abrir cada cuenta (cuota, periodicidad, fecha del primer pago y canal de pago: "
+            + "caja, nómina o pagaduría) y quedan en la cuenta. Cambiarlo no toca las cuentas ya abiertas.",
+            [CuotaDeLaLinea, CuotaDeLaCuenta], CuotaDeLaLinea, K7, General),
         SiNo(Modulo, RiesgoDescuentoAportesDeterioro,
             "Los aportes del deudor descuentan de la base del deterioro individual y del valor expuesto del activo de la pérdida esperada cuando la norma "
             + "lo permite (Anexo 1, num. 5.1; Anexo 2, num. 4.2): la entidad sin pérdidas acumuladas y con solvencia. Forzado en «false» mientras rija D19.",

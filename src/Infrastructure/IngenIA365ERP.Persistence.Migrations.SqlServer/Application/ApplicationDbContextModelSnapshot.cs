@@ -31511,6 +31511,19 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("ContractualStatus")
                         .HasColumnType("int");
 
+                    b.Property<DateOnly?>("ContributionFirstDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("ContributionInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("ContributionInstallmentPeriodicity")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ContributionPaymentChannel")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 

@@ -76,6 +76,19 @@ En `/cartera/ahorros`, «Abrir cuenta». Reglas:
   (`APORTES-16261749-2`): el número se elige al abrir («Número del aporte», letras y dígitos hasta 6) y es único para ese asociado y esa línea; vacío,
   el siguiente del asociado. El mínimo no reducible y el límite de participación se miden sobre la **suma** de sus cuentas. Con «No», una sola
   cuenta de aportes viva por asociado y el número lo pone el consecutivo de la línea.
+- **Aportes: la cuota de cada cuenta** (desde el 2026-11-24; parámetro de Cartera `Aportes.OrigenDeLaCuota`, **«DeLaLinea»** de fábrica).
+  - Con «DeLaLinea» la cuota, la periodicidad y el día de vencimiento son los de la línea, iguales para todas sus cuentas, como siempre. Al abrir
+    sólo se elige, si se quiere, el **«Canal de pago»** (vacío: «Sin canal fijo»).
+  - Con **«DeLaCuenta»**, al abrir cada cuenta de aportes se digitan **«Cuota»**, **«Periodicidad»**, **«Fecha del primer pago»** y **«Canal de
+    pago»**, los cuatro obligatorios. Quedan en la cuenta y el ciclo genera sus cuotas con ellos: la primera es la del período que contiene la fecha
+    del primer pago y vence ese día; en las mensuales o mayores, las siguientes vencen ese mismo día, y en las semanales, decadales y quincenales, al
+    final de su período. La cuota va tal como se digitó (sin el redondeo de la línea); el reparto con el ahorro permanente sigue siendo el de la línea.
+  - **El canal de pago** decide quién descuenta: con «Caja», ni la nómina ni la pagaduría la descuentan; con «Nómina», sólo la nómina propia; con
+    «Pagaduría (libranza)», sólo el archivo de la pagaduría. La caja siempre la recibe. El débito automático no se ofrece: hoy sólo paga créditos.
+  - **Corregir**: en la ficha de la cuenta, «Corregir la cuota» (permiso `Lending.Accounts.Open`, con motivo, queda en la auditoría). Rige para las
+    cuotas que todavía no se generaron; las generadas no cambian. Si la cuenta no tiene cuota propia y la cooperativa toma la de la línea, sólo se
+    corrige el canal.
+  - Cambiar el parámetro no toca las cuentas ya abiertas: la que tiene cuota propia la conserva.
 
 ## 4. Titularidad, menores y beneficiarios
 

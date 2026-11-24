@@ -267,6 +267,10 @@ public sealed class CalculoDeNovedad(IApplicationDbContext db, CargadorDeReconst
             PrimerVencimiento = terminos.FirstDueDate,
             PrimeraCuota = primera,
         };
+        // 2026-11-24 (CR-000026 en producción): un crédito de pago único no pasa a varias cuotas sin una periodicidad nueva; el generador lo
+        // rechazaba con una excepción y la pantalla mostraba «error inesperado».
+        if ((terminos.Periodicity ?? plan.Entrada.Periodicidad) == RepaymentPeriodicity.SinglePayment && cuotas > 1)
+            return Result.Failure<NovedadCalculada>(ErroresDeNovedades.PagoUnicoSinPeriodicidad(principal.Credito.Number, cuotas));
         PlanDePagos nuevo;
         ResultadoDeUsura usura;
         try
