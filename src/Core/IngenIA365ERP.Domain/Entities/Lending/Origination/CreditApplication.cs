@@ -94,6 +94,18 @@ public class CreditApplication : AuditableEntity
     /// </summary>
     public string? ReturnSnapshot { get; set; }
 
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado, el caso del SOAT): el valor del bien que se compra al proveedor. El crédito es este valor menos lo que
+    /// paga el fondo según <see cref="DiscountOptionCode"/>. Nulo si la línea no financia un bien con descuento.
+    /// </summary>
+    public decimal? AssetValue { get; set; }
+
+    /// <summary>2026-11-23: el proveedor del bien (persona del maestro): a él se gira el valor completo.</summary>
+    public int? SupplierPersonId { get; set; }
+
+    /// <summary>2026-11-23: la opción de descuento de la línea que se propone (la confirma quien decide al aprobar).</summary>
+    public string? DiscountOptionCode { get; set; }
+
     public CreditApplicationStatus Status { get; set; } = CreditApplicationStatus.Draft;
 
     /// <summary>Quien la armó (segregación). Nulo si la armó el asociado por el canal digital (feature 021, US13).</summary>

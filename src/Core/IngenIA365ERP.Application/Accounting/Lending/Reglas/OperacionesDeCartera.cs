@@ -143,11 +143,12 @@ public static class OperacionesDeCartera
     public static IReadOnlyList<OperacionDeCartera> Todas { get; } =
     [
         new(CreditoDesembolsadoV1.Type, "DES", false,
-            [R.Capital], [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial], EnLinea, null, "DS", EntregaDelHecho.K1, Ninguno),
+            [R.Capital, R.FondoQueSubsidia], [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial], EnLinea, null, "DS", EntregaDelHecho.K1, Ninguno),
         // 2026-11-16 (feature 024, fase 2): el reverso de un desembolso también deshace la administración causada (cargo por cobrar contra ingreso).
         new(DesembolsoReversadoV1.Type, "DRV", false,
             [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial, R.Ingreso, R.SeguroPorPagar, R.ContraOrdenContingente],
-            [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar, R.SuspensoEnOrden], Heredado, null, "DS", EntregaDelHecho.K1,
+            [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar, R.SuspensoEnOrden, R.FondoQueSubsidia], Heredado, null, "DS",
+            EntregaDelHecho.K1,
             [AjusteDeCausacionPorFechaValorV1.Type], HeredaElModo: true),
         // T1098 (decisión del dueño del 2026-10-18; contabilidad.md §32): sus reallocations se asientan con el molde de PRN, como las de PagoAplicado,
         // así que el ajuste también puede mover los conceptos de la cuota, el ingreso de la recuperación, la orden, el anticipo y el saldo a favor.

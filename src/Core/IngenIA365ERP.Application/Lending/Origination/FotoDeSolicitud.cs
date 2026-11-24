@@ -45,7 +45,10 @@ public sealed record FotoDeSolicitud(
     string? Recogidas,
     bool Excepcion,
     string? MotivoDeExcepcion,
-    PrepaymentChoice? Preferencia)
+    PrepaymentChoice? Preferencia,
+    decimal? ValorDelBien = null,
+    int? ProveedorId = null,
+    string? OpcionDeDescuento = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -62,7 +65,7 @@ public sealed record FotoDeSolicitud(
             s.ExpectedDisbursementDate, s.GraceKind, s.GraceInstallments, s.ExtraordinaryInstallments, s.IsSocialHousing, s.CreditLineId, s.BranchId,
             s.Purpose, s.RepaymentChannel, s.PayrollAgreementId, s.PayrollEmployeeIdentifier, s.SelectedInsurances, solicitante?.MonthlyIncome,
             solicitante?.MonthlyExpenses, solicitante?.ExternalInstallments, codeudores, s.PayoffRequest, s.PolicyExceptionRequested,
-            s.PolicyExceptionReason, s.PrepaymentChoice);
+            s.PolicyExceptionReason, s.PrepaymentChoice, s.AssetValue, s.SupplierPersonId, s.DiscountOptionCode);
     }
 
     /// <summary>La foto de la solicitud con sus partes leídas de la base.</summary>
@@ -105,6 +108,9 @@ public sealed record FotoDeSolicitud(
         Si(C, "Períodos de gracia", PeriodosDeGracia, despues.PeriodosDeGracia);
         Si(C, "Cuotas extraordinarias", Extraordinarias, despues.Extraordinarias);
         Si(C, "Vivienda de interés social", Vis, despues.Vis);
+        Si(C, "Valor del bien", ValorDelBien, despues.ValorDelBien);
+        Si(C, "Proveedor del bien", ProveedorId, despues.ProveedorId);
+        Si(C, "Opción de descuento", OpcionDeDescuento, despues.OpcionDeDescuento);
         Si(GrupoEditableAlDevolver.Linea, "Línea", LineaId, despues.LineaId);
         Si(GrupoEditableAlDevolver.Oficina, "Oficina", OficinaId, despues.OficinaId);
         Si(GrupoEditableAlDevolver.Destino, "Destino", Destino, despues.Destino);

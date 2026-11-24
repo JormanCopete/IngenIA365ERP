@@ -29741,6 +29741,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<string>("DiscountOptions")
+                        .HasColumnType("text");
+
                     b.Property<bool>("ForEmployees")
                         .HasColumnType("boolean");
 
@@ -40563,6 +40566,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<string>("SubsidizedPurchase")
+                        .HasColumnType("text");
+
                     b.Property<bool>("SuspenseWithItsConcept")
                         .HasColumnType("boolean");
 
@@ -43801,6 +43807,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<DateTime?>("StatusChangedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("SubsidyAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -45411,6 +45423,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("ApprovedTerms")
                         .HasColumnType("text");
 
+                    b.Property<decimal?>("AssetValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int?>("AttributionMatrixId")
                         .HasColumnType("integer");
 
@@ -45462,6 +45478,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DiscountOptionCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateOnly?>("ExpectedDisbursementDate")
                         .HasColumnType("date");
@@ -45573,6 +45593,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("SubmittedByUserId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SupplierPersonId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("TermMonths")
                         .HasColumnType("integer");
 
@@ -45621,6 +45644,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("RequiredLevelId");
 
                     b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("SupplierPersonId");
 
                     b.HasIndex("ApplicantPersonId", "Status")
                         .HasDatabaseName("IX_LND_CreditApplications_Applicant_Status");
@@ -81369,6 +81394,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierPersonId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

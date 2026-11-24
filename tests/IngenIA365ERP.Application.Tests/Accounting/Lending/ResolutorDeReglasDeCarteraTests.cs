@@ -88,11 +88,11 @@ public class ResolutorDeReglasDeCarteraTests
     }
 
     [Fact]
-    public void Los_roles_son_los_27_de_la_tabla_de_2_2_y_los_17_de_captaciones()
+    public void Los_roles_son_los_28_de_credito_y_los_18_de_captaciones()
     {
         // Feature 014 (T045): los 17 de captaciones y aportes al final, en español (research C10); el 18.º, la retención de la asamblea (E260).
-        R.Todos.Should().HaveCount(45);
-        R.Todos.Take(27).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
+        R.Todos.Should().HaveCount(46, "el 28.º de crédito es el fondo del descuento condicionado (2026-11-23)");
+        R.Todos.Take(28).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
         R.Buscar(R.Capital)!.Exigidas.Should().Equal(DimensionDeCartera.Modality, DimensionDeCartera.RiskCategory);
         R.Buscar(R.Capital)!.Opcionales.Should().Equal(DimensionDeCartera.CreditLine, DimensionDeCartera.IsEmployee, DimensionDeCartera.Subsegment,
             DimensionDeCartera.Restructured, DimensionDeCartera.Branch);

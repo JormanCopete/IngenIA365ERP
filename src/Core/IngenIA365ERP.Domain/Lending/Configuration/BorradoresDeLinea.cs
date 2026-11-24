@@ -57,6 +57,9 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
     /// <summary>2026-11-17: la originación pide la fecha del primer pago (<see cref="CreditLineVersion.AsksFirstDueDate"/>).</summary>
     public bool AsksFirstDueDate { get; init; }
 
+    /// <summary>2026-11-23: las opciones de descuento condicionado de la línea (<see cref="OpcionDeDescuento"/>); vacía en las demás.</summary>
+    public IReadOnlyList<OpcionDeDescuento> DiscountOptions { get; init; } = [];
+
     // ------------------------------------------------------------------------------------------------- plan --
     public IReadOnlyList<AmortizationSystem> AmortizationSystems { get; init; } = [AmortizationSystem.LevelPayment];
     public AmortizationSystem DefaultAmortizationSystem { get; init; } = AmortizationSystem.LevelPayment;
@@ -148,6 +151,7 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
             PaymentDay = v.PaymentDay,
             CutoffDay = v.CutoffDay,
             AsksFirstDueDate = v.AsksFirstDueDate,
+            DiscountOptions = v.LeerOpcionesDeDescuento(),
             AmortizationSystems = v.LeerSistemas(),
             DefaultAmortizationSystem = v.DefaultAmortizationSystem,
             AllowsExtraordinaryInstallments = v.AllowsExtraordinaryInstallments,

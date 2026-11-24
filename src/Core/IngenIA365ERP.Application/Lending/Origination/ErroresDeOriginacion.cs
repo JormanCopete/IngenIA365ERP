@@ -22,6 +22,10 @@ public static class ErroresDeOriginacion
     public const string CodigoParteRepetida = CreditApplicationParty.CodigoParteRepetida;
     public const string CodigoNoEditable = CreditApplication.CodigoNoEditable;
     public const string CodigoNoCorregible = "Lending.Application.FieldNotEditable";
+    public const string CodigoCompraIncompleta = "Lending.Application.SubsidizedPurchaseIncomplete";
+    public const string CodigoLineaSinDescuento = "Lending.Application.LineWithoutDiscount";
+    public const string CodigoOpcionDesconocida = "Lending.Application.DiscountOptionUnknown";
+    public const string CodigoMontoDeLaCompra = "Lending.Application.SubsidizedAmountMismatch";
     public const string CodigoEstadoInvalido = CreditApplication.CodigoEstadoInvalido;
     public const string CodigoRequisitoDesconocido = "Lending.Application.RequirementUnknown";
     public const string CodigoDocumentosFaltantes = "Lending.Application.DocumentsMissing";
@@ -76,6 +80,24 @@ public static class ErroresDeOriginacion
             $"En una solicitud devuelta para corregir no se puede cambiar: {nombres}. "
             + "Déjelo como estaba o, si hay que cambiarlo, anule la solicitud y radique otra.",
             new { groups = grupos.Select(g => g.ToString()).ToList() });
+    }
+
+    /// <summary>2026-11-23 (descuento condicionado): la línea financia un bien con descuento y falta el valor, el proveedor o la opción.</summary>
+    public static Error CompraIncompleta() => new ErrorConDatos(CodigoCompraIncompleta,
+        "Esta línea financia un bien con descuento: indique el valor del bien, el proveedor y la opción de descuento.", new { });
+
+    public static Error LineaSinDescuento() => new ErrorConDatos(CodigoLineaSinDescuento,
+        "La línea no tiene opciones de descuento: quite el valor del bien, el proveedor y la opción.", new { });
+
+    public static Error OpcionDeDescuentoDesconocida(string codigo, IReadOnlyList<string> admitidas) => new ErrorConDatos(CodigoOpcionDesconocida,
+        "La opción de descuento no es de esta línea: elija una de las que ofrece.", new { option = codigo, admitted = admitidas });
+
+    public static Error MontoDeLaCompra(decimal valor, string opcion, decimal monto)
+    {
+        var bien = valor.ToString("N0", CultureInfo.GetCultureInfo("es-CO"));
+        var credito = monto.ToString("N0", CultureInfo.GetCultureInfo("es-CO"));
+        return new ErrorConDatos(CodigoMontoDeLaCompra, $"Con la opción «{opcion}», el crédito por un bien de {bien} es de {credito}: simule con ese monto.",
+            new { assetValue = valor, expectedAmount = monto });
     }
 
     public static Error EstadoInvalido(string estado, string pedido) => new ErrorConDatos(CodigoEstadoInvalido,

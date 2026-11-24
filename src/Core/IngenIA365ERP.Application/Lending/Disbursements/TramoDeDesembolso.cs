@@ -128,14 +128,14 @@ public sealed class TramoDeDesembolso(
     /// casó, la efectiva con cargos, la sobretasa y la usura del día (T28), <c>Mora.SobreIntereses</c> sellado y la prelación de la línea.
     /// </summary>
     public LoanTermsVersion Condiciones(Loan credito, LoanOperation operacion, RequisitosEvaluados r) =>
-        Condiciones(credito, operacion, r.Simulacion, r.FechaValor, r.MoraSobreIntereses, TermsVersionCause.Origination);
+        Condiciones(credito, operacion, r.Simulacion, r.FechaValor, r.MoraSobreIntereses, TermsVersionCause.Origination, r.Compra?.Serializar());
 
     /// <summary>
     /// US6 (T0590): la versión de condiciones con que nace un crédito desde una simulación —la del desembolso (<c>Origination</c>) o la de una venta de
     /// Comercial (<c>CommercialSale</c>)—. Misma forma que la del primer tramo.
     /// </summary>
     public LoanTermsVersion Condiciones(Loan credito, LoanOperation operacion, SimulacionCalculada simulacion, DateOnly fechaValor, bool moraSobreIntereses,
-        TermsVersionCause causa)
+        TermsVersionCause causa, string? compraSubsidiada = null)
     {
         var v = simulacion.Version.Version;
         var e = simulacion.Entrada;
@@ -205,6 +205,7 @@ public sealed class TramoDeDesembolso(
             UsuryValuePublicId = usura.UsuraPublicId,
             RestructuringCount = 0,
             InputsSha256 = simulacion.Huella,
+            SubsidizedPurchase = compraSubsidiada,
         };
         registro.RegistrarVersionDeCondiciones(condiciones);
         return condiciones;

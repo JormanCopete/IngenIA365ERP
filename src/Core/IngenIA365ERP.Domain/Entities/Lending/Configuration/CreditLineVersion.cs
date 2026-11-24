@@ -98,6 +98,14 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     /// </summary>
     public bool AsksFirstDueDate { get; init; }
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño, el caso del SOAT): las opciones de descuento condicionado en JSON (<see cref="OpcionesDeDescuento"/>); nulo si
+    /// la línea no financia un bien con descuento. Con opciones, la solicitud lleva el valor del bien, el proveedor y la opción.
+    /// </summary>
+    public string? DiscountOptions { get; init; }
+
+    public IReadOnlyList<OpcionDeDescuento> LeerOpcionesDeDescuento() => OpcionesDeDescuento.Leer(DiscountOptions);
+
     // ------------------------------------------------------------------------------------------------------- plan --
 
     /// <summary>JSON con la lista de <see cref="AmortizationSystem"/> admitidos.</summary>
@@ -310,6 +318,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             return Invalida("insurances", "La clase de cada cargo es seguro o administración.");
         if (b.Insurances.Any(s => s.Kind == InsuranceKind.Administration && s.IsDebtorLifeInsurance))
             return Invalida("insurances", "La administración no es un seguro de vida deudores: desmarque «Vida deudores» o cambie la clase a seguro.");
+        if (OpcionesDeDescuento.Problema(b.DiscountOptions) is { } descuento) return Invalida("discountOptions", descuento);
         if (b.CollateralRules.Select(g => g.Order).Distinct().Count() != b.CollateralRules.Count
             || b.CollateralRules.Any(g => g.RequiredCoDebtors < 0 || g.MinAmount > g.MaxAmount || g.MinTermMonths > g.MaxTermMonths))
             return Invalida("collateralRules", "Las reglas de garantía tienen órdenes distintos, rangos bien formados y codeudores no negativos.");
@@ -364,6 +373,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             PaymentDay = b.PaymentDay,
             CutoffDay = b.CutoffDay,
             AsksFirstDueDate = b.AsksFirstDueDate,
+            DiscountOptions = OpcionesDeDescuento.Escribir(b.DiscountOptions),
             AmortizationSystems = ListaDeEnums.Conjunto(b.AmortizationSystems),
             DefaultAmortizationSystem = b.DefaultAmortizationSystem,
             AllowsExtraordinaryInstallments = b.AllowsExtraordinaryInstallments,
@@ -521,6 +531,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             .Si(b.DenominationUnit != DenominationUnit.Pesos, h => h.Enumeracion("denominationUnit", (DenominationUnit?)b.DenominationUnit))
             // 2026-11-17: igual, la marca de pedir la fecha del primer pago sólo entra si está puesta (las versiones anteriores conservan su huella).
             .Si(b.AsksFirstDueDate, h => h.Logico("asksFirstDueDate", true))
+            // 2026-11-23: las opciones de descuento sólo entran si hay (las versiones anteriores conservan su huella).
+            .Si(b.DiscountOptions.Count > 0, h => h.Texto("discountOptions", OpcionesDeDescuento.Escribir(b.DiscountOptions)))
             .Calcular();
 
     /// <summary>La huella de esta versión ya guardada con sus hijas, para verificar que nadie la cambió.</summary>

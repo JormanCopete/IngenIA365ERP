@@ -132,6 +132,9 @@ public sealed record CreditLineVersionInput
 
     /// <summary>2026-11-17: la originación pide la fecha del primer pago y las demás cuotas salen de ella con la periodicidad.</summary>
     public bool AsksFirstDueDate { get; init; }
+
+    /// <summary>2026-11-23: las opciones de descuento condicionado (el caso del SOAT); vacía si la línea no financia un bien con descuento.</summary>
+    public IReadOnlyList<DiscountOptionDto> DiscountOptions { get; init; } = [];
     public AmortizationInput Amortization { get; init; } = new();
     public DayCountConvention DayCount { get; init; } = DayCountConvention.Actual365;
     public RateEquivalence RateEquivalence { get; init; } = RateEquivalence.Compound;
@@ -198,6 +201,7 @@ public sealed record CreditLineVersionInput
             PaymentDay = PaymentDay,
             CutoffDay = CutoffDay,
             AsksFirstDueDate = AsksFirstDueDate,
+            DiscountOptions = [.. (DiscountOptions ?? []).Select(o => new Domain.Lending.Configuration.OpcionDeDescuento(o.Code ?? "", o.Name ?? "", o.Fraction, o.FundCode))],
             AmortizationSystems = sistemas,
             DefaultAmortizationSystem = Amortization?.Default ?? sistemas.FirstOrDefault(),
             AllowsExtraordinaryInstallments = Amortization?.AllowsExtraordinary ?? false,
@@ -383,6 +387,7 @@ public sealed record CreditLineVersionDto(
         {
             AsksFirstDueDate = v.AsksFirstDueDate,
             DenominationUnit = v.DenominationUnit,
+            DiscountOptions = [.. v.LeerOpcionesDeDescuento().Select(o => new DiscountOptionDto(o.Code, o.Name, o.Fraction, o.FundCode))],
         };
     }
 
@@ -391,7 +396,13 @@ public sealed record CreditLineVersionDto(
 
     /// <summary>2026-11-17: la originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
+
+    /// <summary>2026-11-23: las opciones de descuento condicionado de la versión.</summary>
+    public IReadOnlyList<DiscountOptionDto> DiscountOptions { get; init; } = [];
 }
+
+/// <summary>2026-11-23: una opción de descuento condicionado: código, nombre, fracción que paga el fondo (0,5 = 50 %) y el fondo.</summary>
+public sealed record DiscountOptionDto(string Code, string Name, decimal Fraction, string? FundCode);
 
 /// <summary>Una versión en el historial de la línea (api.md §3.1 <c>GET /{id}</c>).</summary>
 public sealed record CreditLineVersionSummaryDto(Guid PublicId, int VersionNumber, DateOnly ValidFrom, DateOnly? ValidTo, DateTime RegisteredAt,

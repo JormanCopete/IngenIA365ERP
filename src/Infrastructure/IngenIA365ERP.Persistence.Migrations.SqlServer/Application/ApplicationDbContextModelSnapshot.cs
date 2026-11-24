@@ -29986,6 +29986,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("int")
                         .HasDefaultValue(1);
 
+                    b.Property<string>("DiscountOptions")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("ForEmployees")
                         .HasColumnType("bit");
 
@@ -40899,6 +40902,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("SubsidizedPurchase")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("SuspenseWithItsConcept")
                         .HasColumnType("bit");
 
@@ -44166,6 +44172,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateTime?>("StatusChangedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("SubsidyAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -45784,6 +45796,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("ApprovedTerms")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("AssetValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("AttributionMatrixId")
                         .HasColumnType("int");
 
@@ -45835,6 +45851,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DiscountOptionCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<DateOnly?>("ExpectedDisbursementDate")
                         .HasColumnType("date");
@@ -45952,6 +45972,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("SubmittedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SupplierPersonId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("TermMonths")
                         .HasColumnType("int");
 
@@ -45994,6 +46017,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("RequiredLevelId");
 
                     b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("SupplierPersonId");
 
                     b.HasIndex("ApplicantPersonId", "Status")
                         .HasDatabaseName("IX_LND_CreditApplications_Applicant_Status");
@@ -82013,6 +82038,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierPersonId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
