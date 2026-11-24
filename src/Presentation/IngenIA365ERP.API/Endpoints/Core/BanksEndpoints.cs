@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Banks.Commands.CreateBank;
 using IngenIA365ERP.Application.Core.Banks.Commands.UpdateBank;
 using IngenIA365ERP.Application.Core.Banks.Commands.DeleteBank;
@@ -33,19 +34,22 @@ public class BanksEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/banks/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateBank");
+        }).WithName("CreateBank")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateBankCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateBank");
+        }).WithName("UpdateBank")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteBankCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteBank");
+        }).WithName("DeleteBank")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

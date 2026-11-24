@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Departments.Commands.CreateDepartment;
 using IngenIA365ERP.Application.Core.Departments.Commands.DeleteDepartment;
 using IngenIA365ERP.Application.Core.Departments.Commands.UpdateDepartment;
@@ -33,19 +34,22 @@ public class DepartmentsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/departments/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateDepartment");
+        }).WithName("CreateDepartment")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateDepartmentCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("UpdateDepartment");
+        }).WithName("UpdateDepartment")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteDepartmentCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("DeleteDepartment");
+        }).WithName("DeleteDepartment")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

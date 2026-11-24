@@ -20,7 +20,9 @@
             <DropDownListEvents TValue="Guid?" TItem="LookupOption"
                                 ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<Guid?, LookupOption> e) => LoadData())" />
         </SfDropDownList>
-        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Departamento</SfButton>
+        <PermissionGate Required="Core.Catalogs.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Departamento</SfButton>
+        </PermissionGate>
     </div>
 </div>
 
@@ -36,10 +38,14 @@
             <Template>
                 @{
                     var d = context as DepartmentRow;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
-                              OnClick="@(() => OpenEdit(d!))" Title="Editar" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
-                              OnClick="@(() => OpenDelete(d!))" Title="Eliminar" />
+                    <PermissionGate Required="Core.Catalogs.Manage">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                                  OnClick="@(() => OpenEdit(d!))" Title="Editar" />
+                    </PermissionGate>
+                    <PermissionGate Required="Core.Catalogs.Manage">
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                  OnClick="@(() => OpenDelete(d!))" Title="Eliminar" />
+                    </PermissionGate>
                 }
             </Template>
         </GridColumn>

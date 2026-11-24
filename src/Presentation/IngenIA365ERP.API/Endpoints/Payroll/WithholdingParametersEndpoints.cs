@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.CreateWithholdingParameter;
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.UpdateWithholdingParameter;
 using IngenIA365ERP.Application.Payroll.WithholdingParameters.Commands.DeleteWithholdingParameter;
@@ -20,13 +21,15 @@ public class WithholdingParametersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListWithholdingParameters");
+        }).WithName("ListWithholdingParameters")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetWithholdingParameterByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetWithholdingParameterById");
+        }).WithName("GetWithholdingParameterById")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapPost("/", async (CreateWithholdingParameterCommand command, ISender sender) =>
         {
@@ -34,7 +37,8 @@ public class WithholdingParametersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/payroll/withholding-parameters/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateWithholdingParameter");
+        }).WithName("CreateWithholdingParameter")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateWithholdingParameterCommand command, ISender sender) =>
         {
@@ -43,12 +47,14 @@ public class WithholdingParametersEndpoints : ICarterModule
             // Un tramo que se cruza o un plan inexistente no es un 404: es un 400 con el motivo.
             return result.IsSuccess ? Results.NoContent()
                 : result.Error.Code == Error.NotFound.Code ? Results.NotFound(result.Error) : Results.BadRequest(result.Error);
-        }).WithName("UpdateWithholdingParameter");
+        }).WithName("UpdateWithholdingParameter")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteWithholdingParameterCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteWithholdingParameter");
+        }).WithName("DeleteWithholdingParameter")
+            .RequirePermission("Payroll.Entities.Manage");
     }
 }

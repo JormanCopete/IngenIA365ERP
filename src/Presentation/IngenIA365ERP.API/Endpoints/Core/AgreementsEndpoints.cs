@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Agreements.Commands.CreateAgreement;
 using IngenIA365ERP.Application.Core.Agreements.Commands.UpdateAgreement;
 using IngenIA365ERP.Application.Core.Agreements.Commands.DeleteAgreement;
@@ -33,19 +34,22 @@ public class AgreementsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/agreements/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateAgreement");
+        }).WithName("CreateAgreement")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateAgreementCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateAgreement");
+        }).WithName("UpdateAgreement")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteAgreementCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteAgreement");
+        }).WithName("DeleteAgreement")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

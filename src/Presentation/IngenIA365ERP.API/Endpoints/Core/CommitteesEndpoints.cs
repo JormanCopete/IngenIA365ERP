@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Committees.Commands.CreateCommittee;
 using IngenIA365ERP.Application.Core.Committees.Commands.DeleteCommittee;
 using IngenIA365ERP.Application.Core.Committees.Commands.UpdateCommittee;
@@ -33,19 +34,22 @@ public class CommitteesEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/committees/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateCommittee");
+        }).WithName("CreateCommittee")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateCommitteeCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("UpdateCommittee");
+        }).WithName("UpdateCommittee")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteCommitteeCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("DeleteCommittee");
+        }).WithName("DeleteCommittee")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

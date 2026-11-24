@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Sports.Commands.CreateSport;
 using IngenIA365ERP.Application.Core.Sports.Commands.UpdateSport;
 using IngenIA365ERP.Application.Core.Sports.Commands.DeleteSport;
@@ -33,19 +34,22 @@ public class SportsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/sports/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateSport");
+        }).WithName("CreateSport")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateSportCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateSport");
+        }).WithName("UpdateSport")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteSportCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteSport");
+        }).WithName("DeleteSport")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

@@ -36,19 +36,22 @@ public class BranchesEndpoints : ICarterModule
             return result.IsSuccess
                 ? (object?)Results.Created($"/api/core/branches/{result.Value}", result.Value)
                 : ErrorEnvelopeFilter.Translate(http, result);
-        }).WithName("CreateBranch");
+        }).WithName("CreateBranch")
+            .RequirePermission("Core.Branches.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateBranchCommand command, ISender sender, HttpContext http) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? (object?)Results.NoContent() : ErrorEnvelopeFilter.Translate(http, result);
-        }).WithName("UpdateBranch");
+        }).WithName("UpdateBranch")
+            .RequirePermission("Core.Branches.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteBranchCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteBranch");
+        }).WithName("DeleteBranch")
+            .RequirePermission("Core.Branches.Manage");
     }
 }

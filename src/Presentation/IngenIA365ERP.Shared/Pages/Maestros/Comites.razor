@@ -12,7 +12,9 @@
     <div>
         <SfTextBox Placeholder="Buscar comite..." @bind-Value="_search" Width="280px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
-        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Comite</SfButton>
+        <PermissionGate Required="Core.Catalogs.Manage">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nuevo Comite</SfButton>
+        </PermissionGate>
     </div>
 </div>
 
@@ -37,10 +39,14 @@
             <Template>
                 @{
                     var c = context as CommitteeRow;
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
-                              OnClick="@(() => OpenEdit(c!))" Title="Editar" />
-                    <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
-                              OnClick="@(() => OpenDelete(c!))" Title="Eliminar" />
+                    <PermissionGate Required="Core.Catalogs.Manage">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
+                                  OnClick="@(() => OpenEdit(c!))" Title="Editar" />
+                    </PermissionGate>
+                    <PermissionGate Required="Core.Catalogs.Manage">
+                        <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
+                                  OnClick="@(() => OpenDelete(c!))" Title="Eliminar" />
+                    </PermissionGate>
                 }
             </Template>
         </GridColumn>

@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Diseases.Commands.CreateDisease;
 using IngenIA365ERP.Application.Core.Diseases.Commands.UpdateDisease;
 using IngenIA365ERP.Application.Core.Diseases.Commands.DeleteDisease;
@@ -33,19 +34,22 @@ public class DiseasesEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/diseases/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateDisease");
+        }).WithName("CreateDisease")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateDiseaseCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateDisease");
+        }).WithName("UpdateDisease")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteDiseaseCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteDisease");
+        }).WithName("DeleteDisease")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

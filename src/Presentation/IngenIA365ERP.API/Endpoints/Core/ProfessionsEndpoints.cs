@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Professions.Commands.CreateProfession;
 using IngenIA365ERP.Application.Core.Professions.Commands.UpdateProfession;
 using IngenIA365ERP.Application.Core.Professions.Commands.DeleteProfession;
@@ -33,19 +34,22 @@ public class ProfessionsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/professions/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateProfession");
+        }).WithName("CreateProfession")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateProfessionCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateProfession");
+        }).WithName("UpdateProfession")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteProfessionCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteProfession");
+        }).WithName("DeleteProfession")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

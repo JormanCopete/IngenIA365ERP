@@ -38,30 +38,66 @@
                codigos de impuestos, cierre) desaparecieron con el modelo del sistema anterior; lo que
                vuelve en E2-E4 (conciliacion, presupuesto, impuestos, exogena, activos) se
                agrega en su entrega. *@
-            <NavLink href="/contabilidad/configuracion" class="nav-subitem">Configuracion inicial</NavLink>
-            <NavLink href="/contabilidad/catalogos" class="nav-subitem">Catalogos PUC</NavLink>
-            <NavLink href="/contabilidad/plan-de-cuentas" class="nav-subitem">Plan de cuentas</NavLink>
-            <NavLink href="/contabilidad/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
-            <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos</NavLink>
-            <NavLink href="/contabilidad/apertura" class="nav-subitem">Saldos de apertura</NavLink>
-            <NavLink href="/contabilidad/comprobantes" class="nav-subitem">Comprobantes</NavLink>
-            <NavLink href="/contabilidad/borradores" class="nav-subitem">Borradores</NavLink>
-            <NavLink href="/contabilidad/parametrizaciones-invalidas" class="nav-subitem">Parametrizaciones invalidas</NavLink>
-            <NavLink href="/contabilidad/presupuesto" class="nav-subitem">Presupuesto</NavLink>
+            <OpcionPermitida Ruta="/contabilidad/configuracion">
+                <NavLink href="/contabilidad/configuracion" class="nav-subitem">Configuracion inicial</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/catalogos">
+                <NavLink href="/contabilidad/catalogos" class="nav-subitem">Catalogos PUC</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/plan-de-cuentas">
+                <NavLink href="/contabilidad/plan-de-cuentas" class="nav-subitem">Plan de cuentas</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/tipos-de-comprobante">
+                <NavLink href="/contabilidad/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/periodos">
+                <NavLink href="/contabilidad/periodos" class="nav-subitem">Periodos</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/apertura">
+                <NavLink href="/contabilidad/apertura" class="nav-subitem">Saldos de apertura</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/comprobantes">
+                <NavLink href="/contabilidad/comprobantes" class="nav-subitem">Comprobantes</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/borradores">
+                <NavLink href="/contabilidad/borradores" class="nav-subitem">Borradores</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/parametrizaciones-invalidas">
+                <NavLink href="/contabilidad/parametrizaciones-invalidas" class="nav-subitem">Parametrizaciones invalidas</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/presupuesto">
+                <NavLink href="/contabilidad/presupuesto" class="nav-subitem">Presupuesto</NavLink>
+            </OpcionPermitida>
             @* Feature 009 E4: los satélites (activos, impuestos y certificados, exógena). La conciliación bancaria es de Tesorería (enmienda E-04 de la 015). *@
-            <NavLink href="/contabilidad/activos" class="nav-subitem">Activos fijos</NavLink>
-            <NavLink href="/contabilidad/impuestos" class="nav-subitem">Impuestos</NavLink>
-            <NavLink href="/contabilidad/certificados" class="nav-subitem">Certificados de retención</NavLink>
-            <NavLink href="/contabilidad/exogena" class="nav-subitem">Información exógena</NavLink>
+            <OpcionPermitida Ruta="/contabilidad/activos">
+                <NavLink href="/contabilidad/activos" class="nav-subitem">Activos fijos</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/impuestos">
+                <NavLink href="/contabilidad/impuestos" class="nav-subitem">Impuestos</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/certificados">
+                <NavLink href="/contabilidad/certificados" class="nav-subitem">Certificados de retención</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/exogena">
+                <NavLink href="/contabilidad/exogena" class="nav-subitem">Información exógena</NavLink>
+            </OpcionPermitida>
             @* Los reportes de cada modulo viven en su modulo (no en un grupo "Reportes"
                aparte); el Centro de Reportes solo enlaza aqui. Son de la entrega E2 (US5):
                hasta el 2026-09-19 el enlace apuntaba a una ruta sin pagina y mostraba
                "Pagina no encontrada", por eso se quito hasta tener las pantallas. *@
             <span class="nav-subgroup-title">Consultas e informes</span>
-            <NavLink href="/contabilidad/libro-auxiliar" class="nav-subitem">Libro auxiliar</NavLink>
-            <NavLink href="/contabilidad/informes" class="nav-subitem">Informes</NavLink>
-            <NavLink href="/contabilidad/estados-financieros" class="nav-subitem">Estados financieros</NavLink>
-            <NavLink href="/contabilidad/terceros" class="nav-subitem">Estado de cuenta del tercero</NavLink>
+            <OpcionPermitida Ruta="/contabilidad/libro-auxiliar">
+                <NavLink href="/contabilidad/libro-auxiliar" class="nav-subitem">Libro auxiliar</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/informes">
+                <NavLink href="/contabilidad/informes" class="nav-subitem">Informes</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/estados-financieros">
+                <NavLink href="/contabilidad/estados-financieros" class="nav-subitem">Estados financieros</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/contabilidad/terceros">
+                <NavLink href="/contabilidad/terceros" class="nav-subitem">Estado de cuenta del tercero</NavLink>
+            </OpcionPermitida>
             @* Feature 012, US7 (T540): el lado contable de la integración con Inventario (enmienda de la 009). El detalle de un
                lote (/contabilidad/inventario/lotes/{id}) se abre desde la lista, sin enlace propio. *@
             <span class="nav-subgroup-title">Inventario</span>
@@ -522,41 +558,99 @@
         </PermissionGate>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
-            <NavLink href="/nomina/empleados" class="nav-subitem">Empleados</NavLink>
-            <NavLink href="/nomina/liquidacion" class="nav-subitem">Liquidacion</NavLink>
-            <NavLink href="/nomina/novedades" class="nav-subitem">Novedades</NavLink>
-            <NavLink href="/nomina/conceptos" class="nav-subitem">Conceptos</NavLink>
-            <NavLink href="/nomina/periodos-pago" class="nav-subitem">Periodos Pago</NavLink>
-            <NavLink href="/nomina/planes" class="nav-subitem">Planes de nomina</NavLink>
-            <NavLink href="/nomina/parametros-legales" class="nav-subitem">Parametros legales</NavLink>
-            <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
-            <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
-            <NavLink href="/nomina/arl-tarifas" class="nav-subitem">Clases de riesgo ARL</NavLink>
-            <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
-            <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
-            <NavLink href="/nomina/cajas-compensacion" class="nav-subitem">Cajas de compensacion</NavLink>
-            <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            <PermissionGate Required="Payroll.Employees.View">
+                <NavLink href="/nomina/empleados" class="nav-subitem">Empleados</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Runs.View">
+                <NavLink href="/nomina/liquidacion" class="nav-subitem">Liquidacion</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Novelties.View">
+                <NavLink href="/nomina/novedades" class="nav-subitem">Novedades</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Concepts.View">
+                <NavLink href="/nomina/conceptos" class="nav-subitem">Conceptos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Runs.View">
+                <NavLink href="/nomina/periodos-pago" class="nav-subitem">Periodos Pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Plans.View">
+                <NavLink href="/nomina/planes" class="nav-subitem">Planes de nomina</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.LegalParameters.View">
+                <NavLink href="/nomina/parametros-legales" class="nav-subitem">Parametros legales</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/arl-tarifas" class="nav-subitem">Clases de riesgo ARL</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/cajas-compensacion" class="nav-subitem">Cajas de compensacion</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Liquidaciones</span>
-            <NavLink href="/nomina/prima" class="nav-subitem">Prima de servicios</NavLink>
-            <NavLink href="/nomina/cesantias-anuales" class="nav-subitem">Cesantias e intereses</NavLink>
-            <NavLink href="/nomina/vacaciones" class="nav-subitem">Vacaciones</NavLink>
-            <NavLink href="/nomina/liquidacion-definitiva" class="nav-subitem">Liquidacion definitiva</NavLink>
-            <NavLink href="/nomina/dispersion" class="nav-subitem">Dispersion bancaria</NavLink>
-            <NavLink href="/nomina/pila" class="nav-subitem">Planilla PILA</NavLink>
-            <NavLink href="/nomina/retencion-procedimiento-2" class="nav-subitem">Retencion procedimiento 2</NavLink>
+            <OpcionPermitida Ruta="/nomina/prima">
+                <NavLink href="/nomina/prima" class="nav-subitem">Prima de servicios</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/cesantias-anuales">
+                <NavLink href="/nomina/cesantias-anuales" class="nav-subitem">Cesantias e intereses</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/vacaciones">
+                <NavLink href="/nomina/vacaciones" class="nav-subitem">Vacaciones</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/liquidacion-definitiva">
+                <NavLink href="/nomina/liquidacion-definitiva" class="nav-subitem">Liquidacion definitiva</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/dispersion">
+                <NavLink href="/nomina/dispersion" class="nav-subitem">Dispersion bancaria</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/pila">
+                <NavLink href="/nomina/pila" class="nav-subitem">Planilla PILA</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/retencion-procedimiento-2">
+                <NavLink href="/nomina/retencion-procedimiento-2" class="nav-subitem">Retencion procedimiento 2</NavLink>
+            </OpcionPermitida>
             <span class="nav-subgroup-title">Parametrizacion</span>
-            <NavLink href="/nomina/politicas" class="nav-subitem">Politicas de la empresa</NavLink>
-            <NavLink href="/nomina/festivos" class="nav-subitem">Festivos</NavLink>
-            <NavLink href="/nomina/saldos-iniciales" class="nav-subitem">Saldos iniciales</NavLink>
+            <OpcionPermitida Ruta="/nomina/politicas">
+                <NavLink href="/nomina/politicas" class="nav-subitem">Politicas de la empresa</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/festivos">
+                <NavLink href="/nomina/festivos" class="nav-subitem">Festivos</NavLink>
+            </OpcionPermitida>
+            <OpcionPermitida Ruta="/nomina/saldos-iniciales">
+                <NavLink href="/nomina/saldos-iniciales" class="nav-subitem">Saldos iniciales</NavLink>
+            </OpcionPermitida>
             <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/reportes/nomina" class="nav-subitem">Reportes de nomina</NavLink>
+            <PermissionGate Required="Payroll.Runs.View">
+                <NavLink href="/reportes/nomina" class="nav-subitem">Reportes de nomina</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-stamp" Title="Tarjeta Debito" Expanded="SidebarOpen">
-            <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
-            <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
-            <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
-            <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@
@@ -838,12 +932,16 @@
         </ModuloHabilitado>
 
         <NavMenuGroup Icon="e-user" Title="Asociados" Expanded="SidebarOpen">
-            <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
+            <PermissionGate Required="Core.Associates.View">
+                <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
+            </PermissionGate>
             @* Beneficiarios no tiene pagina ni API todavia (venia asi desde la primera version); el enlace vuelve con la pantalla. *@
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-list-unordered" Title="Maestros Core" Expanded="SidebarOpen">
-            <NavLink href="/maestros/personas" class="nav-subitem">Personas</NavLink>
+            <PermissionGate Required="Core.People.View">
+                <NavLink href="/maestros/personas" class="nav-subitem">Personas</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Core.PersonBankAccounts.Approve">
                 <NavLink href="/maestros/cuentas-bancarias-por-aprobar" class="nav-subitem">Cuentas bancarias por aprobar</NavLink>
             </PermissionGate>
@@ -852,7 +950,9 @@
             <NavLink href="/maestros/departamentos" class="nav-subitem">Departamentos</NavLink>
             <NavLink href="/maestros/ciudades" class="nav-subitem">Ciudades</NavLink>
             <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
-            <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
+            <OpcionPermitida Ruta="/maestros/formatos-bancarios">
+                <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
+            </OpcionPermitida>
             @* Revisión a mano del 2026-10-27: la página y todas sus lecturas exigen Core.Taxes.View; sin él el enlace llevaba a una pantalla sin permiso. *@
             <PermissionGate Required="Core.Taxes.View">
                 <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
@@ -908,15 +1008,23 @@
             @* Apuntaban a /admin/usuarios y /admin/roles, que son marcadores
                vacios. Las pantallas reales viven bajo /security y estaban
                huerfanas: existian, funcionaban y no habia como llegar. *@
-            <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
-            <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            <PermissionGate Required="Security.Users.View">
+                <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
+            </PermissionGate>
+            <OpcionPermitida Ruta="/security/roles">
+                <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            </OpcionPermitida>
             @* 2026-11-17: qué cifras ve al entrar cada rol. *@
             <PermissionGate Required="Security.Roles.View">
                 <NavLink href="/admin/tablero-por-rol" class="nav-subitem">Tablero por rol</NavLink>
             </PermissionGate>
             <NavLink href="/admin/branches" class="nav-subitem">Oficinas</NavLink>
-            <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
-            <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
+            <PermissionGate Required="Security.Parameters.View">
+                <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
+            </PermissionGate>
+            <OpcionPermitida Ruta="/admin/auditoria">
+                <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
+            </OpcionPermitida>
             <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
             @* I4 (T759): la configuración de emisión electrónica, su canal y su credencial. *@
             <PermissionGate Required="ElectronicInvoicing.Settings.View">
@@ -983,7 +1091,9 @@
                 <NavLink href="@($"/admin/tenant/{_activeTenantId}/members")" class="nav-subitem">Miembros</NavLink>
                 <NavLink href="@($"/admin/tenant/{_activeTenantId}/mfa-policy")" class="nav-subitem">Politica MFA</NavLink>
                 <NavLink href="@($"/admin/tenant/{_activeTenantId}/identity-policy")" class="nav-subitem">Política de identidad</NavLink>
-                <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                <PermissionGate Required="Security.MfaReset.Approve">
+                    <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                </PermissionGate>
             </NavMenuGroup>
         }
 
@@ -993,9 +1103,13 @@
                 <NavLink href="/admin/tenants" class="nav-subitem">Cooperativas</NavLink>
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
-                <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                <PermissionGate Required="Security.MfaReset.Approve">
+                    <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                </PermissionGate>
                 @* Feature 013 (T0095): el registro central de valores nacionales, que la réplica copia a cada cooperativa. *@
-                <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+                <OpcionPermitida Ruta="/admin/valores-nacionales">
+                    <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+                </OpcionPermitida>
                 @* Feature 020 (US1): los módulos habilitables por cooperativa. *@
                 <NavLink href="/saas/modulos" class="nav-subitem">Módulos por cooperativa</NavLink>
                 @* Feature 020 (US7): los conectores externos que define el maestro. *@
