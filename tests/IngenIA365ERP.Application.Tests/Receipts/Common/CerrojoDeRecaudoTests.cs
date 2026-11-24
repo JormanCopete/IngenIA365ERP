@@ -103,6 +103,32 @@ public class CerrojoDeRecaudoTests
     }
 
     /// <summary>
+    /// 2026-11-24: la caja única cierra la caja del punto de venta y entra lo recibido (sesión de Recaudo) antes del arqueo, cada paso en su
+    /// transacción y todos en la misma petición. El orden rige por transacción: la siguiente empieza de cero; dentro de la misma sigue rigiendo.
+    /// </summary>
+    [Fact]
+    public void Otra_transaccion_empieza_el_orden_de_cero()
+    {
+        var orden = new OrdenDeCerrojos();
+        var primera = Guid.NewGuid();
+        orden.EnLaTransaccion(primera);
+        orden.Tomar(OrdenDeCerrojos.DeRecaudo(NivelDeRecaudo.Configuracion), "RCD_Setup");
+        orden.Tomar(OrdenDeCerrojos.DeRecaudo(NivelDeRecaudo.Sesion), "RCD_CashSessions");
+
+        orden.EnLaTransaccion(primera);
+        var mismaTransaccion = () => orden.Tomar(OrdenDeCerrojos.DeRecaudo(NivelDeRecaudo.Configuracion), "RCD_Setup");
+        mismaTransaccion.Should().Throw<InvalidOperationException>().WithMessage("*orden fijo*");
+
+        orden.EnLaTransaccion(Guid.NewGuid());
+        var siguiente = () =>
+        {
+            orden.Tomar(OrdenDeCerrojos.DeRecaudo(NivelDeRecaudo.Configuracion), "RCD_Setup");
+            orden.Tomar(OrdenDeCerrojos.DeRecaudo(NivelDeRecaudo.Sesion), "RCD_CashSessions");
+        };
+        siguiente.Should().NotThrow();
+    }
+
+    /// <summary>
     /// CH16 con dos transacciones cruzadas: el resultado de una orden de Recaudo (Tesorería → Recaudo) y la anulación de la misma devolución en
     /// caja (Recaudo → Tesorería). Si las dos toman Recaudo antes que Tesorería no hay espera circular; si Tesorería tomara su lote antes del saldo
     /// a favor de Recaudo, el orden lo rechaza.
