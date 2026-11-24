@@ -1,0 +1,40 @@
+@* 2026-11-23 (pedido del dueño): una opción del menú se ve sólo si el usuario puede abrir su pantalla. Los permisos que pide
+   cada pantalla los sabe MapaDelMenu (generado de los PermissionGate de la página), así el menú no repite a mano la lista y no
+   se desfasa: la prueba ElMapaDelMenuEstaAlDia vigila el mapa y CadaOpcionDelMenuSeOcultaSinPermiso que ninguna opción quede
+   sin envolver. Mientras los permisos no se resuelven no pinta nada, igual que PermissionGate. *@
+@implements IDisposable
+@inject PermisosDelUsuario Permisos
+
+@if (_visible)
+{
+    @ChildContent
+}
+
+@code {
+    /// <summary>La dirección de la opción, tal como está en el menú.</summary>
+    [Parameter, EditorRequired] public string Ruta { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _visible;
+
+    protected override void OnInitialized() => Permisos.Cambiaron += OnCambiaron;
+
+    protected override async Task OnParametersSetAsync() => await EvaluarAsync();
+
+    private async Task EvaluarAsync()
+    {
+        var estado = await Permisos.ObtenerAsync();
+        var opcion = MapaDelMenu.Buscar(Ruta);
+        _visible = !estado.Provisional
+            && (estado.EsMaestro || opcion is null || MapaDelMenu.PuedeVer(opcion, estado.Codigos));
+    }
+
+    private void OnCambiaron() => _ = InvokeAsync(async () =>
+    {
+        await EvaluarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Permisos.Cambiaron -= OnCambiaron;
+}
