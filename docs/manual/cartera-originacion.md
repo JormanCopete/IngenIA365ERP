@@ -417,7 +417,7 @@ la misma pantalla de la solicitud nueva con lo guardado (`/cartera/solicitudes/{
 | Documentos | adjuntar y quitar documentos |
 | Garantías | registrar o cambiar garantías |
 
-De fábrica se puede corregir todo **menos la línea y la oficina**. El solicitante no cambia nunca: para otra persona, otra solicitud.
+De fábrica se puede corregir **todo**, línea y oficina incluidas (desde el 2026-11-24; antes esas dos quedaban fijas). Quien quiera dejar algo fijo lo quita del parámetro. El solicitante no cambia nunca: para otra persona, otra solicitud.
 
 - **El servidor revisa cada grupo.** Si alguien cambia algo que el parámetro deja fijo, la respuesta es `Lending.Application.FieldNotEditable`
   con la lista de grupos, y no se guarda nada.

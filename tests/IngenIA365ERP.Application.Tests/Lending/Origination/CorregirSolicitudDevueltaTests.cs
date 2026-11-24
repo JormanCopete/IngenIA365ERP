@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Tests.Lending.Origination;
 
 /// <summary>
 /// Pedido del dueño del 2026-11-23: una solicitud devuelta para corregir sólo cambia lo que el parámetro
-/// <c>Originacion.GruposEditablesAlDevolver</c> de su línea deja (de fábrica, todo menos la línea y la oficina); al devolverla queda la foto de lo
+/// <c>Originacion.GruposEditablesAlDevolver</c> de su línea deja (de fábrica, todo desde el 2026-11-24); al devolverla queda la foto de lo
 /// que decía y el detalle muestra qué cambió. Un borrador se edita entero.
 /// </summary>
 public sealed class CorregirSolicitudDevueltaTests : IAsyncLifetime
@@ -66,7 +66,7 @@ public sealed class CorregirSolicitudDevueltaTests : IAsyncLifetime
     {
         var s = await DevueltaAsync();
         s.Status.Should().Be(CreditApplicationStatus.Returned);
-        s.EditableGroups.Should().NotContain(["Linea", "Oficina"]).And.Contain(["Condiciones", "Destino", "Documentos"]);
+        s.EditableGroups.Should().HaveCount(GruposEditablesAlDevolver.Nombres.Count, "de fábrica todo se corrige");
         (await _o.Db.CreditApplications.SingleAsync(a => a.PublicId == s.PublicId)).ReturnSnapshot.Should().NotBeNullOrWhiteSpace();
         _o.Db.ChangeTracker.Clear();
 
@@ -138,12 +138,10 @@ public sealed class CorregirSolicitudDevueltaTests : IAsyncLifetime
         GruposEditablesAlDevolver.Leer(texto).Should().Be(esperado);
 
     [Fact]
-    public void El_defecto_deja_fijas_la_linea_y_la_oficina()
+    public void El_defecto_deja_corregir_todo()
     {
         var defecto = GruposEditablesAlDevolver.Leer(GruposEditablesAlDevolver.Defecto)!.Value;
-        defecto.HasFlag(GrupoEditableAlDevolver.Linea).Should().BeFalse();
-        defecto.HasFlag(GrupoEditableAlDevolver.Oficina).Should().BeFalse();
-        defecto.HasFlag(GrupoEditableAlDevolver.Condiciones).Should().BeTrue();
+        defecto.Should().Be(GrupoEditableAlDevolver.Todos);
         System.Text.RegularExpressions.Regex.IsMatch(GruposEditablesAlDevolver.Defecto, GruposEditablesAlDevolver.Patron).Should().BeTrue();
     }
 }
