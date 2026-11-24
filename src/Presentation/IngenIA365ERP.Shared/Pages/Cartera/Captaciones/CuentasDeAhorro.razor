@@ -107,6 +107,14 @@
                             @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
                         </select>
                     </label>
+                    @if (EsAportes)
+                    {
+                        @* 2026-11-24: un asociado puede tener varias cuentas de aportes (por ejemplo, una por vehículo). *@
+                        <label class="campo">Número del aporte
+                            <input class="e-input" maxlength="6" placeholder="El siguiente" @bind="_pedido.ContributionNumber" />
+                            <span class="texto-tenue">La cuenta queda línea-documento-número (APORTES-16261749-2). Vacío: el siguiente del asociado.</span>
+                        </label>
+                    }
                 </div>
 
                 @if (_titular is not null && _linea is not null)
@@ -294,6 +302,7 @@
             var linea = await Cliente.LineaAsync(id);
             _admitidos = linea.Value?.DepositVersion?.Contractual?.MaturityDestinations ?? 3;
         }
+        if (!EsAportes) _pedido.ContributionNumber = null;
         if (EsAportes)
         {
             _pedido.Parties.Clear();

@@ -285,9 +285,11 @@ public sealed class ArrastreDelCruceAlRetiro(
         // D44: las canceladas se reabren en cierre antes de reversar (una cuenta cancelada no recibe operaciones).
         var ahora = reloj.UtcNow;
         var cerradas = await db.MemberAccounts.Where(a => ids.Contains(a.Id) && a.Status == MemberAccountStatus.Closed).OrderBy(a => a.Id).ToListAsync(ct);
+        // 2026-11-24: con varias cuentas de aportes por asociado, reabrir una no choca con otra viva.
+        var variasDeAportes = parametros is not null && await Accounts.CuentasDeAportesPorAsociado.VariasAsync(parametros, reloj.HoyLocal, ct);
         foreach (var cuenta in cerradas)
         {
-            if (cuenta.Nature == LineNature.Contribution
+            if (cuenta.Nature == LineNature.Contribution && !variasDeAportes
                 && await db.MemberAccounts.AsNoTracking().AnyAsync(a => a.HolderPersonId == cuenta.HolderPersonId && a.Nature == LineNature.Contribution
                                                                         && a.Id != cuenta.Id && a.Status != MemberAccountStatus.Closed && !a.IsDeleted, ct))
                 return Result.Failure(ErroresDeRetiro.ReaperturaConCuentaViva(cuenta.Number));

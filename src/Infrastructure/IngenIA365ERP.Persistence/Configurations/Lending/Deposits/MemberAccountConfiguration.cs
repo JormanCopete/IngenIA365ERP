@@ -52,9 +52,8 @@ public class MemberAccountConfiguration : IEntityTypeConfiguration<MemberAccount
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_MemberAccounts_Number");
-        // Una cuenta de aportes viva por persona (Nature = Contribution 3, Status ≠ Closed 6); el reingreso abre otra (FR-085).
-        builder.HasIndex(e => e.HolderPersonId).IsUnique().HasDatabaseName("UK_LND_MemberAccounts_LiveContribution")
-            .HasFilter("[Nature] = 3 AND [Status] <> 6 AND [IsDeleted] = 0");
+        // 2026-11-24: ya no hay índice único de una cuenta de aportes viva por persona (UK_LND_MemberAccounts_LiveContribution): con
+        // Aportes.VariasCuentasPorAsociado un asociado tiene varias, y la regla de una sola, cuando la cooperativa la pide, la aplica la apertura.
         // Un ahorro permanente vivo por persona y línea (DepositClass = Permanent 3).
         builder.HasIndex(e => new { e.HolderPersonId, e.CreditLineId }).IsUnique().HasDatabaseName("UK_LND_MemberAccounts_LivePermanent")
             .HasFilter("[DepositClass] = 3 AND [Status] <> 6 AND [IsDeleted] = 0");

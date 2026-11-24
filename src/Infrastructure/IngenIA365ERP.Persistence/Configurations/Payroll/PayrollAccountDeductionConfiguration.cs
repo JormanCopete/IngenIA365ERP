@@ -20,7 +20,7 @@ public class PayrollAccountDeductionConfiguration : IEntityTypeConfiguration<Pay
         builder.Property(e => e.PublicId);
         builder.HasIndex(e => e.PublicId).IsUnique();
 
-        builder.Property(e => e.AccountNumber).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.AccountNumber).HasMaxLength(Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero).IsRequired();
         builder.Property(e => e.ConceptCode).HasMaxLength(20).IsRequired();
         builder.Property(e => e.ExpectedAmount).HasPrecision(18, 2);
         builder.Property(e => e.DeductedAmount).HasPrecision(18, 2);

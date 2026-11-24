@@ -20,6 +20,10 @@ calificación ni deterioro.
 | Grupos de archivo y equivalencias de una pagaduría | pestaña «Grupos y equivalencias» de `/cartera/pagadurias/{id}` | los de la 013 |
 | Descuentos de cuentas de una corrida de Nómina | `/api/payroll/runs/{runId}/account-deductions` | los de Nómina |
 
+Un asociado puede tener **varias cuentas de aportes** —por ejemplo, una por vehículo— cuando la cooperativa lo admite (`Aportes.VariasCuentasPorAsociado`,
+sí de fábrica, 2026-11-24). Cada una tiene su número (línea-documento-número), su cuota y sus clases; el saldo de aportes del asociado, la constancia, el
+paz y salvo, el mínimo, el límite de participación, la consulta de los créditos y el retiro suman todas sus cuentas.
+
 ## 2. La cuota y su recaudo
 
 - **Cálculo**: por la versión de la línea de aportes vigente: valor fijo, fracción del ingreso registrado del asociado (sin ingreso registrado la

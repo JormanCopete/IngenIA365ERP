@@ -3,6 +3,8 @@ using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Tests.Lending.Sessions;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
+using IngenIA365ERP.Domain.Entities.Parameters;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using Microsoft.EntityFrameworkCore;
@@ -231,23 +233,62 @@ public sealed class AperturaDeCuentasTests : IDisposable
     // ------------------------------------------------------------------------------------------------------- aportes --
 
     [Fact]
-    public async Task Aportes_una_sola_cuenta_viva_por_persona_solo_titular_y_beneficiarios_y_siempre_asociado()
+    public async Task Aportes_varias_cuentas_por_asociado_con_su_numero_solo_titular_y_beneficiarios_y_siempre_asociado()
     {
+        // 2026-11-24 (pedido del dueño, cooperativas de transporte): un aporte por vehículo; de fábrica, varias cuentas por asociado.
         var aportes = await _c.LineaDeAportesAsync();
 
         var cuenta = await _c.AbiertaAsync(_c.Apertura(aportes, _c.Ana, beneficiarios: [Beneficiario(_c.Carla, 100m)]));
         cuenta.Nature.Should().Be(LineNature.Contribution);
         cuenta.DepositClass.Should().BeNull();
         cuenta.Status.Should().Be(MemberAccountStatus.Active, "los aportes no esperan depósito de apertura");
+        cuenta.Number.Should().Be("APORTES-1001-1", "línea, usuario del documento y el siguiente número del asociado");
 
-        var otra = await _c.AbrirAsync(_c.Apertura(aportes, _c.Ana));
-        otra.Error.Code.Should().Be("Lending.Contributions.AccountAlreadyOpen");
-        GobiernoDePrueba.Datos(otra.Error).GetProperty("existingAccountNumber").GetString().Should().Be(cuenta.Number);
+        (await _c.AbiertaAsync(_c.Apertura(aportes, _c.Ana) with { ContributionNumber = "7" })).Number.Should().Be("APORTES-1001-7");
+        (await _c.AbiertaAsync(_c.Apertura(aportes, _c.Ana))).Number.Should().Be("APORTES-1001-8", "el siguiente pasa del mayor");
+        (await _c.AbiertaAsync(_c.Apertura(aportes, _c.Beto))).Number.Should().Be("APORTES-1002-1", "el número es por asociado");
+        (await _c.AbrirAsync(_c.Apertura(aportes, _c.Ana) with { ContributionNumber = "7" })).Error.Code
+            .Should().Be(CuentasDeAportesPorAsociado.CodigoNumeroTomado);
+        (await _c.AbrirAsync(_c.Apertura(aportes, _c.Ana) with { ContributionNumber = "a-1" })).Error.Code
+            .Should().Be(CuentasDeAportesPorAsociado.CodigoNumeroInvalido);
 
         (await _c.AbrirAsync(_c.Apertura(aportes, _c.Beto, [Cotitular(_c.Ana)]))).Error.Code
             .Should().Be("Lending.Contributions.OnlyHolderAndBeneficiaries");
         (await _c.AbrirAsync(_c.Apertura(aportes, _c.Externa))).Error.Code.Should().Be("Lending.Savings.MembersOnly");
         (await _c.AbrirAsync(_c.Apertura(aportes, _c.Beto, exenta: true))).Error.Code.Should().Be("Lending.Gmf.AccountNotSavings");
+    }
+
+    [Fact]
+    public async Task Aportes_con_una_cuenta_por_asociado_la_segunda_se_rechaza_y_el_numero_lo_pone_el_sistema()
+    {
+        _c.G.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeCartera.Modulo, Key = ParametrosDeCartera.AportesVariasCuentasPorAsociado, Value = "false",
+            ValidFrom = CuentasDePrueba.Hoy.AddDays(-1), Reason = "prueba",
+        });
+        await _c.G.Db.SaveChangesAsync();
+        var aportes = await _c.LineaDeAportesAsync();
+
+        var cuenta = await _c.AbiertaAsync(_c.Apertura(aportes, _c.Ana));
+        cuenta.Number.Should().StartWith("APORTES-").And.NotBe("APORTES-1001-1", "el consecutivo de la línea");
+
+        var otra = await _c.AbrirAsync(_c.Apertura(aportes, _c.Ana));
+        otra.Error.Code.Should().Be("Lending.Contributions.AccountAlreadyOpen");
+        GobiernoDePrueba.Datos(otra.Error).GetProperty("existingAccountNumber").GetString().Should().Be(cuenta.Number);
+        (await _c.AbrirAsync(_c.Apertura(aportes, _c.Beto) with { ContributionNumber = "2" })).Error.Code
+            .Should().Be(CuentasDeAportesPorAsociado.CodigoNumeroSinVarias);
+    }
+
+    [Fact]
+    public void El_numero_de_aportes_es_linea_usuario_y_el_siguiente_del_asociado()
+    {
+        CuentasDeAportesPorAsociado.Prefijo("APORTES", "CE987654").Should().Be("APORTES-CE987654-");
+        CuentasDeAportesPorAsociado.Siguiente(["APORTES-1001-1", "APORTES-1001-X9", "APORTES-1001-12", "APORTES-10011-40"], "APORTES-1001-")
+            .Should().Be("13", "sólo cuentan los sufijos numéricos de ese asociado");
+        CuentasDeAportesPorAsociado.Siguiente([], "APORTES-1001-").Should().Be("1");
+        CuentasDeAportesPorAsociado.Normalizar(" ab12 ").Value.Should().Be("AB12");
+        CuentasDeAportesPorAsociado.Normalizar(null).Value.Should().BeNull();
+        CuentasDeAportesPorAsociado.Normalizar("1234567").IsFailure.Should().BeTrue("hasta seis");
     }
 
     // ------------------------------------------------------------------------------------------------- validaciones --
