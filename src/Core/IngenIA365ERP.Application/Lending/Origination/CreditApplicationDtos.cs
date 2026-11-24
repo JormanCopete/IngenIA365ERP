@@ -82,6 +82,14 @@ public sealed record CreditApplicationInput
     /// <summary>K6b (T1055): en una solicitud de vivienda, si el inmueble es de interés social (elige el límite de financiación VIS).</summary>
     public bool? IsSocialHousing { get; init; }
 
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado): en una línea con opciones de descuento, el valor del bien, el proveedor y la opción. El monto debe ser
+    /// el valor del bien menos lo que paga el fondo.
+    /// </summary>
+    public decimal? AssetValue { get; init; }
+    public Guid? SupplierPersonPublicId { get; init; }
+    public string? DiscountOptionCode { get; init; }
+
     /// <summary>La simulación que corresponde a esta solicitud (las mismas entradas del simulador).</summary>
     public ScheduleSimulationInput Simulacion() => new(CreditLinePublicId, Amount, Installments, Periodicity, ExpectedDisbursementDate, FirstDueDate,
         AmortizationSystem, Extraordinary, Grace, Insurances, ApplicantPersonPublicId);
@@ -188,7 +196,14 @@ public sealed record CreditApplicationDto(
 
     /// <summary>2026-11-23: lo que cambió desde la última devolución para corregir.</summary>
     public IReadOnlyList<CreditApplicationChangeDto> ChangesSinceReturn { get; init; } = [];
+
+    /// <summary>2026-11-23: la compra con descuento condicionado (valor del bien, proveedor, opción y lo que paga el fondo); nula si no hay.</summary>
+    public SubsidizedPurchaseDto? SubsidizedPurchase { get; init; }
 }
+
+/// <summary>Una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
+public sealed record SubsidizedPurchaseDto(decimal AssetValue, PersonaRefDto? Supplier, string OptionCode, string OptionName, decimal Fraction,
+    string? FundCode, decimal FundedAmount, decimal LoanAmount);
 
 /// <summary>Un dato que cambió desde la devolución: su grupo, el campo y los valores, ya legibles.</summary>
 public sealed record CreditApplicationChangeDto(string Group, string Field, string? Before, string? After);
@@ -274,7 +289,20 @@ public static class ConsultasDeSolicitudes
             ChangesSinceReturn = FotoDeSolicitud.Leer(s.ReturnSnapshot) is { } foto
                 ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes), ct)
                 : [],
+            SubsidizedPurchase = await CompraAsync(db, s, version, ct),
         };
+    }
+
+    /// <summary>La compra con descuento de la solicitud, con la opción leída de la versión de la línea que selló.</summary>
+    private static async Task<SubsidizedPurchaseDto?> CompraAsync(IApplicationDbContext db, CreditApplication s,
+        Domain.Entities.Lending.Configuration.CreditLineVersion? version, CancellationToken ct)
+    {
+        if (s.AssetValue is not { } valor || s.DiscountOptionCode is not { } codigo) return null;
+        var opcion = version?.LeerOpcionesDeDescuento().FirstOrDefault(o => o.Code == codigo);
+        var proveedor = s.SupplierPersonId is { } id ? (await ReferenciasDeGobierno.PersonasAsync(db, [id], ct)).GetValueOrDefault(id) : null;
+        var fraccion = opcion?.Fraction ?? 0m;
+        var fondo = Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, fraccion);
+        return new SubsidizedPurchaseDto(valor, proveedor, codigo, opcion?.Name ?? codigo, fraccion, opcion?.FundCode, fondo, valor - fondo);
     }
 
     /// <summary>Las diferencias entre la foto de la devolución y la solicitud de ahora, con líneas, oficinas y personas por su nombre.</summary>
@@ -287,7 +315,9 @@ public static class ConsultasDeSolicitudes
             .ToDictionaryAsync(l => l.Id, l => $"{l.Code} · {l.Name}", ct);
         var oficinas = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == antes.OficinaId || b.Id == ahora.OficinaId)
             .ToDictionaryAsync(b => b.Id, b => b.Name, ct);
-        var personas = await ReferenciasDeGobierno.PersonasAsync(db, antes.Codeudores.Concat(ahora.Codeudores).Select(p => p.PersonId), ct);
+        var personas = await ReferenciasDeGobierno.PersonasAsync(db, antes.Codeudores.Concat(ahora.Codeudores).Select(p => p.PersonId)
+            .Concat(new[] { antes.ProveedorId, ahora.ProveedorId }.OfType<int>()), ct);
+        string? Nombre(int? id) => id is { } x && personas.TryGetValue(x, out var r) ? r.FullName : null;
         string Partes(IReadOnlyList<ParteEnLaFoto> partes) => partes.Count == 0
             ? "Ninguno"
             : string.Join("; ", partes.Select(p => $"{(personas.TryGetValue(p.PersonId, out var r) ? r.FullName : "?")}"
@@ -302,6 +332,8 @@ public static class ConsultasDeSolicitudes
                 oficinas.GetValueOrDefault(antes.OficinaId), oficinas.GetValueOrDefault(ahora.OficinaId)),
             GrupoEditableAlDevolver.Codeudores => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo,
                 Partes(antes.Codeudores), Partes(ahora.Codeudores)),
+            _ when d.Campo == "Proveedor del bien" => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo,
+                Nombre(antes.ProveedorId), Nombre(ahora.ProveedorId)),
             _ => new CreditApplicationChangeDto(GruposEditablesAlDevolver.Texto(d.Grupo), d.Campo, d.Antes, d.Despues),
         }).ToList();
     }

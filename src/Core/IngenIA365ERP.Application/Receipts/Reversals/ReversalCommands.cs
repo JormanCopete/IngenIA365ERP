@@ -102,13 +102,24 @@ public sealed class ConfirmModuleReversalCauseCommandHandler(
 
         var hoy = reloj.HoyLocal;
         var ahora = reloj.UtcNow;
-        reverso.Cause = request.Cause;
-        reverso.ConfirmedByUserId = usuario;
-        reverso.ConfirmedAt = ahora;
-        reverso.ConfirmationNote = request.Note.Trim();
         var porcion = reverso.PortionId is { } pid ? await db.ReceiptApplicationPortions.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pid, ct) : null;
         var medio = porcion is null ? null : await db.ReceiptMeans.FirstOrDefaultAsync(m => m.Id == porcion.ReceiptMeansId, ct);
-        if (request.Cause == ModuleReversalCause.MoneyReceived)
+        // 2026-11-23: lo pagado con el medio de un anticipo de concepto no fue dinero; sea cual sea la causa elegida, el valor vuelve al anticipo.
+        var deAnticipo = medio is not null && await CreditBalances.AnticiposDeConcepto.EsMedioDeAnticipoAsync(db, medio.PaymentMeansId, ct);
+        if (deAnticipo)
+        {
+            // Vuelve al anticipo: ni saldo a favor ni baja del medio.
+            await CreditBalances.AnticiposDeConcepto.ResolverReversoAsync(db, reverso, recibo, medio!, usuario, ahora, ct);
+        }
+        else
+        {
+            reverso.Cause = request.Cause;
+            reverso.ConfirmedByUserId = usuario;
+            reverso.ConfirmedAt = ahora;
+            reverso.ConfirmationNote = request.Note.Trim();
+        }
+
+        if (!deAnticipo && request.Cause == ModuleReversalCause.MoneyReceived)
         {
             var saldo = SaldosAFavor.Reconocer(db, recibo.PayerPersonId, PayerCreditBalanceOrigin.ModuleReversal, reverso.PublicId, reverso.ModuleReversalNumber,
                 recibo.BranchId, reverso.Amount, hoy, usuario, ahora, recibo.OwnBankAccountPublicId);
@@ -116,12 +127,12 @@ public sealed class ConfirmModuleReversalCauseCommandHandler(
             SaldosAFavor.Reconocido(db, saldo, usuario, ahora);
             reverso.PayerCreditBalanceId = saldo.Id;
         }
-        else if (medio is not null)
+        else if (!deAnticipo && medio is not null)
             medio.Status = ReceiptMeansState.WrittenOff;
         await db.SaveChangesAsync(ct);
         await emision.AplicacionReversadaPorModuloAsync(reverso, recibo, aplicacion, medio, hoy, ct);
         await auditoria.AgregarAsync("Receipts.ModuleReversal.CauseConfirmed", "ModuleReversal", reverso.PublicId, null,
-            new { receipt = recibo.Number, cause = request.Cause.ToString(), amount = reverso.Amount, note = reverso.ConfirmationNote, by = actor.Name }, ct);
+            new { receipt = recibo.Number, cause = reverso.Cause.ToString(), amount = reverso.Amount, note = reverso.ConfirmationNote, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         var dto = (await new ListModuleReversalsQueryHandler(db, alcance).Handle(new ListModuleReversalsQuery(), ct)).Value.First(x => x.PublicId == reverso.PublicId);
         return Result.Success(dto);

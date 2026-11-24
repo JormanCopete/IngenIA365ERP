@@ -114,8 +114,10 @@ precio por cantidad con sus tramos o precio de paquete), vigencia y motivo.
 ### Venta de oficina (factura)
 
 1. **Ventas → Nueva factura** (o «Nueva factura» desde Documentos de venta).
-2. Tipo, bodega, cliente, vendedor y productos; el precio sale de la lista que gana y las promociones se aplican solas.
-   Desde un pedido, «Traer el pedido» trae lo pendiente.
+2. Tipo, bodega, cliente (F4 lo busca en una ventana), vendedor y productos; el precio sale de la lista que gana y las
+   promociones se aplican solas. «Traer documento» (F8) trae remisiones por facturar o una cotización (2026-11-23: «Traer
+   el pedido» se retiró; el pedido sigue el camino pedido → remisión → factura). El resto de la cabecera está en «Más
+   datos».
 3. «Guardar» calcula el total con impuestos y retenciones.
 4. Se registran los pagos, uno o varios medios. Los medios que se arquean van a la sesión de caja abierta.
 5. «Confirmar». La factura se numera con la resolución DIAN y se transmite (ver el manual de facturación electrónica).
@@ -158,8 +160,10 @@ DIAN como la factura. Validada, no se anula: se corrige con otra nota.
   que siga reservado.
 - **Ventas → Remisiones**, desde un pedido o «Remisión directa»: despacha la mercancía y reconoce su costo sin facturarla.
   La lista dice cuántos días lleva cada una sin facturar. Para facturar, elija remisiones confirmadas del mismo cliente
-  y «Facturar remisiones»: la factura trae lo pendiente de cada línea, de sólo lectura. Sin facturar se anula (la
-  mercancía vuelve al costo con que salió); facturada, ya no.
+  y «Facturar remisiones», use «Facturar» en la remisión abierta o «Traer documento» (F8) en la factura: la factura trae
+  lo pendiente de cada línea. Desde el 2026-11-23 se factura **en parte** bajando la cantidad de la línea (al precio de la
+  remisión; no se sube sobre lo pendiente). La remisión se imprime (Ctrl+P) para que la firme quien recibe. Sin facturar
+  se anula (la mercancía vuelve al costo con que salió); facturada, ya no.
 - **Los descuentos siguen al documento (2026-11-13)**: lo pendiente de un pedido o de una remisión llega a la remisión
   o a la factura con el descuento manual de su línea origen, en proporción (antes llegaba sólo al precio de lista). Si a
   la fecha de la venta esa línea tiene una promoción, la promoción gana y el descuento heredado se quita. «Cargar

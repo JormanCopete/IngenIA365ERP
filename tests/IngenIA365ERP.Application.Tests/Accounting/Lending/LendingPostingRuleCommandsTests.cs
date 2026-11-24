@@ -329,7 +329,7 @@ public class LendingPostingRuleCommandsTests
 
         var catalogo = (await new GetLendingRulesCatalogQueryHandler(e.M.Dimensiones).Handle(new GetLendingRulesCatalogQuery(), default)).Value;
         catalogo.Operations.Should().HaveCount(72, "39 de crédito (con la administración causada y la cuota reconocida de la feature 024) y 33 de captaciones y aportes (feature 014, T048)");
-        catalogo.Roles.Should().HaveCount(45);
+        catalogo.Roles.Should().HaveCount(46, "con el fondo del descuento condicionado (2026-11-23)");
         catalogo.Dimensions.CreditLines.Select(l => l.Code).Should().Contain("VIE01");
     }
 }

@@ -166,6 +166,13 @@ public static class RolesDeCuentaDeCartera
     public const string DesembolsoPorGirar = "DesembolsoPorGirar";
     public const string PuenteComercial = "PuenteComercial";
     public const string CuentaPorCobrarComercial = "CuentaPorCobrarComercial";
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño, descuento condicionado; el caso del SOAT): el fondo que paga parte del bien que financia la línea. En el
+    /// desembolso se debita por lo que pone el fondo y el puente del giro se acredita por el valor completo del bien. El motivo es el código del
+    /// fondo de la opción de descuento (libre, de la cooperativa): una regla por fondo. (nuevo)
+    /// </summary>
+    public const string FondoQueSubsidia = "FondoQueSubsidia";
     public const string Ingreso = "Ingreso";
     public const string GastoDeterioro = "GastoDeterioro";
     public const string RecuperacionDeterioro = "RecuperacionDeterioro";
@@ -359,6 +366,8 @@ public static class RolesDeCuentaDeCartera
         new(DesembolsoPorGirar, C, FamiliaDeRol.Puente, [Mot], [Lin, Suc], null, MotivosDelGiro, TerceroNaturalDeCartera.Beneficiario, CruceDeRol.Credito),
         new(PuenteComercial, C, FamiliaDeRol.Puente, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Factura),
         new(CuentaPorCobrarComercial, C, FamiliaDeRol.Puente, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Factura),
+        // 2026-11-23 (descuento condicionado): un pasivo (el fondo social) que el desembolso debita; el motivo es el código del fondo, libre.
+        new(FondoQueSubsidia, C, FamiliaDeRol.Pasivo, [Mot], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         // K6b (T1056): el Ingreso admite también el capital, el anticipo y el saldo a favor, sólo para la corrección monetaria UVR (con su hecho
         // fijado en la regla, la contadora elige la cuenta de la corrección monetaria).
         new(Ingreso, C, FamiliaDeRol.Resultado, [Mod, Con], [Op, Lin, Emp, Gra, Sub, Ree, Pca, Suc],
@@ -403,7 +412,7 @@ public static class RolesDeCuentaDeCartera
     ];
 
     /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013, con el diferido de la cuota reconocida de la feature 024).</summary>
-    public const int RolesDeCredito = 27;
+    public const int RolesDeCredito = 28;
 
     /// <summary>Los 17 roles de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todos"/>.</summary>
     public static IReadOnlyList<RolDeCuentaDeCartera> DeCaptaciones { get; } = Todos.Skip(RolesDeCredito).ToList();
@@ -440,7 +449,9 @@ public static class RolesDeCuentaDeCartera
 
     /// <summary>¿El rol admite el motivo? Sólo los roles que exigen motivo tienen lista.</summary>
     public static bool AdmiteMotivo(RolDeCuentaDeCartera rol, string motivo) =>
-        rol.Motivos is { } motivos && motivos.Contains(motivo, StringComparer.Ordinal);
+        rol.Codigo == FondoQueSubsidia
+            ? !string.IsNullOrWhiteSpace(motivo) && motivo.Trim().Length <= 20
+            : rol.Motivos is { } motivos && motivos.Contains(motivo, StringComparer.Ordinal);
 
     /// <summary>
     /// De concepto a rol de saldo (§2.2): el constructor elige el rol de cada importe por su <c>LoanConcept</c>. El suspenso de un crédito

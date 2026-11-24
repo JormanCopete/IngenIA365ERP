@@ -33,6 +33,9 @@ public sealed class PreferenciasClient(
     /// <summary>Feature 022 (T031): la clave de «Enter pasa al siguiente campo» (<c>si</c> | <c>no</c>; sin valor = encendido).</summary>
     public const string ClaveEnterAvanza = "ui.enter-avanza";
 
+    /// <summary>2026-11-23: cómo imprime la caja el recibo al confirmarlo (<c>preguntar</c> | <c>tirilla</c> | <c>carta</c>).</summary>
+    public const string ClaveImpresionReciboCaja = "recaudo.caja.impresion";
+
     /// <summary>
     /// Feature 022 (T031): si Enter pasa al siguiente campo según lo guardado en este navegador (encendido por defecto, Q3).
     /// No toca la red.
@@ -226,7 +229,8 @@ public sealed record PreferenciasUsuarioRespuesta(
     IReadOnlyList<string>? ColumnasLibroAuxiliar = null,
     bool LibroAuxiliarSoloMovimiento = false,
     string TamanoTextoEstadoDeCuenta = "normal",
-    bool DecimalesEstadoDeCuenta = false);
+    bool DecimalesEstadoDeCuenta = false,
+    string ImpresionReciboCaja = "preguntar");
 
 /// <summary>2026-11-10: un acceso directo del tablero (la clave <c>ui.accesos</c>): la ruta y, si el usuario los eligió, nombre, ícono y color.</summary>
 public sealed record AccesoDirecto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);

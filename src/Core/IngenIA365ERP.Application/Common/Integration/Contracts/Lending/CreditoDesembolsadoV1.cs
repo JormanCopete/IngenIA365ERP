@@ -57,4 +57,19 @@ public sealed record CreditoDesembolsadoV1
 
     /// <summary>El plan sellado (o regenerado en cada tramo, D12).</summary>
     public LoanPlanSummaryV1 Plan { get; init; } = new();
+
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado, el caso del SOAT): la parte del bien que paga un fondo; el giro al proveedor es el capital más esta
+    /// parte. Nulo si el crédito no financia un bien con descuento. El fondo va por código: la cuenta la pone Contabilidad.
+    /// </summary>
+    public SubsidyV1? Subsidy { get; init; }
+}
+
+/// <summary>2026-11-23: lo que paga el fondo de un descuento condicionado (su código, la opción y el proveedor del bien).</summary>
+public sealed record SubsidyV1
+{
+    public decimal Amount { get; init; }
+    public string OptionCode { get; init; } = string.Empty;
+    public string FundCode { get; init; } = string.Empty;
+    public Guid SupplierPersonPublicId { get; init; }
 }

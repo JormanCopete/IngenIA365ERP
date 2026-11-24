@@ -16,6 +16,10 @@
         <div class="campo"><b>Periodicidades</b> @TextosDeCartera.Lista(TextosDeCartera.Periodicidades, V.Periodicities)</div>
         <div class="campo"><b>Sistemas</b> @TextosDeCartera.Lista(TextosDeCartera.Sistemas, V.AmortizationSystems)</div>
         <div class="campo"><b>Fecha del primer pago</b> @(V.AsksFirstDueDate ? "Se pide al simular y en la solicitud" : "Sale del desembolso y del día de pago")</div>
+        @if (V.DiscountOptions.Count > 0)
+        {
+            <div class="campo campo-ancho"><b>Descuento condicionado</b> @string.Join(" · ", V.DiscountOptions.Select(o => $"{o.Name} ({(o.Fraction * 100m).ToString("0.##", Es)} %{(o.FundCode is { } f ? $", fondo {f}" : "")})"))</div>
+        }
         <div class="campo"><b>Gracia</b> @TextosDeCartera.ClaseDeGracia(V.AllowedGraceKind)@(V.MaxGraceInstallments is { } maxGracia ? $" hasta {maxGracia} cuotas" : "")</div>
         <div class="campo"><b>Formas de pago</b> @TextosDeCartera.Lista(TextosDeCartera.FormasDePago, V.PaymentForms)</div>
         <div class="campo"><b>Clientes</b> @(V.AllowsNonAssociates ? "Asociados y no asociados" : "Sólo asociados")@(V.ForEmployees ? " · para empleados" : "")</div>

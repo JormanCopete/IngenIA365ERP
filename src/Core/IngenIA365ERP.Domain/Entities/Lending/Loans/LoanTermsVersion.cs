@@ -146,6 +146,12 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
     /// </summary>
     public string Insurances { get; init; } = "[]";
 
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado): la compra sellada al desembolsar, en JSON (valor del bien, proveedor, opción, fracción, fondo y lo que
+    /// pagó el fondo); nula si el crédito no financia un bien con descuento.
+    /// </summary>
+    public string? SubsidizedPurchase { get; init; }
+
     /// <summary>Efectiva resultante con cargos, sellada al desembolsar (T28).</summary>
     public decimal? ResultingEffectiveRate { get; init; }
 

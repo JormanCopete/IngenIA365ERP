@@ -15,7 +15,7 @@
     <div class="page-header">
         <div>
             <h2>Política de identidad</h2>
-            <p class="texto-apoyo">Documentos que acepta la cooperativa y cómo se confirman.</p>
+            <p class="texto-apoyo">Documentos que acepta la cooperativa, cómo se confirman y cuándo se cierra la sesión por inactividad.</p>
         </div>
     </div>
 
@@ -60,8 +60,28 @@
                 </div>
             </section>
 
+            <section class="tarjeta">
+                <h3>Cierre de sesión por inactividad</h3>
+                <p class="texto-apoyo">
+                    Minutos sin usar el ERP tras los cuales se cierra la sesión en esta cooperativa, entre 15 y 120. Cinco
+                    minutos antes aparece el aviso «Seguir trabajando». Déjelo vacío para usar el general
+                    (@_politica.MinutosDeInactividadGeneral minutos). La sesión dura como máximo lo mismo de siempre,
+                    aunque se esté trabajando. Rige desde la siguiente renovación de cada sesión abierta.
+                </p>
+                <div class="rejilla-campos">
+                    <label>Minutos de inactividad
+                        <input type="number" min="15" max="120" step="5" @bind="_minutosDeInactividad" disabled="@_guardando"
+                               placeholder="@_politica.MinutosDeInactividadGeneral" />
+                    </label>
+                </div>
+                @if (_minutosDeInactividad is < 15 or > 120)
+                {
+                    <p class="aviso aviso-error">Los minutos de inactividad van de 15 a 120; vacío usa el general.</p>
+                }
+            </section>
+
             <div class="toolbar">
-                <button class="boton-principal" type="button" disabled="@(_guardando || _aceptados.Count == 0)"
+                <button class="boton-principal" type="button" disabled="@(_guardando || _aceptados.Count == 0 || _minutosDeInactividad is < 15 or > 120)"
                         @onclick="GuardarAsync">
                     @(_guardando ? "Guardando…" : "Guardar")
                 </button>
@@ -78,6 +98,7 @@
     private HashSet<string> _aceptados = [];
     private DateOnly? _exigidoDesde;
     private int _intentos = 3;
+    private int? _minutosDeInactividad;
     private bool _guardando;
     private string? _mensaje;
     private bool _error;
@@ -101,6 +122,7 @@
         _aceptados = [.. p.TiposAceptados];
         _exigidoDesde = p.DocumentoExigidoDesde;
         _intentos = p.IntentosAlActivar;
+        _minutosDeInactividad = p.MinutosDeInactividad;
     }
 
     private void Alternar(string codigo, bool marcado)
@@ -115,7 +137,7 @@
         try
         {
             var r = await Clientes.GuardarPoliticaDeIdentidadAsync(
-                TenantPublicId, _aceptados.ToList(), _exigidoDesde, _intentos);
+                TenantPublicId, _aceptados.ToList(), _exigidoDesde, _intentos, _minutosDeInactividad);
             _error = !r.IsSuccess;
             if (r.IsSuccess && r.Value is { } p)
             {

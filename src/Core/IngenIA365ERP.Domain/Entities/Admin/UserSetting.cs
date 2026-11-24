@@ -113,6 +113,12 @@ public static class UserSettingKeys
     /// <summary>2026-11-16: si los valores del estado de cuenta se ven con centavos (<c>si</c> | <c>no</c>; sin fila = no).</summary>
     public const string DecimalesEstadoDeCuenta = "cartera.estado-de-cuenta.decimales";
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): cómo imprime la caja el recibo al confirmarlo (<c>preguntar</c> | <c>tirilla</c> | <c>carta</c>; sin fila =
+    /// preguntar, que es como funcionaba: sólo los botones). Con tirilla o carta imprime solo, con el diálogo de impresión, sin descargar el PDF.
+    /// </summary>
+    public const string ImpresionReciboCaja = "recaudo.caja.impresion";
+
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
         new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
@@ -122,7 +128,7 @@ public static class UserSettingKeys
         new HashSet<string>(StringComparer.Ordinal)
         {
             PaginaInicio, Favoritos, Accesos, Tablero, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento,
-            TamanoTextoEstadoDeCuenta, DecimalesEstadoDeCuenta,
+            TamanoTextoEstadoDeCuenta, DecimalesEstadoDeCuenta, ImpresionReciboCaja,
         };
 
     public static bool EsValida(string clave) =>
@@ -144,6 +150,7 @@ public static class UserSettingKeys
             [LibroAuxiliarSoloMovimiento] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
             [TamanoTextoEstadoDeCuenta] = new HashSet<string>(StringComparer.Ordinal) { "pequeno", "normal", "grande" },
             [DecimalesEstadoDeCuenta] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
+            [ImpresionReciboCaja] = new HashSet<string>(StringComparer.Ordinal) { "preguntar", "tirilla", "carta" },
         };
 }
 

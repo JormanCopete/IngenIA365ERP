@@ -184,6 +184,14 @@ public static class ParametrosDeCartera
 
     // -------------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
     public const string OriginacionDiasVigenciaDeAprobacion = "Originacion.DiasVigenciaDeAprobacion";
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): si las solicitudes de crédito validan la capacidad de pago con los ingresos y gastos declarados, por empresa
+    /// y por línea. «Sí» (de fábrica) es lo de siempre: sin ingreso declarado no se aprueba y si no alcanza bloquea. «No»: la validación queda
+    /// «No aplica» con el código <c>Lending.Capacity.NotValidated</c>, no bloquea ni sube de nivel, y si lo declarado no alcanza sólo lo avisa en
+    /// el detalle. No toca la capacidad de descuento (libranza y nómina propia: límite legal) ni la cuota/ingreso de vivienda. (nuevo)
+    /// </summary>
+    public const string OriginacionValidarIngresosYGastos = "Originacion.ValidarIngresosYGastos";
     public const string ReservasDiasDeVigencia = "Reservas.DiasDeVigencia";
     public const string GirosDiasSinResultado = "Giros.DiasSinResultado";
     public const string CupoMoraMaximaParaVender = "Cupo.MoraMaximaParaVender";
@@ -207,7 +215,7 @@ public static class ParametrosDeCartera
 
     /// <summary>
     /// 2026-11-23 (pedido del dueño): qué grupos de datos de una solicitud devuelta para corregir se pueden modificar, como nombres de
-    /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica todo menos la línea y la oficina. (nuevo)
+    /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica, todo (desde el 2026-11-24). (nuevo)
     /// </summary>
     public const string OriginacionGruposEditablesAlDevolver = "Originacion.GruposEditablesAlDevolver";
 
@@ -748,6 +756,12 @@ public static class ParametrosDeCartera
         // ---------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
         Entero(Modulo, OriginacionDiasVigenciaDeAprobacion, "Días que dura una aprobación de crédito sin desembolsar.", "30", K1, General, Linea)
             with { Minimo = 1m, PendienteDeValidar = PendienteContadora },
+        // 2026-11-23 (pedido del dueño): no validar ingresos y gastos en las solicitudes, por empresa y por línea.
+        SiNo(Modulo, OriginacionValidarIngresosYGastos,
+            "Las solicitudes de crédito validan la capacidad de pago con los ingresos y gastos declarados. Con «No» la solicitud se radica, se analiza "
+            + "y se aprueba aunque no tenga ingresos ni gastos, y si los declarados no alcanzan sólo se avisa. No cambia la capacidad de descuento de la "
+            + "libranza y la nómina propia ni la relación cuota/ingreso de vivienda, que son límites legales.",
+            true, K1, General, Linea),
         Entero(Modulo, ReservasDiasDeVigencia, "Días que dura una reserva de cupo para una venta a crédito.", "5", K1, General)
             with { Minimo = 1m, PendienteDeValidar = PendienteContadora },
         Entero(Modulo, GirosDiasSinResultado, "Días sin resultado del giro antes de alertar.", "3", K1, General)
@@ -782,7 +796,7 @@ public static class ParametrosDeCartera
         Texto(OriginacionGruposEditablesAlDevolver,
             "Qué se puede corregir en una solicitud devuelta para corregir, separado por coma: Condiciones (monto, cuotas, fechas), Linea, "
             + "Oficina, Destino, FormaDePago, Seguros, Capacidad (ingresos y gastos del solicitante), Codeudores, Recogidas, ExcepcionDePolitica, "
-            + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica todo menos la línea y la oficina.",
+            + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica, todo.",
             Origination.GruposEditablesAlDevolver.Defecto, K1, patron: Origination.GruposEditablesAlDevolver.Patron)
             with { AmbitosAdmitidos = [General, Linea], OpcionesMultiples = Origination.GruposEditablesAlDevolver.Nombres },
 

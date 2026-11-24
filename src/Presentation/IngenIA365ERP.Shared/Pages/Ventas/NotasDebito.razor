@@ -18,6 +18,24 @@
    sin un paso más para la persona: las obligadas sólo tienen facturas y las no obligadas sólo comprobantes. El concepto se elige del
    catálogo de la DIAN (opcional en papel); la de papel se anula con su documento contrario. La lista pagina. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+@* 2026-11-23 (pedido del dueño): la nota abierta es la ventana transaccional común, a pantalla completa, con sus pagos en la ventana de cobro
+   (F10) y su estado electrónico arriba; se vuelve a la lista con Esc. *@
+@if (_editando)
+{
+    <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.NotasDebito" Clases="@ClasesDeLaNota" Nombre="nota débito" Documento="@Documento"
+                    Origenes="@(Documento is null && Factura is { } f ? [f] : null)" ConConcepto="true" ConPagos="true"
+                    Volver="@Volver" TextoVolver="Volver a las notas débito"
+                    AvisoDeAnulacion="Se crea el documento contrario con su propia fecha." Cambio="@CambioAsync">
+        <Debajo Context="nota">
+            @if (_doc is { Electronico: not null } d)
+            {
+                <EstadoElectronico Electronico="@d.Electronico" DocumentoId="@d.DocumentPublicId" Entregar="@(() => Nav.NavigateTo($"/ventas/documentos/{d.DocumentPublicId}"))" Cambio="@RecargarAsync" />
+            }
+        </Debajo>
+    </EditorDelCiclo>
+}
+else
+{
 <div class="pagina">
     <div class="page-header">
         <h3>Notas débito</h3>
@@ -39,16 +57,6 @@
         </PermissionGate>
     </IndicadorDeCarga>
 
-    @if (_editando)
-    {
-        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.NotasDebito" Clases="@ClasesDeLaNota" Nombre="nota débito" Documento="@Documento"
-                        Origenes="@(Documento is null && Factura is { } f ? [f] : null)" ConConcepto="true" ConPagos="true"
-                        AvisoDeAnulacion="Se crea el documento contrario con su propia fecha." Cambio="@CambioAsync" />
-        @if (_doc is { Electronico: not null } d)
-        {
-            <EstadoElectronico Electronico="@d.Electronico" DocumentoId="@d.DocumentPublicId" Entregar="@(() => Nav.NavigateTo($"/ventas/documentos/{d.DocumentPublicId}"))" Cambio="@RecargarAsync" />
-        }
-    }
 
     <IndicadorDeCarga Cargando="@_lista.Activa">
         <h4>Notas débito</h4>
@@ -76,6 +84,7 @@
         </div>
     </IndicadorDeCarga>
 </div>
+}
 </PermissionGate>
 
 @code {
@@ -162,6 +171,12 @@
         _editando = true;
         _clave = Guid.NewGuid();
         Nav.NavigateTo($"/ventas/notas-debito?factura={_factura}", replace: true);
+    }
+
+    private void Volver()
+    {
+        _editando = false;
+        Nav.NavigateTo("/ventas/notas-debito", replace: true);
     }
 
     private void Abrir(Guid id)

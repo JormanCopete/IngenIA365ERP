@@ -17,6 +17,9 @@ public enum ReceiptDocumentKind
     Voiding = 8,
     CashMovement = 9,
     SessionAdjustment = 10,
+
+    /// <summary>2026-11-23: el recibo con que el proceso cruza un anticipo de concepto contra la obligación que acaba de nacer (su propio consecutivo).</summary>
+    AdvanceCrossingReceipt = 11,
 }
 
 /// <summary>El canal por el que entra el dinero de un recibo (FR-198). (data-model §20)</summary>
@@ -28,6 +31,12 @@ public enum ReceiptChannel
     Agreement = 4,
     Online = 5,
     Contingency = 6,
+
+    /// <summary>
+    /// 2026-11-23: el cruce automático de un anticipo de concepto al nacer la obligación que cubre. No entra dinero: el medio es el del anticipo y el hecho es
+    /// el del recibo de caja (<c>ReciboEmitido</c>), así la matriz es la misma que la del cruce a mano.
+    /// </summary>
+    AdvanceCrossing = 7,
 }
 
 /// <summary>A qué se aplica una aplicación de un recibo (y una regla de modalidad por canal). (data-model §20)</summary>

@@ -40,6 +40,7 @@ public sealed partial class ReceiptsReportQueryHandler
         ReceiptChannel.Agreement => "Convenio",
         ReceiptChannel.Online => "Pasarela o PSE",
         ReceiptChannel.Contingency => "Contingencia",
+        ReceiptChannel.AdvanceCrossing => "Cruce de anticipo",
         _ => c.ToString(),
     };
 

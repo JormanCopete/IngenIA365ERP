@@ -30,10 +30,11 @@ public sealed class TenantIdentityPolicyModule : ICarterModule
     private static async Task<object?> UpdateAsync(
         Guid tenantPublicId, [FromBody] UpdateBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdatePoliticaDeIdentidadCommand(
-            tenantPublicId, body.TiposAceptados ?? [], body.DocumentoExigidoDesde, body.IntentosAlActivar), ct);
+            tenantPublicId, body.TiposAceptados ?? [], body.DocumentoExigidoDesde, body.IntentosAlActivar, body.MinutosDeInactividad), ct);
 
     public sealed record UpdateBody(
         IReadOnlyList<string>? TiposAceptados,
         DateOnly? DocumentoExigidoDesde,
-        int IntentosAlActivar);
+        int IntentosAlActivar,
+        int? MinutosDeInactividad = null);
 }

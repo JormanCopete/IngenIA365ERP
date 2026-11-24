@@ -105,6 +105,14 @@ elige sola.
   gracia y seguros. Las mismas reglas de rango y usura del simulador.
 - **Capacidad declarada** del solicitante y de cada codeudor (ingreso, egresos y cuotas externas). Sin ingreso
   declarado, la validación de capacidad queda «no disponible» hasta el análisis.
+- **Sin validar ingresos y gastos** (2026-11-23). El parámetro `Originacion.ValidarIngresosYGastos` (Cartera ›
+  Parámetros, por empresa y por línea, de fábrica «Sí») permite que una línea no valide la capacidad de pago. Con
+  «No», la validación queda «No aplica · no se validan ingresos y gastos en esta línea» (código
+  `Lending.Capacity.NotValidated`). La solicitud se radica, se analiza y se aprueba sin ingresos, no sube de
+  nivel ni es un hallazgo no exceptuable. Si la persona declaró ingresos y no le alcanzan, el aviso lo dice en
+  amarillo, sin bloquear. No cambia la capacidad de descuento (libranza y nómina propia) ni la relación
+  cuota/ingreso de vivienda, que son límites legales. Las solicitudes en trámite toman el valor nuevo al
+  volver a evaluarse antes de decidir.
 - **Forma de pago**: en K1 sólo nómina propia (`OwnPayroll`), y sólo si la persona es empleada
   (`Lending.Application.PaymentFormNotAllowed`). Un convenio de libranza responde
   `Lending.PayrollAgreement.NotAvailable` hasta K2. La certificación de la nómina va como documento.
@@ -145,7 +153,7 @@ las muestra con su resultado: aprobada, advertencia, bloqueante o no ejecutada.
 |---|---|---|
 | Listas restrictivas | consulta al canal vigente; una coincidencia bloquea y alerta al oficial (§9) | **No** |
 | Autorización del titular | tratamiento de datos y, para centrales, consulta con evidencia | **No** |
-| Capacidad de pago | ingresos − egresos − cuotas propias y externas − la cuota simulada | **No** |
+| Capacidad de pago | ingresos − egresos − cuotas propias y externas − la cuota simulada (no se valida si `Originacion.ValidarIngresosYGastos` = «No») | **No** |
 | Usura | la efectiva con cargos contra la usura del día de la modalidad | **No** |
 | Capacidad de descuento | en nómina propia, contra el límite nacional de descuento y la certificación | No (límite legal) |
 | Concentración | exposición del deudor **y de su grupo conectado** contra el límite individual sobre el patrimonio técnico vigente | No (límite legal) |
@@ -409,7 +417,7 @@ la misma pantalla de la solicitud nueva con lo guardado (`/cartera/solicitudes/{
 | Documentos | adjuntar y quitar documentos |
 | Garantías | registrar o cambiar garantías |
 
-De fábrica se puede corregir todo **menos la línea y la oficina**. El solicitante no cambia nunca: para otra persona, otra solicitud.
+De fábrica se puede corregir **todo**, línea y oficina incluidas (desde el 2026-11-24; antes esas dos quedaban fijas). Quien quiera dejar algo fijo lo quita del parámetro. El solicitante no cambia nunca: para otra persona, otra solicitud.
 
 - **El servidor revisa cada grupo.** Si alguien cambia algo que el parámetro deja fijo, la respuesta es `Lending.Application.FieldNotEditable`
   con la lista de grupos, y no se guarda nada.
@@ -419,3 +427,47 @@ De fábrica se puede corregir todo **menos la línea y la oficina**. El solicita
   nivel de atribución.
 - **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia, créditos que recoge o convenio de libranza, porque no
   maneja esos datos. Esas se corrigen por la integración, o se anulan y se radica otra.
+
+## Descuento condicionado: financiar un bien con un fondo (2026-11-23)
+
+Es el caso del SOAT. El asociado compra un bien a un proveedor y la entidad decide cuánto de su valor paga un fondo.
+
+**Configurar la línea.** En el editor de la versión, sección «Descuento condicionado», se agregan las opciones. Cada una lleva código,
+nombre, porcentaje y el fondo que paga el descuento, por ejemplo:
+
+| Código | Opción | Fondo |
+|---|---|---|
+| D0 | Sin descuento | ninguno |
+| D20 | 20 % | FONDOSOAT |
+| D35 | 35 % | FONDOSOAT |
+| D50 | 50 % | FONDOSOAT |
+
+El fondo es un código de la cooperativa. Su cuenta la pone la contadora en la matriz contable de Cartera, con el rol `FondoQueSubsidia`, el
+motivo igual al código del fondo y la cuenta del fondo social. Hay una regla por cada fondo.
+
+**Solicitud.** Con opciones en la línea, el simulador pide el valor del bien y la opción, y calcula el monto del crédito: el valor menos lo
+que paga el fondo, redondeado al peso. La solicitud pide además el proveedor. El servidor exige los tres datos y que el monto cuadre
+(`Lending.Application.SubsidizedPurchaseIncomplete`, `.DiscountOptionUnknown`, `.SubsidizedAmountMismatch`). Una línea sin opciones no los
+admite (`.LineWithoutDiscount`).
+
+**Decisión.** Quien decide ve la compra en el detalle y, al aprobar, confirma la opción. Si quiere otra opción, devuelve la solicitud para
+corregir; el bien, el proveedor y la opción son del grupo «Condiciones».
+
+**Desembolso.** El giro va al proveedor por el valor completo del bien, en un solo giro, con la forma «giro a tercero» y sin recoger
+créditos. La pantalla de desembolso ya lo propone así. Lo aprobado más lo que pone el fondo debe dar el valor del bien; si quien decidió
+bajó el monto, el desembolso se bloquea (`Lending.Disbursement.SubsidizedPurchase`) y hay que devolver la solicitud.
+
+La orden de giro lleva el valor del bien y aparte lo que pagó el fondo (`SubsidyAmount`). Las condiciones del crédito sellan la compra.
+
+**Asiento** (bien de 500.000 con el 50 %):
+
+| Cuenta | Débito | Crédito |
+|---|---|---|
+| Capital (el crédito del asociado) | 250.000 | |
+| Fondo (`FondoQueSubsidia`, motivo = el código del fondo) | 250.000 | |
+| Desembolso por girar, giro a tercero (tercero: el proveedor) | | 500.000 |
+
+La contadora puede poner como «desembolso por girar a terceros» la cuenta por pagar al proveedor. Cuando Tesorería paga, la cancela. El
+reverso del desembolso devuelve el fondo con el asiento espejo.
+
+**Pendiente.** No se controla el saldo del fondo antes de aprobar ni de desembolsar.

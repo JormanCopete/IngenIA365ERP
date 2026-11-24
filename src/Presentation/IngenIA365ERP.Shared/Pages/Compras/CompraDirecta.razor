@@ -111,7 +111,7 @@
                     <p class="aviso aviso-info">Elija el producto para la línea del XML «@destino.DescripcionXml»@(destino.CodigoProveedor is { } cp ? $" (código del proveedor {cp})" : "").
                         <SfButton CssClass="e-flat e-small" OnClick="@(() => _asignando = null)">Cancelar</SfButton></p>
                 }
-                <SelectorDeProducto Operacion="OperacionDeLaLinea.Compra" @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto Operacion="OperacionDeLaLinea.Compra" @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto (F2)" Bodega="@_bodega" FlujoDeLinea="true" Elegido="@AgregarLineaAsync" />
             </div>
             <div class="tabla-desplazable">
                 <table class="data-grid">
@@ -121,7 +121,7 @@
                         {
                             var indice = i;
                             var l = _lineas[i];
-                            <tr data-zona-teclado data-siguiente="#compra-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
+                            <tr data-zona-teclado data-linea data-siguiente="#compra-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
                                 <td>@(indice + 1)</td>
                                 <td>
                                     @if (l.ProductPublicId is null)
