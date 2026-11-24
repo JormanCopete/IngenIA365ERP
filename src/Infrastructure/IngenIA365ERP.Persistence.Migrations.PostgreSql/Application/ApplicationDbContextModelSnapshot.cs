@@ -45547,6 +45547,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("RequiredLevelId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ReturnSnapshot")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("RoutedAt")
                         .HasColumnType("timestamp with time zone");
 

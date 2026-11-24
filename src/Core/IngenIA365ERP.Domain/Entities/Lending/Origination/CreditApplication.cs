@@ -88,6 +88,12 @@ public class CreditApplication : AuditableEntity
 
     public string? PolicyExceptionReason { get; set; }
 
+    /// <summary>
+    /// 2026-11-23: lo que decía la solicitud cuando se devolvió para corregir (JSON de <c>FotoDeSolicitud</c>). El detalle lo compara con lo
+    /// de ahora para mostrar qué cambió; la última devolución reemplaza a la anterior. Nulo si nunca se devolvió.
+    /// </summary>
+    public string? ReturnSnapshot { get; set; }
+
     public CreditApplicationStatus Status { get; set; } = CreditApplicationStatus.Draft;
 
     /// <summary>Quien la armó (segregación). Nulo si la armó el asociado por el canal digital (feature 021, US13).</summary>
@@ -256,11 +262,15 @@ public class CreditApplication : AuditableEntity
         Status = CreditApplicationStatus.Denied;
     }
 
-    /// <summary><c>PendingDecision</c> → <c>Returned</c>: vuelve a quien la armó para corregirla; al reenviarla se radica otra vez.</summary>
-    public void Devolver()
+    /// <summary>
+    /// <c>PendingDecision</c> → <c>Returned</c>: vuelve a quien la armó para corregirla; al reenviarla se radica otra vez. <paramref name="foto"/> es
+    /// lo que decía al devolverla (<see cref="ReturnSnapshot"/>).
+    /// </summary>
+    public void Devolver(string? foto = null)
     {
         ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Returned));
         Status = CreditApplicationStatus.Returned;
+        ReturnSnapshot = foto;
     }
 
     /// <summary>Anular o desistir con motivo, antes de desembolsar u otorgar (FR-047): no genera cartera.</summary>

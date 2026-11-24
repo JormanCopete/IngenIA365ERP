@@ -16,6 +16,7 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Origination;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -339,7 +340,8 @@ public sealed class UpdateCreditApplicationCommandHandler(
     IAutorizacionDeDatos autorizaciones,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<UpdateCreditApplicationCommand, Result<CreditApplicationDto>>
+    IDateTimeService reloj,
+    GruposEditablesDeSolicitud editables) : IRequestHandler<UpdateCreditApplicationCommand, Result<CreditApplicationDto>>
 {
     public async Task<Result<CreditApplicationDto>> Handle(UpdateCreditApplicationCommand request, CancellationToken ct)
     {
@@ -359,6 +361,9 @@ public sealed class UpdateCreditApplicationCommandHandler(
         var armada = await armado.ArmarAsync(e, reloj.HoyLocal, ct);
         if (armada.IsFailure) return Result.Failure<CreditApplicationDto>(armada.Error);
         var a = armada.Value;
+        // 2026-11-23 (pedido del dueño): devuelta para corregir, sólo cambia lo que el parámetro de su línea deja (Originacion.GruposEditablesAlDevolver).
+        var antes = s.Status == CreditApplicationStatus.Returned ? await FotoDeSolicitud.TomarAsync(db, s, ct) : null;
+        var permitidos = antes is null ? GrupoEditableAlDevolver.Todos : await editables.LeerAsync(s.CreditLineId, reloj.HoyLocal, ct);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -369,6 +374,7 @@ public sealed class UpdateCreditApplicationCommandHandler(
             var quedan = a.Codeudores.Select(c => c.Persona.Id).ToHashSet();
             foreach (var sale in partes.Where(p => p.Role != CreditPartyRole.Applicant && !quedan.Contains(p.PersonId))) sale.IsDeleted = true;
             var orden = partes.Max(p => p.Order) + 1;
+            var agregadas = new List<CreditApplicationParty>();
             foreach (var (persona, entrada) in a.Codeudores)
             {
                 var parte = partes.FirstOrDefault(p => p.PersonId == persona.Id && p.Role != CreditPartyRole.Applicant);
@@ -376,9 +382,16 @@ public sealed class UpdateCreditApplicationCommandHandler(
                 {
                     parte = CreditApplicationParty.Nueva(s.Id, persona.Id, entrada.Role, orden++);
                     db.CreditApplicationParties.Add(parte);
+                    agregadas.Add(parte);
                 }
                 parte.Role = entrada.Role;
                 parte.Declarar(entrada.MonthlyIncome, entrada.MonthlyExpenses, entrada.ExternalInstallments);
+            }
+            if (antes is not null)
+            {
+                var fuera = antes.GruposDistintos(FotoDeSolicitud.De(s, partes.Concat(agregadas))) & ~permitidos;
+                if (fuera != GrupoEditableAlDevolver.Ninguno)
+                    return Result.Failure<CreditApplicationDto>(ErroresDeOriginacion.NoCorregible(GruposEditablesAlDevolver.Separar(fuera)));
             }
             var autorizadas = await ArmadoDeSolicitud.AutorizacionesAsync(autorizaciones, e, reloj.UtcNow, ct);
             if (autorizadas.IsFailure) return Result.Failure<CreditApplicationDto>(autorizadas.Error);
@@ -419,7 +432,8 @@ public sealed class AttachCreditApplicationDocumentCommandHandler(
     IApplicationDbContext db,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<AttachCreditApplicationDocumentCommand, Result<CreditApplicationDocumentDto>>
+    IDateTimeService reloj,
+    GruposEditablesDeSolicitud editables) : IRequestHandler<AttachCreditApplicationDocumentCommand, Result<CreditApplicationDocumentDto>>
 {
     public async Task<Result<CreditApplicationDocumentDto>> Handle(AttachCreditApplicationDocumentCommand request, CancellationToken ct)
     {
@@ -428,6 +442,7 @@ public sealed class AttachCreditApplicationDocumentCommandHandler(
         if (leida.IsFailure) return Falla(leida.Error);
         var s = leida.Value;
         if (s.Decidida) return Falla(ErroresDeOriginacion.NoEditable(s.Status.ToString()));
+        if (await editables.ExigirAsync(s, GrupoEditableAlDevolver.Documentos, reloj.HoyLocal, ct) is { } fijo) return Falla(fijo);
 
         CreditLineDocumentRequirement? requisito = null;
         if (!string.IsNullOrWhiteSpace(request.RequirementCode))
@@ -483,7 +498,8 @@ public sealed class RemoveCreditApplicationDocumentCommandValidator : AbstractVa
     }
 }
 
-public sealed class RemoveCreditApplicationDocumentCommandHandler(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria)
+public sealed class RemoveCreditApplicationDocumentCommandHandler(
+    IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria, IDateTimeService reloj, GruposEditablesDeSolicitud editables)
     : IRequestHandler<RemoveCreditApplicationDocumentCommand, Result>
 {
     public async Task<Result> Handle(RemoveCreditApplicationDocumentCommand request, CancellationToken ct)
@@ -496,6 +512,7 @@ public sealed class RemoveCreditApplicationDocumentCommandHandler(IApplicationDb
                                                                                      && !d.IsDeleted, ct);
         if (documento is null) return Result.Failure(Error.NotFound);
         if (s.Decidida) return Result.Failure(AdjuntosDeModulo.SolicitudBloqueada());
+        if (await editables.ExigirAsync(s, GrupoEditableAlDevolver.Documentos, reloj.HoyLocal, ct) is { } fijo) return Result.Failure(fijo);
 
         documento.IsDeleted = true;
         await db.SaveChangesAsync(ct);

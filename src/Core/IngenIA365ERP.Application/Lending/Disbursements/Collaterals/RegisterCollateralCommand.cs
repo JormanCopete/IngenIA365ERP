@@ -98,7 +98,8 @@ public sealed class RegisterCollateralCommandHandler(
     FechaContable fechaContable,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<RegisterCollateralCommand, Result<CollateralDto>>
+    IDateTimeService reloj,
+    GruposEditablesDeSolicitud editables) : IRequestHandler<RegisterCollateralCommand, Result<CollateralDto>>
 {
     public async Task<Result<CollateralDto>> Handle(RegisterCollateralCommand request, CancellationToken ct)
     {
@@ -107,6 +108,9 @@ public sealed class RegisterCollateralCommandHandler(
         if (leido.IsFailure) return Falla(leido.Error);
         var dueno = leido.Value;
         if (dueno.Decidido) return Falla(ErroresDeGarantias.DuenoDecidido(dueno.Clase));
+        // 2026-11-23: en una solicitud devuelta, las garantías se corrigen sólo si el parámetro de su línea lo deja.
+        if (await editables.ExigirAsync(dueno.EstadoDeLaSolicitud, dueno.CreditLineId, Domain.Lending.Origination.GrupoEditableAlDevolver.Garantias,
+                reloj.HoyLocal, ct) is { } fijo) return Falla(fijo);
 
         var admitidas = await ClasesAdmitidasAsync(dueno, ct);
         if (!admitidas.Contains(e.Kind)) return Falla(ErroresDeGarantias.ClaseNoAdmitida(e.Kind, admitidas));

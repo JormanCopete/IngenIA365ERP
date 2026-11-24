@@ -119,6 +119,13 @@ public sealed record DefinicionDeParametro
     /// <summary>Para <see cref="TipoDeParametro.Text"/>: expresión regular que el texto debe cumplir.</summary>
     public string? Patron { get; init; }
 
+    /// <summary>
+    /// 2026-11-23: para un <see cref="TipoDeParametro.Text"/> que es una lista de nombres separados por coma (como
+    /// <c>Originacion.GruposEditablesAlDevolver</c>), los nombres que admite: la pantalla los ofrece como casillas en vez de una caja de
+    /// texto. El <see cref="Patron"/> sigue siendo quien valida.
+    /// </summary>
+    public IReadOnlyList<string>? OpcionesMultiples { get; init; }
+
     public bool AdmiteAmbito(ParameterScopeKind ambito) => AmbitosAdmitidos.Contains(ambito);
 
     /// <summary>

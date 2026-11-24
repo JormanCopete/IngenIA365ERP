@@ -28,7 +28,11 @@ public sealed record ParametroDeCarteraDto(
     IReadOnlyList<ExcepcionDeParametroDto> Overrides,
     IReadOnlyList<ParametroProgramadoDto> Scheduled,
     IReadOnlyList<string>? LegalLimits = null,
-    string? PendingValidation = null);
+    string? PendingValidation = null)
+{
+    /// <summary>2026-11-23: una lista de nombres separados por coma; se elige con casillas.</summary>
+    public IReadOnlyList<string>? MultipleValues { get; init; }
+}
 
 /// <summary>El cuerpo de <c>POST /parameters/{key}/versions</c>; <c>ScopeKind</c> 0 general, 6 línea de crédito.</summary>
 public sealed record NuevaVigenciaDeCarteraRequest(int ScopeKind, Guid? ScopePublicId, string Value, DateOnly ValidFrom, string Reason, string? LegalSource);

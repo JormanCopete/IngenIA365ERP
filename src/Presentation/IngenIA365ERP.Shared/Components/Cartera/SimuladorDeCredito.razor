@@ -20,7 +20,7 @@
     <div class="form-grid">
         <div class="campo campo-ancho">
             <span class="etiqueta-campo">Línea de crédito *</span>
-            <SelectorDeLineaDeCredito Value="@_linea" ValueChanged="@ElegirLineaAsync" />
+            <SelectorDeLineaDeCredito Value="@_linea" ValueChanged="@ElegirLineaAsync" Deshabilitado="@LineaFija" />
             @if (_condiciones is { } c)
             {
                 <span class="texto-tenue">
@@ -178,6 +178,12 @@
     /// <summary>La línea con que abre (desde la solicitud).</summary>
     [Parameter] public Guid? LineaInicial { get; set; }
 
+    /// <summary>2026-11-23: los datos con que abre al corregir una solicitud devuelta (monto, cuotas, fechas…).</summary>
+    [Parameter] public SimulacionRequest? Inicial { get; set; }
+
+    /// <summary>2026-11-23: la línea no se puede cambiar (corrección de una solicitud devuelta con la línea fija).</summary>
+    [Parameter] public bool LineaFija { get; set; }
+
     private readonly EstadoDeCarga _carga = new();
     private Guid? _linea;
     private VersionDeLineaDto? _condiciones;
@@ -211,7 +217,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (LineaInicial is { } l) await ElegirLineaAsync(l);
+        if (Inicial is { } i)
+        {
+            _desembolso = i.DisbursementDate ?? Hoy;
+            await ElegirLineaAsync(i.CreditLinePublicId);
+            _monto = i.Amount;
+            _cuotas = i.Installments;
+            if (i.Periodicity is { } p) _periodicidad = p;
+            if (i.AmortizationSystem is { } sis) _sistema = sis;
+            if (i.FirstDueDate is { } f) _primerPago = f;
+            Cambio();
+        }
+        else if (LineaInicial is { } l) await ElegirLineaAsync(l);
     }
 
     /// <summary>Elegir la línea lee sus condiciones vigentes a la fecha de desembolso y propone sus valores por defecto.</summary>

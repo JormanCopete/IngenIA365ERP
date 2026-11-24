@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Compliance;
+using IngenIA365ERP.Domain.Lending.Origination;
 using IngenIA365ERP.Domain.Lending.Rates;
 
 namespace IngenIA365ERP.Application.Lending.Origination;
@@ -20,6 +21,7 @@ public static class ErroresDeOriginacion
     public const string CodigoNoAsociado = "Lending.Application.NotAssociate";
     public const string CodigoParteRepetida = CreditApplicationParty.CodigoParteRepetida;
     public const string CodigoNoEditable = CreditApplication.CodigoNoEditable;
+    public const string CodigoNoCorregible = "Lending.Application.FieldNotEditable";
     public const string CodigoEstadoInvalido = CreditApplication.CodigoEstadoInvalido;
     public const string CodigoRequisitoDesconocido = "Lending.Application.RequirementUnknown";
     public const string CodigoDocumentosFaltantes = "Lending.Application.DocumentsMissing";
@@ -65,6 +67,16 @@ public static class ErroresDeOriginacion
 
     public static Error NoEditable(string estado) => new ErrorConDatos(CodigoNoEditable,
         "La solicitud ya no se puede modificar: sólo se edita en borrador o cuando se devolvió para corregir.", new { status = estado });
+
+    /// <summary>2026-11-23: la solicitud devuelta cambia algo que el parámetro <c>Originacion.GruposEditablesAlDevolver</c> deja fijo.</summary>
+    public static Error NoCorregible(IReadOnlyList<GrupoEditableAlDevolver> grupos)
+    {
+        var nombres = string.Join(", ", grupos.Select(GruposEditablesAlDevolver.Texto));
+        return new ErrorConDatos(CodigoNoCorregible,
+            $"En una solicitud devuelta para corregir no se puede cambiar: {nombres}. "
+            + "Déjelo como estaba o, si hay que cambiarlo, anule la solicitud y radique otra.",
+            new { groups = grupos.Select(g => g.ToString()).ToList() });
+    }
 
     public static Error EstadoInvalido(string estado, string pedido) => new ErrorConDatos(CodigoEstadoInvalido,
         $"La solicitud está en «{estado}» y no admite esa acción.", new { status = estado, requested = pedido });

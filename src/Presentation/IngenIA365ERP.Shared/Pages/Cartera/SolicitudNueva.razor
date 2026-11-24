@@ -1,4 +1,5 @@
 @page "/cartera/solicitudes/nueva"
+@page "/cartera/solicitudes/{Id:guid}/corregir"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Cartera
 @using IngenIA365ERP.Shared.Services.Http
@@ -10,80 +11,128 @@
 @inject INotificationService Notification
 @inject NavigationManager Navegacion
 
-<PageTitle>Nueva solicitud de crédito - IngenIA365ERP</PageTitle>
+<PageTitle>@(EsCorreccion ? "Corregir solicitud de crédito" : "Nueva solicitud de crédito") - IngenIA365ERP</PageTitle>
 
 @* Feature 013, US2 (T0411; FR-035; SC-009; quickstart §3.5 paso 2): radicar en tres pasos. 1) simular (el simulador queda visible, FR-013);
    2) el solicitante —se busca en el maestro y, si no está, se registra con PersonaDialog—, la oficina, los codeudores con su capacidad, la
    capacidad declarada y la preferencia de abono a capital; 3) se guarda el borrador y en su detalle se adjuntan los documentos y se radica.
    Las autorizaciones de datos de cada persona se registran con su evidencia en Autorizaciones del titular: si falta, radicar lo dice.
    2026-11-17 (pedido del dueño): los pasos se ven arriba; la persona elegida en el simulador pasa a ser el solicitante; con una sola oficina se
-   elige sola; el resumen dice desembolso, primer pago y cuota; y lo que falta para guardar se dice en vez de sólo apagar el botón. *@
+   elige sola; el resumen dice desembolso, primer pago y cuota; y lo que falta para guardar se dice en vez de sólo apagar el botón.
+   2026-11-23 (pedido del dueño): la misma pantalla corrige un borrador o una solicitud devuelta (/cartera/solicitudes/{id}/corregir). Abre con
+   lo guardado y sólo deja cambiar los grupos que el parámetro Originacion.GruposEditablesAlDevolver de la línea permite (en borrador, todo); el
+   servidor los vuelve a revisar. El solicitante no cambia. *@
 <PermissionGate Required="Lending.Applications.Create" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Nueva solicitud de crédito</h3>
+        <h3>@(EsCorreccion ? $"Corregir la solicitud {_original?.Number ?? "en borrador"}" : "Nueva solicitud de crédito")</h3>
         <div class="toolbar">
-            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes"))">Volver</SfButton>
+            <SfButton CssClass="e-outline" OnClick="@Volver">Volver</SfButton>
         </div>
     </div>
 
     <PasosDeSolicitud Actual="@_paso" />
-    <p class="texto-apoyo">@(_paso == 1
-        ? "Elija la línea, simule y, si el plan le sirve, pulse «Usar en la solicitud»."
-        : "Complete los datos del solicitante y guarde el borrador. Después adjunta los documentos y radica la solicitud.")</p>
 
-    <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" PersonaElegida="@TomarPersona" />
+    @if (EsCorreccion)
+    {
+        <IndicadorDeCarga Cargando="@_cargaOriginal.Activa" Texto="Leyendo la solicitud…">
+            @if (_bloqueo is { } bloqueo)
+            {
+                <p class="aviso aviso-alerta" role="alert">@bloqueo</p>
+            }
+            else if (_original is { } o)
+            {
+                <p class="texto-apoyo">
+                    @(o.Status == 4 ? "La solicitud fue devuelta para corregir." : "La solicitud está en borrador.")
+                    Puede cambiar: @string.Join(", ", o.EditableGroups.Select(TextosDeOriginacion.GrupoEditable)).
+                    Lo demás queda como está.
+                </p>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <p class="texto-apoyo">@(_paso == 1
+            ? "Elija la línea, simule y, si el plan le sirve, pulse «Usar en la solicitud»."
+            : "Complete los datos del solicitante y guarde el borrador. Después adjunta los documentos y radica la solicitud.")</p>
+    }
 
-    @if (_simulacion is { } sim)
+    @if (MuestraSimulador)
+    {
+        @if (EsCorreccion) { <p class="texto-tenue">Para cambiar monto, cuotas o fechas, simule y pulse «Usar en la solicitud»; si no simula, quedan las condiciones guardadas.</p> }
+        <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" PersonaElegida="@TomarPersona" Inicial="@_inicial" LineaFija="@(EsCorreccion && !Edita("Linea"))" />
+    }
+
+    @if (HayDatos)
     {
         <div class="info-card">
             <h4>Datos de la solicitud</h4>
             <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo las oficinas…">
                 <div class="kpi-grid">
-                    <div class="kpi-card"><span class="kpi-label">Línea</span><span class="kpi-value">@sim.Resultado.CreditLineCode</span></div>
-                    <div class="kpi-card"><span class="kpi-label">Monto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(sim.Resultado.Amount)</span></div>
-                    <div class="kpi-card"><span class="kpi-label">Cuotas</span><span class="kpi-value">@sim.Resultado.InstallmentCount @TextosDeOriginacion.Periodicidad(sim.Resultado.Periodicity).ToLowerInvariant()</span></div>
-                    <div class="kpi-card"><span class="kpi-label">Primera cuota</span><span class="kpi-value">@(sim.Resultado.Installments.FirstOrDefault() is { } c1 ? $"{TextosDeOriginacion.Pesos(c1.Total)} el {c1.DueDate:dd/MM/yyyy}" : "—")</span></div>
-                    <div class="kpi-card"><span class="kpi-label">Desembolso previsto</span><span class="kpi-value">@sim.Resultado.DisbursementDate.ToString("dd/MM/yyyy")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Línea</span><span class="kpi-value">@LineaVisible</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Monto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(MontoVisible)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Cuotas</span><span class="kpi-value">@CuotasVisibles</span></div>
+                    @if (_simulacion is { } sim)
+                    {
+                        <div class="kpi-card"><span class="kpi-label">Primera cuota</span><span class="kpi-value">@(sim.Resultado.Installments.FirstOrDefault() is { } c1 ? $"{TextosDeOriginacion.Pesos(c1.Total)} el {c1.DueDate:dd/MM/yyyy}" : "—")</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Desembolso previsto</span><span class="kpi-value">@sim.Resultado.DisbursementDate.ToString("dd/MM/yyyy")</span></div>
+                    }
+                    else if (_original is { } o)
+                    {
+                        <div class="kpi-card"><span class="kpi-label">Desembolso previsto</span><span class="kpi-value">@(o.ExpectedDisbursementDate?.ToString("dd/MM/yyyy") ?? "el día que se desembolse")</span></div>
+                    }
                 </div>
-                <p class="texto-tenue">Para cambiar monto, plazo o fechas, simule de nuevo arriba y pulse otra vez «Usar en la solicitud».</p>
+                @if (!EsCorreccion)
+                {
+                    <p class="texto-tenue">Para cambiar monto, plazo o fechas, simule de nuevo arriba y pulse otra vez «Usar en la solicitud».</p>
+                }
                 <div class="form-grid">
                     <div class="campo campo-ancho">Solicitante *
-                        <PersonSearchPicker @bind-Selected="_solicitante" ShowHelpText="false" Compacto="true" PermitirCrear="@_puedeCrearPersona"
-                                            OnCrearPersona="@CrearPersona" TextoSinResultados="Regístrela con «Crear persona» y vuelva a buscarla." />
+                        @if (EsCorreccion)
+                        {
+                            <p>@(_original?.Applicant.FullName) <span class="texto-tenue">(no cambia: para otra persona, otra solicitud)</span></p>
+                        }
+                        else
+                        {
+                            <PersonSearchPicker @bind-Selected="_solicitante" ShowHelpText="false" Compacto="true" PermitirCrear="@_puedeCrearPersona"
+                                                OnCrearPersona="@CrearPersona" TextoSinResultados="Regístrela con «Crear persona» y vuelva a buscarla." />
+                        }
                     </div>
                     <label class="campo">Oficina *
-                        <select class="e-input" @bind="_oficina">
+                        <select class="e-input" @bind="_oficina" disabled="@(!Edita("Oficina"))">
                             <option value="">Elija la oficina…</option>
                             @foreach (var o in _oficinas) { <option value="@o.PublicId">@o.Name</option> }
                         </select>
                     </label>
-                    <label class="campo">Destino <input class="e-input" @bind="_destino" maxlength="200" /></label>
+                    <label class="campo">Destino <input class="e-input" @bind="_destino" maxlength="200" disabled="@(!Edita("Destino"))" /></label>
                     <label class="campo">Forma de pago
-                        <select class="e-input" @bind="_formaDePago">
+                        <select class="e-input" @bind="_formaDePago" disabled="@(!Edita("FormaDePago"))">
                             @foreach (var f in TextosDeOriginacion.FormasDePago) { <option value="@f.Valor">@f.Texto</option> }
                         </select>
                     </label>
                     <label class="campo">Abonos extraordinarios a capital *
-                        <select class="e-input" @bind="_preferencia">
+                        <select class="e-input" @bind="_preferencia" disabled="@(!Edita("PreferenciaDeAbono"))">
                             @foreach (var p in TextosDeOriginacion.PreferenciasDeAbono) { <option value="@p.Valor">@p.Texto</option> }
                         </select>
                     </label>
-                    <label class="campo">Ingreso mensual del solicitante <input class="e-input" type="number" min="0" step="1000" @bind="_ingreso" /></label>
-                    <label class="campo">Gasto mensual <input class="e-input" type="number" min="0" step="1000" @bind="_gasto" /></label>
-                    <label class="campo">Cuotas que paga a otras entidades <input class="e-input" type="number" min="0" step="1000" @bind="_externas" /></label>
-                    @if (sim.Resultado.IsHousing)
+                    <label class="campo">Ingreso mensual del solicitante <input class="e-input" type="number" min="0" step="1000" @bind="_ingreso" disabled="@(!Edita("Capacidad"))" /></label>
+                    <label class="campo">Gasto mensual <input class="e-input" type="number" min="0" step="1000" @bind="_gasto" disabled="@(!Edita("Capacidad"))" /></label>
+                    <label class="campo">Cuotas que paga a otras entidades <input class="e-input" type="number" min="0" step="1000" @bind="_externas" disabled="@(!Edita("Capacidad"))" /></label>
+                    @if (EsVivienda)
                     {
                         @* K6b (T1060; FR-024): en vivienda, VIS elige el porcentaje financiable de interés social (Ley 546 de 1999). *@
-                        <label class="campo-check"><input type="checkbox" @bind="_esVis" /> El inmueble es vivienda de interés social (VIS)</label>
+                        <label class="campo-check"><input type="checkbox" @bind="_esVis" disabled="@(!Edita("Condiciones"))" /> El inmueble es vivienda de interés social (VIS)</label>
                     }
                 </div>
 
                 <h5>Codeudores</h5>
-                <div class="toolbar">
-                    <div class="campo"><PersonSearchPicker @bind-Selected="_codeudor" ShowHelpText="false" Compacto="true" /></div>
-                    <SfButton CssClass="e-outline" Disabled="@(_codeudor is null)" OnClick="@AgregarCodeudor">Agregar codeudor</SfButton>
-                </div>
+                @if (Edita("Codeudores"))
+                {
+                    <div class="toolbar">
+                        <div class="campo"><PersonSearchPicker @bind-Selected="_codeudor" ShowHelpText="false" Compacto="true" /></div>
+                        <SfButton CssClass="e-outline" Disabled="@(_codeudor is null)" OnClick="@AgregarCodeudor">Agregar codeudor</SfButton>
+                    </div>
+                }
                 @if (_codeudores.Count > 0)
                 {
                     <table class="data-grid">
@@ -93,14 +142,23 @@
                             {
                                 var codeudor = c;
                                 <tr>
-                                    <td>@codeudor.Nombre</td>
-                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Ingreso" /></td>
-                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Gasto" /></td>
-                                    <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _codeudores.Remove(codeudor))">Quitar</SfButton></td>
+                                    <td>@codeudor.Nombre@(codeudor.Rol == 3 ? " (avalista)" : "")</td>
+                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Ingreso" disabled="@(!Edita("Codeudores"))" /></td>
+                                    <td class="numero"><input class="e-input" type="number" min="0" @bind="codeudor.Gasto" disabled="@(!Edita("Codeudores"))" /></td>
+                                    <td>
+                                        @if (Edita("Codeudores"))
+                                        {
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => _codeudores.Remove(codeudor))">Quitar</SfButton>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                }
+                else if (EsCorreccion)
+                {
+                    <p class="texto-tenue">Sin codeudores.</p>
                 }
                 <p class="aviso aviso-info">
                     Cada persona necesita su autorización de tratamiento de datos para el estudio del crédito (y para consultar centrales si la
@@ -108,11 +166,13 @@
                 </p>
             </IndicadorDeCarga>
 
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando el borrador…">
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 @if (Faltan.Count > 0) { <p class="texto-tenue">Para guardar falta: @string.Join(", ", Faltan).</p> }
                 <div class="toolbar">
-                    <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(_guardado.Activa || Faltan.Count > 0)" OnClick="@GuardarAsync">Guardar borrador y adjuntar documentos</SfButton>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(_guardado.Activa || Faltan.Count > 0)" OnClick="@GuardarAsync">
+                        @(EsCorreccion ? "Guardar la corrección" : "Guardar borrador y adjuntar documentos")
+                    </SfButton>
                 </div>
             </IndicadorDeCarga>
         </div>
@@ -127,25 +187,51 @@
     {
         public Guid Persona { get; init; }
         public string Nombre { get; init; } = "";
+        public int Rol { get; init; } = 2;
         public decimal? Ingreso { get; set; }
         public decimal? Gasto { get; set; }
+        public decimal? Externas { get; init; }
     }
 
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    /// <summary>La solicitud que se corrige (borrador o devuelta); nula en una nueva.</summary>
+    [Parameter] public Guid? Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaOriginal = new();
     private (SimulacionRequest Entrada, SimulacionDto Resultado)? _simulacion;
+    private SolicitudDto? _original;
+    private SimulacionRequest? _inicial;
     private IReadOnlyList<SucursalContableDto> _oficinas = [];
     private PersonSearchPicker.PersonSearchItem? _solicitante, _codeudor;
     private readonly List<Codeudor> _codeudores = [];
     private Guid? _oficina;
-    private string? _destino, _error, _documentoInicial;
+    private string? _destino, _error, _documentoInicial, _bloqueo;
     private int _formaDePago = 1, _preferencia = 1, _paso = 1;
     private decimal? _ingreso, _gasto, _externas;
     private bool _puedeCrearPersona, _mostrarPersona, _esVis;
     private ClaveDeOperacion _clave = new();
 
+    private bool EsCorreccion => Id is not null;
+
+    /// <summary>En una nueva todo se edita; al corregir, lo que diga la solicitud.</summary>
+    private bool Edita(string grupo) => !EsCorreccion || (_original?.Edita(grupo) ?? false);
+
+    private bool MuestraSimulador => !EsCorreccion || (_original is not null && _bloqueo is null && (Edita("Condiciones") || Edita("Linea")));
+
+    private bool HayDatos => EsCorreccion ? _original is not null && _bloqueo is null : _simulacion is not null;
+
+    private bool EsVivienda => _simulacion?.Resultado.IsHousing ?? _original?.IsSocialHousing is not null;
+
+    private string LineaVisible => _simulacion?.Resultado.CreditLineCode ?? _original?.Line.Code ?? "—";
+
+    private decimal MontoVisible => _simulacion?.Resultado.Amount ?? _original?.Amount ?? 0m;
+
+    private string CuotasVisibles => _simulacion is { } s
+        ? $"{s.Resultado.InstallmentCount} {TextosDeOriginacion.Periodicidad(s.Resultado.Periodicity).ToLowerInvariant()}"
+        : _original is { } o ? $"{o.Installments} {TextosDeOriginacion.Periodicidad(o.Periodicity).ToLowerInvariant()}" : "—";
+
     private List<string> Faltan =>
     [
-        .. _solicitante is null ? ["el solicitante"] : Array.Empty<string>(),
+        .. !EsCorreccion && _solicitante is null ? ["el solicitante"] : Array.Empty<string>(),
         .. _oficina is null ? ["la oficina"] : Array.Empty<string>(),
     ];
 
@@ -155,8 +241,49 @@
         _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
         var r = await Inventario.ListarSucursalesAsync();
         _oficinas = r.Value ?? [];
-        if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
+        if (EsCorreccion) await CargarOriginalAsync();
+        else if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
     }
+
+    /// <summary>Abre con lo guardado: oficina, destino, forma de pago, capacidad, codeudores y las condiciones para el simulador.</summary>
+    private async Task CargarOriginalAsync()
+    {
+        using var carga = _cargaOriginal.Iniciar();
+        var r = await Originacion.SolicitudAsync(Id!.Value);
+        if (!r.IsSuccess || r.Value is not { } o) { _bloqueo = r.ErrorMessage ?? "No se pudo leer la solicitud."; return; }
+        _original = o;
+        _paso = 2;
+        if (o.Status is not (1 or 4) || o.EditableGroups.Count == 0)
+        {
+            _bloqueo = "Esta solicitud ya no se puede corregir: sólo se corrige en borrador o cuando se devuelve para corregir.";
+            return;
+        }
+        if (o.UsesAdvancedTerms)
+        {
+            _bloqueo = "Esta solicitud tiene condiciones que esta pantalla no maneja (cuotas extraordinarias, gracia, créditos que recoge o convenio de "
+                + "libranza). Para no perderlas, anúlela y radique otra.";
+            return;
+        }
+        _oficina = o.Office?.PublicId;
+        _destino = o.Purpose;
+        _formaDePago = o.PaymentForm;
+        _preferencia = o.PrepaymentPreference ?? 1;
+        _esVis = o.IsSocialHousing ?? false;
+        var solicitante = o.Parties.FirstOrDefault(p => p.Role == 1);
+        _ingreso = solicitante?.MonthlyIncome;
+        _gasto = solicitante?.MonthlyExpenses;
+        _externas = solicitante?.ExternalInstallments;
+        _codeudores.Clear();
+        _codeudores.AddRange(o.Parties.Where(p => p.Role != 1).OrderBy(p => p.Order).Select(p => new Codeudor
+        {
+            Persona = p.Person.PersonPublicId, Nombre = p.Person.FullName, Rol = p.Role, Ingreso = p.MonthlyIncome, Gasto = p.MonthlyExpenses,
+            Externas = p.ExternalInstallments,
+        }));
+        _inicial = new SimulacionRequest(o.Line.PublicId, o.Amount, o.Installments ?? 1, o.Periodicity, o.ExpectedDisbursementDate, o.FirstDueDate,
+            AmortizationSystem: o.AmortizationSystem, PersonPublicId: o.Applicant.PersonPublicId);
+    }
+
+    private void Volver() => Navegacion.NavigateTo(EsCorreccion ? $"/cartera/solicitudes/{Id}" : "/cartera/solicitudes");
 
     private void TomarSimulacion((SimulacionRequest Entrada, SimulacionDto Resultado) simulacion)
     {
@@ -166,10 +293,10 @@
         _clave = new ClaveDeOperacion();
     }
 
-    /// <summary>La persona simulada se propone como solicitante si todavía no hay uno.</summary>
+    /// <summary>La persona simulada se propone como solicitante si todavía no hay uno (al corregir, el solicitante no cambia).</summary>
     private void TomarPersona(PersonSearchPicker.PersonSearchItem? persona)
     {
-        if (persona is not null && _solicitante is null) _solicitante = persona;
+        if (!EsCorreccion && persona is not null && _solicitante is null) _solicitante = persona;
     }
 
     private void CrearPersona(string termino)
@@ -188,31 +315,77 @@
 
     private void AgregarCodeudor()
     {
-        if (_codeudor is not { } c || _codeudores.Any(x => x.Persona == c.PublicId) || c.PublicId == _solicitante?.PublicId) return;
+        var titular = EsCorreccion ? _original?.Applicant.PersonPublicId : _solicitante?.PublicId;
+        if (_codeudor is not { } c || _codeudores.Any(x => x.Persona == c.PublicId) || c.PublicId == titular) return;
         _codeudores.Add(new Codeudor { Persona = c.PublicId, Nombre = c.FullName });
         _codeudor = null;
     }
 
     private async Task GuardarAsync()
     {
-        if (_simulacion is not { } sim || _solicitante is null || _oficina is null) return;
+        if (_oficina is null) return;
+        Guid solicitante;
+        if (EsCorreccion)
+        {
+            if (_original is null) return;
+            solicitante = _original.Applicant.PersonPublicId;
+        }
+        else
+        {
+            if (_solicitante is null || _simulacion is null) return;
+            solicitante = _solicitante.PublicId;
+        }
         using var carga = _guardado.Iniciar();
         _error = null;
-        var e = sim.Entrada;
         var solicitud = new SolicitudRequest
         {
-            ApplicantPersonPublicId = _solicitante.PublicId, OfficePublicId = _oficina.Value, CreditLinePublicId = e.CreditLinePublicId,
-            Purpose = string.IsNullOrWhiteSpace(_destino) ? null : _destino.Trim(), Amount = e.Amount, Installments = e.Installments,
-            Periodicity = e.Periodicity, ExpectedDisbursementDate = e.DisbursementDate, FirstDueDate = e.FirstDueDate, AmortizationSystem = e.AmortizationSystem,
-            Insurances = e.Insurances, PaymentForm = _formaDePago, PrepaymentPreference = _preferencia,
+            ApplicantPersonPublicId = solicitante, OfficePublicId = _oficina.Value,
+            Purpose = string.IsNullOrWhiteSpace(_destino) ? null : _destino.Trim(), PaymentForm = _formaDePago, PrepaymentPreference = _preferencia,
             ApplicantCapacity = new CapacidadRequest(_ingreso, _gasto, _externas),
-            CoDebtors = _codeudores.Select(c => new ParteDeSolicitudRequest(c.Persona, c.Ingreso, c.Gasto)).ToList(),
-            SimulationSha256 = sim.Resultado.SimulationSha256,
-            IsSocialHousing = sim.Resultado.IsHousing ? _esVis : null,
+            CoDebtors = _codeudores.Select(c => new ParteDeSolicitudRequest(c.Persona, c.Ingreso, c.Gasto, c.Externas, c.Rol)).ToList(),
         };
-        var r = await Originacion.CrearAsync(solicitud, _clave);
+        if (_simulacion is { } sim)
+        {
+            var e = sim.Entrada;
+            solicitud.CreditLinePublicId = e.CreditLinePublicId;
+            solicitud.Amount = e.Amount;
+            solicitud.Installments = e.Installments;
+            solicitud.Periodicity = e.Periodicity;
+            solicitud.ExpectedDisbursementDate = e.DisbursementDate;
+            solicitud.FirstDueDate = e.FirstDueDate;
+            solicitud.AmortizationSystem = e.AmortizationSystem;
+            solicitud.SimulationSha256 = sim.Resultado.SimulationSha256;
+            solicitud.IsSocialHousing = sim.Resultado.IsHousing ? _esVis : null;
+        }
+        else if (_original is { } o)
+        {
+            // Sin simular de nuevo, quedan las condiciones guardadas.
+            solicitud.CreditLinePublicId = o.Line.PublicId;
+            solicitud.Amount = o.Amount;
+            solicitud.Installments = o.Installments ?? 1;
+            solicitud.Periodicity = o.Periodicity;
+            solicitud.ExpectedDisbursementDate = o.ExpectedDisbursementDate;
+            solicitud.FirstDueDate = o.FirstDueDate;
+            solicitud.AmortizationSystem = o.AmortizationSystem;
+            solicitud.IsSocialHousing = o.IsSocialHousing is null ? null : _esVis;
+        }
+        if (_original is { } original)
+        {
+            // La pantalla no elige seguros ni excepción: se mandan los que tiene.
+            solicitud.Insurances = original.Insurances.Count > 0 ? original.Insurances : null;
+            solicitud.PolicyExceptionRequested = original.PolicyExceptionRequested;
+            solicitud.PolicyExceptionReason = original.PolicyExceptionReason;
+        }
+        else
+        {
+            solicitud.Insurances = _simulacion?.Entrada.Insurances;
+        }
+
+        var r = EsCorreccion
+            ? await Originacion.ActualizarAsync(Id!.Value, solicitud, _original!.RowVersion, _clave)
+            : await Originacion.CrearAsync(solicitud, _clave);
         if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
-        await Notification.SuccessAsync("Borrador guardado: adjunte los documentos y radique.");
+        await Notification.SuccessAsync(EsCorreccion ? "Corrección guardada: revise los documentos y vuelva a radicar." : "Borrador guardado: adjunte los documentos y radique.");
         Navegacion.NavigateTo($"/cartera/solicitudes/{r.Value.PublicId}");
     }
 }

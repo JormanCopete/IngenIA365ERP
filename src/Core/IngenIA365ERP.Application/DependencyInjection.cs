@@ -432,6 +432,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Origination.EnrutamientoDeSolicitud>();
         services.AddScoped<Lending.Origination.EvaluacionDeSolicitud>();
         services.AddScoped<Lending.Origination.ArmadoDeSolicitud>();
+        services.AddScoped<Lending.Origination.GruposEditablesDeSolicitud>();
         // Feature 013, US2 (bloque 6B; T0398–T0407): la consulta de listas de Cartera, el disponible de cupo y los bloqueos (los puertos que
         // consumen las validaciones), el saldo de aportes (D19: Aportes primero, la plantilla si responde «no disponible»), los cupos y su
         // enrutamiento y revalidación, la atribución de quien decide, la decisión individual por sujeto y los asuntos de acta de la solicitud y del

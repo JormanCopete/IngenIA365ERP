@@ -45920,6 +45920,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("RequiredLevelId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReturnSnapshot")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("RoutedAt")
                         .HasColumnType("datetime2");
 

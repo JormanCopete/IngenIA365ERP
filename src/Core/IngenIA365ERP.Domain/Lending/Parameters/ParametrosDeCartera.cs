@@ -205,6 +205,12 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string SegregacionQuienRadicaDecide = "Segregacion.QuienRadicaDecide";
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): qué grupos de datos de una solicitud devuelta para corregir se pueden modificar, como nombres de
+    /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica todo menos la línea y la oficina. (nuevo)
+    /// </summary>
+    public const string OriginacionGruposEditablesAlDevolver = "Originacion.GruposEditablesAlDevolver";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -773,6 +779,13 @@ public static class ParametrosDeCartera
             false, K1, General)
             with { PermisoAdicional = PermisoDeSegregacion },
 
+        Texto(OriginacionGruposEditablesAlDevolver,
+            "Qué se puede corregir en una solicitud devuelta para corregir, separado por coma: Condiciones (monto, cuotas, fechas), Linea, "
+            + "Oficina, Destino, FormaDePago, Seguros, Capacidad (ingresos y gastos del solicitante), Codeudores, Recogidas, ExcepcionDePolitica, "
+            + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica todo menos la línea y la oficina.",
+            Origination.GruposEditablesAlDevolver.Defecto, K1, patron: Origination.GruposEditablesAlDevolver.Patron)
+            with { AmbitosAdmitidos = [General, Linea], OpcionesMultiples = Origination.GruposEditablesAlDevolver.Nombres },
+
         // ------------------------------------------------------------------------------------------------ libranza (K2) --
         NumeroDecimal(Modulo, LibranzaCapacidadDeDescuento,
             "Fracción del salario o pensión, tras los descuentos de ley, que admite la libranza. Vacío: rige el límite legal.", "", K2, General) with
@@ -897,7 +910,8 @@ public static class ParametrosDeCartera
         Texto(DocumentosCertificadoTributarioSaldoIncluye,
             "Conceptos que suma el saldo al 31 de diciembre del certificado tributario, separados por coma: Capital, InteresCorriente, InteresDeMora, "
             + "OtrosCargos (seguros, gastos de cobranza y otros cargos) y MenosAnticipo (resta el anticipo). El defecto los lleva todos.",
-            SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron),
+            SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron)
+            with { OpcionesMultiples = SaldoDelCertificadoTributario.Nombres },
         // Feature 014, US13 (T196; documentos.md §2.3, §2.4; research E175): los documentos al titular de captaciones.
         SiNo(Modulo, DocumentosCertificadoTributarioIncluyeAportes,
             "El certificado tributario de captaciones incluye el saldo de aportes al 31 de diciembre y la revalorización abonada en el año.", false, K8, General) with
