@@ -27,7 +27,9 @@ namespace IngenIA365ERP.Application.Receipts.Sessions;
 // Receipts.NotActivated), lleva Idempotency-Key y toma los cerrojos en el orden fijo de data-model §0.5 con la numeración al final. (nuevo)
 
 /// <summary><c>POST /api/receipts/sessions</c> (<c>Receipts.Session.Open</c>): abre la sesión del cajero en la caja con la base contada. (nuevo)</summary>
-public sealed record OpenCashSessionCommand(Guid CashBoxPublicId, IReadOnlyList<DenominacionContadaDto> OpeningBase)
+/// <remarks>2026-11-23: la base también se puede dar con un solo valor (<see cref="OpeningBaseTotal"/>, sin denominaciones) si
+/// <c>Caja.FormaDeConteoDelEfectivo</c> no exige billetes.</remarks>
+public sealed record OpenCashSessionCommand(Guid CashBoxPublicId, IReadOnlyList<DenominacionContadaDto> OpeningBase, decimal? OpeningBaseTotal = null)
     : IRequest<Result<CashSessionDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
@@ -40,6 +42,7 @@ public sealed class OpenCashSessionCommandValidator : AbstractValidator<OpenCash
         RuleFor(x => x.CashBoxPublicId).NotEmpty().WithMessage("Indique la caja.");
         RuleFor(x => x.OpeningBase).NotNull();
         RuleForEach(x => x.OpeningBase).Must(d => d.Quantity >= 0).WithMessage("Una cantidad no puede ser negativa.");
+        RuleFor(x => x.OpeningBaseTotal).GreaterThanOrEqualTo(0m).When(x => x.OpeningBaseTotal is not null).WithMessage("La base no puede ser negativa.");
     }
 }
 
@@ -100,6 +103,13 @@ public sealed class OpenCashSessionCommandHandler(
         var denominaciones = await SesionesDeCaja.DenominacionesAsync(db, request.OpeningBase, ct);
         if (denominaciones.IsFailure) return Result.Failure<CashSessionDto>(denominaciones.Error);
         var baseContada = denominaciones.Value.Sum(d => d.Valor);
+        // 2026-11-23: sin billetes, la base puede venir como un solo valor, salvo que la cooperativa exija contarla por denominaciones.
+        if (denominaciones.Value.Count == 0 && request.OpeningBaseTotal is > 0m)
+        {
+            if (await FormaDeConteoDelEfectivo.ExigeDenominacionesAsync(parametros, hoy, ct))
+                return Result.Failure<CashSessionDto>(ErroresDeRecaudo.ConteoPorDenominaciones());
+            baseContada = request.OpeningBaseTotal.Value;
+        }
         if (baseContada > 0m && efectivo is null)
             return Result.Failure<CashSessionDto>(ErroresDeRecaudo.MovimientoInvalido("El punto no ofrece efectivo: la sesión abre sin base."));
         if (caja.BaseMode == CashBoxBaseMode.FixedFund && baseContada != caja.BaseAmount)
