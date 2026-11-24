@@ -8,6 +8,8 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Lending.Deposits.Accounts;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
@@ -82,7 +84,8 @@ public sealed class ImportDepositMigrationPartCommandHandler(
     IAlcanceDeCartera alcanceDeLaPeticion,
     RequisitosDeActivacionDeCaptaciones requisitos,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<ImportDepositMigrationPartCommand, Result<ImportResultDto>>
+    IDateTimeService reloj,
+    ILectorDeParametros? lector = null) : IRequestHandler<ImportDepositMigrationPartCommand, Result<ImportResultDto>>
 {
     public const string CodigoCuentaPendiente = "Lending.Migration.AccountNotInLoad";
 
@@ -120,7 +123,9 @@ public sealed class ImportDepositMigrationPartCommandHandler(
         var sinCambio = !request.Replace && vivas.Any(t => string.Equals(t.FileSha256, huella, StringComparison.OrdinalIgnoreCase));
 
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
-        var lectura = new LecturaDeParteDeCaptaciones(db, parte, carga, request.Replace ? [] : vivas, alcance, ct);
+        // 2026-11-24: con varias cuentas de aportes por asociado, una persona trae varias filas de aportes, cada una con su número.
+        var variasDeAportes = lector is null || await CuentasDeAportesPorAsociado.VariasAsync(lector, reloj.HoyLocal, ct);
+        var lectura = new LecturaDeParteDeCaptaciones(db, parte, carga, request.Replace ? [] : vivas, alcance, ct, variasDeAportes);
         var pendientes = new List<Action<int>>();
         MigrationLoadPart? nueva = null;
 
@@ -162,7 +167,8 @@ internal sealed class LecturaDeParteDeCaptaciones(
     MigrationLoad carga,
     IReadOnlyList<MigrationLoadPart> vivas,
     AlcanceDeCartera alcance,
-    CancellationToken ct)
+    CancellationToken ct,
+    bool variasDeAportes = false)
 {
     private static readonly Regex PatronDeNumero = new("^[A-Za-z0-9-]+$", RegexOptions.Compiled);
     private static readonly Regex PatronDePeriodo = new(@"^(\d{4})-(\d{2})(?:-[Qq]?(\d))?$", RegexOptions.Compiled);
@@ -326,10 +332,11 @@ internal sealed class LecturaDeParteDeCaptaciones(
 
     private string? NumeroDeCuenta(FilaDeImportacion fila, string columna)
     {
-        var texto = fila.Texto(columna, 20);
+        var texto = fila.Texto(columna, Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero);
         if (texto is null) return null;
         if (PatronDeNumero.IsMatch(texto)) return texto.ToUpperInvariant();
-        fila.Error(columna, ImportErrors.CellFormat, "El número de cuenta admite letras, dígitos y guion, hasta 20.");
+        fila.Error(columna, ImportErrors.CellFormat,
+            $"El número de cuenta admite letras, dígitos y guion, hasta {Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero}.");
         return null;
     }
 
@@ -663,7 +670,7 @@ internal sealed class LecturaDeParteDeCaptaciones(
 
         if (asociado is { AsociadaAlCorte: false })
             fila.Error(C.Asociado, "Lending.Savings.MembersOnly", "Una cuenta de aportes es de un asociado vigente al corte, y esta persona no lo estaba.");
-        if (asociado is not null && _conAportesVivos.Contains(asociado.Id))
+        if (asociado is not null && !variasDeAportes && _conAportesVivos.Contains(asociado.Id))
             fila.Error(C.Asociado, "Lending.Contributions.AccountAlreadyOpen", "La persona ya tiene una cuenta de aportes viva en la Cartera.");
 
         if (asociado is null) return null;
@@ -673,7 +680,8 @@ internal sealed class LecturaDeParteDeCaptaciones(
             if (!ctx.Datos.LlaveUnica(fila, numero, C.Numero)) return null;
             _numerosDelArchivo.Add(numero);
         }
-        if (!LlaveNueva(ctx, fila, Llave(asociado.Id), C.Asociado)) return null;
+        // Una fila sin número por persona (su llave es el asociado); con varias cuentas por asociado, las demás llevan su número.
+        if ((!variasDeAportes || numero is null) && !LlaveNueva(ctx, fila, Llave(asociado.Id), C.Asociado)) return null;
         if (oficina is null || linea is null || vinculacion is null) return null;
         var (lineaDeLaCuenta, heredado) = linea.Value;
         return Registrar(ctx, fila, numero ?? fila.Crudo(C.Asociado)!, id => db.MigrationContributionAccountRows.Add(new MigrationContributionAccountRow

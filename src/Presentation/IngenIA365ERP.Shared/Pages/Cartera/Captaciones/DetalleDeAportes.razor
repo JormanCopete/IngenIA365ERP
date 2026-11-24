@@ -100,19 +100,26 @@
                 </p>
                 <div class="form-grid">
                     <label class="campo">Cuenta de aportes *
-                        <select class="e-input" @bind="_cuentaDelPedido">
+                        <select class="e-input" @bind="_cuentaDelPedido" @bind:after="AjustarCierre">
                             @foreach (var c in _cuentasDeAportes) { <option value="@c.PublicId">@c.Number</option> }
                         </select>
                     </label>
-                    <label class="campo">Valor * <input class="e-input" type="number" min="0" step="1" @bind="_valor" /></label>
+                    <label class="campo">Valor * <input class="e-input" type="number" min="0" step="1" @bind="_valor" disabled="@EsCierre" /></label>
                     @if (_clase == TextosDeAportes.Devolucion)
                     {
                         <label class="campo">Causa
-                            <select class="e-input" @bind="_causa">
+                            <select class="e-input" @bind="_causa" @bind:after="AjustarCierre">
                                 <option value="ParticipationExcess">Exceso de participación</option>
+                                @* 2026-11-24: cerrar una de sus cuentas de aportes sin retirarse (vende o desafilia el vehículo). *@
+                                @if (_cuentasDeAportes.Count > 1) { <option value="AccountClosure">Cerrar la cuenta (sale todo su saldo)</option> }
                                 <option value="Other">Otra</option>
                             </select>
                         </label>
+                        @if (EsCierre)
+                        {
+                            <p class="texto-tenue campo-ancho">La cuenta se cierra y sale todo su saldo: quien aprueba decide si se devuelve por orden de giro o se
+                                traslada a otra de las cuentas de aportes del asociado. Sus cuotas sin pagar se anulan.</p>
+                        }
                     }
                     else
                     {
@@ -187,6 +194,14 @@
         var r = await Cliente.CuotasDeCuentasAsync(Id, string.IsNullOrEmpty(_estado) ? null : _estado, tamano: 200);
         if (!r.IsSuccess || r.Value is null) { _cuotas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cuotas."); return; }
         _cuotas = [.. r.Value.Items];
+    }
+
+    private bool EsCierre => _clase == TextosDeAportes.Devolucion && _causa == "AccountClosure";
+
+    /// <summary>El cierre pide todo el saldo de la cuenta elegida.</summary>
+    private void AjustarCierre()
+    {
+        if (EsCierre) _valor = _cuentasDeAportes.FirstOrDefault(c => c.PublicId == _cuentaDelPedido)?.Balance ?? 0m;
     }
 
     private void AbrirPedido(int clase)

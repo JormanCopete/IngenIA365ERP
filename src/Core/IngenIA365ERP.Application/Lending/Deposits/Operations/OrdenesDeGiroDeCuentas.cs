@@ -222,7 +222,8 @@ public sealed class OrdenesDeGiroDeCuentas(
             if (orden.Purpose == PayoutPurpose.GarnishmentConsignment && origen.GarnishmentId is { } embargo)
                 Holds.RetencionDeEmbargos.Reintegrar(db, embargo, orden.MemberAccountId, orden.Amount, reloj.HoyLocal, texto);
             // US5 (T135; data-model §3.1): la orden de una cancelación rechazada devuelve la cuenta a activa con su saldo.
-            if (orden.Purpose == PayoutPurpose.Cancellation
+            // 2026-11-24: también el cierre de una cuenta de aportes sin retiro (la devolución de todo su saldo deja la cuenta en cierre).
+            if (orden.Purpose is PayoutPurpose.Cancellation or PayoutPurpose.ContributionRefund
                 && await db.MemberAccounts.FirstOrDefaultAsync(a => a.Id == orden.MemberAccountId && a.Status == MemberAccountStatus.Closing, ct) is { } enCierre)
                 enCierre.RevertirCierre(MemberAccountStatus.Active, ahora);
             // US6 (T173): el giro rechazado de la salida de un CDAT lo devuelve a su estado (vencido si ya había vencido) con su saldo reintegrado.
@@ -243,7 +244,8 @@ public sealed class OrdenesDeGiroDeCuentas(
         // US14 (T210): girada una entrega por fallecimiento, la cuenta sin saldo se cancela y, con todas canceladas, el caso queda entregado.
         await Deceased.Fallecimientos.AlGirarAsync(db, orden, reloj.HoyLocal, ahora, (await actorActual.ObtenerAsync(ct)).UserId, ct);
         // US5 (T135; FR-039): girada la entrega de una cancelación, la cuenta sin saldo queda cancelada.
-        if (orden.Purpose is PayoutPurpose.Cancellation or PayoutPurpose.TermDepositRedemption)
+        // 2026-11-24: y la de una cuenta de aportes cerrada sin retiro (una devolución parcial deja la cuenta activa: no está en cierre).
+        if (orden.Purpose is PayoutPurpose.Cancellation or PayoutPurpose.TermDepositRedemption or PayoutPurpose.ContributionRefund)
         {
             var enCierre = await db.MemberAccounts.FirstAsync(a => a.Id == orden.MemberAccountId, ct);
             var saldos = (await LectorDeCuentas.SaldosAsync(db, [enCierre.Id], ct)).GetValueOrDefault(enCierre.Id) ?? [];

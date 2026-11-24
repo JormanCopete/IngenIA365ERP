@@ -143,11 +143,51 @@ public sealed class SolicitudesDeAportes(IApplicationDbContext db, IAlcanceDeCar
         var version = await reglas.VersionAsync(cuenta, fecha, ct);
         var minimo = version is null ? 0m : await reglas.MinimoAsync(version, cuenta.HolderPersonId, fecha, ct);
         var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
+        // 2026-11-24: el mínimo no reducible es del asociado, no de cada cuenta: lo que tienen sus otras cuentas de aportes lo cubre.
+        var enLasOtras = (await reglas.AportesDeAsync(cuenta.HolderPersonId, ct)).Values.Sum() - LectorDeCuentas.SaldoDelTitular(LineNature.Contribution, saldos);
+        minimo = Math.Max(0m, minimo - Math.Max(0m, enLasOtras));
         var porciones = DebitoDeAportes.Repartir(saldos, monto, minimo);
         return porciones is null
             ? Result.Failure<IReadOnlyList<(MemberAccountConcept, decimal)>>(ErroresDeAportes.Minimo(minimo,
                 LectorDeCuentas.SaldoDelTitular(LineNature.Contribution, saldos), monto))
             : Result.Success(porciones);
+    }
+
+    /// <summary>
+    /// 2026-11-24: lo que sale al cerrar una cuenta de aportes sin retiro del asociado: todo su saldo, por clase. Exige otra cuenta de aportes viva del
+    /// asociado (la última se cierra con el retiro). Si el dinero sale de los aportes (<paramref name="saleDinero"/>, la devolución por giro), además sin
+    /// créditos vivos (FR-044) y sin dejar al asociado bajo el mínimo no reducible con lo que queda en sus otras cuentas (FR-042).
+    /// </summary>
+    public async Task<Result<IReadOnlyList<(MemberAccountConcept Concepto, decimal Monto)>>> CierreAsync(MemberAccount cuenta, DateOnly fecha, bool saleDinero,
+        CancellationToken ct)
+    {
+        if (!await Accounts.CuentasDeAportesPorAsociado.VivasDe(db, cuenta.HolderPersonId).AnyAsync(a => a.Id != cuenta.Id, ct))
+            return Result.Failure<IReadOnlyList<(MemberAccountConcept, decimal)>>(ErroresDeAportes.UltimaCuenta(cuenta.Number));
+        var saldos = (await LectorDeCuentas.SaldosAsync(db, [cuenta.Id], ct)).GetValueOrDefault(cuenta.Id) ?? [];
+        IReadOnlyList<(MemberAccountConcept Concepto, decimal Monto)> porciones = DebitoDeAportes.Orden
+            .Where(c => saldos.GetValueOrDefault(c) > 0m).Select(c => (c, saldos[c])).ToList();
+        if (!saleDinero) return Result.Success(porciones);
+        var creditos = await reglas.CreditosVivosAsync(cuenta.HolderPersonId, ct);
+        if (creditos.Count > 0) return Result.Failure<IReadOnlyList<(MemberAccountConcept, decimal)>>(ErroresDeAportes.ConCreditosVivos(creditos));
+        var version = await reglas.VersionAsync(cuenta, fecha, ct);
+        var minimo = version is null ? 0m : await reglas.MinimoAsync(version, cuenta.HolderPersonId, fecha, ct);
+        var total = (await reglas.AportesDeAsync(cuenta.HolderPersonId, ct)).Values.Sum();
+        var sale = porciones.Sum(p => p.Monto);
+        return total - sale < minimo
+            ? Result.Failure<IReadOnlyList<(MemberAccountConcept, decimal)>>(ErroresDeAportes.Minimo(minimo, total, sale))
+            : Result.Success(porciones);
+    }
+
+    /// <summary>
+    /// 2026-11-24: anula las cuotas de la cuenta que se cierra que quedaron sin pagar (ya no se exigen), con la operación que la cerró. No guarda.
+    /// </summary>
+    public async Task AnularCuotasAsync(MemberAccount cuenta, DateTime ahora, string motivo, long? operacion, CancellationToken ct)
+    {
+        var vivas = await db.AccountInstallments.Where(c => c.MemberAccountId == cuenta.Id && c.CancelledAt == null && !c.IsDeleted).ToListAsync(ct);
+        if (vivas.Count == 0) return;
+        var leidas = await LectorDeCuotas.DeCuentasAsync(db, [cuenta.Id], ct);
+        var sinPagar = vivas.Where(c => leidas.FirstOrDefault(l => l.Cuota.Id == c.Id) is { Pendiente: > 0m }).ToList();
+        RegistroDeCuentas.AnularCuotas(sinPagar, ahora, motivo, operacion);
     }
 
     public async Task<ContributionRequestDto> DtoAsync(ContributionRequest s, CancellationToken ct)
@@ -180,8 +220,18 @@ public sealed class RequestContributionRefundCommandHandler(
         var leida = await solicitudes.CuentaAsync(request.AccountPublicId, seguir: false, ct);
         if (leida.IsFailure) return Falla(leida.Error);
         var cuenta = leida.Value;
-        var debito = await solicitudes.DebitoAsync(cuenta, request.Amount, hoy, ct);
-        if (debito.IsFailure) return Falla(debito.Error);
+        if (request.Cause == ContributionRefundCause.AccountClosure)
+        {
+            // 2026-11-24: cerrar la cuenta sin retiro; cómo sale el saldo (giro o traslado) lo decide quien aprueba.
+            var cierre = await solicitudes.CierreAsync(cuenta, hoy, saleDinero: false, ct);
+            if (cierre.IsFailure) return Falla(cierre.Error);
+            var saldo = cierre.Value.Sum(p => p.Monto);
+            if (saldo != request.Amount) return Falla(ErroresDeAportes.MontoDelCierre(cuenta.Number, saldo));
+        }
+        else if (await solicitudes.DebitoAsync(cuenta, request.Amount, hoy, ct) is { IsFailure: true } debito)
+        {
+            return Falla(debito.Error);
+        }
 
         // FR-043: el exceso sobre el límite de participación es lo que se devuelve por esa causa.
         if (request.Cause == ContributionRefundCause.ParticipationExcess)
@@ -344,11 +394,13 @@ public sealed class ApproveContributionRefundCommandHandler(
     public async Task<Result<ContributionRequestDto>> Handle(ApproveContributionRefundCommand request, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
-        if (request.Form == FormaDeDevolucionDeAportes.TransferToAccount)
-            return Falla(ErroresDeAportes.EntregaNoDisponible("La devolución a una cuenta de ahorro", nameof(EntregaDeCartera.K8)));
         var solicitud = await db.ContributionRequests.FirstOrDefaultAsync(s => s.PublicId == request.RefundPublicId
             && s.Kind == ContributionRequestKind.Refund && !s.IsDeleted, ct);
         if (solicitud is null) return Falla(ErroresDeAportes.SolicitudInexistente());
+        // 2026-11-24: el cierre de una cuenta de aportes sin retiro sale por giro o se traslada a otra cuenta de aportes del mismo asociado.
+        var esCierre = solicitud.RefundCause == ContributionRefundCause.AccountClosure;
+        if (request.Form == FormaDeDevolucionDeAportes.TransferToAccount && !esCierre)
+            return Falla(ErroresDeAportes.EntregaNoDisponible("La devolución a una cuenta de ahorro", nameof(EntregaDeCartera.K8)));
         var cuentaPublica = await db.MemberAccounts.AsNoTracking().Where(a => a.Id == solicitud.MemberAccountId).Select(a => a.PublicId).FirstAsync(ct);
         var leida = await solicitudes.CuentaAsync(cuentaPublica, seguir: true, ct);
         if (leida.IsFailure) return Falla(leida.Error);
@@ -357,12 +409,19 @@ public sealed class ApproveContributionRefundCommandHandler(
         var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(SolicitudesDeAportes.Expediente, solicitud.PublicId),
             AccionesDeSegregacion.Decidir, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
-        var debito = await solicitudes.DebitoAsync(cuenta, solicitud.Amount, hoy, ct);
+        var debito = esCierre
+            ? await solicitudes.CierreAsync(cuenta, hoy, saleDinero: request.Form == FormaDeDevolucionDeAportes.DisbursementOrder, ct)
+            : await solicitudes.DebitoAsync(cuenta, solicitud.Amount, hoy, ct);
         if (debito.IsFailure) return Falla(debito.Error);
+        // El cierre lleva el saldo que la cuenta tiene al aprobar (pudo recibir una cuota desde que se pidió).
+        var monto = esCierre ? debito.Value.Sum(d => d.Monto) : solicitud.Amount;
+        if (esCierre && monto <= 0m) return Falla(ErroresDeAportes.MontoDelCierre(cuenta.Number, monto));
+        if (esCierre && request.Form == FormaDeDevolucionDeAportes.TransferToAccount)
+            return await TrasladarYCerrarAsync(request, solicitud, cuenta, debito.Value, monto, verificada.Value, hoy, ct);
         if (await reglas.MinimoDeLaEntidadAsync(hoy, ct) is { } minimoDeLaEntidad and > 0m)
         {
             var capital = await reglas.CapitalSocialAsync(ct);
-            if (capital - solicitud.Amount < minimoDeLaEntidad) return Falla(ErroresDeAportes.MinimoDeLaEntidad(minimoDeLaEntidad, capital));
+            if (capital - monto < minimoDeLaEntidad) return Falla(ErroresDeAportes.MinimoDeLaEntidad(minimoDeLaEntidad, capital));
         }
         var titular = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == cuenta.HolderPersonId, ct);
         var banco = request.Payee is { } p
@@ -393,20 +452,20 @@ public sealed class ApproveContributionRefundCommandHandler(
                 ValueDate = hoy,
                 AccountingDate = hecho.Value.FechaContable,
                 RegisteredAt = sello.RegisteredAt,
-                Amount = solicitud.Amount,
+                Amount = monto,
                 ActorKind = actor.Kind,
                 ActorUserId = actor.UserId,
                 OriginUserCentralId = actor.CentralUserId,
                 Reason = solicitud.Reason,
                 Payload = $"{{\"requestPublicId\":\"{solicitud.PublicId:N}\"}}",
-                InputsSha256 = new HuellaDeCartera().Identificador("request", solicitud.PublicId).Decimal("amount", solicitud.Amount, 2).Calcular(),
+                InputsSha256 = new HuellaDeCartera().Identificador("request", solicitud.PublicId).Decimal("amount", monto, 2).Calcular(),
                 RulesVersion = VersionesDeReglas.Vigente,
             });
             await db.SaveChangesAsync(ct);
 
             var orden = AccountPayoutOrder.Emitir(cuenta.Id, operacion.Id, PayoutPurpose.ContributionRefund, titular.Id, titular.IdType ?? string.Empty,
                 titular.TaxId ?? string.Empty, ReferenciasDeGobierno.Nombre(titular), banco?.Id, request.Payee?.AccountType, request.Payee?.AccountNumber,
-                solicitud.Amount, hoy.AddDays(Math.Max(1, version?.RefundTermDays ?? 0)), ahora, actor.UserId);
+                monto, hoy.AddDays(Math.Max(1, version?.RefundTermDays ?? 0)), ahora, actor.UserId);
             await numerador.NumerarOrdenDeCuentaAsync(orden, Disbursements.TramoDeDesembolso.PrefijoDeOrden, ct);
             db.AccountPayoutOrders.Add(orden);
             await db.SaveChangesAsync(ct);
@@ -439,12 +498,111 @@ public sealed class ApproveContributionRefundCommandHandler(
                 RegisteredAt = operacion.RegisteredAt,
                 MessagePublicId = mensaje,
             }).ToList());
+            if (esCierre)
+            {
+                // La cuenta queda en cierre hasta que Tesorería gire la orden (OrdenesDeGiroDeCuentas la cancela); si el giro vuelve, regresa a activa.
+                solicitud.Amount = monto;
+                cuenta.PedirCierre(ahora);
+                await solicitudes.AnularCuotasAsync(cuenta, ahora, $"Cierre de la cuenta de aportes {cuenta.Number} (solicitud aprobada)", operacion.Id, ct);
+            }
             solicitud.Aprobar(actor.UserId ?? 0, ahora, request.Reason, operacion.Id, orden.Id);
             intervenciones.Registrar(verificada.Value, SolicitudesDeAportes.Expediente, solicitud.PublicId);
             await db.SaveChangesAsync(ct);
             return Result.Success(await solicitudes.DtoAsync(solicitud, ct));
         }, ct);
     }
+
+    /// <summary>
+    /// 2026-11-24: el cierre de una cuenta de aportes que traslada todo su saldo, clase por clase, a otra cuenta de aportes viva del mismo asociado (un
+    /// traslado como el de la cesión, sin tercero distinto ni dinero que salga: no mira créditos ni mínimos) y la cancela en la misma transacción.
+    /// </summary>
+    private async Task<Result<ContributionRequestDto>> TrasladarYCerrarAsync(ApproveContributionRefundCommand request, ContributionRequest solicitud,
+        MemberAccount origen, IReadOnlyList<(MemberAccountConcept Concepto, decimal Monto)> porciones, decimal monto, IntervencionVerificada verificada,
+        DateOnly hoy, CancellationToken ct)
+    {
+        var destino = request.TargetAccountPublicId is { } elegida
+            ? await db.MemberAccounts.FirstOrDefaultAsync(a => a.PublicId == elegida && !a.IsDeleted, ct)
+            : null;
+        if (destino is null || destino.Id == origen.Id || destino.HolderPersonId != origen.HolderPersonId || destino.Nature != LineNature.Contribution
+            || destino.Status is not (MemberAccountStatus.Active or MemberAccountStatus.Inactive))
+            return Falla(ErroresDeAportes.DestinoDelCierre());
+        if (await solicitudes.DestinoEnAlcanceAsync(destino, ct) is { IsFailure: true } fuera) return Falla(fuera.Error);
+        var actor = await actorActual.ObtenerAsync(ct);
+
+        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+        {
+            await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+            await cerrojo.BloquearDeudoresAsync([origen.HolderPersonId], ModoDeEspera.Esperar, ct);
+            await cerrojo.BloquearCuentasAsync(new[] { origen.Id, destino.Id }.Order().ToList(), ModoDeEspera.Esperar, ct);
+
+            var hechoOrigen = await emision.HechoDeCuentaAsync(origen, hoy, ct);
+            if (hechoOrigen.IsFailure) return Falla(hechoOrigen.Error);
+            var hechoDestino = await emision.HechoDeCuentaAsync(destino, hoy, ct);
+            if (hechoDestino.IsFailure) return Falla(hechoDestino.Error);
+            var control = await db.MemberAccountControls.FirstAsync(c => c.MemberAccountId == origen.Id, ct);
+            var numero = await numerador.NumeroDeOperacionDeCuentaAsync(MemberAccountOperationKind.Transfer, ApproveContributionAssignmentCommandHandler.Prefijo, ct);
+            var ahora = reloj.UtcNow;
+            var operacion = registro.RegistrarOperacion(control, ahora, sello => new MemberAccountOperation
+            {
+                MemberAccountId = origen.Id,
+                CounterpartMemberAccountId = destino.Id,
+                Kind = MemberAccountOperationKind.Transfer,
+                Number = numero,
+                Sequence = sello.Sequence,
+                ValueDate = hoy,
+                AccountingDate = hechoOrigen.Value.FechaContable,
+                RegisteredAt = sello.RegisteredAt,
+                Amount = monto,
+                ActorKind = actor.Kind,
+                ActorUserId = actor.UserId,
+                OriginUserCentralId = actor.CentralUserId,
+                Reason = solicitud.Reason,
+                Payload = $"{{\"requestPublicId\":\"{solicitud.PublicId:N}\"}}",
+                InputsSha256 = new HuellaDeCartera().Identificador("request", solicitud.PublicId).Decimal("amount", monto, 2).Calcular(),
+                RulesVersion = VersionesDeReglas.Vigente,
+            });
+            var deOrigen = porciones.Select(d => new DepositConceptAmountV1
+            {
+                Concept = d.Concepto.ToString(), ContributionClass = EmisionDeCartera.ClaseDeAporte(d.Concepto)?.ToString(), Amount = -d.Monto,
+            }).ToList();
+            var aDestino = porciones.Select(d => new DepositConceptAmountV1
+            {
+                Concept = d.Concepto.ToString(), ContributionClass = EmisionDeCartera.ClaseDeAporte(d.Concepto)?.ToString(), Amount = d.Monto,
+            }).ToList();
+            var unidad = await emision.TrasladoEntreCuentasAsync(new TrasladoAEmitir(hechoOrigen.Value, hechoDestino.Value, operacion, deOrigen, aDestino), ct);
+            if (unidad.IsFailure) throw new InvalidOperationException($"{unidad.Error.Code}: {unidad.Error.Message}");
+            var mensaje = unidad.Value.De(TrasladoEntreCuentasAplicadoV1.Type);
+            registro.RegistrarTransacciones(porciones.SelectMany(d => new[]
+            {
+                Fila(origen.Id, operacion, MemberAccountTransactionKind.TransferOut, d.Concepto, -d.Monto, hoy, hechoOrigen.Value.FechaContable, mensaje),
+                Fila(destino.Id, operacion, MemberAccountTransactionKind.TransferIn, d.Concepto, d.Monto, hoy, hechoOrigen.Value.FechaContable, mensaje),
+            }).ToList());
+            await db.SaveChangesAsync(ct);
+            var motivo = $"Cerrada sin retiro del asociado: el saldo pasó a la cuenta {destino.Number} ({numero})";
+            origen.Cerrar(hoy, actor.UserId, motivo, ahora);
+            await solicitudes.AnularCuotasAsync(origen, ahora, motivo, operacion.Id, ct);
+            solicitud.Amount = monto;
+            solicitud.TargetMemberAccountId = destino.Id;
+            solicitud.Aprobar(actor.UserId ?? 0, ahora, request.Reason, operacion.Id, null);
+            intervenciones.Registrar(verificada, SolicitudesDeAportes.Expediente, solicitud.PublicId);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(await solicitudes.DtoAsync(solicitud, ct));
+        }, ct);
+    }
+
+    private static MemberAccountTransaction Fila(int cuenta, MemberAccountOperation operacion, MemberAccountTransactionKind clase, MemberAccountConcept concepto,
+        decimal monto, DateOnly fecha, DateOnly contable, Guid? mensaje) => new()
+    {
+        MemberAccountId = cuenta,
+        Operation = operacion,
+        Kind = clase,
+        Concept = concepto,
+        Amount = monto,
+        ValueDate = fecha,
+        AccountingDate = contable,
+        RegisteredAt = operacion.RegisteredAt,
+        MessagePublicId = mensaje,
+    };
 
     private static Result<ContributionRequestDto> Falla(Error e) => Result.Failure<ContributionRequestDto>(e);
 }

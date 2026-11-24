@@ -64,6 +64,12 @@ public sealed record OpenAccountInput
 
     /// <summary>US7 (T182; api.md §4, <c>contractual</c>): el contrato de un ahorro contractual —cuota, plazo en meses e instrucción al vencimiento—.</summary>
     public Contractual.ContractualTermsInput? Contractual { get; init; }
+
+    /// <summary>
+    /// 2026-11-24: el número elegido de una cuenta de aportes cuando la cooperativa admite varias por asociado (letras y dígitos, hasta 6). La cuenta queda
+    /// <c>{línea}-{usuario del documento}-{número}</c>; vacío, el siguiente del asociado (<see cref="CuentasDeAportesPorAsociado"/>).
+    /// </summary>
+    public string? ContributionNumber { get; init; }
 }
 
 /// <summary>Una persona en una cuenta: su <c>PublicId</c>, su nombre y su documento. (nuevo)</summary>

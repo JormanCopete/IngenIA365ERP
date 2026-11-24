@@ -46,7 +46,7 @@ public class PayrollDeductionFileLineConfiguration : IEntityTypeConfiguration<Pa
         builder.HasOne<PayrollDeductionFile>().WithMany().HasForeignKey(e => e.PayrollDeductionFileId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Kind).HasConversion<int>();
-        builder.Property(e => e.ProductNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.ProductNumber).HasMaxLength(40).IsRequired();
         builder.Property(e => e.PayerEmployeeId).HasMaxLength(30).IsRequired();
         builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20);
         builder.Property(e => e.NoveltyKind).HasMaxLength(30).IsRequired();
@@ -110,7 +110,7 @@ public class PaymasterResponseLineConfiguration : IEntityTypeConfiguration<Payma
         builder.HasOne<PaymasterResponse>().WithMany().HasForeignKey(e => e.PaymasterResponseId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.PayerEmployeeId).HasMaxLength(30);
         builder.Property(e => e.PaymasterConceptCode).HasMaxLength(20);
-        builder.Property(e => e.ProductNumber).HasMaxLength(30);
+        builder.Property(e => e.ProductNumber).HasMaxLength(40);
         builder.Property(e => e.Expected).Monto();
         builder.Property(e => e.Deducted).Monto();
         builder.Property(e => e.Outcome).HasConversion<int>();

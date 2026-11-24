@@ -85,7 +85,8 @@ public sealed class ValidacionEntrePartesDeCaptaciones(IApplicationDbContext db,
         }
         foreach (var c in cuentas) PersonaViva(c.Parte, c.Tanda, c.Fila, c.Parte == P.ContributionAccounts ? C.Asociado : C.Titular, c.TitularId);
 
-        if (carga.Nature == LineNature.Contribution)
+        if (carga.Nature == LineNature.Contribution
+            && !await Accounts.CuentasDeAportesPorAsociado.VariasAsync(parametros, reloj?.HoyLocal ?? carga.CutoffDate.AddDays(1), ct))
         {
             var titulares = cuentas.Select(c => c.TitularId).ToList();
             var conAportes = (await db.MemberAccounts.AsNoTracking()

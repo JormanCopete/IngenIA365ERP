@@ -449,6 +449,12 @@ public static class ParametrosDeCartera
     /// <summary>Mínimo irreducible de aportes de la entidad (estatutos), en pesos (FR-080).</summary>
     public const string AportesMinimoIrreducibleEntidad = "Aportes.MinimoIrreducibleEntidad";
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño, cooperativas de transporte: un aporte por vehículo): un asociado puede tener varias cuentas de aportes vivas. Cada
+    /// una se numera <c>{línea}-{usuario del documento}-{número elegido}</c>; el mínimo no reducible sigue siendo del asociado. De fábrica, sí. (nuevo)
+    /// </summary>
+    public const string AportesVariasCuentasPorAsociado = "Aportes.VariasCuentasPorAsociado";
+
     /// <summary>Edad desde la que el titular menor pasa a manejar su cuenta (R22).</summary>
     public const string CaptacionesMayoriaDeEdadAnios = "Captaciones.MayoriaDeEdadAnios";
 
@@ -1219,6 +1225,11 @@ public static class ParametrosDeCartera
         {
             AdmiteVacio = true, PendienteDeValidar = "Sin valor: lo fijan los estatutos de cada cooperativa (FR-080).",
         },
+        SiNo(Modulo, AportesVariasCuentasPorAsociado,
+            "Un asociado puede tener varias cuentas de aportes (por ejemplo, una por vehículo). Cada una se numera con la línea, el usuario del "
+            + "documento y un número que se elige al abrirla (APORTES-16261749-2). El mínimo no reducible se exige sobre la suma de sus cuentas. Con "
+            + "«No», una sola cuenta de aportes viva por asociado.",
+            true, K7, General),
         SiNo(Modulo, RiesgoDescuentoAportesDeterioro,
             "Los aportes del deudor descuentan de la base del deterioro individual y del valor expuesto del activo de la pérdida esperada cuando la norma "
             + "lo permite (Anexo 1, num. 5.1; Anexo 2, num. 4.2): la entidad sin pérdidas acumuladas y con solvencia. Forzado en «false» mientras rija D19.",

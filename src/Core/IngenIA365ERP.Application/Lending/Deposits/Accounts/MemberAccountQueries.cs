@@ -42,7 +42,7 @@ public sealed class ListMemberAccountsQueryValidator : AbstractValidator<ListMem
         RuleFor(x => x.DepositClass).IsInEnum().When(x => x.DepositClass is not null);
         RuleFor(x => x.Status).IsInEnum().When(x => x.Status is not null);
         RuleFor(x => x.Search).MaximumLength(100);
-        RuleFor(x => x.Number).MaximumLength(20);
+        RuleFor(x => x.Number).MaximumLength(Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero);
     }
 }
 

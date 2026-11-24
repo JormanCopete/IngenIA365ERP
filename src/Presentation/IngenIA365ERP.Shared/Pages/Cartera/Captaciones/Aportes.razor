@@ -111,9 +111,22 @@
                 @if (_decidida is { } d)
                 {
                     <p class="texto-apoyo">
-                        @(d.Kind == TextosDeAportes.Devolucion ? "Devolución" : "Cesión") de @Pesos(d.Amount) de la cuenta @d.AccountNumber.
-                        @if (_aprobar && d.Kind == TextosDeAportes.Devolucion) { <span>Se ordena el giro a Tesorería.</span> }
+                        @(d.Kind == TextosDeAportes.Devolucion ? (d.Cause == TextosDeAportes.CierreDeCuenta ? "Cierre" : "Devolución") : "Cesión") de
+                        @Pesos(d.Amount) de la cuenta @d.AccountNumber.
+                        @if (_aprobar && d.Kind == TextosDeAportes.Devolucion && _trasladarA is null) { <span>Se ordena el giro a Tesorería.</span> }
                     </p>
+                    @if (_aprobar && d.Cause == TextosDeAportes.CierreDeCuenta)
+                    {
+                        @* 2026-11-24: el saldo de la cuenta que se cierra se devuelve por giro o pasa a otra cuenta de aportes del mismo asociado. *@
+                        <IndicadorDeCarga Cargando="@_cargaDestinos.Activa">
+                            <label class="campo campo-ancho">El saldo
+                                <select class="e-input" @bind="_trasladarA">
+                                    <option value="">Se devuelve por orden de giro a Tesorería</option>
+                                    @foreach (var c in _destinos) { <option value="@c.PublicId">Pasa a la cuenta @c.Number (@Pesos(c.Balance))</option> }
+                                </select>
+                            </label>
+                        </IndicadorDeCarga>
+                    }
                 }
                 <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="3" maxlength="500" @bind="_motivo"></textarea></label>
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
@@ -130,7 +143,9 @@
 @code {
     private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
 
-    private readonly EstadoDeCarga _cargaResumen = new(), _cargaSolicitudes = new(), _accion = new();
+    private readonly EstadoDeCarga _cargaResumen = new(), _cargaSolicitudes = new(), _accion = new(), _cargaDestinos = new();
+    private List<CuentaEnListaDto> _destinos = [];
+    private Guid? _trasladarA;
     private int _pestana;
     private PersonSearchPicker.PersonSearchItem? _persona;
     private ResumenDeAportesDto? _resumen;
@@ -173,13 +188,20 @@
         _solicitudes = [.. r.Value.Items];
     }
 
-    private void AbrirDecision(SolicitudDeAportesDto solicitud, bool aprobar)
+    private async Task AbrirDecision(SolicitudDeAportesDto solicitud, bool aprobar)
     {
         _decidida = solicitud;
         _aprobar = aprobar;
         _motivo = _error = null;
+        _trasladarA = null;
+        _destinos = [];
         _clave = new ClaveDeOperacion();
         _mostrarDecision = true;
+        if (!aprobar || solicitud.Cause != TextosDeAportes.CierreDeCuenta) return;
+        using var carga = _cargaDestinos.Iniciar();
+        var r = await Cliente.CuentasAsync(naturaleza: TextosDeCaptaciones.Aportes, titular: solicitud.Holder.PersonPublicId, tamano: 50);
+        _destinos = [.. (r.Value?.Items ?? []).Where(c => c.PublicId != solicitud.AccountPublicId
+            && c.Status is TextosDeCaptaciones.Activa or TextosDeCaptaciones.Inactiva)];
     }
 
     private async Task DecidirAsync()
@@ -188,7 +210,7 @@
         using var carga = _accion.Iniciar();
         _error = null;
         var r = _aprobar
-            ? await Cliente.AprobarSolicitudDeAportesAsync(_decidida, _motivo.Trim(), _clave)
+            ? await Cliente.AprobarSolicitudDeAportesAsync(_decidida, _motivo.Trim(), _clave, trasladarA: _trasladarA)
             : await Cliente.NegarSolicitudDeAportesAsync(_decidida, _motivo.Trim(), _clave);
         if (!r.IsSuccess) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
         _mostrarDecision = false;

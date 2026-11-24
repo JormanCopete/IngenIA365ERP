@@ -21,7 +21,8 @@ public class MemberAccount : AuditableEntity
     public const string CodigoNaturalezaDistinta = "Lending.CreditLine.NatureMismatch";
 
     /// <summary>Largo del número de cuenta (<c>nvarchar(20)</c>, §0.4).</summary>
-    public const int LargoDelNumero = 20;
+    /// <summary>40 desde el 2026-11-24: el número compuesto de una cuenta de aportes (línea, usuario del documento y número elegido).</summary>
+    public const int LargoDelNumero = 40;
 
     /// <summary>Consecutivo por línea (§0.4); único sin filtro. Vacío mientras la cuenta es un borrador sin numerar.</summary>
     public string Number { get; set; } = string.Empty;

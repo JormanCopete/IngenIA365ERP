@@ -65,7 +65,7 @@ public sealed record DevolucionDeAportesRequest(Guid AccountPublicId, decimal Am
 public sealed record CesionDeAportesRequest(Guid FromAccountPublicId, Guid ToPersonPublicId, decimal Amount, Guid? SessionItemPublicId, string Reason);
 
 /// <summary>El cuerpo de aprobar una devolución: en K7, por orden de giro (DisbursementOrder) a Tesorería.</summary>
-public sealed record AprobarDevolucionDeAportesRequest(string Form, string Reason);
+public sealed record AprobarDevolucionDeAportesRequest(string Form, string Reason, Guid? TargetAccountPublicId = null);
 
 // --------------------------------------------------------------------------------------------- §18.3 pagadurías --
 
@@ -117,9 +117,13 @@ public static class TextosDeAportes
         _ => estado.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
 
+    /// <summary>2026-11-24: cerrar una de las cuentas de aportes del asociado sin retiro (<c>ContributionRefundCause.AccountClosure</c>).</summary>
+    public const int CierreDeCuenta = 2;
+
     public static string Causa(int? causa) => causa switch
     {
         1 => "Exceso de participación",
+        CierreDeCuenta => "Cierre de la cuenta",
         99 => "Otra",
         null => "—",
         _ => causa.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),

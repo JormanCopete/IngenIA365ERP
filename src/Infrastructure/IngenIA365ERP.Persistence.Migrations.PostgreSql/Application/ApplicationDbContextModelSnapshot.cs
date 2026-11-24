@@ -31307,8 +31307,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<int?>("OpenedByUserId")
                         .HasColumnType("integer");
@@ -31357,11 +31357,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("HolderPersonId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_LND_MemberAccounts_LiveContribution")
-                        .HasFilter("\"Nature\" = 3 AND \"Status\" <> 6 AND \"IsDeleted\" = FALSE");
 
                     b.HasIndex("MigrationLoadId")
                         .HasDatabaseName("IX_LND_MemberAccounts_MigrationLoadId")
@@ -53448,8 +53443,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AccountNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<Guid?>("AccountPublicId")
                         .HasColumnType("uuid");
@@ -56053,8 +56048,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<string>("AccountNumber")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<Guid>("AccountPublicId")
                         .HasColumnType("uuid");
@@ -64353,8 +64348,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("ProductNumber")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
@@ -64619,8 +64614,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<string>("ProductNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<Guid>("ProductPublicId")
                         .HasColumnType("uuid");
