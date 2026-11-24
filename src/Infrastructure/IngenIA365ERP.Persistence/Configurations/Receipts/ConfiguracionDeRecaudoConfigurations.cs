@@ -123,6 +123,7 @@ public class MiscConceptConfiguration : IEntityTypeConfiguration<MiscConcept>
         builder.Property(e => e.CollectedForThirdParty).HasDefaultValue(false);
         builder.Property(e => e.IsAdvance).HasDefaultValue(false);
         builder.HasOne<Domain.Entities.Core.Payments.PaymentMeans>().WithMany().HasForeignKey(e => e.AdvanceMeansId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.AdvanceCreditLineCode).HasMaxLength(20);
     }
 }
 

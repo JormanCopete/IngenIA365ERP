@@ -18,6 +18,7 @@
                 <option value="3">Por confirmar</option>
                 <option value="1">Dinero recibido</option>
                 <option value="2">Dinero no recibido</option>
+                <option value="4">Vuelve al anticipo</option>
                 <option value="0">Todos</option>
             </select>
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
@@ -67,7 +68,7 @@
         _reversos = r.Value ?? [];
     }
 
-    private static string Causa(int c) => c switch { 1 => "Dinero recibido", 2 => "Dinero no recibido", 3 => "Por confirmar", _ => "—" };
+    private static string Causa(int c) => c switch { 1 => "Dinero recibido", 2 => "Dinero no recibido", 3 => "Por confirmar", 4 => "Vuelve al anticipo", _ => "—" };
 
     private async Task ConfirmarAsync(ReversoDeModuloDto reverso, int causa)
     {

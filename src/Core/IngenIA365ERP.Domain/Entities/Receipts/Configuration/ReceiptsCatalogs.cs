@@ -96,6 +96,12 @@ public class MiscConcept : AuditableEntity
 
     /// <summary>2026-11-23: el medio de pago (clase «otro», sin arqueo) con que la caja cruza el anticipo; su cuenta es la del anticipo en la matriz.</summary>
     public int? AdvanceMeansId { get; set; }
+
+    /// <summary>
+    /// 2026-11-23 (cruce automático, decisión 8a del dueño): la línea de Cartera cuyas obligaciones cubre el anticipo. Cuando Cartera crea una obligación de esa
+    /// línea (<c>ObligacionCreada</c>), Recaudo le cruza solo el anticipo del deudor. Nula: el anticipo se cruza a mano en la caja.
+    /// </summary>
+    public string? AdvanceCreditLineCode { get; set; }
 }
 
 /// <summary>

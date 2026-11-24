@@ -17,6 +17,12 @@ public enum ModuleReversalCause
     MoneyReceived = 1,
     MoneyNotReceived = 2,
     PendingConfirmation = 3,
+
+    /// <summary>
+    /// 2026-11-23 (cruce automático de anticipos): la porción reversada se había pagado con el medio de un anticipo de concepto; no hubo dinero, así que el valor
+    /// vuelve al anticipo y el medio se reversa (la cuenta del anticipo) sin que nadie confirme nada.
+    /// </summary>
+    ReturnedToAdvance = 4,
 }
 
 /// <summary>De quién es el saldo a favor (nuevo).</summary>
@@ -69,6 +75,9 @@ public enum PayerCreditBalanceMovementKind
 
     /// <summary>2026-11-23: el recibo que cruzó el anticipo se anuló; lo cruzado vuelve al anticipo.</summary>
     ReopenedByVoiding = 8,
+
+    /// <summary>2026-11-23 (cruce automático): el módulo reversó el pago que el anticipo había cruzado; lo reversado vuelve al anticipo.</summary>
+    ReturnedByModuleReversal = 9,
 }
 
 /// <summary>El estado de la cuenta por cobrar al pagador (nuevo).</summary>

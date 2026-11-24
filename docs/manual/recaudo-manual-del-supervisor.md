@@ -105,6 +105,31 @@ Lo que antes iba a la cuenta 272095001 y se cruzaba con un informe se lleva ahor
   medio del anticipo, con una referencia. No pasa de lo disponible (`Receipts.Advance.Insufficient`). Se baja de lo más antiguo a
   lo más nuevo.
 
+**Cruce automático al facturar el cargo (opcional):**
+
+Para que el anticipo se cruce solo, sin pasar por la caja:
+
+1. **La línea que cubre.** En el concepto del anticipo se escribe la **«Línea de Cartera que cubre»**: el código de la línea con
+   que se factura el cargo (la misma que tiene el servicio en Transporte, por ejemplo la de administración del vehículo).
+2. **El tipo de documento.** En Recaudo › Configuración › Tipos de documento se crea uno de la clase **«Cruce de anticipo»**. Los
+   recibos de cruce llevan su propio consecutivo.
+
+Desde ahí, cada vez que Cartera crea la obligación de un cargo a crédito de esa línea, Recaudo hace solo un recibo «Cruce de anticipo»:
+
+- Paga la **cuota del ciclo** con el medio del anticipo, hasta lo disponible. Si el anticipo no alcanza, abona lo que haya y el
+  resto lo paga la persona como siempre.
+- Baja el anticipo de lo más antiguo a lo más nuevo, como el cruce en la caja.
+- No entra dinero: la contabilidad es la misma del cruce en la caja (el rol del medio va a la cuenta del anticipo).
+- Lo firma el proceso, y los mensajes quedan a nombre de **quien facturó**.
+- Si llegara dos veces el mismo aviso, no cruza dos veces.
+
+Si el cruce no se puede hacer (falta el tipo de documento, Cartera no admite el pago, o el aviso no dice quién facturó), el anticipo
+queda intacto y llega la alerta **«Anticipo por cruzar en la caja»** (`Recaudo.CruceDeAnticipoPendiente`): el cajero lo cruza a mano.
+
+**Si se anula la factura** y Cartera reversa el pago que hizo el anticipo, el valor **vuelve al anticipo solo**. En Reversos de los
+módulos queda con la causa «Vuelve al anticipo», sin que nadie tenga que confirmar si llegó el dinero. Esto vale también para un
+cruce hecho a mano en la caja.
+
 **Anular:**
 
 - **El recibo que cruzó.** Lo cruzado vuelve al anticipo.

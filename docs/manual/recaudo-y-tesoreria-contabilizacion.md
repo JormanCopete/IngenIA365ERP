@@ -86,6 +86,14 @@ No hay hechos ni roles nuevos: se configuran con los de siempre.
 - **Del recibo que cruzó.** El espejo devuelve el valor a la cuenta del anticipo, porque se anula con su medio.
 - **Del recibo que recibió el anticipo.** El espejo lo saca de la cuenta del anticipo.
 
+**El cruce automático** (concepto con «Línea de Cartera que cubre», recibo de la clase «Cruce de anticipo», canal `AdvanceCrossing`)
+emite el mismo hecho que el recibo de caja (`ReciboEmitido`): el rol «Medio por cobrar» del medio del anticipo contra el puente de
+Cartera. No hace falta ninguna regla nueva en la matriz.
+
+**Si Cartera reversa un pago hecho con el anticipo** (por ejemplo, porque se anuló la factura), el reverso del módulo queda con la
+causa «Vuelve al anticipo». El hecho `AplicacionReversadaPorModulo` acredita el rol del medio, es decir, la cuenta del anticipo, y
+debita el puente de Cartera. No nace un saldo a favor de pagadores.
+
 **Lo que no lleva asiento:**
 
 - La carga inicial de anticipos (plantilla `recaudo.anticipos-al-corte`): esos saldos ya están en la apertura.

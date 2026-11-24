@@ -148,19 +148,106 @@ public static class AnticiposDeConcepto
             SaldosAFavor.Bajar(db, saldo, PayerCreditBalanceMovementKind.VoidedWithReceipt, saldo.Balance, anulacion, numeroDeAnulacion, usuario, ahora,
                 $"Anulado con el recibo {recibo.Number}.");
 
+        // Lo que el módulo ya reversó y volvió al anticipo no vuelve dos veces.
+        foreach (var (saldo, pendiente) in await CruzadoSinDevolverAsync(db, recibo, ct))
+            Devolver(db, saldo, pendiente, PayerCreditBalanceMovementKind.ReopenedByVoiding, anulacion, numeroDeAnulacion, usuario, ahora,
+                $"Se anuló el recibo {recibo.Number}, que lo había cruzado.");
+    }
+
+    /// <summary>
+    /// Los conceptos de anticipo activos que cubren las obligaciones de una línea de Cartera (<see cref="MiscConcept.AdvanceCreditLineCode"/>), con su medio
+    /// (cruce automático, 2026-11-23).
+    /// </summary>
+    public static async Task<IReadOnlyList<MiscConcept>> QueCubrenAsync(IApplicationDbContext db, string linea, CancellationToken ct)
+    {
+        var codigo = (linea ?? string.Empty).Trim().ToUpperInvariant();
+        if (codigo.Length == 0) return [];
+        return await db.MiscConcepts.AsNoTracking()
+            .Where(c => c.IsAdvance && c.AdvanceMeansId != null && c.AdvanceCreditLineCode == codigo && c.Status == ReceiptsCatalogStatus.Active)
+            .OrderBy(c => c.Code).ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Cuando el módulo reversa una porción pagada con el medio de un anticipo (<paramref name="medioId"/>): devuelve al anticipo, hasta <paramref name="valor"/>,
+    /// lo que el recibo había cruzado y no ha vuelto, de lo más nuevo a lo más antiguo. Devuelve lo que volvió. Sin guardar.
+    /// </summary>
+    public static async Task<decimal> DevolverPorReversoAsync(IApplicationDbContext db, Receipt recibo, int medioId, decimal valor, Guid reverso, string numero,
+        int? usuario, DateTime ahora, CancellationToken ct)
+    {
+        var porMedio = await PorMedioAsync(db, ct);
+        if (!porMedio.TryGetValue(medioId, out var concepto) || valor <= 0m) return 0m;
+        var resta = valor;
+        var pendientes = (await CruzadoSinDevolverAsync(db, recibo, ct)).Where(x => x.Saldo.MiscConceptId == concepto.Id)
+            .OrderByDescending(x => x.Saldo.OpenedOn).ThenByDescending(x => x.Saldo.Id);
+        foreach (var (saldo, pendiente) in pendientes)
+        {
+            if (resta <= 0m) break;
+            var vuelve = Math.Min(pendiente, resta);
+            Devolver(db, saldo, vuelve, PayerCreditBalanceMovementKind.ReturnedByModuleReversal, reverso, numero, usuario, ahora,
+                $"El módulo reversó el pago del recibo {recibo.Number}, que lo había cruzado.");
+            resta -= vuelve;
+        }
+        return valor - resta;
+    }
+
+    /// <summary>La nota con que queda resuelto el reverso de una porción pagada con el medio de un anticipo.</summary>
+    public const string NotaDelReverso = "Se pagó con el medio de un anticipo: no hubo dinero, el valor vuelve al anticipo.";
+
+    /// <summary>
+    /// El módulo reversó una porción pagada con el medio de un anticipo: no hay dinero que confirmar, así que el reverso queda «vuelve al anticipo» y el valor
+    /// vuelve (<see cref="DevolverPorReversoAsync"/>). El hecho <c>AplicacionReversadaPorModulo</c> lo emite quien llama, con la causa ya puesta: acredita el rol
+    /// del medio, que la matriz lleva a la cuenta del anticipo. Sin guardar.
+    /// </summary>
+    public static async Task ResolverReversoAsync(IApplicationDbContext db, ModuleReversal reverso, Receipt recibo, ReceiptMeans medio, int? usuario, DateTime ahora,
+        CancellationToken ct)
+    {
+        reverso.Cause = ModuleReversalCause.ReturnedToAdvance;
+        reverso.ConfirmedByUserId = usuario;
+        reverso.ConfirmedAt = ahora;
+        reverso.ConfirmationNote = NotaDelReverso;
+        await DevolverPorReversoAsync(db, recibo, medio.PaymentMeansId, reverso.Amount, reverso.PublicId, reverso.ModuleReversalNumber, usuario, ahora, ct);
+    }
+
+    /// <summary>Si el medio es el de un concepto de anticipo.</summary>
+    public static async Task<bool> EsMedioDeAnticipoAsync(IApplicationDbContext db, int medioId, CancellationToken ct) =>
+        await db.MiscConcepts.AsNoTracking().AnyAsync(c => c.IsAdvance && c.AdvanceMeansId == medioId, ct);
+
+    /// <summary>
+    /// Por saldo de anticipo, lo que el recibo cruzó y todavía no ha vuelto por un reverso del módulo (los movimientos <c>ReturnedByModuleReversal</c> de los
+    /// reversos de sus aplicaciones). Los saldos vienen rastreados.
+    /// </summary>
+    private static async Task<List<(PayerCreditBalance Saldo, decimal Pendiente)>> CruzadoSinDevolverAsync(IApplicationDbContext db, Receipt recibo,
+        CancellationToken ct)
+    {
         var cruzados = await (from m in db.PayerCreditBalanceMovements
                               join s in db.PayerCreditBalances on m.PayerCreditBalanceId equals s.Id
                               where m.Kind == PayerCreditBalanceMovementKind.AppliedByReceipt && m.DocumentPublicId == recibo.PublicId && s.MiscConceptId != null
-                              select new { Movimiento = m, Saldo = s }).ToListAsync(ct);
-        foreach (var x in cruzados)
+                              select new { m.Amount, Saldo = s }).ToListAsync(ct);
+        if (cruzados.Count == 0) return [];
+        var reversos = await (from r in db.ModuleReversals
+                              join a in db.ReceiptApplications on r.ReceiptApplicationId equals a.Id
+                              where a.ReceiptId == recibo.Id
+                              select r.PublicId).ToListAsync(ct);
+        var devueltos = reversos.Count == 0
+            ? []
+            : (await db.PayerCreditBalanceMovements.AsNoTracking()
+                .Where(m => m.Kind == PayerCreditBalanceMovementKind.ReturnedByModuleReversal && m.DocumentPublicId != null && reversos.Contains(m.DocumentPublicId.Value))
+                .Select(m => new { m.PayerCreditBalanceId, m.Amount }).ToListAsync(ct))
+                .GroupBy(m => m.PayerCreditBalanceId).ToDictionary(g => g.Key, g => g.Sum(m => m.Amount));
+        return cruzados.GroupBy(c => c.Saldo.Id)
+            .Select(g => (g.First().Saldo, Pendiente: g.Sum(c => c.Amount) - devueltos.GetValueOrDefault(g.Key)))
+            .Where(x => x.Pendiente > 0m).ToList();
+    }
+
+    private static void Devolver(IApplicationDbContext db, PayerCreditBalance saldo, decimal valor, PayerCreditBalanceMovementKind clase, Guid documento,
+        string numero, int? usuario, DateTime ahora, string nota)
+    {
+        saldo.Balance += valor;
+        saldo.Status = PayerCreditBalanceState.Open;
+        db.PayerCreditBalanceMovements.Add(new PayerCreditBalanceMovement
         {
-            x.Saldo.Balance += x.Movimiento.Amount;
-            x.Saldo.Status = PayerCreditBalanceState.Open;
-            db.PayerCreditBalanceMovements.Add(new PayerCreditBalanceMovement
-            {
-                PayerCreditBalanceId = x.Saldo.Id, Kind = PayerCreditBalanceMovementKind.ReopenedByVoiding, Amount = x.Movimiento.Amount, DocumentPublicId = anulacion,
-                DocumentNumber = numeroDeAnulacion, RecordedByUserId = usuario, RecordedAt = ahora, Note = $"Se anuló el recibo {recibo.Number}, que lo había cruzado.",
-            });
-        }
+            PayerCreditBalanceId = saldo.Id, Kind = clase, Amount = valor, DocumentPublicId = documento, DocumentNumber = numero, RecordedByUserId = usuario,
+            RecordedAt = ahora, Note = nota,
+        });
     }
 }

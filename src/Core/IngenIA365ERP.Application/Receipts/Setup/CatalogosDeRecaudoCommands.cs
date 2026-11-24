@@ -132,7 +132,15 @@ internal static class ConceptosDeRecaudo
     public static MiscConceptDto Dto(MiscConcept c, TerceroDeConcepto? fijo = null, CuentaDeConceptoVarioDto? cuenta = null,
         (Guid PublicId, string Code)? medio = null) => new(c.PublicId, c.Code, c.Name,
         c.Direction, c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresInvoice, c.RequiresApproval, c.MaxAmount, c.IsSystem, c.Status, c.ThirdPartyMode,
-        fijo?.PublicId, fijo?.Nombre, c.SuggestedAmount, cuenta?.AccountCode, cuenta?.AccountName, c.CollectedForThirdParty, c.IsAdvance, medio?.PublicId, medio?.Code);
+        fijo?.PublicId, fijo?.Nombre, c.SuggestedAmount, cuenta?.AccountCode, cuenta?.AccountName, c.CollectedForThirdParty, c.IsAdvance, medio?.PublicId, medio?.Code,
+        c.AdvanceCreditLineCode);
+
+    /// <summary>
+    /// 2026-11-23 (cruce automático): la línea de Cartera que cubre el anticipo, en mayúsculas y sin espacios; nula si el concepto no es anticipo o no la dice
+    /// (entonces se cruza a mano en la caja).
+    /// </summary>
+    public static string? LineaQueCubre(bool anticipo, string? linea) =>
+        anticipo && !string.IsNullOrWhiteSpace(linea) ? linea.Trim().ToUpperInvariant() : null;
 
     /// <summary>
     /// 2026-11-16: los conceptos con su tercero fijo y la cuenta a la que van según la matriz de Recaudo a hoy (informativa: la pregunta a Contabilidad por su puerto;
@@ -223,7 +231,8 @@ internal static class ReglasDelTerceroDeConcepto
 public sealed record CreateMiscConceptCommand(
     string Code, string Name, MiscConceptDirection Direction, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice,
     bool RequiresApproval, decimal? MaxAmount, MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null,
-    decimal? SuggestedAmount = null, bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null)
+    decimal? SuggestedAmount = null, bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null,
+    string? AdvanceCreditLineCode = null)
     : IRequest<Result<MiscConceptDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -238,6 +247,8 @@ public sealed class CreateMiscConceptCommandValidator : AbstractValidator<Create
         RuleFor(x => x.Direction).IsInEnum();
         RuleFor(x => x.MaxAmount).GreaterThan(0).When(x => x.MaxAmount is not null);
         ReglasDelTerceroDeConcepto.Aplicar(this, x => x.ThirdPartyMode, x => x.DefaultThirdPartyPublicId, x => x.SuggestedAmount, x => x.MaxAmount);
+        RuleFor(x => x.AdvanceCreditLineCode).MaximumLength(20).Matches("^[A-Za-z0-9_-]*$")
+            .WithMessage("El código de la línea de Cartera va sin espacios (letras, números, guion).");
     }
 }
 
@@ -271,6 +282,7 @@ public sealed class CreateMiscConceptCommandHandler(IApplicationDbContext db, IC
             CollectedForThirdParty = request.CollectedForThirdParty,
             IsAdvance = request.IsAdvance,
             AdvanceMeansId = marcas.Value,
+            AdvanceCreditLineCode = ConceptosDeRecaudo.LineaQueCubre(request.IsAdvance, request.AdvanceCreditLineCode),
         };
         if (concepto.CollectedForThirdParty) concepto.RequiresCrossDocument = true;
         db.MiscConcepts.Add(concepto);
@@ -284,7 +296,7 @@ public sealed class CreateMiscConceptCommandHandler(IApplicationDbContext db, IC
 public sealed record UpdateMiscConceptCommand(
     Guid PublicId, string Name, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice, bool RequiresApproval, decimal? MaxAmount,
     MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null,
-    bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null)
+    bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null, string? AdvanceCreditLineCode = null)
     : IRequest<Result<MiscConceptDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -298,6 +310,8 @@ public sealed class UpdateMiscConceptCommandValidator : AbstractValidator<Update
         RuleFor(x => x.Name).NotEmpty().WithMessage("Indique el nombre.").MaximumLength(150);
         RuleFor(x => x.MaxAmount).GreaterThan(0).When(x => x.MaxAmount is not null);
         ReglasDelTerceroDeConcepto.Aplicar(this, x => x.ThirdPartyMode, x => x.DefaultThirdPartyPublicId, x => x.SuggestedAmount, x => x.MaxAmount);
+        RuleFor(x => x.AdvanceCreditLineCode).MaximumLength(20).Matches("^[A-Za-z0-9_-]*$")
+            .WithMessage("El código de la línea de Cartera va sin espacios (letras, números, guion).");
     }
 }
 
@@ -320,6 +334,7 @@ public sealed class UpdateMiscConceptCommandHandler(IApplicationDbContext db, IC
         concepto.CollectedForThirdParty = request.CollectedForThirdParty;
         concepto.IsAdvance = request.IsAdvance;
         concepto.AdvanceMeansId = marcas.Value;
+        concepto.AdvanceCreditLineCode = ConceptosDeRecaudo.LineaQueCubre(request.IsAdvance, request.AdvanceCreditLineCode);
         concepto.Name = request.Name.Trim();
         concepto.RequiresThirdParty = request.RequiresThirdParty || request.RequiresInvoice;
         concepto.RequiresCrossDocument = request.RequiresCrossDocument || request.RequiresInvoice || request.CollectedForThirdParty;

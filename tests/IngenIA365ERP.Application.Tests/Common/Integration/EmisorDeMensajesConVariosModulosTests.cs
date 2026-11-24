@@ -161,6 +161,44 @@ public class EmisorDeMensajesConVariosModulosTests
     }
 
     [Fact]
+    public async Task Sin_persona_ni_usuario_en_la_solicitud_toma_el_del_mensaje_que_se_esta_consumiendo()
+    {
+        // 2026-11-23 (cruce automático de anticipos): el PagoAplicado lo emite Cartera por dentro del contrato y no recibe el usuario; lo toma del consumo.
+        ActuaElProceso();
+        var facturo = Guid.NewGuid();
+
+        IntegrationMessage emitido;
+        using (OrigenDelConsumo.Usar(new UserRefV1 { CentralUserId = facturo, Name = "Quien facturó" }))
+            emitido = (await Emisor().EmitirAsync(new SolicitudDeEmision(
+                Documento(Guid.NewGuid(), "DisbursementReversal", "DRV", "DRV-2026-000004"), ClavesDeEvento.Confirmacion,
+                [new DesembolsoReversadoV1()], EnLinea,
+                Relacionado: new DocumentoRelacionado(Guid.NewGuid(), "LoanDisbursement", "DES-2026-000121")))).Single();
+
+        emitido.OriginActorKind.Should().Be(ActorKind.Person);
+        emitido.OriginUserCentralId.Should().Be(facturo);
+        OrigenDelConsumo.Actual.Should().BeNull("al salir del consumo se restaura");
+    }
+
+    [Fact]
+    public async Task El_usuario_de_la_solicitud_gana_al_del_consumo_y_sin_identidad_central_el_del_consumo_no_cuenta()
+    {
+        ActuaElProceso();
+        var deLaSolicitud = Guid.NewGuid();
+        using (OrigenDelConsumo.Usar(new UserRefV1 { CentralUserId = Guid.NewGuid(), Name = "Del consumo" }))
+        {
+            var emitido = (await Emisor().EmitirAsync(new SolicitudDeEmision(
+                Documento(Guid.NewGuid(), "DisbursementReversal", "DRV", "DRV-2026-000005"), ClavesDeEvento.Confirmacion,
+                [new DesembolsoReversadoV1()], EnLinea,
+                Relacionado: new DocumentoRelacionado(Guid.NewGuid(), "LoanDisbursement", "DES-2026-000122"),
+                UsuarioDeOrigen: new UserRefV1 { CentralUserId = deLaSolicitud, Name = "De la solicitud" }))).Single();
+            emitido.OriginUserCentralId.Should().Be(deLaSolicitud);
+        }
+
+        using (OrigenDelConsumo.Usar(new UserRefV1 { CentralUserId = null, Name = "Sin identidad" }))
+            OrigenDelConsumo.Actual.Should().BeNull("un usuario sin identidad central no origina nada");
+    }
+
+    [Fact]
     public async Task Sin_persona_ni_usuario_de_origen_un_tipo_que_admite_proceso_lo_sella_como_proceso()
     {
         ActuaElProceso();

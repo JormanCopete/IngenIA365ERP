@@ -128,7 +128,9 @@ public static class CatalogoDeMensajesDeCarteraV1
     /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden, y la v2 de la orden de giro (feature 014).</summary>
     public static IReadOnlyList<TipoDeMensaje> AOtrosDestinos { get; } =
     [
-        Otro(typeof(ObligacionCreadaV1), ObligacionCreadaV1.Type, IntegrationDestinations.Inventory, C, proceso: true),
+        // 2026-11-23 (cruce automático de anticipos): Recaudo escucha la obligación nacida de una venta para cruzarle el anticipo del deudor.
+        Otro(typeof(ObligacionCreadaV1), ObligacionCreadaV1.Type, IntegrationDestinations.Inventory, C, proceso: true)
+            with { DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Receipts) },
         Otro(typeof(ObligacionRechazadaV1), ObligacionRechazadaV1.Type, IntegrationDestinations.Inventory, P, proceso: true),
         Otro(typeof(OrdenDeGiroEmitidaV1), OrdenDeGiroEmitidaV1.Type, IntegrationDestinations.Treasury, C, proceso: false),
         Otro(typeof(AnulacionDeOrdenDeGiroV1), AnulacionDeOrdenDeGiroV1.Type, IntegrationDestinations.Treasury, P, proceso: false),

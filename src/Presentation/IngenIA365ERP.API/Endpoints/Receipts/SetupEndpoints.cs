@@ -132,7 +132,7 @@ public class SetupEndpoints : ICarterModule
         g.MapPut("/misc-concepts/{id:guid}", async (Guid id, ConceptoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new UpdateMiscConceptCommand(id, body.Name ?? string.Empty, body.RequiresThirdParty, body.RequiresCrossDocument, body.RequiresInvoice,
                     body.RequiresApproval, body.MaxAmount, body.ThirdPartyMode ?? MiscConceptThirdPartyMode.Payer, body.DefaultThirdPartyPublicId, body.SuggestedAmount,
-                    body.CollectedForThirdParty, body.IsAdvance, body.AdvanceMeansPublicId)
+                    body.CollectedForThirdParty, body.IsAdvance, body.AdvanceMeansPublicId, body.AdvanceCreditLineCode)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -199,7 +199,7 @@ public class SetupEndpoints : ICarterModule
     /// <summary>2026-11-16: con cómo se elige el tercero del concepto, su tercero fijo y su valor sugerido (sin modo, quien paga).</summary>
     public sealed record ConceptoRequest(string? Name, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice, bool RequiresApproval,
         decimal? MaxAmount, MiscConceptThirdPartyMode? ThirdPartyMode = null, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null,
-        bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null);
+        bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null, string? AdvanceCreditLineCode = null);
 
     public sealed record MotivoRequest(string? Reason);
 
