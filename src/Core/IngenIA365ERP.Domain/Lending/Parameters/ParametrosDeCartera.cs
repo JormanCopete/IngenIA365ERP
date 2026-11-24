@@ -219,6 +219,13 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string OriginacionGruposEditablesAlDevolver = "Originacion.GruposEditablesAlDevolver";
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): si registrar la autorización de tratamiento general o de trámite de crédito exige adjuntar el soporte
+    /// firmado. De fábrica, no. La consulta y el reporte a centrales y el canal de contacto la exigen siempre (salvo la migrada): sin soporte
+    /// <c>HasEvidence</c> saldría verdadero por el origen y habilitaría lo que FR-006 reserva a lo probado. (nuevo)
+    /// </summary>
+    public const string AutorizacionesExigenEvidencia = "Autorizaciones.ExigenEvidencia";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -799,6 +806,10 @@ public static class ParametrosDeCartera
             + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica, todo.",
             Origination.GruposEditablesAlDevolver.Defecto, K1, patron: Origination.GruposEditablesAlDevolver.Patron)
             with { AmbitosAdmitidos = [General, Linea], OpcionesMultiples = Origination.GruposEditablesAlDevolver.Nombres },
+        SiNo(Modulo, AutorizacionesExigenEvidencia,
+            "Registrar la autorización de tratamiento general o de trámite de crédito de un titular exige adjuntar el soporte firmado (el "
+            + "formato o la grabación). Con «No» se registran sin él. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.",
+            false, K1, General),
 
         // ------------------------------------------------------------------------------------------------ libranza (K2) --
         NumeroDecimal(Modulo, LibranzaCapacidadDeDescuento,
