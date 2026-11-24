@@ -143,6 +143,14 @@ nivel (por ejemplo `CARTERA-GERENTE`, que trae `Lending.Decisions.Management`): 
 cooperativa y el de Cartera no la traen. Sin el parámetro, la pantalla de la solicitud ya dice antes de
 decidir que quien la radicó no puede hacerlo, y nombra el parámetro.
 
+**El cambio de plazo de un crédito sin pagos ni causación (desde el 2026-11-24).** Lo hace una sola persona con
+`Lending.Loans.ChangeTerm` (botón «Cambiar el plazo» del crédito; receta en `cartera-novedades-y-condonaciones.md` §3a): no
+mueve plata y corrige un dato de un crédito recién nacido. La cooperativa que quiera segregarlo enciende
+`Segregacion.CambioDePlazoPorOtraPersona` (Sí/No, de fábrica «No», mismo permiso propio): entonces quien registró el crédito
+—quien lo desembolsó o lo vendió a crédito, comparado por persona— no le cambia el plazo
+(`Lending.Loan.TermChange.SameUser`). `Creditos.CambioDePlazo` (Sí/No, de fábrica «Sí», por cooperativa o línea) apaga la
+opción del todo.
+
 **Todo usuario que radique, decida, vote, cierre un acta o desembolse necesita su persona del maestro**
 (`SEC_Users.PersonId`); sin ella, `Lending.Security.UserWithoutPerson` con `data.howToFix`. Se asocia con
 `PUT /api/admin/users/{publicId}` y `personPublicId` (la pantalla de usuarios todavía no lo ofrece: ver §8).
@@ -170,6 +178,29 @@ calificada.
   encienda `Autorizaciones.ExigenEvidencia` en Parámetros de Cartera (apagado de fábrica). La consulta y el reporte a
   centrales y el canal de contacto lo exigen siempre: `HasEvidence` se deriva del origen y una no migrada sin soporte
   contaría como probada.
+  **Autorización general** (2026-11-24, pedido del dueño): en «Registrar decisión» la finalidad viene preseleccionada en
+  **«Autorización general (todas las finalidades)»**, que registra en un paso **una decisión por finalidad y canal**
+  —tratamiento general, trámite de crédito, consulta y reporte a centrales y los cinco canales de contacto: SMS, WhatsApp,
+  correo, llamada y visita—, cada una contra la versión vigente de la política de su finalidad
+  (`POST /api/compliance/habeas-data/authorizations/general`, el mismo permiso). Así la trazabilidad sigue siendo por
+  finalidad y cada consumidor sigue preguntando por la suya: el tratamiento general **no** implica las centrales, que piden
+  consentimiento expreso con soporte. Con el soporte firmado quedan todas; sin él, sólo las que no lo exigen, y la pantalla
+  muestra «Quedaron por fuera:» con cada finalidad y su motivo («Exige el soporte firmado…» o «La cooperativa no tiene
+  publicada la política…»). Si no queda ninguna, el registro se rechaza (`Compliance.HabeasData.EvidenceRequired` o
+  `.NoCurrentPolicy`) y no escribe nada. Una finalidad sola se sigue registrando eligiéndola en la lista.
+  Al **crear una persona** con la autorización (POS, Compras, Caja, solicitud, cuentas, transporte), el diálogo ofrece
+  «El titular autoriza todas las finalidades (autorización general)», «El titular autoriza sólo el tratamiento de datos» y
+  «El titular no autoriza». La primera registra, en la misma transacción que la persona, el tratamiento general (la política
+  que se le mostró) y el trámite de crédito (salvo que la cooperativa exija el soporte); al crear no hay soporte, así que
+  centrales y canales de contacto se registran después en Autorizaciones del titular.
+  **Una política por finalidad.** Cada autorización se registra contra la política vigente de su finalidad; sin ella responde
+  «La cooperativa no tiene una política de tratamiento de datos vigente para la finalidad «…»: publíquela en Cumplimiento ›
+  Políticas de datos…». Desde el 2026-11-24 esa pantalla tiene enlace en el menú (Cumplimiento › **Políticas de datos**,
+  `Compliance.HabeasData.ViewHistory`), muestra la finalidad de cada versión y avisa cuáles no tienen política vigente; al
+  publicar (`Compliance.HabeasData.Publish`) se elige la **«Finalidad»**, y con **«Todas las finalidades (la misma política
+  para cada una)»** el mismo texto queda publicado para las cinco, una versión por finalidad
+  (`POST /api/compliance/habeas-data/policies/several`). La fecha «Vigente desde» va en hora de Colombia. Antes la pantalla
+  sólo publicaba la de tratamiento general.
 - **Auditoría**: todo el grupo `/api/lending` audita el intento sin permiso (`Lending.Access.Denied`, antes
   del 404) y el rechazo de forma (`Lending.Request.Rejected`, con el comando, los campos y los códigos de la
   regla, **nunca los valores**); los comandos llevan oficina y dispositivo (`X-Dispositivo`). Los eventos

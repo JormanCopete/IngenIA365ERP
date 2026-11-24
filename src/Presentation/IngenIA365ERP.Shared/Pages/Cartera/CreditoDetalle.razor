@@ -39,6 +39,14 @@
             <PermissionGate Required="Lending.Condonations.Request">
                 <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/condonaciones?credito={Id}"))">Condonar</SfButton>
             </PermissionGate>
+            @* 2026-11-24 (pedido del dueño): cambiar el plazo de un crédito activo que todavía no tiene pagos ni causación (no es una novedad; el
+               servidor dice por qué no, si no se puede). *@
+            @if (_c is { Status: "Active" } credito && credito.Origin != "Migration")
+            {
+                <PermissionGate Required="Lending.Loans.ChangeTerm">
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCambioDePlazo = true)">Cambiar el plazo</SfButton>
+                </PermissionGate>
+            }
             @if (!EnPopup)
             {
                 <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
@@ -484,6 +492,7 @@
     </DialogTemplates>
 </SfDialog>
 <TrasladoDeLibranza CreditoId="@Id" @bind-Visible="_mostrarTraslado" />
+<CambioDePlazoDelCredito CreditoId="@Id" @bind-Visible="_mostrarCambioDePlazo" Cambiado="@AlCambiarPlazoAsync" />
 </PermissionGate>
 
 @code {
@@ -494,6 +503,23 @@
 
     // K2 (T0852): el traslado de la libranza.
     private bool _mostrarTraslado;
+
+    // 2026-11-24: el cambio de plazo de un crédito sin pagos ni causación.
+    private bool _mostrarCambioDePlazo;
+
+    /// <summary>Tras cambiar el plazo cambian el resumen, el plan, las operaciones y el estado de cuenta: se vuelven a leer.</summary>
+    private async Task AlCambiarPlazoAsync()
+    {
+        _leidas.RemoveWhere(p => p is Pestana.Estado or Pestana.Plan or Pestana.Operaciones or Pestana.Libro);
+        _liquidacion = null;
+        _versiones = [];
+        await OnParametersSetAsync();
+        if (_pestana is Pestana.Estado or Pestana.Plan or Pestana.Operaciones or Pestana.Libro)
+        {
+            var actual = _pestana;
+            await AbrirAsync(actual);
+        }
+    }
 
     // US6 (T0603): la confirmación por excepción de una validación fallida.
     private readonly EstadoDeCarga _guardado = new();

@@ -77,6 +77,7 @@ public class LasCaptacionesExigenPermisoYAlcance
         ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa",
         ["SetDepositReferenceFiguresCommand"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa",
         ["GetDepositsActivationStatusQuery"] = "la activación es de toda la cooperativa (FR-116): requisitos y conteos",
+        ["GetContributionInstallmentModeQuery"] = "2026-11-24: lee un parámetro de toda la cooperativa (Aportes.OrigenDeLaCuota), sin cuentas ni titulares",
         ["ConsumeChargeInvoiceRegisteredCommand"] = "consumo de la bandeja (Comercial informa la factura de un cargo): sin usuario, sin ruta ni alcance (I-2)",
         // US16 (T162): crear una línea no toca una línea existente ni una oficina; la línea nueva entra al alcance de cada usuario por su asignación de
         // líneas (LND_UserCreditLineScopes) o por Lending.Scope.AllLines, como las líneas de crédito de la 013.

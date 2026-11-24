@@ -103,6 +103,15 @@ public sealed partial class CaptacionesClient(HttpClient http, CentralAuthClient
     public Task<ResultadoDeInventario<CuentaDto>> AbrirCuentaAsync(AbrirCuentaRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CuentaDto>(HttpMethod.Post, RutaDeCuentas, request, clave, ct);
 
+    /// <summary>2026-11-24: si la cooperativa pide la cuota al abrir cada cuenta de aportes y los canales de pago que ofrece.</summary>
+    public Task<ResultadoDeInventario<ModoDeCuotaDeAportesDto>> ModoDeCuotaDeAportesAsync(CancellationToken ct = default) =>
+        Enviar<ModoDeCuotaDeAportesDto>(HttpMethod.Get, $"{RutaDeCuentas}/contribution-installment-mode", null, null, ct);
+
+    /// <summary>2026-11-24: corrige la cuota de una cuenta de aportes, con motivo; rige para las cuotas que todavía no se generaron.</summary>
+    public Task<ResultadoDeInventario<CuentaDto>> CorregirCuotaDeAportesAsync(Guid cuenta, CuotaDeLaCuentaDeAportesRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CuentaDto>(HttpMethod.Put, $"{RutaDeCuentas}/{cuenta}/contribution-installment", request, clave, ct);
+
     /// <summary>Aprueba la apertura retenida (otra persona que quien la abrió, y con las coincidencias liberadas por el oficial).</summary>
     public Task<ResultadoDeInventario<CuentaDto>> AprobarAperturaAsync(Guid cuenta, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CuentaDto>(HttpMethod.Post, $"{RutaDeCuentas}/{cuenta}/approve-opening", new MotivoDeCarteraRequest(motivo), clave, ct);

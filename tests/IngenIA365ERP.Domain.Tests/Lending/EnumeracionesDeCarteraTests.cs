@@ -43,7 +43,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(SaleObligationStatus)] = [("Validated", 1), ("ValidationFailed", 2), ("Migrated", 3), ("CancelledBeforeCutoff", 4)],
         [typeof(LoanLinkKind)] = [("Replacement", 1), ("Novation", 2), ("Refinancing", 3)],
         [typeof(TermsVersionCause)] = [("Origination", 1), ("CommercialSale", 2), ("Migration", 3), ("RateReset", 4), ("Restructuring", 5),
-            ("Modification", 6), ("Extension", 7), ("PaymentDateChange", 8), ("RateChange", 9), ("Novation", 10)],
+            ("Modification", 6), ("Extension", 7), ("PaymentDateChange", 8), ("RateChange", 9), ("Novation", 10),
+            // 2026-11-24: la versión que deja el cambio de plazo sin pagos ni causación.
+            ("TermCorrection", 11)],
         [typeof(DisbursementForm)] = [("Transfer", 1), ("Check", 2), ("ThirdPartyPayment", 3), ("InKind", 4)],
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
@@ -173,7 +175,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(PayrollFileStatus)] = [("Generated", 1), ("Superseded", 2), ("Sent", 3), ("Voided", 4)],
         [typeof(PayrollNoveltyKind)] = [("New", 1), ("Change", 2), ("Cancellation", 3), ("Unchanged", 4)],
         [typeof(NoveltyMechanism)] = [("Extension", 1), ("PaymentDateChange", 2), ("RateChange", 3), ("Novation", 4), ("Refinancing", 5),
-            ("BranchChange", 6)],
+            ("BranchChange", 6),
+            // 2026-11-24: el cambio de plazo sin pagos ni causación (no es una novedad; sólo viaja en la decisión de su operación).
+            ("TermCorrection", 7)],
         [typeof(NoveltyCause)] = [("Restructuring", 1), ("Modification", 2)],
         [typeof(LoanNoveltyStatus)] = [("Draft", 1), ("Submitted", 2), ("Approved", 3), ("Rejected", 4), ("Applied", 5), ("Cancelled", 6)],
         [typeof(NoveltyLoanRole)] = [("Modified", 1), ("Collected", 2), ("Resulting", 3)],

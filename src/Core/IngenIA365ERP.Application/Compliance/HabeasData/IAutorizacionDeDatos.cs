@@ -93,8 +93,12 @@ public enum DecisionDeAutorizacion
 /// <c>CreatePersonCommand</c> y en los compuestos <c>with-person</c>, y se escribe junto con la persona —las dos o
 /// ninguna—. <see cref="PolicyVersionPublicId"/> es la versión que se le mostró al titular; nula sólo cuando la
 /// cooperativa no tiene política publicada (el alta procede con la constancia «sin política vigente»).
+/// 2026-11-24 (pedido del dueño): con <see cref="AllPurposes"/> y la decisión <c>Accepted</c> es la <b>autorización general</b>: además del
+/// tratamiento general se registran, en la misma transacción, las demás finalidades que no exigen soporte firmado
+/// (<see cref="Authorizations.AutorizacionGeneral"/>); al crear no hay soporte, así que centrales y canales de contacto quedan para
+/// Autorizaciones del titular.
 /// </summary>
-public sealed record AutorizacionAlCrear(DecisionDeAutorizacion Decision, Guid? PolicyVersionPublicId, string? Channel);
+public sealed record AutorizacionAlCrear(DecisionDeAutorizacion Decision, Guid? PolicyVersionPublicId, string? Channel, bool AllPurposes = false);
 
 /// <summary>Forma de <see cref="AutorizacionAlCrear"/>; lo incluyen el alta y los compuestos. (nuevo)</summary>
 public sealed class AutorizacionAlCrearValidator : AbstractValidator<AutorizacionAlCrear>

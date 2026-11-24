@@ -31,6 +31,10 @@ paz y salvo, el mínimo, el límite de participación, la consulta de los crédi
   y la de **ahorro permanente** (otra cuota de la cuenta permanente, enlazada); si el asociado no tiene cuenta permanente viva sólo se exige la de
   aportes.
 - **Generación**: el paso de captaciones del ciclo diario genera las cuotas al vencer su período.
+- **Cuota propia de la cuenta** (2026-11-24, `Aportes.OrigenDeLaCuota = DeLaCuenta`): la cuenta que tiene cuota, periodicidad y fecha del primer pago
+  propias se genera con ellas y no con las de la línea (ver [cartera-captaciones-lineas-y-apertura.md](cartera-captaciones-lineas-y-apertura.md) §3).
+- **Canal de pago de la cuenta** (2026-11-24): sin canal fijo, la nómina y la pagaduría la descuentan como siempre; con «Caja», ninguna de las dos;
+  con «Nómina», sólo la nómina; con «Pagaduría (libranza)», sólo el archivo de la pagaduría. La caja la recibe siempre.
 - **Recaudo**: sólo por el **contrato de cuentas** (`ConsignarAsync`), en la transacción del recaudador: Recaudo, Tesorería, Nómina o la pagaduría.
   Lo libre en aportes es un **extraordinario** (si la línea lo admite); un sobrepago sin extraordinarios se rechaza: no hay saldo a favor. El límite
   de participación sólo se aplica cuando el capital social ya es mayor que cero.

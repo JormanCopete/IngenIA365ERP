@@ -254,6 +254,13 @@
                     @if (_mecanismo is "Extension" or "Novation" or "Refinancing")
                     {
                         <label class="campo">Cuotas del plan nuevo <input class="e-input" type="number" min="1" @bind="_cuotas" /></label>
+                        @* 2026-11-24: un crédito de pago único pasa a varias cuotas sólo con la periodicidad del plan nuevo. *@
+                        <label class="campo">Periodicidad del plan nuevo
+                            <select class="e-input" @bind="_periodicidad">
+                                <option value="">La del crédito</option>
+                                @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+                            </select>
+                        </label>
                         <label class="campo"><input type="checkbox" @bind="_capitalizar" /> Capitalizar el interés que se debe</label>
                     }
                     @if (_mecanismo is "RateChange" or "Novation" or "Refinancing")
@@ -329,7 +336,7 @@
     private List<NovedadResumenDto> _filas = [];
     private string? _estado, _causa, _error, _errorNueva, _motivo, _buscarCredito, _motivoAnulacion, _motivoSalida, _motivoExcepcion, _adjunto;
     private string _mecanismo = "Extension", _motivoDelDeudor = "DebtorRequest";
-    private int? _cuotas, _diaDePago;
+    private int? _cuotas, _diaDePago, _periodicidad;
     private decimal? _tasa;
     private bool _capitalizar, _mostrarNueva, _mostrarConsentimiento, _mostrarDecision, _acepto, _usarExcepcion;
     private int _pagina = 1;
@@ -389,7 +396,7 @@
         _errorNueva = _motivo = null;
         _creditos.Clear();
         _encontrados = [];
-        _cuotas = _diaDePago = null;
+        _cuotas = _diaDePago = _periodicidad = null;
         _tasa = null;
         _capitalizar = false;
         _clave = new ClaveDeOperacion();
@@ -415,7 +422,8 @@
         _errorNueva = null;
         var principal = _creditos.First();
         var recogidos = _mecanismo == "Refinancing" ? _creditos.Skip(1).ToList() : null;
-        var condiciones = new CondicionesDeNovedadDto(_tasa is { } t ? t / 100m : null, _cuotas, null, _diaDePago, null, _capitalizar,
+        var condiciones = new CondicionesDeNovedadDto(_tasa is { } t ? t / 100m : null, _cuotas,
+            _mecanismo is "Extension" or "Novation" or "Refinancing" ? _periodicidad : null, _diaDePago, null, _capitalizar,
             recogidos is { Count: > 0 } ? recogidos : null);
         var creditos = _mecanismo == "Refinancing" ? new List<Guid> { principal } : _creditos.ToList();
         var r = await Cliente.PedirAsync(new NovedadRequest(creditos, _mecanismo, _motivoDelDeudor, condiciones, _motivo!.Trim()), _clave);

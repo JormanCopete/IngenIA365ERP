@@ -3,6 +3,8 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Compliance.HabeasData;
+using IngenIA365ERP.Application.Compliance.HabeasData.Authorizations;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Application.Core.People.Contracts;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +27,16 @@ namespace IngenIA365ERP.Application.Core.People.Services;
 /// vigente» (<see cref="AutorizacionDeDatos.DejarConstanciaSinPoliticaAsync"/>).</item>
 /// </list>
 /// </summary>
+/// <remarks>
+/// 2026-11-24 (pedido del dueño): con la <b>autorización general</b> (<see cref="AutorizacionAlCrear.AllPurposes"/>) se suman en la misma
+/// transacción las demás finalidades que no exigen soporte firmado (<see cref="AutorizacionGeneral"/>); si una no se puede escribir por otra
+/// razón que la evidencia o la política, no queda la persona.
+/// </remarks>
 public sealed class AltaConAutorizacion(
     IApplicationDbContext context,
     PersonFactory personas,
-    AutorizacionDeDatos autorizaciones)
+    AutorizacionDeDatos autorizaciones,
+    AutorizacionGeneral? general = null)
 {
     /// <summary>
     /// Da de alta la persona de <paramref name="entrada"/>, deja que <paramref name="prepararRol"/> agregue su fila hija
@@ -78,8 +86,16 @@ public sealed class AltaConAutorizacion(
                 choque = ex;
                 return Result.Failure<AltaRealizada<T>>(PersonFactory.DocumentoDuplicado("otra persona"));
             }
-            autorizaciones.AgregarConsentimiento(alta.Value.Persona, decision);
+            var consentimiento = autorizaciones.AgregarConsentimiento(alta.Value.Persona, decision);
             await context.SaveChangesAsync(ct);
+            if (decision.RegistraLasDemas && general is not null)
+            {
+                var demas = await general.AgregarAsync(new AutorizacionGeneralAAgregar(alta.Value.Persona.PublicId, decision.Decision, null,
+                        DataAuthorizationOrigin.PersonRegistration, consentimiento.ActionAt, "Autorización general capturada al crear la persona."),
+                    [new FinalidadDeLaGeneral(DataAuthorizationPurpose.GeneralTreatment)], ct);
+                if (demas.IsFailure) return Result.Failure<AltaRealizada<T>>(demas.Error);
+                await context.SaveChangesAsync(ct);
+            }
             return alta;
         }, ct);
 

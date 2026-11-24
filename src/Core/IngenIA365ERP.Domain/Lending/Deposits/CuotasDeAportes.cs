@@ -30,7 +30,8 @@ public sealed record EntradaDeCuotaDeAportes(
     decimal? SalarioMinimo,
     decimal UnidadDeRedondeo,
     RoundingMode Redondeo,
-    decimal? FraccionPermanente);
+    decimal? FraccionPermanente,
+    bool DeLaCuenta = false);
 
 /// <summary>
 /// La cuota calculada: el total del período y su reparto entre aportes y ahorro permanente (FR-049), con la explicación y la base usada. (nuevo)
@@ -144,7 +145,7 @@ public static class CuotasDeAportes
         {
             case ContributionAmountMode.FixedAmount:
                 bruto = e.Valor ?? 0m;
-                explicacion = $"Valor fijo de la línea {N(bruto)}.";
+                explicacion = e.DeLaCuenta ? $"Cuota propia de la cuenta {N(bruto)}." : $"Valor fijo de la línea {N(bruto)}.";
                 break;
             case ContributionAmountMode.IncomeFraction:
                 if (e.Ingreso is not { } ingreso || ingreso <= 0m)

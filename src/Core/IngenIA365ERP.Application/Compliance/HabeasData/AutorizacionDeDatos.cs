@@ -53,7 +53,10 @@ public sealed class AutorizacionDeDatos(
             if (vigente is { } numero)
                 return Result.Failure<AutorizacionResuelta?>(PoliticaRequerida,
                     $"La cooperativa tiene publicada la política de tratamiento de datos (versión {numero}): muéstrela al titular y registre su decisión sobre esa versión.");
-            return Result.Success<AutorizacionResuelta?>(new AutorizacionResuelta(autorizacion.Decision, null, cooperativa, canal));
+            return Result.Success<AutorizacionResuelta?>(new AutorizacionResuelta(autorizacion.Decision, null, cooperativa, canal)
+            {
+                TodasLasFinalidades = autorizacion.AllPurposes,
+            });
         }
 
         var version = await db.HabeasDataPolicyVersions.AsNoTracking()
@@ -61,7 +64,10 @@ public sealed class AutorizacionDeDatos(
             .Select(p => (int?)p.Id)
             .FirstOrDefaultAsync(ct);
         return version is { } id
-            ? Result.Success<AutorizacionResuelta?>(new AutorizacionResuelta(autorizacion.Decision, id, cooperativa, canal))
+            ? Result.Success<AutorizacionResuelta?>(new AutorizacionResuelta(autorizacion.Decision, id, cooperativa, canal)
+            {
+                TodasLasFinalidades = autorizacion.AllPurposes,
+            })
             : Result.Failure<AutorizacionResuelta?>(PoliticaDesconocida, "La versión de la política de tratamiento de datos no existe en esta cooperativa.");
     }
 
@@ -157,10 +163,25 @@ public sealed class AutorizacionDeDatos(
             };
     }
 
-    /// <summary>Feature 013 (T0086): sin finalidad vigente para registrar la decisión.</summary>
+    /// <summary>
+    /// Feature 013 (T0086): sin finalidad vigente para registrar la decisión. 2026-11-24: con el nombre de la finalidad en español y la pantalla donde se
+    /// publica (antes decía «GeneralTreatment» y no decía dónde).
+    /// </summary>
     public static Error SinPoliticaDeLaFinalidad(DataAuthorizationPurpose finalidad) => new ErrorConDatos(HabeasDataErrorCodes.NoCurrentPolicy,
-        $"La cooperativa no tiene una política de tratamiento de datos vigente para la finalidad {finalidad}: publíquela antes de registrar la autorización.",
+        $"La cooperativa no tiene una política de tratamiento de datos vigente para la finalidad «{NombreDeFinalidad(finalidad)}»: publíquela en "
+        + "Cumplimiento › Políticas de datos (con «Todas las finalidades» una misma política las cubre todas) antes de registrar la autorización.",
         new { purpose = finalidad.ToString() });
+
+    /// <summary>El nombre de una finalidad como lo ve una persona (2026-11-24).</summary>
+    public static string NombreDeFinalidad(DataAuthorizationPurpose finalidad) => finalidad switch
+    {
+        DataAuthorizationPurpose.GeneralTreatment => "Tratamiento general",
+        DataAuthorizationPurpose.CreditProcessing => "Trámite de crédito",
+        DataAuthorizationPurpose.CreditBureauQuery => "Consulta en centrales",
+        DataAuthorizationPurpose.CreditBureauReport => "Reporte a centrales",
+        DataAuthorizationPurpose.ContactChannel => "Canal de contacto",
+        _ => finalidad.ToString(),
+    };
 
     /// <summary>Feature 013 (T0086): el canal es obligatorio con la finalidad <c>ContactChannel</c> y no va con otra.</summary>
     public static readonly Error CanalDeContactoRequerido = new(Error.Validation.Code,
@@ -276,4 +297,10 @@ public sealed class AutorizacionDeDatos(
 public sealed record AutorizacionResuelta(DecisionDeAutorizacion Decision, int? PolicyVersionId, int TenantId, string Channel)
 {
     public bool SinPolitica => PolicyVersionId is null;
+
+    /// <summary>2026-11-24: la autorización general (<see cref="AutorizacionAlCrear.AllPurposes"/>).</summary>
+    public bool TodasLasFinalidades { get; init; }
+
+    /// <summary>¿Registra también las demás finalidades? Sólo si el titular aceptó y hay política del tratamiento general.</summary>
+    public bool RegistraLasDemas => TodasLasFinalidades && Decision == DecisionDeAutorizacion.Accepted && !SinPolitica;
 }

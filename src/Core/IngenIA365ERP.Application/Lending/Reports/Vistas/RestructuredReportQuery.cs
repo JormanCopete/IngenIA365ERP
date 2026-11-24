@@ -138,6 +138,7 @@ public sealed class RestructuredReportQueryHandler(
         NoveltyMechanism.Novation => "Novación",
         NoveltyMechanism.Refinancing => "Refinanciación",
         NoveltyMechanism.BranchChange => "Cambio de oficina",
+        NoveltyMechanism.TermCorrection => "Cambio de plazo",
         _ => m.ToString(),
     };
 }

@@ -1,82 +1,136 @@
 @page "/compliance/habeas-data/policies/publicar"
+@using System.Globalization
 @using IngenIA365ERP.Shared.Configuration
+@using IngenIA365ERP.Shared.Services.Cartera
 @using System.Net.Http.Json
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-<PageTitle>Publicar política habeas data — IngenIA365ERP</PageTitle>
+<PageTitle>Publicar política de datos — IngenIA365ERP</PageTitle>
 
+@* 2026-11-24 (pedido del dueño): cada finalidad necesita su política publicada y la pantalla sólo publicaba la de tratamiento general, así que no se
+   podía registrar la autorización de trámite de crédito, de centrales ni de canal de contacto («…no tiene una política vigente para la finalidad…»).
+   Ahora se elige la finalidad; con «Todas las finalidades» la misma política se publica para cada una, una versión por finalidad
+   (POST /policies/several). La fecha va en hora de Colombia (antes era UTC y por defecto una hora después). *@
 <PermissionGate Required="Compliance.HabeasData.Publish" MostrarAviso="true">
     <ChildContent>
-        <div class="admin-page">
-            <h1>Publicar nueva versión de política</h1>
-            <p class="muted">
-                Al publicar, la versión vigente queda cerrada y la nueva entra en vigor.
-                El hash SHA-256 se calcula al guardar.
+        <div class="pagina">
+            <div class="page-header">
+                <h3>Publicar una versión de la política de datos</h3>
+            </div>
+            <p class="texto-apoyo">
+                Al publicar, la versión vigente de cada finalidad elegida queda cerrada y la nueva entra en vigor desde la fecha indicada. Una versión
+                publicada no se edita: se publica otra. El hash SHA-256 se calcula al guardar.
             </p>
 
-            <div class="form-grid">
-                <label>Título
-                    <input type="text" maxlength="300" @bind="_title" />
-                </label>
-                <label>Vigente desde (UTC)
-                    <input type="datetime-local" @bind="_effectiveFrom" />
-                </label>
-                <label>Contenido (Markdown)
-                    <textarea rows="20" @bind="_content"></textarea>
-                </label>
-            </div>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Publicando…">
+                <div class="form-grid">
+                    <label class="campo">Finalidad *
+                        <select class="e-input" @bind="_finalidad">
+                            <option value="@TodasLasFinalidades">Todas las finalidades (la misma política para cada una)</option>
+                            @foreach (var f in TextosDeCartera.Finalidades) { <option value="@f.Valor">@f.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Vigente desde (hora de Colombia) *
+                        <input class="e-input" type="datetime-local" @bind="_vigenteDesde" />
+                    </label>
+                    <label class="campo campo-ancho">Título *
+                        <input class="e-input" type="text" maxlength="300" @bind="_titulo" />
+                    </label>
+                    <label class="campo campo-ancho">Contenido (Markdown) *
+                        <textarea class="e-input" rows="20" @bind="_contenido"></textarea>
+                    </label>
+                </div>
+                <p class="texto-tenue">
+                    Cada autorización del titular se registra contra la política de su finalidad: tratamiento general, trámite de crédito, consulta en
+                    centrales, reporte a centrales y canal de contacto. Si un solo texto las cubre todas, publíquelo con «Todas las finalidades».
+                </p>
 
-            @if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
 
-            <div class="acciones">
-                <button class="primary" @onclick="PublishAsync" disabled="@_saving">
-                    @(_saving ? "Publicando…" : "Publicar")
-                </button>
-                <button class="boton" @onclick="Cancel">Cancelar</button>
-            </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@PublicarAsync">Publicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@Cancelar">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
         </div>
     </ChildContent>
-    <Fallback><p>No tienes permiso para publicar políticas habeas data.</p></Fallback>
+    <Fallback><p>No tiene permiso para publicar políticas de datos.</p></Fallback>
 </PermissionGate>
 
 @code {
-    private string _title = string.Empty;
-    private string _content = string.Empty;
-    private DateTime _effectiveFrom = DateTime.UtcNow.AddHours(1);
-    private bool _saving;
+    /// <summary>La opción que publica la misma política para todas las finalidades.</summary>
+    private const int TodasLasFinalidades = 0;
+
+    /// <summary>Colombia no tiene horario de verano: siempre UTC−5.</summary>
+    private static readonly TimeSpan HoraDeColombia = TimeSpan.FromHours(-5);
+
+    private readonly EstadoDeCarga _guardado = new();
+    private int _finalidad = TodasLasFinalidades;
+    private string _titulo = string.Empty;
+    private string _contenido = string.Empty;
+    private DateTime _vigenteDesde = AhoraEnColombia();
     private string? _error;
 
-    private async Task PublishAsync()
+    /// <summary>La hora de Colombia de ahora, al minuto (lo que el campo muestra).</summary>
+    private static DateTime AhoraEnColombia()
     {
-        _saving = true; _error = null;
+        var local = DateTimeOffset.UtcNow.ToOffset(HoraDeColombia).DateTime;
+        return new DateTime(local.Year, local.Month, local.Day, local.Hour, local.Minute, 0, DateTimeKind.Unspecified);
+    }
+
+    /// <summary>La hora de Colombia escrita, como instante UTC (lo que guarda el servidor).</summary>
+    private DateTime VigenteDesdeUtc => new DateTimeOffset(DateTime.SpecifyKind(_vigenteDesde, DateTimeKind.Unspecified), HoraDeColombia).UtcDateTime;
+
+    private async Task PublicarAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_titulo) || string.IsNullOrWhiteSpace(_contenido))
+        {
+            _error = "Escriba el título y el contenido de la política.";
+            return;
+        }
+        using var carga = _guardado.Iniciar();
         try
         {
-            var resp = await Http.PostAsJsonAsync(
-                $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/policies/",
-                new { title = _title, contentMarkdown = _content, effectiveFrom = _effectiveFrom });
+            var base_ = $"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/policies";
+            var resp = _finalidad == TodasLasFinalidades
+                ? await Http.PostAsJsonAsync($"{base_}/several", new
+                {
+                    title = _titulo.Trim(), contentMarkdown = _contenido, effectiveFrom = VigenteDesdeUtc,
+                    purposes = TextosDeCartera.Finalidades.Select(f => f.Valor).ToArray(),
+                })
+                : await Http.PostAsJsonAsync($"{base_}/", new
+                {
+                    title = _titulo.Trim(), contentMarkdown = _contenido, effectiveFrom = VigenteDesdeUtc, purpose = _finalidad,
+                });
             if (!resp.IsSuccessStatusCode)
             {
-                _error = await ExtractErrorAsync(resp);
+                _error = await ExtraerErrorAsync(resp);
                 return;
             }
             Nav.NavigateTo("/compliance/habeas-data/policies");
         }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _saving = false; }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _error = $"No se pudo publicar la política: {ex.Message}";
+        }
     }
 
-    private void Cancel() => Nav.NavigateTo("/compliance/habeas-data/policies");
+    private void Cancelar() => Nav.NavigateTo("/compliance/habeas-data/policies");
 
-    private static async Task<string> ExtractErrorAsync(HttpResponseMessage resp)
+    private static async Task<string> ExtraerErrorAsync(HttpResponseMessage resp)
     {
         try
         {
             var env = await resp.Content.ReadFromJsonAsync<ErrorEnvelope>();
-            return env is null ? $"Error {(int)resp.StatusCode}" : $"{env.Code}: {env.Message}";
+            return string.IsNullOrWhiteSpace(env?.Message) ? $"No se pudo publicar la política (error {(int)resp.StatusCode})." : env.Message;
         }
-        catch { return $"Error {(int)resp.StatusCode}"; }
+        catch (System.Text.Json.JsonException)
+        {
+            return $"No se pudo publicar la política (error {(int)resp.StatusCode}).";
+        }
     }
 
     private sealed record ErrorEnvelope(string Code, string Message, string? TraceId);

@@ -32,7 +32,11 @@ Todo se abre en un popup que se cierra con **Esc**:
 | F6 | Cuotas extras |
 | F7 | Plan de pagos |
 | F8 | Movimientos (auxiliar con filtro por fechas, rubro y débito o crédito; Excel) |
-| F9 | El producto completo, con todas sus pestañas y acciones |
+| F9 | El producto completo, con todas sus pestañas y acciones: un crédito abre su expediente; una cuenta de aportes o de ahorro, la página de **esa cuenta** (con «Documentos al titular»: «Ver el extracto» y el documento «Extracto de cuenta»); un CDAT, el suyo |
+
+Desde el 2026-11-24, **F9 sobre una fila de aportes** abre la cuenta de aportes de esa fila (`/cartera/ahorros/{cuenta}`). Antes
+abría «Aportes del asociado», que espera la persona y no la cuenta, y salía vacía o con error; con varias cuentas de aportes por
+asociado, cada fila abre la suya. El resumen de aportes de la persona sigue en Cartera › Aportes.
 
 En **F9** de un crédito, la pestaña **«Documentos firmados»** descarga la copia del pagaré, la carta de instrucciones y la libranza para
 reimprimirlas. El sistema no genera esos documentos: son las copias firmadas que se adjuntaron al registrar el pagaré o como soportes de la

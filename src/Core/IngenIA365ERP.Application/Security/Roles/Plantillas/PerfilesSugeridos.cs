@@ -192,6 +192,8 @@ public static class PerfilesSugeridos
                 "Lending.PriorNotices.RegisterEvidence",
                 // Feature 024, fase 3 (2026-11-16): arma, recalcula, pide poner en firme y reprocesa los procesos de causación (los aprueba otra persona).
                 "Lending.AccrualProcesses.*",
+                // 2026-11-24 (pedido del dueño): cambia el plazo de un crédito sin pagos ni causación (el que nació con las cuotas equivocadas).
+                "Lending.Loans.ChangeTerm",
             ],
             "Todas las oficinas y líneas; límite de monto en Lending.Disbursements.Execute y Lending.CreditLimits.Assign si la cooperativa lo fija."),
 
