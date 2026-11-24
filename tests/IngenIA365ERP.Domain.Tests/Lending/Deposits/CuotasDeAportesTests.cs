@@ -59,6 +59,27 @@ public class CuotasDeAportesTests
     }
 
     [Fact]
+    public void La_cuota_propia_de_la_cuenta_va_tal_cual_y_lo_dice_la_explicacion()
+    {
+        // 2026-11-24: la cuota digitada en la cuenta no se redondea a la unidad de la línea (unidad 0 = al centavo) y conserva el reparto del permanente.
+        var (c, problema) = CuotasDeAportes.Calcular(new EntradaDeCuotaDeAportes(ContributionAmountMode.FixedAmount, 83_333m, null, null, null, 0m,
+            RoundingMode.Up, 0.4m, DeLaCuenta: true));
+        problema.Should().BeNull();
+        (c!.Total, c.Permanente, c.Aportes).Should().Be((83_333m, 33_333.20m, 49_999.80m));
+        c.Explicacion.Should().StartWith("Cuota propia de la cuenta 83,333");
+    }
+
+    [Fact]
+    public void Mensual_desde_la_fecha_del_primer_pago_vence_ese_dia_cada_mes()
+    {
+        var periodos = CuotasDeAportes.Periodos(RepaymentPeriodicity.Monthly, 20, new DateOnly(2026, 12, 20), new DateOnly(2027, 2, 1));
+        periodos.Select(p => (p.Clave, p.Vencimiento)).Should().Equal(
+            ("2026-12-1", new DateOnly(2026, 12, 20)),
+            ("2027-01-1", new DateOnly(2027, 1, 20)),
+            ("2027-02-1", new DateOnly(2027, 2, 20)));
+    }
+
+    [Fact]
     public void Valor_fijo_sin_ahorro_permanente()
     {
         var (c, problema) = CuotasDeAportes.Calcular(new EntradaDeCuotaDeAportes(ContributionAmountMode.FixedAmount, 50_000m, null, null, null, 1m,

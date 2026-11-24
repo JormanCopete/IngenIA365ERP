@@ -120,6 +120,28 @@ public class MemberAccount : AuditableEntity
     /// </summary>
     public string? MaturityInstructionJson { get; set; }
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño, <c>Aportes.OrigenDeLaCuota = DeLaCuenta</c>): la cuota periódica propia de una cuenta de aportes; nula = la de la
+    /// línea. Con ella van la periodicidad y la fecha del primer pago. Se corrige con motivo y rige para las cuotas que todavía no se generaron. (nuevo)
+    /// </summary>
+    public decimal? ContributionInstallmentAmount { get; set; }
+
+    /// <summary>La periodicidad propia de las cuotas de aportes; nula = la de la línea.</summary>
+    public RepaymentPeriodicity? ContributionInstallmentPeriodicity { get; set; }
+
+    /// <summary>La fecha del primer pago (primer descuento): la primera cuota es la del período que la contiene y vence ese día de cada período.</summary>
+    public DateOnly? ContributionFirstDueDate { get; set; }
+
+    /// <summary>
+    /// Por dónde paga la cuenta de aportes: caja, nómina propia o pagaduría; nulo = sin canal fijo (como siempre: la nómina y la pagaduría la descuentan
+    /// si el titular es su empleado y la caja la recibe). Con caja, ni la nómina ni la pagaduría la descuentan; con nómina, sólo la nómina; con pagaduría,
+    /// sólo el archivo de la pagaduría. La caja siempre la recibe. (nuevo)
+    /// </summary>
+    public RepaymentChannel? ContributionPaymentChannel { get; set; }
+
+    /// <summary>¿El canal fijo de la cuenta admite que la cobre <paramref name="canal"/>? Sin canal fijo, cualquiera.</summary>
+    public bool CobraPor(RepaymentChannel canal) => ContributionPaymentChannel is null || ContributionPaymentChannel == canal;
+
     // ------------------------------------------------------------------------------------------------ comportamiento --
 
     /// <summary>

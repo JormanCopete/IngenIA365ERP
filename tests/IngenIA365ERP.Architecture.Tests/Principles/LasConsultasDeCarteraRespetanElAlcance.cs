@@ -356,6 +356,7 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["GetDepositMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa, por conjunto de cuentas y sin titulares (Reconciliation.View)",
         ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa, sin titulares (Deposits.Migration)",
         ["GetDepositsActivationStatusQuery"] = "la activación de aportes o captaciones es de toda la cooperativa: requisitos y conteos (Deposits.Activate)",
+        ["GetContributionInstallmentModeQuery"] = "2026-11-24: lee un parámetro de toda la cooperativa (Aportes.OrigenDeLaCuota), sin cuentas ni titulares",
         ["ListRegulatoryFilesQuery"] = "las generaciones regulatorias son de toda la cooperativa (SICSES y centrales): se leen con RegulatoryFiles.Read",
         ["GetRegulatoryFileQuery"] = "una generación regulatoria es de toda la cooperativa (SICSES y centrales): se lee con RegulatoryFiles.Read",
     };

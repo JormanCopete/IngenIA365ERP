@@ -174,7 +174,8 @@ public static class LectorDeCuentas
             new MemberAccountMarksDto(cuenta.RequiresDataUpdate, cuenta.Status == MemberAccountStatus.Inactive, cuenta.IsGarnished, titularFallecido,
                 cuenta.TechnicalNegativeSince is not null),
             avisos ?? [],
-            await Contractual.RespuestasDeContractual.ResumenAsync(db, cuenta, fecha, ct));
+            await Contractual.RespuestasDeContractual.ResumenAsync(db, cuenta, fecha, ct),
+            CuotaPropiaDeAportes.Dto(cuenta));
     }
 
     public static MemberAccountPartyDto Parte(MemberAccountParty p, IReadOnlyDictionary<int, MemberAccountPersonDto> personas) =>

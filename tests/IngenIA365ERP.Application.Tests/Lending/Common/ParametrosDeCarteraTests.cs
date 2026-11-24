@@ -151,6 +151,7 @@ public class ParametrosDeCarteraTests
         { "Aportes.LimiteParticipacionPersonaJuridica", "", [N], EntregaDeCartera.K7 },
         { "Aportes.MinimoIrreducibleEntidad", "", [N], EntregaDeCartera.K7 },
         { "Aportes.VariasCuentasPorAsociado", "true", [N], EntregaDeCartera.K7 },
+        { "Aportes.OrigenDeLaCuota", "DeLaLinea", [N], EntregaDeCartera.K7 },
         { "Riesgo.DescuentoAportesDeterioro", "false", [N], EntregaDeCartera.K7 },
         { "Captaciones.MayoriaDeEdadAnios", "18", [N], EntregaDeCartera.K7 },
         { "Captaciones.DiasMaximosFechaValor", "5", [N], EntregaDeCartera.K7 },
@@ -233,8 +234,9 @@ public class ParametrosDeCarteraTests
         // fase 14 (US11, T188, T189): 40 con las seis de embargos; fase 15 (US13, T196): 44 con las cuatro de documentos; fase 16 (US12, T203): 50 con las seis de la asamblea;
         // fase 17 (US14, T208, T209): 52 con el aviso previo de la inactividad y el plazo de las cuentas abandonadas; fase 18 (US15, T216): 62 con el
         // margen y la periodicidad del fondo de liquidez y las ocho del riesgo de liquidez.
-        // Respuesta 89 B (E260): 72 con las cuatro de la retención de la asamblea; 2026-11-24: 73 con Aportes.VariasCuentasPorAsociado.
-        posteriores.Should().HaveCount(73).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
+        // Respuesta 89 B (E260): 72 con las cuatro de la retención de la asamblea; 2026-11-24: 73 con Aportes.VariasCuentasPorAsociado y 74 con
+        // Aportes.OrigenDeLaCuota.
+        posteriores.Should().HaveCount(74).And.OnlyContain(d => d.DisponibleDesde >= (EntregaDeModulo)EntregaDeCartera.K7
             && d.DisponibleDesde <= (EntregaDeModulo)EntregaDeCartera.K11).And.OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()

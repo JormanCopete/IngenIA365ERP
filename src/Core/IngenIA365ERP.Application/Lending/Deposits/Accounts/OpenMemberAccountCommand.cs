@@ -227,6 +227,12 @@ public sealed class AperturaDeCuentas(
             if (CuentasDeAportesPorAsociado.Normalizar(e.ContributionNumber) is { IsFailure: true } invalido) return Falla(invalido.Error);
         }
         if (await UnicaVivaAsync(naturaleza, clase, titular.Id, linea.Id, variasDeAportes, ct) is { } yaAbierta) return Falla(yaAbierta);
+        // 2026-11-24: la cuota propia de la cuenta de aportes y su canal de pago (Aportes.OrigenDeLaCuota).
+        if (naturaleza != LineNature.Contribution && CuotaPropiaDeAportes.TieneDatos(e.ContributionInstallment))
+            return Falla(CuotaPropiaDeAportes.SoloAportes());
+        if (naturaleza == LineNature.Contribution
+            && CuotaPropiaDeAportes.Validar(e.ContributionInstallment, await CuotaPropiaDeAportes.DeLaCuentaAsync(parametros, hoy, ct), hoy) is { IsFailure: true } mala)
+            return Falla(mala.Error);
 
         // ------------------------------------------------------------------------------------------------ titularidad --
         var resuelta = await titularidad.ResolverAsync(titular, naturaleza, version, e.HandlingMode, e.Parties, e.Beneficiaries, hoy, ct);
@@ -304,6 +310,7 @@ public sealed class AperturaDeCuentas(
 
             var cuenta = MemberAccount.Abrir(linea.Id, naturaleza, clase, titular.Id, oficina.Value, e.HandlingMode, hoy, verificada.Value.UsuarioId, ahora);
             cuenta.PublicId = publicId;
+            if (naturaleza == LineNature.Contribution) CuotaPropiaDeAportes.Aplicar(cuenta, e.ContributionInstallment);
             if (!paraCdat && coincidencias.Count == 0 && version is not { MinOpeningAmount: > 0m }) cuenta.Activar(hoy, ahora);
             db.MemberAccounts.Add(cuenta);
             foreach (var fila in TitularidadDeCuentas.Filas(cuenta, resuelta.Value.Partes, hoy)) db.MemberAccountParties.Add(fila);

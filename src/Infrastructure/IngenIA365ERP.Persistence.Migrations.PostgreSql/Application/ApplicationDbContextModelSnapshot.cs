@@ -31253,6 +31253,19 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("ContractualStatus")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly?>("ContributionFirstDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("ContributionInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("ContributionInstallmentPeriodicity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ContributionPaymentChannel")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 

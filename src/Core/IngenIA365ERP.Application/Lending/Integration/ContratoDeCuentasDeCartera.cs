@@ -174,7 +174,9 @@ public sealed class ContratoDeCuentasDeCartera(
                 ContratoDeCuentasSinActivar.MensajeCaptacionesNoActivadas, new ExigiblesDeCuentasDto(captaciones, aportes, [], []));
         if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta) return Rechazo<ExigiblesDeCuentasDto>(noCuenta);
 
-        var exigibles = await ExigiblesAsync(solicitud.PersonPublicIds, solicitud.Date, solicitud.PeriodEnd, fechas.DeCaptacionEn(DateOnly.MaxValue), ct);
+        // 2026-11-24: la nómina sólo descuenta las cuentas sin canal fijo o con canal «nómina» (ContributionPaymentChannel).
+        var canal = solicitud.Collector.Class == ClaseDeRecaudador.Payroll ? RepaymentChannel.OwnPayroll : (RepaymentChannel?)null;
+        var exigibles = await ExigiblesAsync(solicitud.PersonPublicIds, solicitud.Date, solicitud.PeriodEnd, fechas.DeCaptacionEn(DateOnly.MaxValue), ct, canal);
         // US9 (T155): las personas de una carga aplicada sin activar (contrato-de-cuentas §3.7): su cuota existe pero todavía no se puede pagar aquí.
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => solicitud.PersonPublicIds.Contains(p.PublicId))
             .Select(p => new { p.Id, p.PublicId }).ToListAsync(ct);
@@ -192,7 +194,7 @@ public sealed class ContratoDeCuentasDeCartera(
     /// prelación dentro de la persona: vencimiento y luego la línea. También la usan Nómina y los informes por el contrato.
     /// </summary>
     public async Task<IReadOnlyList<ExigibleDeCuentaDto>> ExigiblesAsync(IReadOnlyList<Guid> personas, DateOnly fecha, DateOnly? hasta,
-        IReadOnlyList<LineNature> naturalezas, CancellationToken ct)
+        IReadOnlyList<LineNature> naturalezas, CancellationToken ct, RepaymentChannel? canal = null)
     {
         var publicos = personas.Distinct().ToList();
         var porPersona = await db.People.AsNoTracking().Where(p => publicos.Contains(p.PublicId)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
@@ -200,7 +202,8 @@ public sealed class ContratoDeCuentasDeCartera(
         var cuentas = await db.MemberAccounts.AsNoTracking()
             .Where(a => ids.Contains(a.HolderPersonId) && !a.IsDeleted && naturalezas.Contains(a.Nature)
                         && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive)
-                        && (a.Nature == LineNature.Contribution || a.DepositClass == DepositClass.Permanent || a.DepositClass == DepositClass.Contractual))
+                        && (a.Nature == LineNature.Contribution || a.DepositClass == DepositClass.Permanent || a.DepositClass == DepositClass.Contractual)
+                        && (canal == null || a.ContributionPaymentChannel == null || a.ContributionPaymentChannel == canal))
             .ToListAsync(ct);
         if (cuentas.Count == 0) return [];
         var lineas = await LineasAsync(cuentas.Select(c => c.CreditLineId), ct);

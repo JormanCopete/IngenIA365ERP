@@ -126,8 +126,16 @@ public sealed class GeneradorDeCuotas(
             var vigente = VigenciaBitemporal.VigenteDeCartera(versiones, d, DateTime.MaxValue);
             if (vigente is null) return (IReadOnlyList<CuotaGenerada>)[];
 
-            var inicio = Mayor(cuenta.ActivatedOn ?? cuenta.OpenedOn, activacion);
-            var periodos = CuotasDeAportes.Periodos(vigente.InstallmentPeriodicity, vigente.InstallmentDueDay, inicio, d)
+            // 2026-11-24: la cuenta con cuota propia (Aportes.OrigenDeLaCuota = DeLaCuenta) usa su periodicidad, y su primera cuota es la del período
+            // de la fecha del primer pago, que vence ese día de cada período; sin ellas, la periodicidad y el día de la línea desde la apertura.
+            var periodicidad = cuenta.ContributionInstallmentPeriodicity ?? vigente.InstallmentPeriodicity;
+            var diaDeVencimiento = cuenta.ContributionFirstDueDate is { } primerPago ? (byte)primerPago.Day : vigente.InstallmentDueDay;
+            // El período de la fecha del primer pago se genera al empezar ese período, como todos.
+            var desdeLaCuenta = cuenta.ContributionFirstDueDate is { } primero
+                ? CuotasDeAportes.PeriodoDe(periodicidad, diaDeVencimiento, primero)?.Desde ?? primero
+                : cuenta.ActivatedOn ?? cuenta.OpenedOn;
+            var inicio = Mayor(desdeLaCuenta, activacion);
+            var periodos = CuotasDeAportes.Periodos(periodicidad, diaDeVencimiento, inicio, d)
                 .Where(p => control.LastInstallmentPeriod is null || string.CompareOrdinal(p.Clave, control.LastInstallmentPeriod) > 0)
                 .ToList();
             if (periodos.Count == 0) return [];
@@ -159,14 +167,20 @@ public sealed class GeneradorDeCuotas(
         decimal? ingreso, CancellationToken ct)
     {
         decimal? smmlv = null;
-        if (version.InstallmentMode == ContributionAmountMode.MinimumWageFraction)
+        var propia = cuenta.ContributionInstallmentAmount;
+        if (propia is null && version.InstallmentMode == ContributionAmountMode.MinimumWageFraction)
         {
             var leido = await valores.LeerAsync(CodigosDeValorNacional.Smmlv, string.Empty, periodo.Desde, null, ct);
             smmlv = leido.IsSuccess ? leido.Value.Valor : null;
         }
-        var (calculo, problema) = CuotasDeAportes.Calcular(new EntradaDeCuotaDeAportes(version.InstallmentMode, version.InstallmentAmount,
-            version.InstallmentFraction, ingreso, smmlv, version.InstallmentRoundingUnit, version.InstallmentRoundingMode,
-            version.PermanentSavingsLineId is null ? null : version.PermanentSavingsFraction));
+        // 2026-11-24: la cuota propia de la cuenta es un valor fijo tal como se digitó (sin el redondeo de la línea); el reparto con el ahorro
+        // permanente sigue siendo el de la línea.
+        var (calculo, problema) = CuotasDeAportes.Calcular(propia is { } valor
+            ? new EntradaDeCuotaDeAportes(ContributionAmountMode.FixedAmount, valor, null, ingreso, null, 0m, version.InstallmentRoundingMode,
+                version.PermanentSavingsLineId is null ? null : version.PermanentSavingsFraction, DeLaCuenta: true)
+            : new EntradaDeCuotaDeAportes(version.InstallmentMode, version.InstallmentAmount,
+                version.InstallmentFraction, ingreso, smmlv, version.InstallmentRoundingUnit, version.InstallmentRoundingMode,
+                version.PermanentSavingsLineId is null ? null : version.PermanentSavingsFraction));
         ReglaDeCarteraException.SiHay(problema);
         var cuota = calculo!;
 

@@ -114,6 +114,30 @@
                             <input class="e-input" maxlength="6" placeholder="El siguiente" @bind="_pedido.ContributionNumber" />
                             <span class="texto-tenue">La cuenta queda línea-documento-número (APORTES-16261749-2). Vacío: el siguiente del asociado.</span>
                         </label>
+                        @* 2026-11-24: la cuota propia de la cuenta y su canal de pago (Aportes.OrigenDeLaCuota en Parámetros de Cartera). *@
+                        @if (CuotaDeLaCuenta)
+                        {
+                            <label class="campo">Cuota *
+                                <input class="e-input numero" type="number" min="0" step="1" @bind="_cuota.Amount" />
+                                <span class="texto-tenue">El valor de cada cuota de esta cuenta.</span>
+                            </label>
+                            <label class="campo">Periodicidad *
+                                <select class="e-input" @bind="_cuota.Periodicity">
+                                    @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Fecha del primer pago *
+                                <input class="e-input" type="date" @bind="_cuota.FirstDueDate" />
+                                <span class="texto-tenue">La primera cuota vence ese día. En las mensuales o mayores, las siguientes vencen ese mismo día; en las semanales y quincenales, al final de cada período.</span>
+                            </label>
+                        }
+                        <label class="campo">Canal de pago@(CuotaDeLaCuenta ? " *" : "")
+                            <select class="e-input" @bind="_cuota.PaymentChannel">
+                                <option value="">@(CuotaDeLaCuenta ? "Elija el canal…" : "Sin canal fijo")</option>
+                                @foreach (var c in CanalesDeAportes) { <option value="@c.Valor">@c.Texto</option> }
+                            </select>
+                            <span class="texto-tenue">Con caja, ni la nómina ni la pagaduría la descuentan; con nómina o pagaduría, sólo esa. La caja siempre la recibe.</span>
+                        </label>
                     }
                 </div>
 
@@ -217,6 +241,11 @@
     private PersonSearchPicker.PersonSearchItem? _titular;
     private Guid? _linea, _oficina, _origenDeFondos;
     private AbrirCuentaRequest _pedido = new();
+    private CuotaDeLaCuentaDeAportesRequest _cuota = new();
+    private ModoDeCuotaDeAportesDto? _modoDeCuota;
+    private bool CuotaDeLaCuenta => _modoDeCuota?.DeLaCuenta == true;
+    private IEnumerable<(int Valor, string Texto)> CanalesDeAportes =>
+        TextosDeCaptaciones.CanalesDePagoDeAportes.Where(c => _modoDeCuota is null || _modoDeCuota.Channels.Contains(c.Valor));
     private int _alVencer, _admitidos = 3;
     private Guid? _cuentaDestino;
     private IReadOnlyList<CuentaEnListaDto> _cuentasVista = [];
@@ -265,6 +294,7 @@
         _titular = null;
         _linea = _oficina = _origenDeFondos = null;
         _pedido = new AbrirCuentaRequest();
+        _cuota = new CuotaDeLaCuentaDeAportesRequest();
         _alVencer = 0;
         _cuentaDestino = null;
         _soportes = [];
@@ -279,6 +309,8 @@
         _lineas = [.. (captacion.Value ?? []).Concat(aportes.Value ?? []).Where(l => l.Status == 2 && l.DepositClass != TextosDeCaptaciones.Cdat)];
         _oficinas = (await Inventario.ListarSucursalesAsync()).Value ?? [];
         if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
+        _modoDeCuota = (await Cliente.ModoDeCuotaDeAportesAsync()).Value;
+        if (CuotaDeLaCuenta) _cuota.Periodicity = 30;
     }
 
     private async Task CambiarTitularAsync(PersonSearchPicker.PersonSearchItem? persona)
@@ -359,6 +391,15 @@
         _pedido.LinePublicId = _linea.Value;
         _pedido.OfficePublicId = _oficina.Value;
         _pedido.SourceOfFunds = _origenDeFondos is { } origen ? new OrigenDeFondosRequest(origen) : null;
+        _pedido.ContributionInstallment = EsAportes && (CuotaDeLaCuenta || _cuota.PaymentChannel is not null)
+            ? new CuotaDeLaCuentaDeAportesRequest
+            {
+                Amount = CuotaDeLaCuenta ? _cuota.Amount : null,
+                Periodicity = CuotaDeLaCuenta ? _cuota.Periodicity : null,
+                FirstDueDate = CuotaDeLaCuenta ? _cuota.FirstDueDate : null,
+                PaymentChannel = _cuota.PaymentChannel,
+            }
+            : null;
         var r = await Cliente.AbrirCuentaAsync(_pedido, _clave);
         if (!r.IsSuccess || r.Value is null)
         {
