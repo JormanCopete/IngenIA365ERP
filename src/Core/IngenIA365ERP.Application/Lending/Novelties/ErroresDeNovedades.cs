@@ -73,6 +73,10 @@ public static class ErroresDeNovedades
     public static Error CreditosDeOtroDeudor() => CondicionesInvalidas("loanPublicIds",
         "Una refinanciación recoge créditos del mismo deudor.");
 
+    /// <summary>2026-11-24: un crédito de pago único que pasa a varias cuotas necesita la periodicidad del plan nuevo.</summary>
+    public static Error PagoUnicoSinPeriodicidad(string credito, int cuotas) => CondicionesInvalidas("newTerms.periodicity",
+        $"El crédito {credito} es de pago único: para dejarlo en {cuotas} cuotas elija la periodicidad del plan nuevo (por ejemplo, mensual).");
+
     public static Error CuotasRequeridas() => CondicionesInvalidas("newTerms.installments",
         "Diga en cuántas cuotas queda el crédito (las del plan nuevo desde hoy).");
 
