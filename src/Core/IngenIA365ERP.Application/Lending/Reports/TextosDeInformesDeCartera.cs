@@ -209,6 +209,7 @@ public static class TextosDeInformesDeCartera
         NoveltyMechanism.Novation => "Novación",
         NoveltyMechanism.Refinancing => "Refinanciación",
         NoveltyMechanism.BranchChange => "Cambio de oficina",
+        NoveltyMechanism.TermCorrection => "Cambio de plazo",
         _ => mecanismo.ToString(),
     };
 

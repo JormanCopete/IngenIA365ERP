@@ -1,0 +1,161 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CreditosClient Creditos
+@inject INotificationService Notification
+
+@* 2026-11-24 (pedido del dueño): «Cambiar el plazo» desde el expediente del crédito. Sólo para un crédito que todavía no tiene pagos ni causación
+   (el típico: el que nació hace minutos de una venta a crédito con las cuotas equivocadas). Se escriben las cuotas nuevas y, si se quiere, el primer
+   vencimiento; «Simular» muestra el plan nuevo con la cuota nueva (y, si el crédito no lo admite, el porqué); con el motivo, «Cambiar el plazo» lo
+   registra como una versión nueva del plan. No es una novedad. *@
+<SfDialog @bind-Visible="Visible" Header="Cambiar el plazo del crédito" Width="900px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_simulacion.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Cambiando el plazo…" : "Simulando…")">
+                <p class="texto-apoyo">
+                    Sólo un crédito sin pagos (ni anticipos) y sin causación cambia su plazo aquí: el plan se rehace desde el desembolso con las cuotas nuevas y
+                    queda como una versión nueva. No es una novedad ni cuenta como modificación o reestructuración.
+                </p>
+                <div class="form-grid">
+                    <label class="campo">Cuotas nuevas *
+                        <input class="e-input" type="number" min="1" max="600" step="1" @bind="_cuotas" @bind:after="Limpiar" />
+                    </label>
+                    <label class="campo">Primer vencimiento
+                        <input class="e-input" type="date" value="@_primerVencimiento?.ToString("yyyy-MM-dd")" @onchange="@(e => { _primerVencimiento = LeerFecha(e.Value); Limpiar(); })" />
+                    </label>
+                    <div class="campo">
+                        <SfButton CssClass="e-outline" Disabled="@(_simulacion.Activa || _cuotas is not > 0)" OnClick="@SimularAsync">Simular</SfButton>
+                    </div>
+                </div>
+                <p class="texto-tenue">Sin primer vencimiento se conserva el del plan de hoy, así el día de pago no se corre.</p>
+
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+
+                @if (_resultado is { } r)
+                {
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-label">Plazo actual</span><span class="kpi-value">@r.CurrentInstallments cuotas</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Cuota actual</span><span class="kpi-value">@TextosDeCreditos.Pesos(r.CurrentInstallmentAmount)</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Plazo nuevo</span><span class="kpi-value">@r.NewInstallments cuotas</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Cuota nueva</span><span class="kpi-value">@TextosDeCreditos.Pesos(r.NewInstallmentAmount)</span></div>
+                    </div>
+                    <p class="texto-apoyo">
+                        Capital @TextosDeCreditos.Pesos(r.Principal) desde el @TextosDeCreditos.Fecha(r.ValueDate). Vencimientos del
+                        @TextosDeCreditos.Fecha(r.NewFirstDueDate) al @TextosDeCreditos.Fecha(r.NewLastDueDate) (antes, del @TextosDeCreditos.Fecha(r.CurrentFirstDueDate)
+                        al @TextosDeCreditos.Fecha(r.CurrentLastDueDate)). Interés total del plan nuevo: @TextosDeCreditos.Pesos(r.NewTotalInterest).
+                        @if (r.Usury is { } usura) { <span>Tasa efectiva con cargos @TextosDeCreditos.Porcentaje(r.EffectiveRateWithCharges) EA; usura @TextosDeCreditos.Porcentaje(usura) EA.</span> }
+                    </p>
+                    @foreach (var w in r.Warnings) { <p class="aviso aviso-alerta">@w</p> }
+                    var conAdministracion = r.Schedule.Any(q => q.Administration != 0m);
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracion) { <th class="numero">Administración</th> }<th class="numero">Cuota</th><th class="numero">Saldo final</th></tr></thead>
+                            <tbody>
+                                @foreach (var q in r.Schedule)
+                                {
+                                    <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>
+                                        @if (conAdministracion) { <td class="numero">@TextosDeCreditos.Pesos(q.Administration)</td> }
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500"
+                                                                         placeholder="Por ejemplo: la factura se registró con 12 cuotas y eran 24" /></label>
+                    </div>
+                }
+
+                @if (_hecho is { } h)
+                {
+                    <p class="aviso aviso-exito">Plazo cambiado: de @h.InstallmentsBefore a @h.InstallmentsAfter cuotas; la cuota pasó de
+                        @TextosDeCreditos.Pesos(h.InstallmentAmountBefore) a @TextosDeCreditos.Pesos(h.InstallmentAmountAfter). Operación @h.OperationNumber,
+                        versión @h.ScheduleVersion del plan.</p>
+                }
+
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeCambiar)" OnClick="@CambiarAsync">Cambiar el plazo</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@CerrarAsync">Cerrar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public Guid CreditoId { get; set; }
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Tras cambiar el plazo: quien abrió el diálogo vuelve a leer el plan, las operaciones y el estado de cuenta.</summary>
+    [Parameter] public EventCallback Cambiado { get; set; }
+
+    private readonly EstadoDeCarga _simulacion = new(), _guardado = new();
+    private int? _cuotas;
+    private DateOnly? _primerVencimiento;
+    private string? _motivo, _error;
+    private SimulacionDeCambioDePlazoDto? _resultado;
+    private CambioDePlazoRegistradoDto? _hecho;
+    private ClaveDeOperacion _clave = new();
+    private bool _abierto;
+
+    /// <summary>Se cambia lo que se simuló: con una simulación vigente, motivo y sin haberlo cambiado ya.</summary>
+    private bool PuedeCambiar => _resultado is not null && _hecho is null && !string.IsNullOrWhiteSpace(_motivo) && !_guardado.Activa && !_simulacion.Activa;
+
+    protected override void OnParametersSet()
+    {
+        if (Visible && !_abierto)
+        {
+            _abierto = true;
+            _cuotas = null;
+            _primerVencimiento = null;
+            _motivo = _error = null;
+            _resultado = null;
+            _hecho = null;
+            _clave = new ClaveDeOperacion();
+        }
+        else if (!Visible) _abierto = false;
+    }
+
+    /// <summary>Cambiar las cuotas o el primer vencimiento invalida la simulación: hay que volver a simular antes de cambiar.</summary>
+    private void Limpiar()
+    {
+        _resultado = null;
+        _error = null;
+    }
+
+    private async Task SimularAsync()
+    {
+        if (_cuotas is not { } cuotas || cuotas < 1) return;
+        using var carga = _simulacion.Iniciar();
+        _error = null;
+        _hecho = null;
+        var r = await Creditos.SimularCambioDePlazoAsync(CreditoId, cuotas, _primerVencimiento);
+        if (!r.IsSuccess || r.Value is null) { _resultado = null; _error = r.ErrorMessage ?? "No se pudo simular el cambio de plazo."; return; }
+        _resultado = r.Value;
+    }
+
+    private async Task CambiarAsync()
+    {
+        if (_resultado is not { } simulado || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Creditos.CambiarPlazoAsync(CreditoId, new CambioDePlazoRequest(simulado.NewInstallments, _primerVencimiento, _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo cambiar el plazo."; return; }
+        _hecho = r.Value;
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync($"Plazo cambiado: {r.Value.InstallmentsAfter} cuotas de {TextosDeCreditos.Pesos(r.Value.InstallmentAmountAfter)}.");
+        await Cambiado.InvokeAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        Visible = false;
+        _abierto = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

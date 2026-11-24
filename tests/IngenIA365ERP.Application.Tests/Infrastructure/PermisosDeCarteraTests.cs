@@ -65,6 +65,8 @@ public class PermisosDeCarteraTests
         "AccrualProcesses.Read", "AccrualProcesses.Calculate", "AccrualProcesses.Confirm", "AccrualProcesses.Reprocess",
         // 2026-11-18: las plantillas de los documentos para firma.
         "SignatureTemplates.Manage",
+        // 2026-11-24: el cambio de plazo de un crédito sin pagos ni causación.
+        "Loans.ChangeTerm",
     ];
 
     private static bool DeCartera(string c) => c.StartsWith("Lending.", StringComparison.Ordinal);
@@ -73,8 +75,9 @@ public class PermisosDeCarteraTests
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
         // Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163).
-        // Feature 024, fase 3: los cuatro del proceso de causación (163 → 167). 2026-11-18: las plantillas para firma (168).
-        Cartera.Should().HaveCount(168).And.OnlyHaveUniqueItems();
+        // Feature 024, fase 3: los cuatro del proceso de causación (163 → 167). 2026-11-18: las plantillas para firma (168). 2026-11-24: el cambio
+        // de plazo (169).
+        Cartera.Should().HaveCount(169).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -113,7 +116,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(168 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(169 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

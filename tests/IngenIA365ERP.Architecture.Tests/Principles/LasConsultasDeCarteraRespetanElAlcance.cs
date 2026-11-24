@@ -70,6 +70,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanOperationsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanOperationQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanTransactionsQuery.cs",
+        // 2026-11-24: la simulación del cambio de plazo, por la oficina y la línea del crédito (AsegurarAsync, el 404 del crédito).
+        "Core/IngenIA365ERP.Application/Lending/Loans/TermChange/ChangeLoanTermCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
         // US5 (bloque 9B, T0552–T0554): la simulación de pantalla, la vista previa del reverso y la preferencia del crédito, por CreditoEnAlcance.
