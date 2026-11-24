@@ -77,6 +77,29 @@ public static partial class MapaDelMenu
         return Opciones.Any(o => string.Equals(o.Modulo, modulo, StringComparison.OrdinalIgnoreCase) && Coincide(o.RutaSinConsulta, ruta));
     }
 
+    /// <summary>
+    /// 2026-11-23: si quien tiene estos permisos ve la opción en el menú. Necesita los del menú (los <c>PermissionGate</c>
+    /// anidados que la envuelven) y, si la pantalla pide alguno para abrir, al menos uno de ellos: con varios, cada sección de
+    /// la pantalla pide el suyo y basta uno para que algo se vea. Una opción que no pide nada se ve siempre.
+    /// </summary>
+    public static bool PuedeVer(Opcion opcion, IReadOnlySet<string> codigos) =>
+        opcion.PermisosDelMenu.All(codigos.Contains)
+        && (opcion.PermisosDeAcceso.Count == 0 || opcion.PermisosDeAcceso.Any(codigos.Contains));
+
+    /// <summary>La opción del menú con esa dirección exacta (con su consulta), o nula.</summary>
+    public static Opcion? Buscar(string ruta) =>
+        Opciones.FirstOrDefault(o => string.Equals(o.Ruta, ruta, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 2026-11-23: si el módulo del menú tiene alguna opción que quien tiene estos permisos pueda ver. Un módulo que el mapa no
+    /// conoce (sin opciones) se deja ver: no hay con qué decidir.
+    /// </summary>
+    public static bool ElModuloTieneAlgoVisible(string modulo, IReadOnlySet<string> codigos)
+    {
+        var delModulo = Opciones.Where(o => string.Equals(o.Modulo, modulo, StringComparison.OrdinalIgnoreCase)).ToList();
+        return delModulo.Count == 0 || delModulo.Any(o => PuedeVer(o, codigos));
+    }
+
     private static bool Coincide(string opcion, string ruta)
     {
         if (opcion == "/") return ruta == "/";

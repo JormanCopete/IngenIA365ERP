@@ -5,7 +5,11 @@
    sólo si contiene la pantalla actual), abierto o cerrado a mano.
    2026-11-19: el grupo abierto solo se cierra con un clic. El componente pregunta al mapa del menú (MapaDelMenu) si la
    dirección actual es una de sus opciones; antes no lo sabía y el primer clic «abría» lo que ya se veía abierto. *@
+@implements IDisposable
 @inject NavigationManager Nav
+@inject PermisosDelUsuario Permisos
+@if (_visible)
+{
 <div class="nav-group @Estado">
     <button type="button" class="nav-item nav-group-toggle" @onclick="Toggle" title="@Title" aria-expanded="@(Abierto ? "true" : "false")">
         <span class="e-icons @IconoCss"></span>
@@ -22,12 +26,39 @@
         </div>
     }
 </div>
+}
 
 @code {
     [Parameter] public string Icon { get; set; } = "";
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public bool Expanded { get; set; } = true;
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// 2026-11-23: un módulo sin ninguna opción que el usuario pueda abrir no se muestra (antes quedaba el título y, al abrirlo,
+    /// nada). Mientras los permisos no se resuelven se ve, para que el menú no parpadee en quien sí tiene acceso.
+    /// </summary>
+    private bool _visible = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Permisos.Cambiaron += OnCambiaron;
+        await EvaluarAsync();
+    }
+
+    private async Task EvaluarAsync()
+    {
+        var estado = await Permisos.ObtenerAsync();
+        _visible = estado.Provisional || estado.EsMaestro || MapaDelMenu.ElModuloTieneAlgoVisible(Title, estado.Codigos);
+    }
+
+    private void OnCambiaron() => _ = InvokeAsync(async () =>
+    {
+        await EvaluarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Permisos.Cambiaron -= OnCambiaron;
 
     /// <summary>null = sin tocar: lo decide el CSS según contenga la pantalla actual.</summary>
     private bool? _abierto;

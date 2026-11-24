@@ -42,6 +42,28 @@ public class MapaDelMenuTests
         MapaDelMenu.ElModuloContiene(modulo, ruta).Should().Be(esperado);
 
     [Fact]
+    public void Sin_el_permiso_de_entrada_la_opcion_no_se_ve()
+    {
+        var roles = MapaDelMenu.Buscar("/security/roles")!;
+
+        MapaDelMenu.PuedeVer(roles, new HashSet<string>()).Should().BeFalse();
+        MapaDelMenu.PuedeVer(roles, new HashSet<string> { "Security.Roles.View" }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Una_opcion_que_no_pide_nada_se_ve_siempre() =>
+        MapaDelMenu.PuedeVer(MapaDelMenu.Buscar("/favoritos")!, new HashSet<string>()).Should().BeTrue();
+
+    [Fact]
+    public void Un_modulo_sin_nada_visible_se_oculta()
+    {
+        MapaDelMenu.ElModuloTieneAlgoVisible("Contabilidad", new HashSet<string>()).Should().BeFalse();
+        MapaDelMenu.ElModuloTieneAlgoVisible("Contabilidad", new HashSet<string> { "Accounting.Vouchers.View" }).Should().BeTrue();
+        MapaDelMenu.ElModuloTieneAlgoVisible("Mi Cuenta", new HashSet<string>()).Should().BeTrue();
+        MapaDelMenu.ElModuloTieneAlgoVisible("Modulo que no existe", new HashSet<string>()).Should().BeTrue();
+    }
+
+    [Fact]
     public void Todo_modulo_de_permisos_tiene_nombre_en_espanol()
     {
         foreach (var codigo in new[] { "Accounting", "Inventory", "Lending", "Payroll", "Receipts", "Treasury", "Security", "Core" })
