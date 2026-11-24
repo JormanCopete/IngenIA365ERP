@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Inventory.Reports;
 using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Tests.Inventory.Sales;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Enums.Core;
 
 namespace IngenIA365ERP.Application.Tests.Inventory.Reports;
 
@@ -45,6 +46,61 @@ public class VentasYCajaQueriesTests
         t.Filas.Select(f => ((string)Celda(t, f, "Medio")!, (decimal)Celda(t, f, "Recibido")!)).Should().BeEquivalentTo(
             [("BONO · BONO", 4000m), ("EFECTIVO · EFECTIVO", 5000m), ("VISA · VISA", 6900m)]);
         t.Totales!.Valores[Columna(t, "Neto")].Should().Be(15900m);
+    }
+
+    [Fact]
+    public async Task Ventas_por_medio_de_pago_admite_varias_clases()
+    {
+        var (v, _) = await VentaAsync();
+
+        var t = (await new SalesByPaymentMeansReportQueryHandler(v.Db, v.K.Alcance, v.Compras.C.Reloj)
+            .Handle(new SalesByPaymentMeansReportQuery(new FiltrosDeInformeDeInventario(),
+                Classes: [PaymentMeansClass.Cash, PaymentMeansClass.CreditCard]), default)).Value;
+
+        t.Filas.Select(f => (string)Celda(t, f, "Medio")!).Should().BeEquivalentTo(["EFECTIVO · EFECTIVO", "VISA · VISA"]);
+        t.Totales!.Valores[Columna(t, "Neto")].Should().Be(11900m);
+    }
+
+    private static async Task<TablaExportable> DetalleAsync(VentasDePrueba v, IReadOnlyList<Guid>? medios = null,
+        IReadOnlyList<PaymentMeansClass>? clases = null, bool todos = false) =>
+        (await new SalesPaymentsDetailReportQueryHandler(v.Db, v.K.Alcance, v.Compras.C.Reloj)
+            .Handle(new SalesPaymentsDetailReportQuery(new FiltrosDeInformeDeInventario(), medios, clases, todos), default)).Value;
+
+    [Fact]
+    public async Task El_detalle_trae_una_fila_por_medio_con_el_total_de_la_venta()
+    {
+        var (v, venta) = await VentaAsync();
+
+        var t = await DetalleAsync(v);
+
+        t.Filas.Should().HaveCount(3);
+        t.Filas.Select(f => ((string)Celda(t, f, "Medio")!, (decimal)Celda(t, f, "Valor del medio")!)).Should().BeEquivalentTo(
+            [("EFECTIVO · EFECTIVO", 5000m), ("VISA · VISA", 6900m), ("BONO · BONO", 4000m)]);
+        t.Filas.Should().OnlyContain(f => (decimal)Celda(t, f, "Total del documento")! == 15900m);
+        t.Filas.Should().OnlyContain(f => (string?)f.Valores[t.Columnas.Count - 1] == venta.PublicId.ToString(), "la fila lleva a la venta");
+        t.Totales!.Valores[Columna(t, "Total del documento")].Should().Be(15900m, "el total de la venta se suma una vez");
+        t.Totales.Valores[Columna(t, "Valor del medio")].Should().Be(15900m);
+        Celda(t, t.Filas[0], "Clase de medio").Should().Be("Efectivo");
+        SalesPaymentsDetailReportQueryHandler.Vista.PersonalData.Should().BeTrue("lleva el cliente");
+    }
+
+    [Fact]
+    public async Task El_detalle_filtra_por_varios_medios_y_puede_mostrar_todos_los_de_la_venta()
+    {
+        var (v, _) = await VentaAsync();
+
+        var soloElegidos = await DetalleAsync(v, medios: [v.Efectivo.PublicId, v.Bono.PublicId]);
+        soloElegidos.Filas.Select(f => (string)Celda(soloElegidos, f, "Medio")!).Should().BeEquivalentTo(["EFECTIVO · EFECTIVO", "BONO · BONO"]);
+        soloElegidos.Notas.Should().Contain(n => n.Contains("Todos los medios de la venta"));
+
+        var todos = await DetalleAsync(v, medios: [v.Efectivo.PublicId], todos: true);
+        todos.Filas.Should().HaveCount(3, "la venta que usó efectivo muestra también la tarjeta y el bono");
+
+        var porClase = await DetalleAsync(v, clases: [PaymentMeansClass.CreditCard]);
+        porClase.Filas.Should().ContainSingle().Which.Valores[Columna(porClase, "Valor del medio")].Should().Be(6900m);
+
+        var inexistente = await DetalleAsync(v, medios: [Guid.NewGuid()]);
+        inexistente.Filas.Should().BeEmpty("un medio que no existe no muestra todo");
     }
 
     [Fact]

@@ -1830,3 +1830,47 @@ input[type="checkbox"], input[type="radio"] {
 .matriz-opcion-encabezado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-bottom: var(--pad-xs); }
 .matriz-opcion-nombre { font-weight: var(--peso-fuerte); }
 .lista-de-cambios { max-height: 220px; overflow: auto; margin: 0; padding-left: 1.25rem; }
+
+/* SeleccionMultiple (2026-11-23): varios valores en una barra de filtros. Se abre hacia abajo sin empujar la barra. */
+.seleccion-multiple { position: relative; min-width: 12rem; }
+.toolbar > div.campo:has(> .seleccion-multiple) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    font-size: var(--texto-sm);
+    color: var(--texto-secundario);
+}
+.seleccion-multiple > summary {
+    list-style: none;
+    padding: var(--pad-xs) var(--pad-md);
+    border: 1px solid var(--borde-fuerte);
+    border-radius: var(--radio);
+    background: var(--superficie-1);
+    color: var(--texto-primario);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.seleccion-multiple > summary::-webkit-details-marker { display: none; }
+.seleccion-multiple > summary::after { content: " ▾"; color: var(--texto-secundario); }
+.seleccion-multiple[open] > summary { box-shadow: var(--sombra-foco); }
+.seleccion-multiple-lista {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 2px);
+    left: 0;
+    min-width: 100%;
+    max-height: 18rem;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-sm);
+    padding: var(--pad-sm) var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-2);
+    box-shadow: var(--sombra-2);
+    color: var(--texto-primario);
+}
+.seleccion-multiple-acciones { display: flex; gap: var(--gap-md); font-size: var(--texto-sm); }

@@ -149,7 +149,11 @@ public class InventoryReportsEndpoints : ICarterModule
             (f, q) => new SalesBySessionReportQuery(f, Id(q, "cashier"), Texto(q, "groupBy")));
         group.MapVistaDeInventario(SalesByRegisterReportQueryHandler.Vista, (f, q) => new SalesByRegisterReportQuery(f, Texto(q, "groupBy")));
         group.MapVistaDeInventario(SalesByPaymentMeansReportQueryHandler.Vista,
-            (f, q) => new SalesByPaymentMeansReportQuery(f, Id(q, "paymentMeans"), Enumerado<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"), Texto(q, "groupBy")));
+            (f, q) => new SalesByPaymentMeansReportQuery(f, Ids(q, "paymentMeans"), Enumerados<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"), Texto(q, "groupBy")));
+        // Pedido del dueño del 2026-11-23: el detalle por venta y medio, con varios medios o clases a la vez.
+        group.MapVistaDeInventario(SalesPaymentsDetailReportQueryHandler.Vista,
+            (f, q) => new SalesPaymentsDetailReportQuery(f, Ids(q, "paymentMeans"), Enumerados<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"),
+                string.Equals(Texto(q, "allMeans"), "true", StringComparison.OrdinalIgnoreCase)));
         group.MapVistaDeInventario(CashSessionReportQueryHandler.Vista, (f, _) => new CashSessionReportQuery(f));
         group.MapVistaDeInventario(DayCloseReportQueryHandler.Vista,
             (f, q) => new DayCloseReportQuery(f, DateOnly.TryParse(q["operatingDate"].ToString(), System.Globalization.CultureInfo.InvariantCulture, out var dia) ? dia : null,
@@ -205,6 +209,17 @@ public class InventoryReportsEndpoints : ICarterModule
         int.TryParse(q[clave].ToString(), System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 
     private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;
+
+    /// <summary>Varios PublicId separados por coma (o la clave repetida); los que no se leen se ignoran.</summary>
+    private static IReadOnlyList<Guid> Ids(IQueryCollection q, string clave) =>
+        [.. Valores(q, clave).Select(v => Guid.TryParse(v, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty).Distinct()];
+
+    /// <summary>Varios valores de un enumerado separados por coma (o la clave repetida); los que no existen se ignoran.</summary>
+    private static IReadOnlyList<T> Enumerados<T>(IQueryCollection q, string clave) where T : struct, Enum =>
+        [.. Valores(q, clave).Select(v => Enum.TryParse<T>(v, ignoreCase: true, out var x) && Enum.IsDefined(x) ? (T?)x : null).OfType<T>().Distinct()];
+
+    private static IEnumerable<string> Valores(IQueryCollection q, string clave) =>
+        q[clave].SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     private static string? Texto(IQueryCollection q, string clave) => string.IsNullOrWhiteSpace(q[clave].ToString()) ? null : q[clave].ToString().Trim();
 
