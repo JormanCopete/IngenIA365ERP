@@ -267,6 +267,11 @@ public class CasosDoradosDeCarteraTests
             using (new AssertionScope($"{caso.Nombre} · propuesta del corte {propuesta.Corte:yyyy-MM-dd} firmada {propuesta.Hoy:yyyy-MM-dd}"))
                 CompararPropuestaDelCorte(caso, propuesta);
 
+        // 2026-11-24 (feature 025, fase 4): lo que suma la opción del período completo (sin los ajustes: se calcula al activar).
+        foreach (var periodo in caso.PeriodosCompletos)
+            using (new AssertionScope($"{caso.Nombre} · período completo al corte {periodo.Corte:yyyy-MM-dd}"))
+                CompararPeriodoCompleto(caso, periodo);
+
         foreach (var (nombre, condiciones, operaciones, consulta) in caso.TodasLasConsultas())
         {
             var donde = $"{nombre} · {consulta.Modo} a {consulta.Fecha:yyyy-MM-dd} con R {consulta.InformacionHasta:yyyy-MM-ddTHH:mm}";
@@ -289,6 +294,53 @@ public class CasosDoradosDeCarteraTests
                         break;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4): el período completo dos veces —sin reconstrucción, sobre el plan migrado con el inicio del período (la vista previa
+    /// de la carga) y con la regla del recálculo del corte sobre la reconstrucción con la firma el día del corte (la activación)— contra lo que calculó
+    /// calcular.py; y su ajuste, el día siguiente al corte, en <c>ajustesDelCorte</c>.
+    /// </summary>
+    private static void CompararPeriodoCompleto(CasoDoradoDeCartera caso, CasoDoradoDeCartera.PeriodoCompletoJson p)
+    {
+        var e = p.Esperado ?? throw new InvalidOperationException("El período completo no trae «esperado».");
+        var apertura = caso.Operaciones.Single(o => o.Tipo == "OpeningBalance");
+        var entrada = caso.Entrada(caso.Condiciones, caso.Operaciones, p.RegistradoEn) with { AjustesDelCorte = [] };
+        var c = entrada.Condiciones;
+
+        // Sin reconstrucción: el inicio del período sale de la regla (las cuotas de la carga no lo traen) y el plan migrado de las condiciones.
+        var cuotas = AjusteDelCorteDeCarga.ConPeriodoCompleto(
+            apertura.Cuotas.Select(q => new Domain.Lending.Schedules.CuotaMigrada(q.Numero, q.Vencimiento, q.Capital)).ToList(), p.Corte, c.Periodicidad,
+            p.Desembolso);
+        cuotas.First(q => q.Vencimiento > p.Corte).Desde.Should().Be(e.InicioDelPeriodo, "el inicio del período de la primera cuota posterior al corte");
+        var capital = apertura.Saldos.Where(s => s.Concepto == LoanConcept.Principal).Sum(s => s.Valor);
+        var plan = Domain.Lending.Schedules.GeneradorDePlan.DesdeMigracion(new Domain.Lending.Schedules.EntradaDePlanMigrado(p.Corte, capital, cuotas,
+            c.Periodicidad, caso.Condiciones.Sistema, c.TasaEfectivaAnual, c.Convencion, c.Equivalencia, c.Redondeo) { TasaMensual = c.TasaMensual });
+        var cargado = apertura.Saldos.Where(s => s.Cuota == e.CuotaDelCorte
+            && s.Concepto is LoanConcept.CurrentInterest or LoanConcept.CurrentInterestInSuspense).Sum(s => s.Valor);
+        Comparar(AjusteDelCorteDeCarga.PeriodoCompleto(plan, p.Corte, cargado), "sin reconstrucción");
+
+        // Con la reconstrucción, como la activación: la regla del recálculo del corte con la firma el día del corte.
+        Comparar(AjusteDelCorteDeCarga.Calcular(entrada, p.Corte, p.Corte, p.Desembolso), "con la reconstrucción");
+
+        if (e.Ajuste > 0m)
+            caso.AjustesDelCorte.Should().ContainSingle(a => a.Fecha == p.Corte.AddDays(1) && a.Cuota == e.CuotaDestino && a.Valor == e.Ajuste,
+                "el ajuste entra el día de la activación en la misma cuota");
+
+        void Comparar(PropuestaDeAjusteDelCorte? r, string como)
+        {
+            r.Should().NotBeNull(como);
+            r!.CuotaDelCorte.Should().Be(e.CuotaDelCorte, $"{como}: la primera cuota posterior al corte");
+            r.InicioDelPeriodo.Should().Be(e.InicioDelPeriodo, $"{como}: el inicio de su período");
+            r.Vencimiento.Should().Be(e.Vencimiento, como);
+            r.DiasFaltantes.Should().Be(e.DiasFaltantes, $"{como}: los días antes del corte");
+            r.CapitalAlCorte.Should().Be(e.CapitalAlCorte, $"{como}: el capital no vencido al corte");
+            r.InteresDelPeriodo.Should().Be(e.InteresDelPeriodo, $"{como}: el interés del período completo");
+            r.YaCausado.Should().Be(e.YaCausado, $"{como}: lo que se causa desde el corte");
+            r.Cargado.Should().Be(e.Cargado, $"{como}: lo que trajo en la carga cuenta como causado");
+            r.Ajuste.Should().Be(e.Ajuste, $"{como}: lo que suma la opción");
+            r.CuotaDestino.Should().Be(e.CuotaDestino, $"{como}: se cobra en la misma cuota, que todavía no vence");
         }
     }
 

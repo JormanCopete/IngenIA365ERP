@@ -42189,6 +42189,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<bool>("CauseFullInProgressPeriod")
+                        .HasColumnType("bit");
+
                     b.Property<int>("ChargedOffCount")
                         .HasColumnType("int");
 

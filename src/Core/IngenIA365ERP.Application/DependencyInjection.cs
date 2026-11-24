@@ -856,6 +856,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Activation.RecalculoDelCuadreDeActivacion>();
         services.AddScoped<Lending.Activation.ValidacionDeCobrosProvisionales>();
         services.AddScoped<Lending.Activation.NacimientoDeCreditosMigrados>();
+        // 2026-11-24 (feature 025, fase 4): el período en curso al corte se causa completo al activar.
+        services.AddScoped<Lending.Activation.PeriodoCompletoDeLaCarga>();
         services.AddScoped<Lending.Activation.NacimientoDeLoDelDeudorMigrado>();
         // Feature 013, US4 (bloque 8B): la carga de la reconstrucción, las series regulatorias, las partes de hechos, la puesta al día y el ciclo
         // diario. IMotorDeCreditoEnDesembolso (el punto de extensión de la fase 7) ya es el motor real.

@@ -44,6 +44,13 @@ public sealed partial class CarteraClient(HttpClient http, CentralAuthClient aut
     public Task<ResultadoDeInventario<CuadreDeMigracionDto>> CuadreAsync(Guid carga, CancellationToken ct = default) =>
         Enviar<CuadreDeMigracionDto>(HttpMethod.Get, $"{RutaDeCargas}/{carga}/balance-check", null, null, ct);
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4, HU4): lo que suma la opción «el período en curso al corte se causa completo», por crédito y en total (ingreso del
+    /// día de la activación; no entra al cuadre al corte).
+    /// </summary>
+    public Task<ResultadoDeInventario<InteresDelPeriodoCompletoDto>> InteresDelPeriodoCompletoAsync(Guid carga, CancellationToken ct = default) =>
+        Enviar<InteresDelPeriodoCompletoDto>(HttpMethod.Get, $"{RutaDeCargas}/{carga}/full-period-interest", null, null, ct);
+
     /// <summary>Las ventas acumuladas hasta el corte con su clasificación (1 a 4; nula = todas).</summary>
     public Task<ResultadoDeInventario<PaginaDeCarteraDto<VentaDeMigracionDto>>> VentasAsync(Guid carga, int? clasificacion = null, int pagina = 1,
         int tamano = 100, CancellationToken ct = default) =>

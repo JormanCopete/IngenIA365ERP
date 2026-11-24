@@ -81,6 +81,15 @@ public class MigrationLoad : AuditableEntity
     /// </summary>
     public string? ReferenceFiguresJson { get; set; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4, HU4; FR-014, D5; migración <c>CargaConPeriodoCompleto</c>): «el período en curso al corte se causa completo». Con
+    /// la opción, al activar, la primera cuota posterior al corte de cada crédito lleva el interés de su período completo: lo anterior al corte entra como
+    /// ajuste del corte (<c>CutoverInterestAdjustment</c>, hecho <c>InteresDelCorte</c>), ingreso del día de la activación, y el crédito queda marcado para
+    /// no entrar al recálculo de la carga. Sin ella, el interés nace desde el corte (D5 de la 013). Una carga nueva la trae encendida (el comando la propone
+    /// en sí); las creadas antes de la migración quedan apagadas, como venían. Sólo aplica a una carga de créditos. (nuevo)
+    /// </summary>
+    public bool CauseFullInProgressPeriod { get; set; }
+
     // ------------------------------------------------------------------------------------------------- comportamiento (US8) --
 
     /// <summary>Sólo un borrador recibe partes y se aplica (<c>Lending.Migration.LoadNotDraft</c>).</summary>

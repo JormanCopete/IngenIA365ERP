@@ -643,11 +643,14 @@ public static class ManualCatalogo
             "Cargar la cartera que la cooperativa ya tiene, con fecha de corte, en 17 partes; revisar cada archivo, aplicar la carga, cuadrarla contra Contabilidad, conciliar las ventas a crédito y aceptar las diferencias con un acta.",
             [
                 P("Cartera → Migración", "Lista de cargas con su estado: borrador, aplicada, reemplazada o activada. «Carga nueva» pide la fecha de corte (el último día que la cartera anterior manejó).", "/cartera/migracion", "Abrir Migración"),
+                // 2026-11-24 (feature 025, fase 4, HU4): la opción del período completo.
+                P("El período en curso al corte", "«Carga nueva» trae marcada «El período en curso al corte se causa completo»: al activar, la primera cuota que vence después del corte lleva el interés de todo su período; lo que va del vencimiento anterior (o del desembolso, en la cuota 1) al corte entra el día de la activación como ingreso de ese día, y el interés que la cuota ya trae en la carga cuenta como causado. No entra al cuadre al corte. En la pestaña «Partes», «Período en curso al corte» dice cuánto suma por crédito y en total. Desmarcada, el interés nace desde el corte."),
                 P("Cargar las partes", "Por cada parte, descargá su plantilla (encabezados en la fila 1), diligenciala y subila: primero se revisa sin guardar nada (errores con fila y columna, y la revisión en Excel) y después se aplica. Una parte admite varios archivos; «Reemplazar la parte» deja sin efecto los anteriores. Créditos, cuotas, saldos y riesgo son obligatorias."),
                 P("Aplicar la carga", "Aplicar sólo guarda la carga: valida entre partes (todo o nada), calcula el cuadre y concilia las ventas. Los créditos nacen al activar. Otra carga aplicada con el mismo corte deja la anterior reemplazada."),
                 P("Cuadre, ventas y diferencias", "La pestaña «Cuadre» compara con Contabilidad por concepto, modalidad, sub-segmento, categoría y conjunto de cuentas. «Ventas» muestra las ventas a crédito hasta el corte; las que no se migraron se marcan como canceladas antes del corte o fuera de Cartera, con motivo. «Diferencias» se aceptan con el punto de una sesión cerrada, por una persona distinta de quien cargó."),
             ],
-            ["migracion", "carga", "corte", "cartera vigente", "cuadre", "conciliacion de ventas", "diferencias", "acta", "puesta en marcha"],
+            ["migracion", "carga", "corte", "cartera vigente", "cuadre", "conciliacion de ventas", "diferencias", "acta", "puesta en marcha",
+                "periodo completo", "periodo en curso", "interes del corte"],
             ["Contabilidad iniciada con su apertura al corte.", "Personas, líneas de crédito y oficinas registradas.", "Permiso Lending.Migration.Load (y Lending.Migration.AcceptDifferences para aceptar)."],
             ["cartera-activacion", "cartera-plantillas", "captaciones-migracion"], [], TipoDeTema.Proceso));
 

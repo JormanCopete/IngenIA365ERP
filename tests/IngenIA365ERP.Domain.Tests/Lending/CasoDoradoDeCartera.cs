@@ -79,6 +79,12 @@ public sealed class CasoDoradoDeCartera
     /// </summary>
     public List<PropuestaDelCorteJson> PropuestasDelCorte { get; set; } = [];
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4): la carga con la opción «el período en curso al corte se causa completo»: lo que suma al activar, con lo que calculó
+    /// calcular.py en «esperado» (que además deja su ajuste en <see cref="AjustesDelCorte"/>, el día de la activación).
+    /// </summary>
+    public List<PeriodoCompletoJson> PeriodosCompletos { get; set; } = [];
+
     /// <summary>Los reconocimientos con que se corren unas condiciones: los de su variante, o los del caso.</summary>
     public IReadOnlyList<ReconocimientoJson> ReconocimientosDe(CondicionesJson c) =>
         Variantes.FirstOrDefault(v => ReferenceEquals(v.Condiciones, c))?.Reconocimientos ?? Reconocimientos;
@@ -368,6 +374,15 @@ public sealed class CasoDoradoDeCartera
         public DateOnly Hoy { get; set; }
         public DateTime InformacionHasta { get; set; }
         public DateOnly? Desembolso { get; set; }
+        public EsperadoDePropuestaJson? Esperado { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 4): un período completo: el corte, el desembolso (opcional), cuándo se registró la activación (R) y lo esperado.</summary>
+    public sealed class PeriodoCompletoJson
+    {
+        public DateOnly Corte { get; set; }
+        public DateOnly? Desembolso { get; set; }
+        public DateTime RegistradoEn { get; set; }
         public EsperadoDePropuestaJson? Esperado { get; set; }
     }
 

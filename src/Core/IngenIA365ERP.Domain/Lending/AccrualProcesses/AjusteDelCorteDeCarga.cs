@@ -128,6 +128,56 @@ public static class AjusteDelCorteDeCarga
         return VencimientoAnterior(vencimiento, periodicidad);
     }
 
+    // ------------------------------------------------------------------------------------- fase 4: la carga con período completo --
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4, HU4; FR-014): las cuotas de un plan migrado con el inicio del período de la primera posterior al corte
+    /// (<c>Desde</c>) cuando la carga causa completo el período en curso: el vencimiento de la cuota cargada anterior (el mismo que ya le pone
+    /// <see cref="Schedules.GeneradorDePlan.DesdeMigracion"/>); si no la hay y es la cuota 1, el desembolso (si es anterior a su vencimiento); si no, su
+    /// vencimiento menos un período de la periodicidad (<see cref="VencimientoAnterior"/>). Las demás cuotas quedan como vinieron. Es la misma regla de
+    /// <see cref="InicioDelPeriodo"/>: con eso el plan muestra el período completo, el interés lo sigue causando el motor desde el corte y lo anterior entra
+    /// como ajuste del corte el día de la activación. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<Schedules.CuotaMigrada> ConPeriodoCompleto(IReadOnlyList<Schedules.CuotaMigrada> cuotas, DateOnly corte,
+        RepaymentPeriodicity periodicidad, DateOnly? desembolso)
+    {
+        ArgumentNullException.ThrowIfNull(cuotas);
+        var ordenadas = cuotas.OrderBy(c => c.Numero).ToList();
+        var q = ordenadas.FirstOrDefault(c => c.Vencimiento > corte);
+        if (q is null || q.Desde is { } dado && dado < corte) return ordenadas;
+        var anterior = ordenadas.LastOrDefault(c => c.Numero < q.Numero);
+        var inicio = anterior is not null ? anterior.Vencimiento
+            : q.Numero == 1 && desembolso is { } d && d < q.Vencimiento ? d
+            : VencimientoAnterior(q.Vencimiento, periodicidad);
+        if (inicio >= corte) return ordenadas;
+        return ordenadas.Select(c => ReferenceEquals(c, q) ? c with { Desde = inicio } : c).ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4, HU4; FR-014, FR-015): lo que la opción «el período en curso al corte se causa completo» suma a un crédito cargado,
+    /// sin reconstrucción —la vista previa de la carga, antes de que nazca—: sobre el plan migrado (<see cref="Schedules.GeneradorDePlan.DesdeMigracion"/>
+    /// con las cuotas de <see cref="ConPeriodoCompleto"/>), la primera cuota posterior al corte, el interés de su período completo sobre su saldo inicial con
+    /// la tasa pactada del plan, lo que el plan causa desde el corte (su interés) y lo que trajo en la carga (<paramref name="cargado"/>). El ajuste es la
+    /// diferencia redondeada como un concepto si pasa de un peso, como en <see cref="Calcular"/>; si no, cero. La cuota destino es la misma cuota: vence
+    /// después del corte, así que el día de la activación todavía no está vencida. Nula si el plan no tiene cuota posterior al corte. La activación no usa
+    /// esto sino <see cref="Calcular"/> sobre la reconstrucción (que además deja fuera al crédito con la causación suspendida); para un crédito al día dan
+    /// lo mismo. (nuevo)
+    /// </summary>
+    public static PropuestaDeAjusteDelCorte? PeriodoCompleto(Schedules.PlanDePagos plan, DateOnly corte, decimal cargado)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var q = plan.Cuotas.FirstOrDefault(x => x.Vencimiento > corte);
+        if (q is null) return null;
+        var e = plan.Entrada;
+        var inicio = q.Desde < corte ? q.Desde : corte;
+        var periodo = e.Redondeo.Concepto(q.SaldoInicial
+            * EquivalenciaDeTasas.TasaDelPeriodo(plan.TasaDiaria, ContadorDeDias.Dias(e.Convencion, inicio, q.Vencimiento), e.Equivalencia));
+        var faltantes = inicio < corte ? ContadorDeDias.Dias(e.Convencion, inicio, corte) : 0;
+        var falta = e.Redondeo.Concepto(periodo - q.Interes - cargado);
+        return new PropuestaDeAjusteDelCorte(q.Numero, inicio, q.Vencimiento, faltantes, q.SaldoInicial, periodo, q.Interes, cargado,
+            falta > 1m ? falta : 0m, q.Numero);
+    }
+
     /// <summary>El vencimiento un período antes de <paramref name="vencimiento"/>: meses con el calendario, lo demás en días (del valor del enum).</summary>
     public static DateOnly VencimientoAnterior(DateOnly vencimiento, RepaymentPeriodicity periodicidad)
     {

@@ -69,7 +69,11 @@ El orden de carga de una cooperativa que inicia es el de plantillas.md §0.1:
 
 ## 3. La carga por partes
 
-`/cartera/migracion` → «Carga nueva» con la **fecha de corte**. Un borrador anterior queda reemplazado.
+`/cartera/migracion` → «Carga nueva» con la **fecha de corte**. Un borrador anterior queda reemplazado. La casilla **«El período en curso
+al corte se causa completo»** viene marcada (feature 025, fase 4): con ella la primera cuota que vence después del corte lleva el interés de
+todo su período y lo anterior al corte entra el día de la activación como ingreso de ese día (no se cuadra contra el balance al corte); la
+pestaña «Partes» muestra cuánto suma por crédito y en total. Desmarcada, el interés nace desde el corte (D5). Detalle en
+`docs/manual/cartera-causacion-y-liquidacion.md` §9.8.
 
 Por parte (elegirla en la lista): «Plantilla vacía» (encabezados en la fila 1; instrucciones en otra hoja; admite `.csv` con «;»),
 diligenciar, **Revisar** (no guarda nada; errores con fila y columna; «Revisión en Excel» devuelve el mismo libro con el resultado de cada
@@ -134,7 +138,8 @@ de Comercial aplica al nacer la obligación de cada venta. Errores: `Import.Inva
    sigue siendo C+1—.
 3. **El acta de activación** (C61) es obligatoria: el punto de una sesión cerrada sobre la carga. Declara que el consejo conoce la carga,
    su corte, el cuadre y las diferencias aceptadas, los cobros provisionales y que la cuota puede diferir en centavos porque el interés lo
-   causa el motor desde el corte.
+   causa el motor desde el corte. Con la opción del período completo, también el interés que la activación suma como ingreso de C+1 (la
+   vista previa de la carga lo dice; la respuesta de la activación trae lo que sumó en `fullPeriodInterest`).
 4. **Activar**. Antes, la activación **recalcula** el cuadre y la conciliación con los saldos contables de ese momento: si cambiaron, deja
    una versión nueva del cuadre y responde `DifferencesNotAccepted` (hay que volver a aceptar). Si todo está en orden nacen, en una
    transacción guardada por tandas de 1.000 créditos: los créditos con su número de origen, sus condiciones, su plan, su control y su saldo

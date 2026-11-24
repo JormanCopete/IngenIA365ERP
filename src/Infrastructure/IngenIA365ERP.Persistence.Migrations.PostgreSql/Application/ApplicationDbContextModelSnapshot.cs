@@ -41846,6 +41846,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<bool>("CauseFullInProgressPeriod")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("ChargedOffCount")
                         .HasColumnType("integer");
 

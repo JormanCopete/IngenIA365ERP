@@ -490,5 +490,39 @@ haya créditos cargados sin recalcular) lo corrige **sin borrar nada** (D1, D2):
 `LND_LoanControls.CutoverAdjustedAt` y `LND_AccrualProcessLines.Detail` (el detalle por crédito del borrador). El hecho, su mapeo a `CA` y
 su tipo son semilla. Casos dorados 39 (día 9, día 30, interés cargado, cuota destino vencida y quincenal) y 44 (recálculo con pagos).
 
-**Pendiente**: la contadora revisa el borrador de producción crédito por crédito antes de la firma (SC-002), y la fase 4 reusa el ajuste,
-el hecho y la marca para que una carga nueva cause completo el período en curso.
+**Pendiente**: la contadora revisa el borrador de producción crédito por crédito antes de la firma (SC-002). La fase 4 (§9.8) reusa el
+ajuste, el hecho y la marca para que una carga nueva cause completo el período en curso.
+
+### 9.8 La carga causa completo el período en curso (feature 025, fase 4, 2026-11-24)
+
+Una cooperativa nueva no tiene que pasar por el recálculo de §9.7: la carga de migración (`/cartera/migracion` → «Carga nueva») trae la
+opción **«El período en curso al corte se causa completo»**, marcada por defecto (D5 de la 025; `LND_MigrationLoads.CauseFullInProgressPeriod`,
+`causeFullInProgressPeriod` en `POST /api/lending/migration/loads`). Con ella, al **activar**:
+
+- **El plan**: la primera cuota que vence después del corte toma como inicio de su período el vencimiento de la cuota cargada anterior; si no
+  la hay y es la cuota 1, el desembolso de la fila; si no, su vencimiento menos un período. El motor sigue causando **desde el corte**.
+- **Lo anterior al corte** (el interés del período completo, menos lo que el motor causa desde el corte hasta su vencimiento, menos el
+  interés corriente que la cuota trajo en la carga, que **cuenta como causado**; si pasa de un peso) entra **el día de la activación**
+  (C+1), como **ingreso de ese día**, en esa misma cuota (todavía no vence: sin mora): la misma fila `CutoverInterestAdjustment` y el mismo
+  hecho `InteresDelCorte` (`IDC`, comprobante `CA`) de §9.7, de una corrida `CutoverRecalculation` a nombre de quien activa, y una versión
+  nueva del plan con el interés completo en esa cuota. Se calcula con la misma regla de §9.7 sobre la reconstrucción, con la firma el día
+  del corte.
+- **No se cuadra contra el balance al corte**: es ingreso del día de la activación, no un saldo a C. El cuadre de la carga sigue igual.
+- **La marca**: cada crédito evaluado queda con `LND_LoanControls.CutoverAdjustedAt`, sume o no, así que el recálculo de §9.7 no lo vuelve a
+  tomar (la HU1 y la HU4 no se suman). Quedan como hoy, sin ajuste ni marca, los castigados, los de causación suspendida al corte o que
+  llegan con intereses en suspenso (lo de
+  antes del corte no es ingreso de un crédito en suspenso), los de UVR, los de pago único y los que no se pudieron reconstruir; el recálculo
+  puede tomarlos después.
+- **La noche no lo revierte**: el ajuste es entrada de la reconstrucción, como en §9.7.
+- **La vista previa**: en la pestaña «Partes» de la carga, «Período en curso al corte» lista por crédito la cuota, el inicio del período,
+  los días antes del corte, el interés del período completo, lo que se causa desde el corte, lo cargado y lo que suma, con el total
+  (`GET /api/lending/migration/loads/{id}/full-period-interest`, permiso `Lending.Migration.Load`). Es una estimación sin reconstrucción:
+  deja fuera lo que llega con intereses en suspenso; la activación responde lo que de verdad sumó (`fullPeriodInterest`) y lo sella en los
+  conteos de la activación (`fullPeriod`).
+- **Sin la opción**, el comportamiento de siempre (D5 de la 013): el interés nace desde el corte. Una carga creada antes de la migración
+  `CargaConPeriodoCompleto` queda sin la opción; para usarla, se crea una carga nueva (reemplaza al borrador).
+
+Ejemplo (caso dorado `26-credito-migrado-periodo-completo`): 400.000 a 25 % E.A. compuesta, corte el 30-06, cuota 5 que vence el 10-07 con
+4.000 cargados: período completo del 10-06 al 10-07 = 7.507,71; desde el corte el motor causa 2.487,07; la activación suma **1.020,64** el
+01-07. Si la matriz no resuelve el `InteresDelCorte` y `Contabilidad.FaltaDeRegla = Bloquear`, la activación responde
+`Lending.Activation.FullPeriodNotPostable`: se completa la matriz o se carga sin la opción.

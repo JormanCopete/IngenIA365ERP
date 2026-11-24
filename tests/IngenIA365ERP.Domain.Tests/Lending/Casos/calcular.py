@@ -55,6 +55,14 @@ Reglas que implementa (las de decisiones-transversales T25-T29, research R33-R37
     (capital x tasa del periodo, redondeado como un concepto); lo causado de esa cuota del dia siguiente al corte a su vencimiento (la
     reconstruccion proyectada); lo que trajo en la carga; el ajuste (la diferencia redondeada, si pasa de un peso) y la cuota destino (la
     primera que vence despues de hoy).
+- 2026-11-24 (feature 025, fase 4, HU4; FR-014, FR-015), escrito desde la regla y no desde el C#:
+  * "periodosCompletos" (corte, desembolso, registradoEn): la carga con la opcion "el periodo en curso al corte se causa completo". La primera
+    cuota cargada con vencimiento posterior al corte toma como inicio de su periodo el vencimiento de la cuota cargada anterior; si no la hay y
+    es la cuota 1, el desembolso; si no, su vencimiento menos un periodo. Sobre el plan migrado con ese inicio (el interes sigue desde el
+    corte): el interes del periodo completo (saldo inicial de la cuota x tasa pactada del periodo, redondeado como un concepto), lo que el plan
+    causa desde el corte (su interes), lo que trajo en la carga y el ajuste (la diferencia redondeada si pasa de un peso), que se cobra en esa
+    misma cuota. Comprueba que da lo mismo que la propuesta del recalculo del corte (fase 3) con hoy = corte, y deja el ajuste como
+    "ajustesDelCorte" del dia de la activacion (corte + 1) registrado en "registradoEn", que las consultas leen.
 """
 import calendar
 import datetime as dt
@@ -2228,6 +2236,66 @@ def propuestas_calculadas(caso):
     return caso.get("propuestasDelCorte") or []
 
 
+def periodo_completo(caso, p):
+    """2026-11-24 (feature 025, fase 4): lo que suma la opcion del periodo completo al activar (ver la cabecera)."""
+    cond_json = caso["condiciones"]
+    c = leer_condiciones(cond_json)
+    corte = fecha(p["corte"])
+    desembolso = fecha(p["desembolso"]) if p.get("desembolso") else None
+    ops = caso.get("operaciones") or []
+    apertura = next(o for o in ops if o["tipo"] == "OpeningBalance")
+    cuotas = sorted(apertura["cuotas"], key=lambda y: int(y["numero"]))
+    x = next((y for y in cuotas if fecha(y["vencimiento"]) > corte), None)
+    if x is None:
+        return None
+    numero_, venc = int(x["numero"]), fecha(x["vencimiento"])
+    anteriores = [y for y in cuotas if int(y["numero"]) < numero_]
+    if anteriores:
+        inicio = fecha(anteriores[-1]["vencimiento"])
+    elif numero_ == 1 and desembolso is not None and desembolso < venc:
+        inicio = desembolso
+    else:
+        inicio = vencimiento_anterior(venc, c["per"])
+    con_inicio = [dict(y, desde=inicio.isoformat()) if y is x and inicio < corte else {k: v for k, v in y.items() if k != "desde"} for y in cuotas]
+    principal = sum((D(s_["valor"]) for s_ in apertura.get("saldos") or [] if s_["concepto"] == "Principal"), D(0))
+    plan = plan_migrado(cond_json, corte, con_inicio, principal)
+    q_ = next(y for y in plan["cuotas"] if y["numero"] == numero_)
+    efectivo = q_["_desde"] if q_["_desde"] < corte else corte
+    periodo = c["r"].concepto(q_["_saldoIni"] * tasa_del_periodo(plan["rd"], dias(c["conv"], efectivo, venc), c["eq"]))
+    causado = q_["interes"]
+    cargado = sum((D(s_["valor"]) for s_ in apertura.get("saldos") or [] if s_.get("cuota") is not None and int(s_["cuota"]) == numero_
+                   and s_["concepto"] in ("CurrentInterest", "CurrentInterestInSuspense")), D(0))
+    falta = c["r"].concepto(periodo - causado - cargado)
+    esperado = {"cuotaDelCorte": numero_, "inicioDelPeriodo": efectivo.isoformat(), "vencimiento": venc.isoformat(),
+                "diasFaltantes": dias(c["conv"], efectivo, corte) if efectivo < corte else 0, "capitalAlCorte": q_["_saldoIni"],
+                "interesDelPeriodo": periodo, "yaCausado": causado, "cargado": cargado, "ajuste": falta if falta > 1 else D(0), "cuotaDestino": numero_}
+    # La misma regla que el recalculo del corte (fase 3) con hoy = corte, sobre la reconstruccion: la activacion calcula asi.
+    caso_con_inicio = dict(caso, operaciones=[dict(o, cuotas=con_inicio) if o is apertura else o for o in ops])
+    prop = propuesta_del_corte(caso_con_inicio, {"corte": p["corte"], "hoy": p["corte"], "informacionHasta": p["registradoEn"],
+                                                  "desembolso": p.get("desembolso")})
+    assert prop is not None and prop["mvPropuesta"] is None, "el periodo completo no cambia la tasa"
+    for k in ("cuotaDelCorte", "inicioDelPeriodo", "vencimiento", "diasFaltantes", "capitalAlCorte", "interesDelPeriodo", "yaCausado", "cargado",
+              "ajuste", "cuotaDestino"):
+        assert prop[k] == esperado[k], f"periodo completo: {k} {prop[k]} != {esperado[k]}"
+    return esperado
+
+
+def periodos_calculados(caso):
+    """2026-11-24 (feature 025, fase 4): cada periodo completo con su "esperado" y, si suma, su ajuste del corte el dia de la activacion."""
+    periodos = caso.get("periodosCompletos") or []
+    if not periodos:
+        return []
+    ajustes = []
+    for p in periodos:
+        p["esperado"] = periodo_completo(caso, p)
+        e = p["esperado"]
+        if e is not None and e["ajuste"] > 0:
+            ajustes.append({"fecha": (fecha(p["corte"]) + UN_DIA).isoformat(), "cuota": e["cuotaDestino"], "valor": e["ajuste"],
+                            "registradoEn": p["registradoEn"]})
+    caso["ajustesDelCorte"] = ajustes
+    return periodos
+
+
 def esperado_de_operacion(caso, cond_json, ops_json, op):
     """US5: la distribucion de un pago con la informacion hasta su registro (simular = aplicar) y, si trae topeLegal, el tope."""
     ops = [dict(o, _indice=indice_para(caso, o)) if o["tipo"] == "RateReset" else o for o in ops_json]
@@ -2340,6 +2408,8 @@ def main():
         reconocimientos_calculados(caso)
         # 2026-11-24 (feature 025, fase 3): las propuestas del recalculo del corte (las calcula antes de que las consultas las lean).
         propuestas = propuestas_calculadas(caso)
+        # 2026-11-24 (feature 025, fase 4): el periodo completo deja los ajustes del corte que las consultas leen.
+        periodos = periodos_calculados(caso)
         consultas = consultas_calculadas(caso)
         novedades = novedades_calculadas(caso)
         operaciones = operaciones_calculadas(caso, caso["condiciones"], caso.get("operaciones") or [])
@@ -2361,6 +2431,11 @@ def main():
             if propuestas:
                 a, b = bloque(crudo, "propuestasDelCorte")
                 crudo = crudo[:a] + a_json(propuestas, 2, 2) + crudo[b:]
+            if periodos:
+                a, b = bloque(crudo, "periodosCompletos")
+                crudo = crudo[:a] + a_json(periodos, 2, 2) + crudo[b:]
+                a, b = bloque(crudo, "ajustesDelCorte")
+                crudo = crudo[:a] + a_json(caso["ajustesDelCorte"], 2, 2) + crudo[b:]
             if consultas:
                 a, b = bloque(crudo, "consultas")
                 crudo = crudo[:a] + a_json(consultas, 2, 2) + crudo[b:]
@@ -2398,6 +2473,11 @@ def main():
             # 2026-11-24 (feature 025, fase 3): lo que propone cada recalculo del corte.
             for calc, orig in zip(propuestas, original.get("propuestasDelCorte") or []):
                 ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            # 2026-11-24 (feature 025, fase 4): el periodo completo y el ajuste del corte que deja.
+            for calc, orig in zip(periodos, original.get("periodosCompletos") or []):
+                ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            if periodos:
+                ok = ok and iguales(json.loads(a_json(caso["ajustesDelCorte"]), parse_float=D, parse_int=D), original.get("ajustesDelCorte"))
             print(f"{nombre}: {'coincide' if ok else 'DIFIERE'}")
             malos += 0 if ok else 1
         else:
@@ -2412,6 +2492,8 @@ def main():
                 print(a_json(novedades, 2, 2))
             if propuestas:
                 print(a_json(propuestas, 2, 2))
+            if periodos:
+                print(a_json(periodos, 2, 2))
     sys.exit(1 if malos else 0)
 
 
