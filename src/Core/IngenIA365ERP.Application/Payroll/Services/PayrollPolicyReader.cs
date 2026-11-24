@@ -58,7 +58,7 @@ public sealed class PayrollPolicyReader(IApplicationDbContext db, IDateTimeServi
     }
 
     /// <summary>Las políticas vigentes hoy (para lo que no tiene fecha de negocio propia: comparativo, aprobación de la ordinaria).</summary>
-    public Task<PoliticasDeNomina> ReadAsync(CancellationToken ct) => ReadAsync(clock.TodayUtc, ct);
+    public Task<PoliticasDeNomina> ReadAsync(CancellationToken ct) => ReadAsync(clock.HoyLocal, ct);
 
     /// <summary>Como <see cref="ReadAsync(DateOnly, CancellationToken)"/> pero devuelve el error en vez de lanzarlo, para los handlers que responden con sobre.</summary>
     public async Task<Result<PoliticasDeNomina>> LeerAsync(DateOnly fecha, CancellationToken ct)

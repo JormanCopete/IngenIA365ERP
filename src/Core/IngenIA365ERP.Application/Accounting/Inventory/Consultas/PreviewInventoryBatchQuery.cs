@@ -52,7 +52,7 @@ public sealed class PreviewInventoryBatchQueryHandler(
             .Where(u => !ConstructorDeLineasDeInventario.EsInformativa(u.Mensajes.Select(MensajeDeUnidad.De).ToList()))
             .ToList();
         var comoMensajes = unidades.Select(u => (IReadOnlyList<MensajeDeUnidad>)u.Mensajes.Select(MensajeDeUnidad.De).ToList()).ToList();
-        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, comoMensajes, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, comoMensajes, reloj.HoyLocal, ct);
         var construidas = unidades.Select((u, i) => (u.Unidad, u.Mensajes, C: ConstructorDeLineasDeInventario.Construir(comoMensajes[i], catalogos))).ToList();
 
         // Documento por documento: los que fallan quedan fuera con sus errores y quién los corrige.

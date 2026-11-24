@@ -91,7 +91,7 @@ public sealed class RegisterTerminationCommandHandler(
         // --- fechas ---
         var fecha = request.TerminationDate;
         if (fecha < DateOnly.FromDateTime(empleado.JoinDate.Date)) return Result.Failure<TerminationRegisteredDto>(SettlementErrors.TerminationDateBeforeHire);
-        if (fecha > clock.TodayUtc) return Result.Failure<TerminationRegisteredDto>(SettlementErrors.TerminationDateInFuture);
+        if (fecha > clock.HoyLocal) return Result.Failure<TerminationRegisteredDto>(SettlementErrors.TerminationDateInFuture);
 
         // --- FR-021: la fecha tiene que caer en un período abierto del plan (o en ninguno) ---
         var fechaDt = fecha.ToDateTime(TimeOnly.MinValue);

@@ -168,7 +168,7 @@ public sealed class EscenarioContable
     }
 
     public Task<CatalogosDelConstructor> CatalogosAsync(params IReadOnlyList<MensajeDeUnidad>[] unidades) =>
-        CatalogosDelConstructor.CargarAsync(D.Db, new ResolutorDeReglas(D.Db), new TiposDeComprobanteDeInventario(D.Db), unidades, D.Clock.TodayUtc, default);
+        CatalogosDelConstructor.CargarAsync(D.Db, new ResolutorDeReglas(D.Db), new TiposDeComprobanteDeInventario(D.Db), unidades, D.Clock.HoyLocal, default);
 
     // ---------------------------------------------------------------------------------------------------- bandeja --
 

@@ -96,7 +96,7 @@ public sealed class GetLatePaymentPenaltyQueryHandler(IApplicationDbContext db, 
             return Result.Failure<LatePaymentPenaltyDto>(SettlementErrors.KindMismatch(run.Kind, PayrollRunKind.Settlement));
 
         var retiro = run.CutoffDate.Value;
-        var hoy = request.AsOf ?? clock.TodayUtc;
+        var hoy = request.AsOf ?? clock.HoyLocal;
         var retiroDt = retiro.ToDateTime(TimeOnly.MinValue);
 
         // El último salario mensual: el cambio vigente al retiro, o el de la ficha.

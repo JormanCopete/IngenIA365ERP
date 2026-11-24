@@ -150,7 +150,7 @@ public class ConstructorDeLineasDeCarteraTests
         }
 
         var catalogos = await CatalogosDeCartera.CargarAsync(e.D.Db, new ResolutorDeReglasDeCartera(e.D.Db), new TiposDeComprobanteDeCartera(e.D.Db),
-            [hechos], e.D.Clock.TodayUtc, default);
+            [hechos], e.D.Clock.HoyLocal, default);
         var c = ConstructorDeLineasDeCartera.Construir(hechos, catalogos);
         c.Fallos.Select(f => $"{f.FactType} {f.Role}: {f.Error.Code} {f.Error.Message}").Should().BeEmpty(nombre);
 
@@ -213,7 +213,7 @@ public class ConstructorDeLineasDeCarteraTests
         var hechosSin = EscenarioContableDeCartera.Unidad(sin).Select(HechoDeCartera.De).ToList();
         var hechosCon = EscenarioContableDeCartera.Unidad(con).Select(HechoDeCartera.De).ToList();
         var catalogos = await CatalogosDeCartera.CargarAsync(e.D.Db, new ResolutorDeReglasDeCartera(e.D.Db), new TiposDeComprobanteDeCartera(e.D.Db),
-            [hechosSin, hechosCon], e.D.Clock.TodayUtc, default);
+            [hechosSin, hechosCon], e.D.Clock.HoyLocal, default);
         var a = ConstructorDeLineasDeCartera.Construir(hechosSin, catalogos).Request!;
         var b = ConstructorDeLineasDeCartera.Construir(hechosCon, catalogos).Request!;
 

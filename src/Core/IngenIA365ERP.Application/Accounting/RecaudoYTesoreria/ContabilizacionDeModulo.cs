@@ -202,8 +202,8 @@ public sealed class ConsumoDeModulo(IApplicationDbContext db, IActorActual actor
     public async Task<CatalogosDeModulo> CatalogosAsync(ModuloDeLaMatriz modulo, ResolutorDeLaMatriz resolutor, IReadOnlyList<HechoContableDeModulo> hechos,
         CancellationToken ct)
     {
-        var desde = hechos.Count == 0 ? reloj.TodayUtc : hechos.Min(h => h.Fecha);
-        var hasta = hechos.Count == 0 ? reloj.TodayUtc : hechos.Max(h => h.Fecha);
+        var desde = hechos.Count == 0 ? reloj.HoyLocal : hechos.Min(h => h.Fecha);
+        var hasta = hechos.Count == 0 ? reloj.HoyLocal : hechos.Max(h => h.Fecha);
         var matriz = await resolutor.CargarAsync(modulo, desde, hasta, ct);
         var mapeos = await MapeosAsync(modulo, ct);
         var guids = hechos.SelectMany(h => h.Lineas.Select(l => l.Tercero).Append(h.Mensaje.Envelope.PersonPublicId))

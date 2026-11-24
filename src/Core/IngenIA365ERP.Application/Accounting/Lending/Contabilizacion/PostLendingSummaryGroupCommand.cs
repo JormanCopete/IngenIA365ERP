@@ -81,7 +81,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
 
         // 1. cada unidad como si fuera por hecho, con lo del lote cargado una vez (§10.5), validadas todas juntas.
         var comoHechos = vivas.Select(v => (IReadOnlyList<HechoDeCartera>)v.Mensajes.Select(HechoDeCartera.De).ToList()).ToList();
-        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, comoHechos, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, comoHechos, reloj.HoyLocal, ct);
         var construidas = vivas.Select((v, i) => (v.Unidad, v.Mensajes, Construccion: ConstructorDeLineasDeCartera.Construir(comoHechos[i], catalogos))).ToList();
 
         var excluidos = new HashSet<Guid>();

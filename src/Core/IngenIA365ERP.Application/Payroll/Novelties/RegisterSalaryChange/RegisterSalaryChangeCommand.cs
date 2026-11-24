@@ -101,11 +101,11 @@ public sealed class RegisterSalaryChangeCommandHandler(
 
         // Espejo: el salario de la ficha es el último vigente a hoy.
         var ultimoVigente = await db.SalaryChanges.AsNoTracking()
-            .Where(s => s.EmployeeId == employee.Id && s.EffectiveDate <= clock.TodayUtc.ToDateTime(TimeOnly.MinValue))
+            .Where(s => s.EmployeeId == employee.Id && s.EffectiveDate <= clock.HoyLocal.ToDateTime(TimeOnly.MinValue))
             .OrderByDescending(s => s.EffectiveDate)
             .Select(s => (decimal?)s.NewSalary)
             .FirstOrDefaultAsync(ct);
-        if (efecto <= clock.TodayUtc.ToDateTime(TimeOnly.MinValue))
+        if (efecto <= clock.HoyLocal.ToDateTime(TimeOnly.MinValue))
             employee.Salary = request.NewSalary;
         else if (ultimoVigente is { } v)
             employee.Salary = v;

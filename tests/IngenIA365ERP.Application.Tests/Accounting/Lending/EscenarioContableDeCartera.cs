@@ -133,7 +133,7 @@ public sealed class EscenarioContableDeCartera
     /// <summary>Los catálogos del constructor para estas unidades (matriz del rango de sus fechas, mapeos y personas).</summary>
     public Task<CatalogosDeCartera> CatalogosAsync(params IReadOnlyList<MensajeEntrante>[] unidades) =>
         CatalogosDeCartera.CargarAsync(D.Db, new ResolutorDeReglasDeCartera(D.Db), new TiposDeComprobanteDeCartera(D.Db),
-            unidades.Select(u => (IReadOnlyList<HechoDeCartera>)u.Select(HechoDeCartera.De).ToList()), D.Clock.TodayUtc, default);
+            unidades.Select(u => (IReadOnlyList<HechoDeCartera>)u.Select(HechoDeCartera.De).ToList()), D.Clock.HoyLocal, default);
 
     /// <summary>
     /// Escribe el hecho en la bandeja con su entrega a Contabilidad, como lo habría dejado el emisor de Cartera: la clase de origen como texto

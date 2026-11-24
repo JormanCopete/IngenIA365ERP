@@ -149,7 +149,7 @@ public sealed class ReversePayrollRunCommandHandler(
             d.UpdatedBy = yo;
         }
 
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         var posting = await poster.ReverseAsync(original, hoy, request.Reason.Trim(), ct);
         if (posting.IsFailure) return Result.Failure<Reversion>(posting.Error);
 

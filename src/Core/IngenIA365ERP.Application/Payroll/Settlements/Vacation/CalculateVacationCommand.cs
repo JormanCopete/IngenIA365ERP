@@ -85,7 +85,7 @@ public sealed class CalculateVacationCommandHandler(
     {
         var empleado = await db.Employees.Include(e => e.Person).FirstOrDefaultAsync(e => e.PublicId == request.EmployeePublicId && !e.IsDeleted, ct);
         if (empleado is null) return Result.Failure<VacationCalculatedDto>(SettlementErrors.EmployeeNotFound);
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         if (await RetiradoAsync(empleado, hoy, ct)) return Result.Failure<VacationCalculatedDto>(SettlementErrors.VacationEmployeeTerminated);
 
         // --- el movimiento, con sus días congelados ---
