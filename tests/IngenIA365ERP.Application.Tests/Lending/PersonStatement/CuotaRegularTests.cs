@@ -16,13 +16,13 @@ public class CuotaRegularTests
     {
         var plan = new[]
         {
-            Cuota(15, new(2026, 11, 9), 442_252.59m),
-            Cuota(16, new(2026, 12, 9), 569_743.36m),
-            Cuota(17, new(2027, 1, 9), 569_743.36m),
-            Cuota(18, new(2027, 2, 9), 569_743.36m),
+            Cuota(15, new(2026, 11, 9), 400_000.00m),
+            Cuota(16, new(2026, 12, 9), 520_000.00m),
+            Cuota(17, new(2027, 1, 9), 520_000.00m),
+            Cuota(18, new(2027, 2, 9), 520_000.00m),
             Cuota(19, new(2027, 3, 9), 300_000m),
         };
-        Assert.Equal(569_743.36m, GetPersonAccountStatementQueryHandler.CuotaRegular(plan, Hoy));
+        Assert.Equal(520_000.00m, GetPersonAccountStatementQueryHandler.CuotaRegular(plan, Hoy));
     }
 
     [Fact]
