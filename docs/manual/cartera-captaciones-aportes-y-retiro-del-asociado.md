@@ -58,6 +58,18 @@ En `/cartera/aportes`: la **devolución sin retiro** (por exceso sobre el límit
 **cesión** pasa aportes a otro asociado si la línea la admite. Las aprueba o niega **otra persona** (con motivo). Constancia de aportes y paz y
 salvo se emiten desde la ficha; reversar una operación de aportes anula los documentos que la citaban.
 
+**Cerrar una cuenta de aportes sin retiro** (2026-11-24, con varias cuentas por asociado: vende o desafilia un vehículo). En la ficha, «Pedir
+devolución» con la causa «Cerrar la cuenta»: sale **todo** su saldo y no se puede cerrar así la última cuenta viva del asociado (ésa es el retiro).
+Quien aprueba —otra persona— decide cómo sale el saldo:
+
+- **Traslado a otra de sus cuentas de aportes**: pasa clase por clase en un traslado (`TrasladoEntreCuentasAplicado`) y la cuenta queda **cancelada**
+  en el acto. No mira créditos ni mínimo: el dinero no sale de los aportes del asociado.
+- **Orden de giro**: como una devolución, pero sin créditos vivos y sin dejar al asociado bajo el mínimo con lo que queda en sus otras cuentas; la
+  cuenta queda **en cierre** hasta que Tesorería gire la orden (entonces se cancela) y vuelve a activa si el giro se rechaza.
+
+En los dos casos las cuotas sin pagar de esa cuenta se anulan. El mínimo no reducible es del **asociado**: una devolución parcial de una cuenta lo
+mide contra la suma de todas sus cuentas de aportes.
+
 ## 5. El retiro del asociado: de la radicación al pago
 
 El trámite **nace en Cartera** (D16) y Asociados sólo cambia el estado cuando Cartera le avisa.
