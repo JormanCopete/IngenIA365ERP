@@ -37,6 +37,7 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.PayrollEmployeeIdentifier).HasMaxLength(30);
         builder.Property(e => e.PrepaymentChoice).HasConversion<int?>();
         builder.Property(e => e.PayoffRequest);
+        builder.Property(e => e.ReturnSnapshot);
         builder.Property(e => e.PolicyExceptionRequested).IsRequired();
         builder.Property(e => e.PolicyExceptionReason).HasMaxLength(500);
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();

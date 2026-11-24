@@ -36,6 +36,25 @@ public static class TextosDeOriginacion
 
     public static string PreferenciaDeAbono(int? v) => v is { } p ? De(PreferenciasDeAbono, p) : "—";
 
+    /// <summary>2026-11-23: el nombre visible de un grupo que se corrige al devolver (los nombres de <c>GrupoEditableAlDevolver</c>).</summary>
+    public static string GrupoEditable(string grupo) => grupo switch
+    {
+        "Condiciones" => "condiciones (monto, cuotas, fechas)",
+        "Linea" => "línea de crédito",
+        "Oficina" => "oficina",
+        "Destino" => "destino",
+        "FormaDePago" => "forma de pago",
+        "Seguros" => "seguros",
+        "Capacidad" => "ingresos y gastos",
+        "Codeudores" => "codeudores",
+        "Recogidas" => "créditos que recoge",
+        "ExcepcionDePolitica" => "excepción a la política",
+        "PreferenciaDeAbono" => "preferencia de abono",
+        "Documentos" => "documentos",
+        "Garantias" => "garantías",
+        _ => grupo,
+    };
+
     public static IReadOnlyList<(int Valor, string Texto)> FormasDePago { get; } = [(1, "Caja"), (2, "Nómina propia")];
 
     public static IReadOnlyList<(int Valor, string Texto)> ClasesDeValidacion { get; } =
