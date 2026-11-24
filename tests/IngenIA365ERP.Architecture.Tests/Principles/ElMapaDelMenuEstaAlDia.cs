@@ -82,4 +82,34 @@ public class ElMapaDelMenuEstaAlDia
 
         Assert.True(distintas.Count == 0, $"{Aviso}\nPantallas cuyos permisos cambiaron:\n  " + string.Join("\n  ", distintas));
     }
+    /// <summary>
+    /// 2026-11-23: toda opción del menú cuya pantalla pide un permiso para abrir está envuelta en un <c>&lt;PermissionGate&gt;</c>
+    /// o en <c>&lt;OpcionPermitida&gt;</c>; si no, aparece en el menú de quien no puede entrar.
+    /// </summary>
+    [Fact]
+    public void Cada_opcion_del_menu_se_oculta_sin_permiso()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var menu = Regex.Replace(File.ReadAllText(Path.Combine(Shared(root), "Layout", "NavMenu.razor")), @"@\*.*?\*@", "", RegexOptions.Singleline);
+        var conAcceso = Entrada.Matches(Mapa(root))
+            .Where(m => m.Groups["acceso"].Value.Trim().Length > 0)
+            .Select(m => m.Groups["ruta"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var profundidad = 0;
+        var envuelta = false;
+        var sueltas = new List<string>();
+        foreach (Match t in Regex.Matches(menu, @"<PermissionGate\b[^>]*?(/?)>|</PermissionGate>|<OpcionPermitida\b[^>]*>|</OpcionPermitida>|<NavLink\s+href=""([^""]+)"""))
+        {
+            var v = t.Value;
+            if (v.StartsWith("<PermissionGate", StringComparison.Ordinal)) { if (t.Groups[1].Value != "/") profundidad++; }
+            else if (v == "</PermissionGate>") profundidad--;
+            else if (v.StartsWith("<OpcionPermitida", StringComparison.Ordinal)) envuelta = true;
+            else if (v == "</OpcionPermitida>") envuelta = false;
+            else if (profundidad == 0 && !envuelta && conAcceso.Contains(t.Groups[2].Value)) sueltas.Add(t.Groups[2].Value);
+        }
+
+        Assert.True(sueltas.Count == 0,
+            "Opciones del menú que se ven sin permiso; envolvelas en <OpcionPermitida Ruta=\"…\">:\n  " + string.Join("\n  ", sueltas));
+    }
 }
