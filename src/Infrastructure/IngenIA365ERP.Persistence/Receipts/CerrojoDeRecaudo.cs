@@ -71,5 +71,6 @@ public sealed class CerrojoDeRecaudo(ApplicationDbContext db, IActorActual actor
         if (db.Database.CurrentTransaction is null)
             throw new InvalidOperationException(
                 "El cerrojo de Recaudo sólo se toma dentro de una transacción (TransaccionExplicita): fuera de ella no protege nada.");
+        orden.EnLaTransaccion(db.Database.CurrentTransaction.TransactionId);
     }
 }

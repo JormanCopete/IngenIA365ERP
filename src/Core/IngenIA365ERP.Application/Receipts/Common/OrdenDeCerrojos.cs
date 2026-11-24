@@ -22,7 +22,23 @@ public sealed class OrdenDeCerrojos
 
     private int _ultimo;
     private string _ultimoNombre = "ninguno";
+    private Guid _transaccion;
     private readonly Dictionary<string, bool> _filasUnicas = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Ata el orden a la transacción en curso: si es otra que la de los cerrojos anotados, empieza de cero. El orden rige dentro de una transacción;
+    /// una que ya confirmó o revirtió soltó sus filas. Sin esto, dos comandos seguidos en la misma petición —la caja única cierra la caja del punto
+    /// de venta y entra lo recibido antes del arqueo de Recaudo, 2026-11-24— o el reintento de la estrategia tras un interbloqueo lanzaban
+    /// «pidió RCD_Setup después de RCD_CashSessions» sin que nada estuviera fuera de orden.
+    /// </summary>
+    public void EnLaTransaccion(Guid transaccion)
+    {
+        if (transaccion == _transaccion) return;
+        _transaccion = transaccion;
+        _ultimo = 0;
+        _ultimoNombre = "ninguno";
+        _filasUnicas.Clear();
+    }
 
     /// <summary>La posición global de un nivel de Recaudo.</summary>
     public static int DeRecaudo(NivelDeRecaudo nivel) => (int)nivel;
