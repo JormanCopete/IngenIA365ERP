@@ -116,8 +116,24 @@ public class SalesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
 
-        MapBorradoresDeVenta(app, "/api/inventory/sales/orders", "Inventory Sales Orders", "Inventory_Sales_Orders", RutasDeVenta.Pedidos);
-        MapBorradoresDeVenta(app, "/api/inventory/sales/shipments", "Inventory Sales Shipments", "Inventory_Sales_Shipments", RutasDeVenta.Remisiones);
+        var pedidos = MapBorradoresDeVenta(app, "/api/inventory/sales/orders", "Inventory Sales Orders", "Inventory_Sales_Orders", RutasDeVenta.Pedidos);
+        var remisiones = MapBorradoresDeVenta(app, "/api/inventory/sales/shipments", "Inventory Sales Shipments", "Inventory_Sales_Shipments", RutasDeVenta.Remisiones);
+        // 2026-11-23 (pedido del dueño): el pedido y la remisión impresos, con el molde de la cotización.
+        foreach (var (grupo, clase, nombre) in new[]
+                 {
+                     (pedidos, DocumentClass.SalesOrder, "Inventory_Sales_Orders_Pdf"),
+                     (remisiones, DocumentClass.Shipment, "Inventory_Sales_Shipments_Pdf"),
+                 })
+        {
+            grupo.MapGet("/{id:guid}/pdf", async (Guid id, ISender sender, CancellationToken ct) =>
+                {
+                    var pdf = await sender.Send(new GetSalesCycleDocumentPdfQuery(id, clase), ct);
+                    return pdf.IsSuccess ? (object)Results.File(pdf.Value.Pdf, "application/pdf", pdf.Value.FileName) : pdf;
+                })
+                .WithName(nombre)
+                .AddEndpointFilter<ErrorEnvelopeFilter>()
+                .RequirePermission(Ver);
+        }
         MapBorradoresDeVenta(app, "/api/inventory/sales/debit-notes", "Inventory Sales Debit Notes", "Inventory_Sales_DebitNotes", RutasDeVenta.NotasDebito);
     }
 

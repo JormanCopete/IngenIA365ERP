@@ -53,11 +53,11 @@ public static class SalesQuoteReport
                         });
                         row.ConstantItem(220).AlignRight().Column(e =>
                         {
-                            e.Item().Text("COTIZACIÓN").Bold().FontSize(13);
+                            e.Item().Text(c.Titulo.ToUpperInvariant()).Bold().FontSize(13);
                             e.Item().Text(c.DocumentTypeName).FontSize(8);
                             e.Item().Text(marca).Bold().FontSize(11);
                             e.Item().Text($"Fecha {c.OperationDate.ToString("dd/MM/yyyy", Co)}");
-                            if (c.ValidUntil is { } vence) e.Item().Text($"Vigente hasta {vence.ToString("dd/MM/yyyy", Co)}").SemiBold();
+                            if (c.EsCotizacion && c.ValidUntil is { } vence) e.Item().Text($"Vigente hasta {vence.ToString("dd/MM/yyyy", Co)}").SemiBold();
                         });
                     });
                     col.Item().PaddingTop(4).PaddingBottom(4).LineHorizontal(1);
@@ -150,9 +150,10 @@ public static class SalesQuoteReport
                         col.Item().PaddingTop(10).Text("Condiciones de la cotización").Bold();
                         col.Item().Text(c.Condiciones).FontSize(8);
                     }
-                    col.Item().PaddingTop(10).Text(c.ValidUntil is { } hasta
+                    // 2026-11-23: el pedido y la remisión salen con el mismo molde; la vigencia es sólo de la cotización.
+                    col.Item().PaddingTop(10).Text(c.EsCotizacion && c.ValidUntil is { } hasta
                             ? $"Los precios de esta cotización se respetan hasta el {hasta.ToString("dd/MM/yyyy", Co)}. Esta cotización no es una factura."
-                            : "Esta cotización no es una factura.")
+                            : c.EsCotizacion ? "Esta cotización no es una factura." : $"{(c.Titulo == "Remisión" ? "Esta remisión" : "Este pedido")} no es una factura.")
                         .FontSize(7).Italic();
 
                     col.Item().PaddingTop(24).Row(row =>
@@ -165,7 +166,7 @@ public static class SalesQuoteReport
 
                 page.Footer().AlignCenter().Text(x =>
                 {
-                    x.Span($"Cotización {c.DisplayNumber ?? "(borrador)"} · impresa el {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC · página ").FontSize(7);
+                    x.Span($"{c.Titulo} {c.DisplayNumber ?? "(borrador)"} · impresa el {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC · página ").FontSize(7);
                     x.CurrentPageNumber().FontSize(7);
                     x.Span(" de ").FontSize(7);
                     x.TotalPages().FontSize(7);

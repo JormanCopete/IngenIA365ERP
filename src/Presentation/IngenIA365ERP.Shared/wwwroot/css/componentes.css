@@ -1161,6 +1161,19 @@ input[type="checkbox"], input[type="radio"] {
 .ventana-pie .barra-atajos { border-radius: 0 0 var(--radio-sm) var(--radio-sm); }
 .ventana-pie-errores { max-height: 22vh; overflow-y: auto; padding: var(--pad-sm) var(--pad-md) var(--pad-sm) var(--pad-xl); border-bottom: 1px solid var(--borde); background: var(--superficie-0); }
 .estado-guardado { font-weight: var(--peso-normal, 400); font-size: var(--texto-sm); }
+/* 2026-11-23 (pedido del dueño): las ventanas transaccionales de Comercial (factura, cotización, pedido, remisión, notas, compras) usan el mismo
+   marco del comprobante: encabezado compacto con «Más datos», las líneas con su propio desplazamiento y el pie fijo con totales y comandos. */
+.encabezado-comercial { margin-bottom: 0; }
+.mas-datos { border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-0); }
+.mas-datos > summary { cursor: pointer; padding: var(--pad-xs) var(--pad-md); font-size: var(--texto-sm); color: var(--texto-secundario); }
+.mas-datos[open] > summary { border-bottom: 1px solid var(--borde); }
+.mas-datos > .form-grid { padding: var(--pad-sm) var(--pad-md); margin-bottom: 0; }
+.lineas-comerciales tr.fila-activa > td { background: var(--acento-suave); }
+.ventana-comercial .ventana-pie-fila .pos-a-pagar { font-size: var(--texto-lg); }
+.pestanas { display: flex; gap: var(--gap-xs); margin-bottom: var(--gap-sm); }
+.tabla-de-dialogo { max-height: 50vh; overflow: auto; }
+.tabla-de-dialogo tr.fila-elegida > td { background: var(--acento-suave); }
+.tabla-de-dialogo tbody tr { cursor: pointer; }
 .guia-del-comprobante { display: flex; flex-direction: column; gap: var(--gap-sm); }
 @media (min-width: 900px) {
     .erp-layout .erp-main:has(.ventana-transaccional) { height: 100vh; height: 100dvh; min-height: 0; }
