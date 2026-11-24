@@ -62,5 +62,6 @@ public sealed class CerrojoDeTesoreria(ApplicationDbContext db, IActorActual act
         if (db.Database.CurrentTransaction is null)
             throw new InvalidOperationException(
                 "El cerrojo de Tesorería sólo se toma dentro de una transacción (TransaccionExplicita): fuera de ella no protege nada.");
+        orden.EnLaTransaccion(db.Database.CurrentTransaction.TransactionId);
     }
 }
