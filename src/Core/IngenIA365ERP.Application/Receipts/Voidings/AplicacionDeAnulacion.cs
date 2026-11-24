@@ -66,6 +66,10 @@ public sealed class AplicacionDeAnulacion(
         // Feature 015, R1 (T0363): un recaudo pendiente que ya se aplicó en su módulo impide anular; el vigente se anula con el recibo.
         var pendientes = await db.PendingApplications.Where(x => x.ReceiptId == recibo.Id).ToListAsync(ct);
         if (pendientes.Any(x => x.Status == PendingApplicationState.Applied)) return Result.Failure(CashDesk.ErroresDelPendiente.YaAplicado());
+        // 2026-11-23 (pedido del dueño): el anticipo de concepto que recibió este recibo tiene que estar entero; si ya se cruzó, primero se anulan los que lo cruzaron.
+        var anticipoEntero = await CreditBalances.AnticiposDeConcepto.PuedeAnularAsync(db, recibo, ct);
+        if (anticipoEntero.IsFailure) return anticipoEntero;
+        var mediosDeAnticipo = (await CreditBalances.AnticiposDeConcepto.PorMedioAsync(db, ct)).Keys.ToHashSet();
 
         // Obligaciones antes que cuentas (FR-170), una vez por porción.
         foreach (var p in vigentes.Where(p => Destino(aplicaciones, p) == ApplicationTarget.Loan))
@@ -89,7 +93,8 @@ public sealed class AplicacionDeAnulacion(
             p.Status = PortionState.Reversed;
             p.ReversalKey = ClavesDeRecaudo.Reverso(p.IdempotencyKey);
             var medio = medios[p.ReceiptMeansId];
-            var aSaldo = dinero switch
+            // 2026-11-23: lo que se cruzó con el medio de un anticipo vuelve a su anticipo (AlAnularAsync), no a un saldo a favor genérico.
+            var aSaldo = mediosDeAnticipo.Contains(medio.PaymentMeansId) ? false : dinero switch
             {
                 DineroDeLaAnulacion.DevueltoPorLaPasarela => false,
                 DineroDeLaAnulacion.SaldoAFavor => true,
@@ -105,6 +110,8 @@ public sealed class AplicacionDeAnulacion(
         anulacion.DecidedAt = ahora;
         anulacion.DecisionReason = string.IsNullOrWhiteSpace(motivo) ? null : motivo.Trim();
         anulacion.OmittedApplicationsJson = omitidas.Count == 0 ? null : AnulacionesDeRecibos.Omitidas(omitidas.Select(o => o.ProductNumber ?? o.Ordinal.ToString()));
+        // 2026-11-23: el anticipo que recibió se cancela y lo que cruzó vuelve a su anticipo.
+        await CreditBalances.AnticiposDeConcepto.AlAnularAsync(db, recibo, anulacion.PublicId, anulacion.Number, usuario, ahora, ct);
 
         var aFavor = reversadas.Where(x => x.Item4).Sum(x => x.Item1.Amount);
         if (aFavor > 0m)

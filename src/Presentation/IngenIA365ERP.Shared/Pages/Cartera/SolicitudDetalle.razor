@@ -111,6 +111,13 @@
                 {
                     <p><strong>Partes:</strong> @string.Join(", ", s.Parties.Select(p => p.Person.FullName))</p>
                 }
+                @if (s.SubsidizedPurchase is { } compra)
+                {
+                    @* 2026-11-23 (descuento condicionado): quien decide confirma la opción al aprobar; para cambiarla, devuelve la solicitud. *@
+                    <p><strong>Compra con descuento:</strong> bien de @TextosDeOriginacion.Pesos(compra.AssetValue) a @(compra.Supplier?.FullName ?? "—") ·
+                        opción «@compra.OptionName» (@((compra.Fraction * 100m).ToString("0.##")) %) · el fondo @compra.FundCode pone @TextosDeOriginacion.Pesos(compra.FundedAmount)
+                        y el crédito @TextosDeOriginacion.Pesos(compra.LoanAmount)</p>
+                }
                 @if (s.Approval is { } a)
                 {
                     <p><strong>Aprobación:</strong> @(a.Amount is { } m ? TextosDeOriginacion.Pesos(m) : "") @(a.Conditions) — vence @(a.ExpiresAt?.ToString("dd/MM/yyyy"))</p>
@@ -164,9 +171,9 @@
                     <h4>Validaciones</h4>
                     @foreach (var chk in s.Checks)
                     {
-                        <div class="@TextosDeOriginacion.ClaseDeAviso(chk.Outcome)">
+                        <div class="@TextosDeOriginacion.ClaseDeAviso(chk.Outcome, chk.ErrorCode, chk.Detail)">
                             <strong>@TextosDeOriginacion.ClaseDeValidacion(chk.Kind)</strong>@(chk.Person is { } p ? $" · {p.FullName}" : ""):
-                            @TextosDeOriginacion.ResultadoDeValidacion(chk.Outcome)@(chk.Outcome == 3 && !chk.IsExceptionable ? " (no admite excepción)" : "")
+                            @TextosDeOriginacion.ResultadoDeValidacion(chk.Outcome)@(chk.Outcome == 3 && !chk.IsExceptionable ? " (no admite excepción)" : "")@TextosDeOriginacion.NotaDeValidacion(chk.ErrorCode, chk.Detail)
                             <span class="texto-tenue"> · evidencia @chk.EvidenceSha256[..12]…</span>
                         </div>
                     }

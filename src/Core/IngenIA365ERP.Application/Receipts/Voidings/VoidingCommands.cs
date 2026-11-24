@@ -114,6 +114,9 @@ public sealed class RequestReceiptVoidingCommandHandler(
         var recibo = await db.IssuedReceipts.FirstAsync(r => r.Id == visto.Id, ct);
         if (recibo.Status != ReceiptState.Valid || await db.ReceiptVoidings.AnyAsync(v => v.ReceiptId == recibo.Id, ct))
             return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionYaHecha(recibo.Number));
+        // 2026-11-23: el anticipo de concepto que recibió tiene que estar entero; si ya se cruzó, no se pide la anulación.
+        var anticipoEntero = await CreditBalances.AnticiposDeConcepto.PuedeAnularAsync(db, recibo, ct);
+        if (anticipoEntero.IsFailure) return Result.Failure<ReceiptVoidingDto>(anticipoEntero.Error);
         var hoy = reloj.HoyLocal;
         var sesion = recibo.CashSessionId is { } s ? await db.ReceiptsCashSessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == s, ct) : null;
         var mismaSesion = sesion?.Status == CashSessionState.Open && DateOnly.FromDateTime(recibo.RegisteredAt.ToLocalTime()) == hoy;

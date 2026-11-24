@@ -17,6 +17,12 @@ public enum ModuleReversalCause
     MoneyReceived = 1,
     MoneyNotReceived = 2,
     PendingConfirmation = 3,
+
+    /// <summary>
+    /// 2026-11-23 (cruce automático de anticipos): la porción reversada se había pagado con el medio de un anticipo de concepto; no hubo dinero, así que el valor
+    /// vuelve al anticipo y el medio se reversa (la cuenta del anticipo) sin que nadie confirme nada.
+    /// </summary>
+    ReturnedToAdvance = 4,
 }
 
 /// <summary>De quién es el saldo a favor (nuevo).</summary>
@@ -37,6 +43,12 @@ public enum PayerCreditBalanceOrigin
     PaymasterUnapplied = 5,
     RejectedLine = 6,
     LendingRefund = 7,
+
+    /// <summary>2026-11-23 (pedido del dueño): un anticipo de concepto recibido en la caja (un concepto vario marcado como anticipo).</summary>
+    ConceptAdvance = 8,
+
+    /// <summary>2026-11-23: un anticipo de concepto que venía del sistema anterior, cargado con su plantilla (sin hecho contable: ya está en la apertura).</summary>
+    MigratedAdvance = 9,
 }
 
 /// <summary>El estado del saldo a favor (nuevo).</summary>
@@ -57,6 +69,15 @@ public enum PayerCreditBalanceMovementKind
 
     /// <summary>Feature 015, R1 (fase 26) (nuevo): la devolución en efectivo se anuló porque el dinero volvió a la caja; el saldo se reabre.</summary>
     CashRefundVoided = 6,
+
+    /// <summary>2026-11-23: el anticipo se anuló con el recibo que lo recibió.</summary>
+    VoidedWithReceipt = 7,
+
+    /// <summary>2026-11-23: el recibo que cruzó el anticipo se anuló; lo cruzado vuelve al anticipo.</summary>
+    ReopenedByVoiding = 8,
+
+    /// <summary>2026-11-23 (cruce automático): el módulo reversó el pago que el anticipo había cruzado; lo reversado vuelve al anticipo.</summary>
+    ReturnedByModuleReversal = 9,
 }
 
 /// <summary>El estado de la cuenta por cobrar al pagador (nuevo).</summary>

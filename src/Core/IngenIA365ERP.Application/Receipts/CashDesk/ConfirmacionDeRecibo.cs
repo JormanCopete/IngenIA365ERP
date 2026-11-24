@@ -294,6 +294,12 @@ public sealed class ConfirmacionDeRecibo(
         await cerrojo.BloquearAsync(NivelDeRecaudo.Sesion, TablasDeRecaudo.Sesiones, [sesion.Id], ct: ct);
         await cerrojo.BloquearPagadoresAsync(personasDeLaOperacion, ct);
 
+        // 2026-11-23 (pedido del dueño): lo que se cruza con el medio de un anticipo de concepto no pasa de lo disponible del titular, bajo su cerrojo.
+        var titularInterno = operacion.BeneficiaryPersonId ?? operacion.PayerPersonId;
+        var usosDeAnticipo = medios.Select(m => (MedioId: sellados.Means.First(x => x.PublicId == m.PaymentMeansPublicId).PaymentMeansId, Valor: m.Amount)).ToList();
+        var anticipo = await CreditBalances.AnticiposDeConcepto.ValidarUsoAsync(db, titularInterno, usosDeAnticipo, ct);
+        if (anticipo.IsFailure) return Result.Failure<ReceiptDto>(anticipo.Error);
+
         // Feature 015, R1 (T0397; FR-049): el saldo de cada factura comercial otra vez, bajo el cerrojo de la persona (otro recibo pudo cobrarla entre los dos pasos).
         var saldosDeFacturas = new Dictionary<Guid, CommercialReceivableDto>();
         foreach (var i in items.Where(i => i.Target == ApplicationTarget.CommercialReceivable))
@@ -388,6 +394,8 @@ public sealed class ConfirmacionDeRecibo(
             filasDeItems[i.ItemId] = fila;
         }
         await db.SaveChangesAsync(ct);
+        // 2026-11-23 (pedido del dueño): el anticipo de concepto que se recibió nace como saldo a favor con su concepto; el que se cruzó con su medio se baja.
+        await CreditBalances.AnticiposDeConcepto.RegistrarAsync(db, recibo, titularInterno, filasDeItems.Values, filasDeMedios.Values, cajero, reloj.UtcNow, ct);
         // Feature 015, R1 (T0397): el detalle de cada cuenta por cobrar comercial, con el saldo que se consultó.
         foreach (var (itemId, cxc) in saldosDeFacturas)
         {

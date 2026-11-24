@@ -17,6 +17,26 @@
    los vínculos— y arranca en las que faltan por facturar (antes seguían en la lista las ya facturadas), y pagina. La remisión que nace de un
    pedido lleva sólo sus líneas pendientes: no se le agregan productos (el servidor también lo exige). *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+@* 2026-11-23 (pedido del dueño): la remisión abierta es la ventana transaccional común, a pantalla completa, con «Imprimir» (Ctrl+P, para que
+   la firme quien recibe) y «Facturar» mientras tenga algo por facturar; se vuelve a la lista con Esc. *@
+@if (_editando)
+{
+    <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Remisiones" Clases="@([TextosDeVentas.ClaseRemision])" Nombre="remisión" Documento="@Documento"
+                    Origenes="@(Pedido is { } p ? [p] : null)" OrigenFijaLasLineas="true" EtiquetaPendiente="Pendiente por facturar" ConPdf="true"
+                    Volver="@Volver" TextoVolver="Volver a las remisiones" Nuevo="@Nueva"
+                    AvisoDeAnulacion="Si la remisión no se ha facturado, la mercancía vuelve a la bodega al costo con que salió; facturada, no se anula." Cambio="@CambioAsync">
+        <Acciones Context="doc">
+            @if (doc.Lines.Any(l => l.Pending is > 0))
+            {
+                <PermissionGate Required="Inventory.Sales.Create">
+                    <a class="e-btn e-primary" href="@($"/ventas/facturas/nueva?remisiones={doc.DocumentPublicId}")" title="Abre la factura desde esta remisión con lo pendiente; para facturar en parte, baje la cantidad.">Facturar</a>
+                </PermissionGate>
+            }
+        </Acciones>
+    </EditorDelCiclo>
+}
+else
+{
 <div class="pagina">
     <div class="page-header">
         <h3>Remisiones</h3>
@@ -29,12 +49,6 @@
         </div>
     </div>
 
-    @if (_editando)
-    {
-        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Remisiones" Clases="@([TextosDeVentas.ClaseRemision])" Nombre="remisión" Documento="@Documento"
-                        Origenes="@(Pedido is { } p ? [p] : null)" OrigenFijaLasLineas="true" EtiquetaPendiente="Pendiente por facturar"
-                        AvisoDeAnulacion="Si la remisión no se ha facturado, la mercancía vuelve a la bodega al costo con que salió; facturada, no se anula." Cambio="@CambioAsync" />
-    }
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         <label class="campo">Mostrar
@@ -71,6 +85,7 @@
         <p class="texto-apoyo">Lo pendiente por facturar de cada línea se ve al abrir la remisión. El estado de facturación descuenta lo que devolvieron las notas crédito.</p>
     </IndicadorDeCarga>
 </div>
+}
 </PermissionGate>
 
 @code {
@@ -134,6 +149,12 @@
     {
         _editando = true;
         _clave = Guid.NewGuid();
+        Nav.NavigateTo("/ventas/remisiones", replace: true);
+    }
+
+    private void Volver()
+    {
+        _editando = false;
         Nav.NavigateTo("/ventas/remisiones", replace: true);
     }
 

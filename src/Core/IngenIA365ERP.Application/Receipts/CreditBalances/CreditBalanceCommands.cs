@@ -94,6 +94,8 @@ public sealed class RefundPayerCreditBalanceByOrderCommandHandler(
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearPagadoresAsync([leido.PersonId], ct);
         var saldo = await db.PayerCreditBalances.FirstAsync(s => s.Id == leido.Id, ct);
+        // 2026-11-23: un anticipo de concepto se cruza en la caja con su medio; no se devuelve ni se aplica como saldo a favor genérico.
+        if (saldo.EsAnticipo) return Result.Failure<PayerCreditBalanceDto>(AnticiposDeConcepto.NoSeDevuelve());
         if (saldo.Status == PayerCreditBalanceState.Resolved) return Result.Failure<PayerCreditBalanceDto>(ErroresDeRecaudo.SaldoResuelto());
         if (request.Amount > saldo.Balance) return Result.Failure<PayerCreditBalanceDto>(ErroresDeRecaudo.SaldoInsuficiente(saldo.Balance));
 
@@ -170,6 +172,8 @@ public sealed class ApplyPayerCreditBalanceCommandHandler(
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearPagadoresAsync([leido.PersonId], ct);
         var saldo = await db.PayerCreditBalances.FirstAsync(s => s.Id == leido.Id, ct);
+        // 2026-11-23: un anticipo de concepto se cruza en la caja con su medio; no se devuelve ni se aplica como saldo a favor genérico.
+        if (saldo.EsAnticipo) return Result.Failure<PayerCreditBalanceDto>(AnticiposDeConcepto.NoSeDevuelve());
         if (saldo.Status == PayerCreditBalanceState.Resolved) return Result.Failure<PayerCreditBalanceDto>(ErroresDeRecaudo.SaldoResuelto());
         if (request.Amount > saldo.Balance) return Result.Failure<PayerCreditBalanceDto>(ErroresDeRecaudo.SaldoInsuficiente(saldo.Balance));
         var hoy = reloj.HoyLocal;

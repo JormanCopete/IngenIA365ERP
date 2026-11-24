@@ -291,6 +291,7 @@ public sealed class RegisterCashDisbursementCommandHandler(
                 saldoDePagador = await db.PayerCreditBalances.AsNoTracking().FirstOrDefaultAsync(s => s.PublicId == request.PayerCreditBalancePublicId, ct);
                 if (saldoDePagador is null || saldoDePagador.PersonId != beneficiario || !(await alcance.ObtenerAsync(ct)).IncluyeOficina(saldoDePagador.BranchId))
                     return Result.Failure<CashDisbursementDto>(ErroresDeRecaudo.NoEncontrado("El saldo a favor"));
+                if (saldoDePagador.EsAnticipo) return Result.Failure<CashDisbursementDto>(CreditBalances.AnticiposDeConcepto.NoSeDevuelve());
                 if (saldoDePagador.Status == PayerCreditBalanceState.Resolved) return Result.Failure<CashDisbursementDto>(ErroresDeRecaudo.SaldoResuelto());
                 if (valor > saldoDePagador.Balance) return Result.Failure<CashDisbursementDto>(ErroresDeRecaudo.SaldoInsuficiente(saldoDePagador.Balance));
                 break;

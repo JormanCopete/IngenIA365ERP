@@ -24,7 +24,7 @@ public sealed partial class EmisionDeRecaudo
     /// <summary>El tipo del hecho del recibo de un canal no interactivo: banco y otros canales <c>ReciboDeBancoEmitido</c>; la contingencia, <c>ReciboEmitido</c>.</summary>
     public static string TipoDelHechoDelCanal(ReceiptChannel canal) => canal switch
     {
-        ReceiptChannel.Contingency or ReceiptChannel.CashDesk => ReciboEmitidoV1.Type,
+        ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing => ReciboEmitidoV1.Type,
         ReceiptChannel.Paymaster => ReciboDePagaduriaEmitidoV1.Type,
         _ => ReciboDeBancoEmitidoV1.Type,
     };
@@ -54,7 +54,8 @@ public sealed partial class EmisionDeRecaudo
         _ = saldoDePagaduria;
         if (recibo.Channel == ReceiptChannel.Paymaster)
             return await ReciboDePagaduriaEmitidoAsync(recibo, aplicaciones, medio, porciones, naturalezas, codigoDelTipo, ct);
-        if (recibo.Channel is ReceiptChannel.Contingency or ReceiptChannel.CashDesk)
+        // 2026-11-23: el cruce automático de un anticipo es el mismo hecho que el cruce a mano en la caja (medio del anticipo contra el puente del módulo).
+        if (recibo.Channel is ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing)
             return await ReciboEmitidoAsync(recibo, aplicaciones, [medio], porciones, naturalezas, null, codigoDelTipo, ct);
 
         var personas = aplicaciones.Select(a => a.BeneficiaryPersonId).Append(recibo.PayerPersonId).Distinct().ToList();

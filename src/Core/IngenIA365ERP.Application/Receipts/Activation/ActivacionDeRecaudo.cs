@@ -222,6 +222,8 @@ public sealed class ActivateReceiptsCommandHandler(
     [
         new(PagoReversadoPorCarteraV1.Type, 1), new(ConsignacionReversadaPorCarteraV1.Type, 1),
         new(DescuentosPorPagaduriaV1.Type, 1), new(DescuentosPorPagaduriaV1.Type, 2),
+        // 2026-11-23: la obligación nacida de una venta, para el cruce automático del anticipo (destino opcional de ObligacionCreada).
+        new(ObligacionCreadaV1.Type, 1),
     ];
 
     /// <summary>Las versiones que el recaudador <c>REC</c> adopta (FR-147).</summary>

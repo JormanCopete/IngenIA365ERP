@@ -170,6 +170,7 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
         8 => "Anulación",
         9 => "Movimiento de caja",
         10 => "Ajuste de sesión",
+        11 => "Cruce de anticipo",
         _ => "Otra",
     };
 

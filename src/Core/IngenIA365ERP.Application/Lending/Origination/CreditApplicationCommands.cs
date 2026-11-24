@@ -72,6 +72,9 @@ public sealed record SolicitudArmada(
 {
     /// <summary>K2 (T0842): el convenio de la pagaduría externa de una solicitud por libranza.</summary>
     public int? ConvenioId { get; init; }
+
+    /// <summary>2026-11-23: el proveedor del bien en una compra con descuento condicionado.</summary>
+    public int? ProveedorId { get; init; }
 }
 
 /// <summary>
@@ -138,9 +141,33 @@ public sealed class ArmadoDeSolicitud(
         if (!u.Pasa)
             return Falla(ErroresDeLineasDeCredito.UsuraExcedida("amount", simulada.Value.Fecha, u, simulada.Value.Combinacion.ModalityCode));
 
+        // 2026-11-23 (descuento condicionado, el caso del SOAT): con opciones en la línea, el bien, el proveedor y la opción; el monto es el
+        // valor del bien menos lo que paga el fondo. Sin opciones, nada de eso.
+        var compra = await CompraAsync(e, version.LeerOpcionesDeDescuento(), ct);
+        if (compra.IsFailure) return Falla(compra.Error);
+
         return Result.Success(new SolicitudArmada(solicitante, asociado ? DebtorKind.Associate : DebtorKind.Customer,
             (e.CoDebtors ?? []).Select(c => (codeudores.Single(p => p.PublicId == c.PersonPublicId), c)).ToList(), oficina.Value, linea.Value,
-            simulada.Value) { ConvenioId = convenioId });
+            simulada.Value) { ConvenioId = convenioId, ProveedorId = compra.Value });
+    }
+
+    /// <summary>El proveedor de la compra con descuento (o nulo si la línea no tiene opciones), con sus reglas.</summary>
+    private async Task<Result<int?>> CompraAsync(CreditApplicationInput e, IReadOnlyList<Domain.Lending.Configuration.OpcionDeDescuento> opciones,
+        CancellationToken ct)
+    {
+        if (opciones.Count == 0)
+            return e.AssetValue is null && e.SupplierPersonPublicId is null && string.IsNullOrWhiteSpace(e.DiscountOptionCode)
+                ? Result.Success<int?>(null)
+                : Result.Failure<int?>(ErroresDeOriginacion.LineaSinDescuento());
+        if (e.AssetValue is not { } valor || valor <= 0m || e.SupplierPersonPublicId is not { } proveedor || string.IsNullOrWhiteSpace(e.DiscountOptionCode))
+            return Result.Failure<int?>(ErroresDeOriginacion.CompraIncompleta());
+        var codigo = e.DiscountOptionCode.Trim().ToUpperInvariant();
+        var opcion = opciones.FirstOrDefault(o => o.Code == codigo);
+        if (opcion is null) return Result.Failure<int?>(ErroresDeOriginacion.OpcionDeDescuentoDesconocida(codigo, opciones.Select(o => o.Code).ToList()));
+        var monto = valor - Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, opcion.Fraction);
+        if (e.Amount != monto) return Result.Failure<int?>(ErroresDeOriginacion.MontoDeLaCompra(valor, opcion.Name, monto));
+        var id = await db.People.AsNoTracking().Where(p => p.PublicId == proveedor && !p.IsDeleted).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        return id is null ? Result.Failure<int?>(ErroresDeGobierno.PersonaInexistente()) : Result.Success(id);
     }
 
     /// <summary>
@@ -203,6 +230,10 @@ public sealed class ArmadoDeSolicitud(
         s.PolicyExceptionReason = e.PolicyExceptionRequested ? e.PolicyExceptionReason?.Trim() : null;
         // K6b (T1055): sólo una solicitud de vivienda dice si el inmueble es VIS.
         s.IsSocialHousing = Housing.ValidacionDeVivienda.EsVivienda(a.Simulacion) ? e.IsSocialHousing ?? false : null;
+        // 2026-11-23 (descuento condicionado): sólo con proveedor resuelto (la línea tiene opciones y la entrada las trae).
+        s.AssetValue = a.ProveedorId is null ? null : e.AssetValue;
+        s.SupplierPersonId = a.ProveedorId;
+        s.DiscountOptionCode = a.ProveedorId is null ? null : e.DiscountOptionCode?.Trim().ToUpperInvariant();
     }
 
     /// <summary>

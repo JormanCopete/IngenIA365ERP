@@ -21,7 +21,9 @@ public sealed record PoliticaDeIdentidadDto(
     IReadOnlyList<string> TiposAceptados,
     IReadOnlyList<TipoDeDocumentoDto> Catalogo,
     DateOnly? DocumentoExigidoDesde,
-    int IntentosAlActivar);
+    int IntentosAlActivar,
+    int? MinutosDeInactividad = null,
+    int MinutosDeInactividadGeneral = 30);
 
 /// <summary>Un tipo del catálogo fijo, para la pantalla.</summary>
 public sealed record TipoDeDocumentoDto(string Codigo, string Nombre, string Prefijo, bool AdmiteLetras);
@@ -32,7 +34,8 @@ public sealed record UpdatePoliticaDeIdentidadCommand(
     Guid TenantPublicId,
     IReadOnlyList<string> TiposAceptados,
     DateOnly? DocumentoExigidoDesde,
-    int IntentosAlActivar) : IRequest<Result<PoliticaDeIdentidadDto>>;
+    int IntentosAlActivar,
+    int? MinutosDeInactividad = null) : IRequest<Result<PoliticaDeIdentidadDto>>;
 
 public sealed class UpdatePoliticaDeIdentidadCommandValidator : AbstractValidator<UpdatePoliticaDeIdentidadCommand>
 {
@@ -44,10 +47,17 @@ public sealed class UpdatePoliticaDeIdentidadCommandValidator : AbstractValidato
             .WithMessage("Tipo de documento no válido: {PropertyValue}.");
         RuleFor(x => x.IntentosAlActivar)
             .InclusiveBetween(TenantIdentityPolicy.IntentosMinimos, TenantIdentityPolicy.IntentosMaximos);
+        RuleFor(x => x.MinutosDeInactividad!.Value)
+            .InclusiveBetween(TenantIdentityPolicy.InactividadMinimaMinutos, TenantIdentityPolicy.InactividadMaximaMinutos)
+            .When(x => x.MinutosDeInactividad is not null)
+            .WithMessage($"Los minutos de inactividad van de {TenantIdentityPolicy.InactividadMinimaMinutos} a "
+                + $"{TenantIdentityPolicy.InactividadMaximaMinutos}; vacío usa el general.")
+            .OverridePropertyName(nameof(UpdatePoliticaDeIdentidadCommand.MinutosDeInactividad));
     }
 }
 
-public sealed class GetPoliticaDeIdentidadQueryHandler(ICurrentCentralUserContext currentUser, IAdminDbContext db)
+public sealed class GetPoliticaDeIdentidadQueryHandler(ICurrentCentralUserContext currentUser, IAdminDbContext db,
+    Microsoft.Extensions.Options.IOptions<Common.Configuration.PoliticaDeSesionOptions> sesion)
     : IRequestHandler<GetPoliticaDeIdentidadQuery, Result<PoliticaDeIdentidadDto>>
 {
     public async Task<Result<PoliticaDeIdentidadDto>> Handle(GetPoliticaDeIdentidadQuery request, CancellationToken ct)
@@ -58,7 +68,7 @@ public sealed class GetPoliticaDeIdentidadQueryHandler(ICurrentCentralUserContex
 
         var politica = await db.TenantIdentityPolicies.AsNoTracking()
             .FirstOrDefaultAsync(p => p.TenantId == request.TenantPublicId, ct);
-        return Result.Success(Dto.De(request.TenantPublicId, politica));
+        return Result.Success(Dto.De(request.TenantPublicId, politica, sesion.Value.InactividadMinutos));
     }
 }
 
@@ -66,7 +76,8 @@ public sealed class UpdatePoliticaDeIdentidadCommandHandler(
     ICurrentCentralUserContext currentUser,
     IAdminDbContext db,
     AuditoriaDeIdentidad auditoria,
-    IDateTimeService clock)
+    IDateTimeService clock,
+    Microsoft.Extensions.Options.IOptions<Common.Configuration.PoliticaDeSesionOptions> sesion)
     : IRequestHandler<UpdatePoliticaDeIdentidadCommand, Result<PoliticaDeIdentidadDto>>
 {
     public async Task<Result<PoliticaDeIdentidadDto>> Handle(UpdatePoliticaDeIdentidadCommand request, CancellationToken ct)
@@ -76,7 +87,8 @@ public sealed class UpdatePoliticaDeIdentidadCommandHandler(
             return Result.Failure<PoliticaDeIdentidadDto>(guard.ErrorCode!, guard.Message!);
 
         var politica = await db.TenantIdentityPolicies.FirstOrDefaultAsync(p => p.TenantId == request.TenantPublicId, ct);
-        var anterior = Dto.De(request.TenantPublicId, politica);
+        var general = sesion.Value.InactividadMinutos;
+        var anterior = Dto.De(request.TenantPublicId, politica, general);
         if (politica is null)
         {
             politica = TenantIdentityPolicy.CreateForTenant(request.TenantPublicId);
@@ -84,14 +96,15 @@ public sealed class UpdatePoliticaDeIdentidadCommandHandler(
         }
 
         politica.Cambiar(request.TiposAceptados, request.DocumentoExigidoDesde, request.IntentosAlActivar);
+        politica.CambiarInactividad(request.MinutosDeInactividad);
         await db.SaveChangesAsync(ct);
 
-        var nueva = Dto.De(request.TenantPublicId, politica);
+        var nueva = Dto.De(request.TenantPublicId, politica, general);
         await auditoria.EnCooperativaAsync(
             request.TenantPublicId, AuditEventTypes.IdentityPolicyChanged, currentUser.CentralUserId!.Value, currentUser.Email,
             nameof(TenantIdentityPolicy), politica.PublicId,
-            new { anterior.TiposAceptados, anterior.DocumentoExigidoDesde, anterior.IntentosAlActivar },
-            new { nueva.TiposAceptados, nueva.DocumentoExigidoDesde, nueva.IntentosAlActivar },
+            new { anterior.TiposAceptados, anterior.DocumentoExigidoDesde, anterior.IntentosAlActivar, anterior.MinutosDeInactividad },
+            new { nueva.TiposAceptados, nueva.DocumentoExigidoDesde, nueva.IntentosAlActivar, nueva.MinutosDeInactividad },
             clock.UtcNow, ct);
         return Result.Success(nueva);
     }
@@ -99,10 +112,12 @@ public sealed class UpdatePoliticaDeIdentidadCommandHandler(
 
 internal static class Dto
 {
-    internal static PoliticaDeIdentidadDto De(Guid tenant, TenantIdentityPolicy? politica) => new(
+    internal static PoliticaDeIdentidadDto De(Guid tenant, TenantIdentityPolicy? politica, int inactividadGeneral) => new(
         tenant,
         (politica?.TiposAceptados() ?? TenantIdentityPolicy.TiposAceptadosDe(null)).Select(t => t.Codigo).ToList(),
         TiposDeDocumento.DeAcceso.Select(t => new TipoDeDocumentoDto(t.Codigo, t.Nombre, t.Prefijo, t.AdmiteLetras)).ToList(),
         politica?.DocumentRequiredFrom,
-        politica?.MaxActivationAttempts ?? TenantIdentityPolicy.IntentosPorDefecto);
+        politica?.MaxActivationAttempts ?? TenantIdentityPolicy.IntentosPorDefecto,
+        politica?.SessionInactivityMinutes,
+        inactividadGeneral);
 }

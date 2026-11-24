@@ -25,7 +25,7 @@
    2026-11-16 (pedido del dueño): ventana transaccional como las de Comercial y Recaudo.
    - Ocupa la pantalla: sólo las líneas se desplazan y el pie con totales, botones y atajos siempre se ve.
    - Teclas registradas en teclado.js y botones en la BarraDeAtajos: F1 ayuda, F2 buscar en el campo (Accounting.VoucherSearchMode),
-     F3 línea nueva, F4 duplicar, F6 balancear, Ctrl+Supr quitar la selección, F9 guardar borrador, F10 contabilizar (guarda,
+     F3 línea nueva, F4 tercero de la línea, Ctrl+D duplicar (2026-11-23: F4 es «tercero» en todas las ventanas), F6 balancear, Ctrl+Supr quitar la selección, F9 guardar borrador, F10 contabilizar (guarda,
      contabiliza y deja listo uno nuevo con el mismo tipo y fecha), Ctrl+P imprimir (el abierto o el último contabilizado).
    - Desde el primer F9 cada cambio se guarda solo en el borrador.
    - Los pasos y la ayuda van ocultos y se muestran con el botón «Pasos y ayuda» (el equipo lo recuerda).
@@ -247,7 +247,7 @@
     [Parameter] public Guid? Id { get; set; }
 
     private static readonly string[] TeclasRegistradas =
-        ["F2", "F3", "F4", "F6", "F9", "F10", "Ctrl+Delete", "Ctrl+P", "Ctrl+Alt+N", "Ctrl+Alt+D", "Ctrl+Alt+B"];
+        ["F2", "F3", "F4", "Ctrl+D", "F6", "F9", "F10", "Ctrl+Delete", "Ctrl+P", "Ctrl+Alt+N", "Ctrl+Alt+D", "Ctrl+Alt+B"];
 
     private const string ClaveGuia = "ingenia.comprobante.guia";
     private const string ClaveTipo = "ingenia.comprobante.tipo";
@@ -308,7 +308,9 @@
         [
             new("F2", "buscar", BuscarAsync),
             new("F3", "línea nueva", () => _lineas?.NuevaLineaAsync() ?? Task.CompletedTask),
-            new("F4", "duplicar", () => _lineas?.DuplicarAsync() ?? Task.CompletedTask, () => _lineas?.HayActiva == true, PorQueNo: () => "Elija primero una línea."),
+            // 2026-11-23 (decisión del dueño): F4 es «tercero» en todas las ventanas transaccionales; duplicar pasa a Ctrl+D.
+            new("F4", "tercero", () => _lineas?.BuscarTerceroAsync() ?? Task.CompletedTask, () => _lineas is not null),
+            new("Ctrl+D", "duplicar", () => _lineas?.DuplicarAsync() ?? Task.CompletedTask, () => _lineas?.HayActiva == true, PorQueNo: () => "Elija primero una línea."),
             new("F6", "balancear", () => _lineas?.BalancearAsync() ?? Task.CompletedTask, () => _lineas?.HayActiva == true, PorQueNo: () => "Elija primero la línea que cuadra."),
             new("Ctrl+Delete", "quitar líneas", () => _lineas?.QuitarSeleccionAsync() ?? Task.CompletedTask, () => _lineas?.HayActiva == true || _lineas?.Seleccionadas > 0,
                 TeclaVisible: "Ctrl+Supr", PorQueNo: () => "Elija primero las líneas: clic, Shift+clic o Ctrl+clic en el número."),
@@ -422,7 +424,7 @@
     public Task Tecla(string tecla) => InvokeAsync(async () =>
     {
         // Los atajos de antes siguen sirviendo (Ctrl+Alt+Supr nunca llegó al navegador: Windows lo toma).
-        tecla = tecla switch { "Ctrl+Alt+N" => "F3", "Ctrl+Alt+D" => "F4", "Ctrl+Alt+B" => "F6", _ => tecla };
+        tecla = tecla switch { "Ctrl+Alt+N" => "F3", "Ctrl+Alt+D" => "Ctrl+D", "Ctrl+Alt+B" => "F6", _ => tecla };
         if (Comandos is null) return;
         var r = await Comandos.EjecutarAsync(tecla);
         if (r.Aviso is { } aviso) await Notification.WarningAsync(aviso);

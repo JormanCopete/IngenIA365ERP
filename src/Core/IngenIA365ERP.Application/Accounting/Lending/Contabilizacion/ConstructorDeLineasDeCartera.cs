@@ -435,7 +435,21 @@ public static partial class ConstructorDeLineasDeCartera
                 if (saldo is null) continue;
                 Asentar(saldo, ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId), a.Amount);
             }
+            // 2026-11-23 (descuento condicionado): el fondo pone su parte del bien y el puente del giro la recibe junto con el capital.
+            if (x.Subsidy is { Amount: > 0m } s)
+            {
+                var parte = ParteDelFondo(x.DisbursementForm, s);
+                Asentar(Fondo(x.Dimensions, parte, x.Loan, x.DebtorPersonPublicId, s),
+                    ContraDelDesembolso(x.Dimensions, parte, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId), s.Amount);
+            }
         }
+
+        /// <summary>La parte del fondo como importe: sin concepto de Cartera (el rol no lo pide) y con la forma del giro como motivo del puente.</summary>
+        private static ConceptAmountV1 ParteDelFondo(string forma, SubsidyV1 s) =>
+            new() { Concept = R.Principal, Amount = s.Amount, ReasonCode = forma };
+
+        private Lado Fondo(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor, SubsidyV1 s) =>
+            L(R.FondoQueSubsidia, d, a, credito, deudor, motivo: Texto(s.FundCode));
 
         private void DesembolsoReversado(DesembolsoReversadoV1 x)
         {
@@ -446,6 +460,13 @@ public static partial class ConstructorDeLineasDeCartera
                     var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
                     if (saldo is null) continue;
                     Asentar(ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId), saldo, a.Amount);
+                    // 2026-11-23 (descuento condicionado): el espejo de lo que puso el fondo.
+                    if (x.Subsidy is { Amount: > 0m } s)
+                    {
+                        var parte = ParteDelFondo(x.DisbursementForm, s);
+                        Asentar(ContraDelDesembolso(x.Dimensions, parte, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId),
+                            Fondo(x.Dimensions, parte, x.Loan, x.DebtorPersonPublicId, s), s.Amount);
+                    }
                 }
                 else
                 {

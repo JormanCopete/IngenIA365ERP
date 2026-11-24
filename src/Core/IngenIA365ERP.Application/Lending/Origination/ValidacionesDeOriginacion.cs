@@ -121,7 +121,8 @@ public sealed class ValidacionesDeOriginacion(
     IBloqueosDelDeudor bloqueos,
     IAutorizacionDeDatos autorizaciones,
     CreditLimits.SaldoDeAportesVigente saldosDeAportes,
-    Payroll.ConveniosDeLibranza? convenios = null)
+    Payroll.ConveniosDeLibranza? convenios = null,
+    Common.ReglasDeParametrosDeCartera? parametros = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -165,6 +166,7 @@ public sealed class ValidacionesDeOriginacion(
 
         // -------------------------------------------------------------------------------------------- capacidad de pago --
         var capacidades = new Dictionary<int, CapacidadCalculada>();
+        var validaIngresos = !c.Corre(ApplicationCheckKind.PaymentCapacity) || await ValidaIngresosYGastosAsync(c.Linea.Id, c.Fecha, ct);
         foreach (var parte in c.Partes)
         {
             var cap = await capacidad.DePagoAsync(parte, c.Simulacion.CuotaMensual, c.Fecha, ct);
@@ -174,7 +176,16 @@ public sealed class ValidacionesDeOriginacion(
             {
                 income = cap.Ingresos, expenses = cap.Egresos, ownInstallments = cap.CuotasPropias, externalInstallments = cap.CuotasExternas,
                 simulatedInstallment = cap.CuotaSimulada, available = cap.Disponible, declared = cap.Declarada,
+                validated = validaIngresos, insufficient = cap.Declarada && !cap.Alcanza,
             };
+            // 2026-11-23: con «Originacion.ValidarIngresosYGastos» en «No» no se valida: «No aplica», sin bloquear ni subir de nivel; si lo
+            // declarado no alcanza, el detalle lo dice (insufficient) y la pantalla lo avisa.
+            if (!validaIngresos)
+            {
+                pendientes.Add(new ValidacionPendiente(parte.Id, ApplicationCheckKind.PaymentCapacity, CheckOutcome.NotApplicable, true,
+                    ErroresDeOriginacion.CodigoCapacidadNoValidada, detalle));
+                continue;
+            }
             pendientes.Add(!cap.Declarada
                 ? new ValidacionPendiente(parte.Id, ApplicationCheckKind.PaymentCapacity, CheckOutcome.Unavailable, false,
                     ErroresDeOriginacion.CodigoCapacidadDePago, detalle)
@@ -327,6 +338,18 @@ public sealed class ValidacionesDeOriginacion(
     /// Agrega las validaciones evaluadas como filas de <c>LND_CreditApplicationChecks</c> (sin guardar), con el Id de su evidencia —que ya
     /// tiene que estar guardada— y la del puntaje, si lo hubo.
     /// </summary>
+    /// <summary>
+    /// <c>Originacion.ValidarIngresosYGastos</c> a <paramref name="fecha"/>: el de la línea si lo tiene, si no el general. Sin lector (pruebas) o
+    /// ilegible = «Sí»: ante la duda se valida, como siempre.
+    /// </summary>
+    private async Task<bool> ValidaIngresosYGastosAsync(int lineaId, DateOnly fecha, CancellationToken ct)
+    {
+        if (parametros is null) return true;
+        var leido = await parametros.LeerAsync(Domain.Lending.Parameters.ParametrosDeCartera.OriginacionValidarIngresosYGastos, fecha, null,
+            Domain.Enums.Parameters.ParameterScopeKind.CreditLine, lineaId, ct);
+        return !leido.IsSuccess || leido.Value.Como<bool>();
+    }
+
     public IReadOnlyList<CreditApplicationCheck> Registrar(ValidacionesEvaluadas v, int applicationId, CheckStage etapa, DateTime instante,
         CreditScore? puntaje)
     {

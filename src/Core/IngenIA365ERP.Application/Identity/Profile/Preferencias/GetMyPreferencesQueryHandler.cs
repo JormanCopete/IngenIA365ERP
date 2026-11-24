@@ -60,7 +60,9 @@ public sealed class GetMyPreferencesQueryHandler(
             LibroAuxiliarSoloMovimiento: Valor(UserSettingKeys.LibroAuxiliarSoloMovimiento) == "si",
             // 2026-11-16: tamaño del texto y centavos del estado de cuenta (sin fila = normal y sin centavos).
             TamanoTextoEstadoDeCuenta: Valor(UserSettingKeys.TamanoTextoEstadoDeCuenta) ?? "normal",
-            DecimalesEstadoDeCuenta: Valor(UserSettingKeys.DecimalesEstadoDeCuenta) == "si"));
+            DecimalesEstadoDeCuenta: Valor(UserSettingKeys.DecimalesEstadoDeCuenta) == "si",
+            // 2026-11-23: cómo imprime la caja el recibo (sin fila = preguntar).
+            ImpresionReciboCaja: Valor(UserSettingKeys.ImpresionReciboCaja) ?? "preguntar"));
     }
 
     private IReadOnlyList<AccesoDirectoDto> LeerAccesos(string? json, Guid centralUserId)

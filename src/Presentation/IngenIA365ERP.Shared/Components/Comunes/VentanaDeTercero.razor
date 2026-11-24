@@ -1,0 +1,53 @@
+@* 2026-11-23 (pedido del dueño): F4 en las ventanas transaccionales abre la búsqueda del tercero del documento —el cliente de la venta, el
+   proveedor de la compra— en una ventana, como F2 la del producto: se escribe el documento o el nombre, ↑ ↓ recorren, Enter elige y la
+   ventana se cierra; Esc la cierra sin cambiar nada. Con FiltroRol sólo salen las personas con esa marca (proveedores). *@
+<SfDialog Visible="@Visible" VisibleChanged="@CambiarVisibilidad" Header="@Titulo" Width="640px" IsModal="true" ShowCloseIcon="true" CssClass="ventana-de-tercero">
+    <DialogTemplates>
+        <Content>
+            @if (Visible)
+            {
+                <div data-zona-teclado>
+                    <PersonSearchPicker @key="_apertura" AutoEnfocar="true" Compacto="false" ShowHelpText="false" FiltroRol="@FiltroRol"
+                                        Placeholder="Documento o nombre (mín. 2 caracteres)" SelectedChanged="@ElegidoAsync"
+                                        Ayuda="Escriba el documento o el nombre; ↑ ↓ recorren los resultados, Enter elige y Esc cierra." />
+                    @if (Ayuda is { Length: > 0 } ayuda) { <p class="texto-apoyo">@ayuda</p> }
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>«Buscar cliente (F4)», «Buscar proveedor (F4)».</summary>
+    [Parameter] public string Titulo { get; set; } = "Buscar tercero (F4)";
+
+    /// <summary>La marca que deben tener las personas que salen (p. ej. «supplier»); vacío, todas.</summary>
+    [Parameter] public string? FiltroRol { get; set; }
+
+    [Parameter] public string? Ayuda { get; set; }
+
+    /// <summary>La persona elegida; la ventana ya se cerró.</summary>
+    [Parameter] public EventCallback<PersonSearchPicker.PersonSearchItem> Elegido { get; set; }
+
+    /// <summary>Cada apertura es un buscador nuevo, vacío y con el foco.</summary>
+    private int _apertura;
+    private bool _visibleAntes;
+
+    protected override void OnParametersSet()
+    {
+        if (Visible && !_visibleAntes) _apertura++;
+        _visibleAntes = Visible;
+    }
+
+    private Task CambiarVisibilidad(bool visible) => VisibleChanged.InvokeAsync(visible);
+
+    private async Task ElegidoAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is null) return;
+        await VisibleChanged.InvokeAsync(false);
+        await Elegido.InvokeAsync(persona);
+    }
+}

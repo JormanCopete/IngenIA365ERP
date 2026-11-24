@@ -130,6 +130,11 @@ public sealed class SolicitudRequest
 
     /// <summary>K6b: en una solicitud de vivienda, si el inmueble es de interés social (elige el límite de financiación VIS).</summary>
     public bool? IsSocialHousing { get; set; }
+
+    /// <summary>2026-11-23 (descuento condicionado): el valor del bien, el proveedor y la opción de descuento.</summary>
+    public decimal? AssetValue { get; set; }
+    public Guid? SupplierPersonPublicId { get; set; }
+    public string? DiscountOptionCode { get; set; }
 }
 
 public sealed record LineaDeSolicitudDto(Guid PublicId, string Code, string Name, Guid? VersionPublicId);
@@ -145,6 +150,13 @@ public sealed record DocumentoDeSolicitudDto(Guid PublicId, string? RequirementC
     Guid AttachmentPublicId, DateOnly? DocumentDate, string? RejectionReason);
 
 /// <summary>Una validación (FR-036): clase, etapa, persona, resultado (1 pasó, 2 advertencia, 3 bloquea, 4 no aplica, 5 no disponible).</summary>
+/// <summary>2026-11-23: los códigos de validación que la pantalla reconoce (el contrato del servidor, no texto para la persona).</summary>
+public static class CodigosDeValidacion
+{
+    /// <summary>La línea o la empresa no valida ingresos y gastos (<c>Originacion.ValidarIngresosYGastos</c> = «No»).</summary>
+    public const string CapacidadNoValidada = "Lending.Capacity.NotValidated";
+}
+
 public sealed record ValidacionDeSolicitudDto(int Kind, int Stage, PersonaDeCarteraDto? Person, int Outcome, bool IsExceptionable, string? ErrorCode,
     JsonElement? Detail, string EvidenceSha256, DateTime At);
 
@@ -212,7 +224,14 @@ public sealed record SolicitudDto(
     public IReadOnlyList<CambioDeSolicitudDto> ChangesSinceReturn { get; init; } = [];
 
     public bool Edita(string grupo) => EditableGroups.Contains(grupo, StringComparer.Ordinal);
+
+    /// <summary>2026-11-23: la compra con descuento condicionado; nula si no hay.</summary>
+    public CompraConDescuentoDto? SubsidizedPurchase { get; init; }
 }
+
+/// <summary>2026-11-23: una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
+public sealed record CompraConDescuentoDto(decimal AssetValue, PersonaDeCarteraDto? Supplier, string OptionCode, string OptionName, decimal Fraction,
+    string? FundCode, decimal FundedAmount, decimal LoanAmount);
 
 /// <summary>Un dato que cambió desde la devolución: grupo, campo y valores, ya legibles.</summary>
 public sealed record CambioDeSolicitudDto(string Group, string Field, string? Before, string? After);

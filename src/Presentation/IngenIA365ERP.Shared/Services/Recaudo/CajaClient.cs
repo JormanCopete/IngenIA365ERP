@@ -17,7 +17,11 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 /// </summary>
 public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Code, string Name, bool RequiresThirdParty, bool RequiresCrossDocument,
     bool RequiresInvoice, decimal? MaxAmount, int ThirdPartyMode = 1, Guid? DefaultThirdPartyPublicId = null, string? DefaultThirdPartyName = null,
-    decimal? SuggestedAmount = null);
+    decimal? SuggestedAmount = null, bool CollectedForThirdParty = false, bool IsAdvance = false);
+
+/// <summary>2026-11-23: un anticipo de concepto disponible de la persona, con el medio con que la caja lo cruza.</summary>
+public sealed record AnticipoDisponibleDto(Guid MiscConceptPublicId, string ConceptCode, string ConceptName, decimal Balance, Guid? MeansPublicId, string? MeansCode,
+    string? MeansName);
 
 public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number, string CreditLineName, int Role, int DaysPastDue, decimal DueToday,
     decimal CycleInstallment, decimal PastDue, decimal PayoffAmount, IReadOnlyList<int> AdmittedModalities, IReadOnlyList<string> BlockReasons,
@@ -82,7 +86,8 @@ public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Inst
 /// </summary>
 public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, string? TaxId, bool IsAssociate, ListadoPagableDto? Obligations,
     CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices,
-    IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true);
+    IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true, bool PreselectDueOnSelect = false,
+    IReadOnlyList<AnticipoDisponibleDto>? Advances = null);
 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,

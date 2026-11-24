@@ -54,4 +54,7 @@ public sealed record DesembolsoReversadoV1
 
     /// <summary>Los <c>PagoReversado</c> de la recogida nacidos en este guardado porque el crédito se anuló (C11).</summary>
     public IReadOnlyList<OriginalFactRefV1> PayoffReversals { get; init; } = [];
+
+    /// <summary>2026-11-23: la parte del fondo del desembolso que se reversa (el espejo de <see cref="CreditoDesembolsadoV1.Subsidy"/>).</summary>
+    public SubsidyV1? Subsidy { get; init; }
 }

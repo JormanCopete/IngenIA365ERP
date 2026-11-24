@@ -254,7 +254,7 @@ internal sealed class OriginacionDePrueba : IDisposable
     public CapacidadDePago Capacidad() => new(Db, G.Valores);
     public ValidacionesDeOriginacion Validaciones() =>
         new(Db, Listas, new GuardiaDeCanalesExternos(Options.Create(Opciones)), Capacidad(), Exposicion(), Cupos, Concentracion(),
-            new VinculadosVigentes(Db), Bloqueos, Autorizaciones, SaldosDeAportes(), Convenios());
+            new VinculadosVigentes(Db), Bloqueos, Autorizaciones, SaldosDeAportes(), Convenios(), Parametros());
     /// <summary>K2 (T0815): los convenios de libranza, para la capacidad de descuento de una solicitud por pagaduría.</summary>
     public Application.Lending.Payroll.ConveniosDeLibranza Convenios() => new(Db, Parametros(), G.Valores, G.Perfil);
     public Application.Lending.Origination.CreditLimits.SaldoDeAportesVigente SaldosDeAportes() =>

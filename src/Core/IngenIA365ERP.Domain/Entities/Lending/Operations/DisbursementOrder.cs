@@ -47,6 +47,12 @@ public class DisbursementOrder : AuditableEntity
     /// <summary><c>GrossAmount − PayoffAmount</c>, mayor que cero (<c>CK_LND_DisbursementOrders_Net</c>).</summary>
     public decimal NetAmount { get; set; }
 
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado): la parte de <see cref="GrossAmount"/> que paga un fondo y no el crédito. El bruto es el valor del bien
+    /// que se gira al proveedor: el capital más esta parte. Cero en los demás.
+    /// </summary>
+    public decimal SubsidyAmount { get; set; }
+
     public DateOnly ScheduledDate { get; set; }
 
     public DisbursementOrderStatus Status { get; set; } = DisbursementOrderStatus.Issued;
