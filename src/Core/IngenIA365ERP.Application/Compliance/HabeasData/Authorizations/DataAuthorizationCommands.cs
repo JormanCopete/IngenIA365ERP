@@ -3,9 +3,11 @@ using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -97,8 +99,9 @@ public sealed class ListDataAuthorizationsQueryHandler(IApplicationDbContext db,
 /// Registra la autorización del titular para una finalidad (feature 013, T69 a, T0086; <c>POST /api/compliance/habeas-data/authorizations</c>,
 /// <c>Compliance.HabeasData.RecordConsent</c>; contracts/api.md §22.2). La escribe <see cref="IAutorizacionDeDatos.AgregarAsync"/> y se
 /// guarda aquí, en un solo <c>SaveChanges</c>. Sin versión de política vigente para la finalidad, <c>Compliance.HabeasData.NoCurrentPolicy</c>.
-/// La evidencia es un adjunto de dueño <c>DataAuthorization</c> sobre la persona (<c>AdjuntosDeModulo</c>, T81), disponible; sólo una
-/// autorización migrada puede ir sin ella (FR-006). (nuevo)
+/// La evidencia es un adjunto de dueño <c>DataAuthorization</c> sobre la persona (<c>AdjuntosDeModulo</c>, T81), disponible. La migrada
+/// va sin ella (FR-006); la de tratamiento general o trámite de crédito también, salvo que la cooperativa la exija
+/// (<see cref="ParametrosDeCartera.AutorizacionesExigenEvidencia"/>, 2026-11-24); las de centrales y canal de contacto la exigen siempre. (nuevo)
 /// </summary>
 public sealed record RecordDataAuthorizationCommand(
     Guid PersonPublicId,
@@ -133,7 +136,8 @@ public sealed class RecordDataAuthorizationCommandValidator : AbstractValidator<
     }
 }
 
-public sealed class RecordDataAuthorizationCommandHandler(IApplicationDbContext db, IAutorizacionDeDatos autorizaciones, IDateTimeService reloj)
+public sealed class RecordDataAuthorizationCommandHandler(
+    IApplicationDbContext db, IAutorizacionDeDatos autorizaciones, IDateTimeService reloj, ILectorDeParametros parametros)
     : IRequestHandler<RecordDataAuthorizationCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(RecordDataAuthorizationCommand request, CancellationToken ct)
@@ -153,8 +157,13 @@ public sealed class RecordDataAuthorizationCommandHandler(IApplicationDbContext 
         }
         else if (request.Origin != DataAuthorizationOrigin.Migration)
         {
-            return Result.Failure<Guid>(new Error(HabeasDataErrorCodes.EvidenceRequired,
-                "Adjunte la evidencia de la autorización (el formato firmado o la grabación): sólo una autorización migrada puede registrarse sin ella."));
+            if (ExigeSiempre(request.Purpose))
+                return Result.Failure<Guid>(new Error(HabeasDataErrorCodes.EvidenceRequired,
+                    "Adjunte la evidencia de la autorización (el formato firmado o la grabación): la consulta y el reporte a centrales y el canal "
+                    + "de contacto la exigen siempre."));
+            if (await ExigeEvidenciaAsync(ct))
+                return Result.Failure<Guid>(new Error(HabeasDataErrorCodes.EvidenceRequired,
+                    "Adjunte la evidencia de la autorización (el formato firmado o la grabación): la cooperativa la exige en Parámetros de Cartera."));
         }
 
         var agregada = await autorizaciones.AgregarAsync(new AutorizacionAAgregar(
@@ -164,5 +173,20 @@ public sealed class RecordDataAuthorizationCommandHandler(IApplicationDbContext 
 
         await db.SaveChangesAsync(ct);
         return agregada;
+    }
+
+    /// <summary>
+    /// Lo que habilita una autorización «con evidencia» (centrales y mensajes, FR-006): <c>HasEvidence</c> se deriva del origen, así que una no
+    /// migrada sin soporte contaría como probada.
+    /// </summary>
+    private static bool ExigeSiempre(DataAuthorizationPurpose finalidad) => finalidad is DataAuthorizationPurpose.CreditBureauQuery
+        or DataAuthorizationPurpose.CreditBureauReport or DataAuthorizationPurpose.ContactChannel;
+
+    /// <summary>El parámetro de la cooperativa; si no se puede leer, se exige (lo seguro).</summary>
+    private async Task<bool> ExigeEvidenciaAsync(CancellationToken ct)
+    {
+        var leido = await parametros.LeerComoAsync<bool>(ParametrosDeCartera.Modulo, ParametrosDeCartera.AutorizacionesExigenEvidencia,
+            reloj.HoyLocal, ct: ct);
+        return leido.IsFailure || leido.Value;
     }
 }
