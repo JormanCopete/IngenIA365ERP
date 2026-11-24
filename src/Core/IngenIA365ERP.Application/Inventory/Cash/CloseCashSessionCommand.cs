@@ -50,6 +50,10 @@ public sealed record CloseCashSessionCommand(Guid CashSessionPublicId, IReadOnly
     : IRequest<Result<CloseCashSessionResultDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>2026-11-23, caja única: el cierre que hace el arqueo de Recaudo. Sólo así se cierra una sesión vinculada; no viaja en el cuerpo.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool DesdeLaCajaUnica { get; init; }
 }
 
 public sealed class CloseCashSessionCommandValidator : AbstractValidator<CloseCashSessionCommand>
@@ -128,6 +132,7 @@ public sealed class CloseCashSessionCommandHandler(
         var sesion = await sesiones.VisibleAsync(request.CashSessionPublicId, seguir: true, ct);
         if (sesion is null) return Falla(ErroresDeCaja.SessionNotFound());
         if (!sesion.EstaAbierta || !await toque.TocarAsync(sesion.Id, reloj.UtcNow, ct)) return Falla(ErroresDelPos.CashSessionNotOpen());
+        if (sesion.LinkedSessionPublicId is not null && !request.DesdeLaCajaUnica) return Falla(ErroresDeCaja.ClosesWithReceipts());
 
         // (2) Ventas y movimientos en curso.
         var borradores = await db.InventoryDocuments.AsNoTracking()

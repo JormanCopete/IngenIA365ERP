@@ -39,11 +39,17 @@
                                 <option value="@c.PublicId">@c.CollectionPointCode · @c.Code · @c.Name</option>
                             }
                         </select>
+                        <span class="hint">La caja donde va a recibir el dinero hoy.</span>
                     </label>
                 </div>
-                <p class="hint">Cuente la base por denominaciones.</p>
-                <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="_base" />
-                <p>Base contada: <strong>@Total(_base).ToString("N0")</strong></p>
+                @* 2026-11-23: la base con un solo valor o billete por billete, según Caja.FormaDeConteoDelEfectivo. *@
+                <ConteoDelEfectivo Forma="@_forma" @bind-PorBilletes="_basePorBilletes" @bind-ValorGlobal="_baseGlobal" Etiqueta="Base"
+                                   Ayuda="El efectivo que recibe para dar vueltas; no es recaudo. Si la caja trabaja con fondo fijo, tiene que ser igual al fondo. Sin efectivo, deje 0.">
+                    <Billetes>
+                        <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="_base" />
+                        <p>Base contada: <strong>@Total(_base).ToString("N0")</strong></p>
+                    </Billetes>
+                </ConteoDelEfectivo>
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrEmpty(_cajaElegida))" OnClick="@AbrirAsync">Abrir la sesión</SfButton>
                 </div>
@@ -55,6 +61,20 @@
                 <h4>Caja @_actual.CollectionPointCode · @_actual.CashBoxCode</h4>
                 <p>@SesionesClient.Estado(_actual.Status) · base @_actual.OpeningBase.ToString("N0") · abierta @_actual.OpenedAt.ToLocalTime().ToString("g")
                     @(_actual.BlindCount ? " · arqueo ciego" : "")</p>
+                @* 2026-11-23, caja única: la caja del punto de venta abre y cierra con esta sesión. *@
+                @if (_cajaUnica is { Enabled: true, PosCashRegisterPublicId: not null } cu)
+                {
+                    @if (cu.PosSessionOpen)
+                    {
+                        <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode de @cu.PointOfSaleName está abierta con esta sesión. Venda allí sin abrir
+                            otra caja; al «Arquear y cerrar» aquí se cierra sola y se cuenta todo junto.</p>
+                    }
+                    else if (_actual.Status == 1)
+                    {
+                        <p class="aviso aviso-alerta">Caja única: la caja del punto de venta de esta caja no está abierta.
+                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@AbrirCajaDelPuntoDeVentaAsync">Abrir la caja del punto de venta</SfButton></p>
+                    }
+                }
                 @if (_actual.Status == 5)
                 {
                     @* 2026-11-16: la sesión olvidada no recibe operaciones; la cierra un supervisor con testigo desde «Cerrar olvidada», o el mismo cajero
@@ -246,6 +266,11 @@
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @* 2026-11-23: cada medio muestra sólo su forma de contarlo, con una línea de ayuda; el motivo aparece cuando hay diferencia. *@
+                @if (_esperadoDelConteo is null)
+                {
+                    <p class="hint">Cuente sin ver lo esperado. Si hay diferencia, se le pedirá el motivo.</p>
+                }
                 @if (_olvidada || _sorpresivo)
                 {
                     <label class="campo">Testigo@(_olvidada ? " *" : "")
@@ -253,22 +278,30 @@
                             <option value="">Elija el testigo…</option>
                             @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
                         </select>
+                        <span class="hint">Otra persona que está presente mientras se cuenta.</span>
                     </label>
                 }
                 @if (_sorpresivo)
                 {
-                    <label class="campo">Acta (adjunto) * <input class="e-input" @bind="_acta" placeholder="Identificador del adjunto" /></label>
+                    <label class="campo">Acta (adjunto) * <input class="e-input" @bind="_acta" placeholder="Identificador del adjunto" />
+                        <span class="hint">El acta firmada del arqueo sorpresivo, ya subida como adjunto.</span>
+                    </label>
                 }
-                @foreach (var m in _sesionDelConteo?.Means ?? [])
+                @foreach (var m in (_sesionDelConteo?.Means ?? []).Where(x => x.CountMethod != SinArqueo))
                 {
                     var id = m.PaymentMeansPublicId;
                     <h5>@m.Code · @m.Name</h5>
                     @if (m.Class == 1)
                     {
-                        <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="@CantidadesDe(id)" />
+                        <ConteoDelEfectivo Forma="@_forma" PorBilletes="@PorBilletesDe(id)" PorBilletesChanged="@(v => _porBilletes[id] = v)"
+                                           ValorGlobal="@TotalDe(id)" ValorGlobalChanged="@(v => _totales[id] = v ?? 0m)"
+                                           Ayuda="Todo el efectivo que hay en la caja, incluida la base.">
+                            <Billetes><ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="@CantidadesDe(id)" /></Billetes>
+                        </ConteoDelEfectivo>
                     }
                     else if (m.CountMethod == MetodoPorLote)
                     {
+                        <p class="hint">Un renglón por cada cierre de lote del datáfono: el número del lote y su valor.</p>
                         @* Feature 015, R1 (T0358; FR-031): las tarjetas se arquean por lote de datáfono. *@
                         @foreach (var lote in LotesDe(id))
                         {
@@ -287,9 +320,23 @@
                     }
                     else
                     {
-                        <label class="campo">Total contado <input class="e-input" type="number" min="0" value="@TotalDe(id)" @onchange="@(e => _totales[id] = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0m)" /></label>
+                        <label class="campo">Total contado
+                            <CampoDeValor Valor="@TotalDe(id)" ValorChanged="@(v => _totales[id] = v ?? 0m)" />
+                            <span class="hint">La suma de los soportes de este medio: comprobantes, consignaciones o cheques.</span>
+                        </label>
                     }
-                    <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" value="@MotivoDe(id)" @onchange="@(e => _motivos[id] = e.Value?.ToString())" maxlength="500" /></label>
+                    var esperado = EsperadoDe(id);
+                    var diferencia = esperado is null ? (decimal?)null : ContadoDe(m) - esperado.Value;
+                    @if (esperado is not null)
+                    {
+                        <p class="@(diferencia == 0m ? "texto-tenue" : "texto-alerta")">Esperado @esperado.Value.ToString("N0") · contado @ContadoDe(m).ToString("N0") · diferencia @diferencia!.Value.ToString("N0")</p>
+                    }
+                    @if ((diferencia is not null && diferencia != 0m) || (esperado is null && _pedirMotivos) || !string.IsNullOrEmpty(MotivoDe(id)))
+                    {
+                        <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" value="@MotivoDe(id)" @onchange="@(e => _motivos[id] = e.Value?.ToString())" maxlength="500" />
+                            <span class="hint">Qué pasó: por ejemplo, un billete falso o un vuelto mal dado. Si este medio no tiene diferencia, déjelo vacío.</span>
+                        </label>
+                    }
                 }
             </IndicadorDeCarga>
         </Content>
@@ -368,6 +415,14 @@
     private string _cajaElegida = "", _contraparte = "", _segundoCustodio = "", _testigo = "", _desde = "", _hacia = "", _soporte = "", _acta = "", _medioDeAjuste = "";
     private string? _sello, _motivo, _huella, _motivoDeAprobacion;
     private int _claseDeMovimiento = 3, _tratamiento = 1, _claseDeAjuste = 1;
+    // 2026-11-23: Caja.FormaDeConteoDelEfectivo y lo que eligió quien cuenta.
+    private string _forma = FormasDeConteo.AElegir;
+    private bool _basePorBilletes, _pedirMotivos;
+    private decimal? _baseGlobal;
+    private readonly Dictionary<Guid, bool> _porBilletes = [];
+    private IReadOnlyList<EsperadoDeMedioDto>? _esperadoDelConteo;
+    private const int SinArqueo = 4;
+    private CajaUnicaDto? _cajaUnica;
     private decimal _valor;
     private bool _movimientoVisible, _reclasificacionVisible, _conteoVisible, _diferenciasVisible, _ajusteVisible, _olvidada, _sorpresivo;
     private Guid? _aprobacion;
@@ -381,6 +436,8 @@
             if (d.IsSuccess && d.Value is not null) _denominaciones = d.Value.Where(x => x.IsActive).OrderByDescending(x => x.Value).ToList();
             var c = await Configuracion.CajasAsync();
             if (c.IsSuccess && c.Value is not null) _cajas = c.Value;
+            if (_cajas.Count == 1) _cajaElegida = _cajas[0].PublicId.ToString();
+            _forma = await Cliente.FormaDeConteoAsync();
             var u = await Configuracion.UsuariosAsync();
             if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
         }
@@ -394,8 +451,11 @@
             var r = await Cliente.ActualAsync();
             _actual = r.IsSuccess ? r.Value : null;
             _esperado = null;
+            _cajaUnica = null;
             if (_actual is not null)
             {
+                var cu = await Cliente.CajaUnicaAsync(_actual.PublicId);
+                _cajaUnica = cu.IsSuccess ? cu.Value : null;
                 _desde = _actual.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
                 _hacia = _actual.Means.Skip(1).FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
             }
@@ -445,10 +505,13 @@
     {
         if (!Guid.TryParse(_cajaElegida, out var caja)) return;
         using var g = _guardado.Iniciar();
-        var r = await Cliente.AbrirAsync(new AbrirSesionRequest(caja, Billetes(_base)), _clave);
+        var r = FormasDeConteo.PorBilletes(_forma, _basePorBilletes)
+            ? await Cliente.AbrirAsync(new AbrirSesionRequest(caja, Billetes(_base)), _clave)
+            : await Cliente.AbrirAsync(new AbrirSesionRequest(caja, [], _baseGlobal ?? 0m), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la sesión."); return; }
         _clave = new ClaveDeOperacion();
         _base.Clear();
+        _baseGlobal = null;
         await Notification.SuccessAsync("Sesión abierta.");
         await CargarAsync();
     }
@@ -532,10 +595,60 @@
         _totales.Clear();
         _motivos.Clear();
         _lotes.Clear();
+        _porBilletes.Clear();
+        _pedirMotivos = false;
+        _esperadoDelConteo = null;
+        _cajaDelConteo = null;
         _testigo = "";
         _clave = new ClaveDeOperacion();
         _conteoVisible = true;
         if (sesion.Means.Any(m => m.CountMethod == MetodoPorLote) && _datafonos.Count == 0) _ = CargarDatafonosAsync();
+        if (!sesion.BlindCount) _ = CargarEsperadoDelConteoAsync(sesion);
+    }
+
+    /// <summary>Lo esperado por medio para mostrar la diferencia mientras se cuenta (sin arqueo ciego y con permiso de verlo).</summary>
+    private async Task CargarEsperadoDelConteoAsync(SesionDeCajaDto sesion)
+    {
+        var cu = await Cliente.CajaUnicaAsync(sesion.PublicId);
+        _cajaDelConteo = cu.IsSuccess ? cu.Value : null;
+        var r = await Cliente.EsperadoAsync(sesion.PublicId);
+        if (r.IsSuccess && r.Value is { Hidden: false } e && _sesionDelConteo?.PublicId == sesion.PublicId)
+        {
+            _esperadoDelConteo = e.Means;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Lo esperado del medio; con caja única, más lo que lleva la caja del punto de venta (al cerrar entra a esta sesión).</summary>
+    private decimal? EsperadoDe(Guid medio)
+    {
+        var propio = _esperadoDelConteo?.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected;
+        if (propio is null) return null;
+        var delPunto = _cajaDelConteo is { PosSessionOpen: true } cu ? cu.Means.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected ?? 0m : 0m;
+        return propio + delPunto;
+    }
+
+    private CajaUnicaDto? _cajaDelConteo;
+
+    private async Task AbrirCajaDelPuntoDeVentaAsync()
+    {
+        if (_actual is null) return;
+        using var g = _guardado.Iniciar();
+        var r = await Cliente.AbrirCajaDelPuntoDeVentaAsync(_actual.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja del punto de venta."); return; }
+        await Notification.SuccessAsync("Caja del punto de venta abierta.");
+        await CargarAsync();
+    }
+
+    private bool PorBilletesDe(Guid medio) => _porBilletes.GetValueOrDefault(medio);
+
+    /// <summary>Lo contado de un medio como lo va a leer el servidor.</summary>
+    private decimal ContadoDe(MedioDeSesionDto m)
+    {
+        var id = m.PaymentMeansPublicId;
+        if (m.Class == 1) return FormasDeConteo.PorBilletes(_forma, PorBilletesDe(id)) ? Total(CantidadesDe(id)) : TotalDe(id);
+        if (m.CountMethod == MetodoPorLote && LotesContados(id) is { } lotes) return lotes.Sum(l => l.Amount);
+        return TotalDe(id);
     }
 
     private void AbrirSorpresivo(SesionDeCajaDto sesion)
@@ -553,7 +666,9 @@
 
     private IReadOnlyList<ConteoDeMedioRequest> Conteos() =>
         (_sesionDelConteo?.Means ?? []).Select(m => m.Class == 1
-            ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, Denominations: Billetes(CantidadesDe(m.PaymentMeansPublicId)), Reason: MotivoDe(m.PaymentMeansPublicId))
+            ? FormasDeConteo.PorBilletes(_forma, PorBilletesDe(m.PaymentMeansPublicId))
+                ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, Denominations: Billetes(CantidadesDe(m.PaymentMeansPublicId)), Reason: MotivoDe(m.PaymentMeansPublicId))
+                : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))
             : m.CountMethod == MetodoPorLote && LotesContados(m.PaymentMeansPublicId) is { } lotes
                 ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, TerminalBatches: lotes, Reason: MotivoDe(m.PaymentMeansPublicId))
                 : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))).ToList();
@@ -576,6 +691,13 @@
         else
         {
             r = await Cliente.ContarAsync(_sesionDelConteo.PublicId, new ConteoRequest(Conteos()), _clave);
+        }
+        if (r.ErrorCode == "Receipts.Count.ReasonRequired")
+        {
+            // En el arqueo ciego la diferencia se sabe aquí: se muestran los motivos para escribirlos.
+            _pedirMotivos = true;
+            await Notification.WarningAsync(r.ErrorMessage ?? "Hay diferencia: escriba el motivo.");
+            return;
         }
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar lo contado."); return; }
         _clave = new ClaveDeOperacion();

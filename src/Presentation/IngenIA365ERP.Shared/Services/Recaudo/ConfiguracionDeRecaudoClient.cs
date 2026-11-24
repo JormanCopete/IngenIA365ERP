@@ -52,6 +52,11 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
     public Task<ResultadoDeInventario<CajaDeRecaudoDto>> EditarCajaAsync(Guid id, EditarCajaRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CajaDeRecaudoDto>(HttpMethod.Put, $"{Base}/cash-boxes/{id}", r, clave, ct);
 
+    /// <summary>2026-11-23, caja única: la caja del punto de venta que abre y cierra con esta caja (nula: ninguna).</summary>
+    public Task<ResultadoDeInventario<CajaDeRecaudoDto>> VincularCajaDelPuntoDeVentaAsync(Guid id, Guid? cajaDelPuntoDeVenta, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CajaDeRecaudoDto>(HttpMethod.Put, $"{Base}/cash-boxes/{id}/point-of-sale-register", new { PosCashRegisterPublicId = cajaDelPuntoDeVenta }, clave, ct);
+
     public Task<ResultadoDeInventario<CajaDeRecaudoDto>> InactivarCajaAsync(Guid id, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CajaDeRecaudoDto>(HttpMethod.Post, $"{Base}/cash-boxes/{id}/inactivate", null, clave, ct);
 

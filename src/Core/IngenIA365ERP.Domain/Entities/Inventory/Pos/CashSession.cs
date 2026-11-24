@@ -61,6 +61,12 @@ public class CashSession : AuditableEntity
     /// <summary>Copia de <c>Caja.UnaSesionPorCajero</c>.</summary>
     public bool ExclusiveCashier { get; init; }
 
+    /// <summary>
+    /// 2026-11-23, caja única: la sesión de Recaudo (<c>RCD_CashSessions.PublicId</c>) a la que está vinculada. Abre con base cero, no se cierra por su
+    /// cuenta —la cierra el arqueo de Recaudo, cuadrada, y su efectivo pasa a esa sesión— y su base vive en Recaudo. Nula: sesión independiente.
+    /// </summary>
+    public Guid? LinkedSessionPublicId { get; init; }
+
     public CashSessionStatus Status { get; private set; } = CashSessionStatus.Open;
 
     public DateTime LastActivityAt { get; set; }

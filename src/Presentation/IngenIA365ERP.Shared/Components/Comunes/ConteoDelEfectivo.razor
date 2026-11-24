@@ -1,0 +1,68 @@
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+@* 2026-11-23 (pedido del dueño): el efectivo se cuenta como lo pida la cooperativa (Caja.FormaDeConteoDelEfectivo): billete por billete, con
+   un solo valor, o a elección de quien cuenta. Lo usan la caja de Recaudo y la del punto de venta al abrir y al arquear. El conteo por
+   billetes lo pone cada pantalla (Billetes), porque cada módulo tiene su componente de denominaciones. (nuevo) *@
+<div class="conteo-del-efectivo">
+    @if (Forma == FormasDeConteo.AElegir)
+    {
+        <div class="toolbar" role="radiogroup" aria-label="Cómo contar el efectivo">
+            <label class="campo-check"><input type="radio" name="@_grupo" checked="@(!PorBilletes)" @onchange="@(() => ElegirAsync(false))" /> Un solo valor</label>
+            <label class="campo-check"><input type="radio" name="@_grupo" checked="@PorBilletes" @onchange="@(() => ElegirAsync(true))" /> Billete por billete</label>
+        </div>
+    }
+    @if (CuentaPorBilletes)
+    {
+        <p class="hint">Escriba cuántos billetes y monedas hay de cada valor; el total se suma solo.</p>
+        @Billetes
+    }
+    else
+    {
+        <label class="campo">@Etiqueta
+            <CampoDeValor Valor="@ValorGlobal" ValorChanged="@CambiarValorAsync" Ayuda="@Ayuda" Placeholder="0" />
+        </label>
+    }
+    @if (!string.IsNullOrEmpty(Ayuda))
+    {
+        <p class="hint">@Ayuda</p>
+    }
+</div>
+
+@code {
+    private readonly string _grupo = "conteo-" + Guid.NewGuid().ToString("N");
+
+    /// <summary><see cref="FormasDeConteo"/>: la que fijó la cooperativa.</summary>
+    [Parameter] public string Forma { get; set; } = FormasDeConteo.AElegir;
+
+    /// <summary>Con <see cref="FormasDeConteo.AElegir"/>, lo que eligió quien cuenta.</summary>
+    [Parameter] public bool PorBilletes { get; set; }
+
+    [Parameter] public EventCallback<bool> PorBilletesChanged { get; set; }
+
+    [Parameter] public decimal? ValorGlobal { get; set; }
+
+    [Parameter] public EventCallback<decimal?> ValorGlobalChanged { get; set; }
+
+    /// <summary>El conteo por denominaciones del módulo.</summary>
+    [Parameter] public RenderFragment? Billetes { get; set; }
+
+    [Parameter] public string Etiqueta { get; set; } = "Efectivo contado";
+
+    /// <summary>Para qué es el valor, en una línea.</summary>
+    [Parameter] public string? Ayuda { get; set; }
+
+    /// <summary>Si en definitiva se cuenta billete por billete.</summary>
+    public bool CuentaPorBilletes => FormasDeConteo.PorBilletes(Forma, PorBilletes);
+
+    private async Task ElegirAsync(bool porBilletes)
+    {
+        PorBilletes = porBilletes;
+        await PorBilletesChanged.InvokeAsync(porBilletes);
+    }
+
+    private async Task CambiarValorAsync(decimal? valor)
+    {
+        ValorGlobal = valor;
+        await ValorGlobalChanged.InvokeAsync(valor);
+    }
+}
