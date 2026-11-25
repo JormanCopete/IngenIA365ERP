@@ -76,18 +76,21 @@ public sealed class EmisionDeSolicitudDeConector(
             return null;
         }
 
-        var vehiculo = cargo.Vehicle ?? await db.Vehicles.AsNoTracking().FirstAsync(v => v.Id == cargo.VehicleId, ct);
-        var propietario = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == cargo.OwnerPersonId, ct);
+        // Un vehículo externo (vendido sin estar en el parque) se avisa con el lateral digitado; placa y número interno van vacíos.
+        var vehiculo = cargo.Vehicle ?? (cargo.VehicleId is int vehiculoId ? await db.Vehicles.AsNoTracking().FirstAsync(v => v.Id == vehiculoId, ct) : null);
+        var propietario = cargo.OwnerPersonId is int deudorId
+            ? await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == deudorId, ct)
+            : null;
         PeriodoDeServicio.TryParse(cargo.Period, out var periodo);
         var fecha = pago.Fecha ?? reloj.HoyLocal;
 
         var variables = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["vehiculo.placa"] = vehiculo.Plate,
-            ["vehiculo.numeroInterno"] = vehiculo.InternalNumber,
-            ["vehiculo.radioMovil"] = vehiculo.RadioCode ?? string.Empty,
-            ["propietario.documento"] = propietario.TaxId,
-            ["propietario.nombre"] = NombreVisible.De(propietario),
+            ["vehiculo.placa"] = vehiculo?.Plate ?? string.Empty,
+            ["vehiculo.numeroInterno"] = vehiculo?.InternalNumber ?? string.Empty,
+            ["vehiculo.radioMovil"] = vehiculo is null ? cargo.VehicleReference ?? string.Empty : vehiculo.RadioCode ?? string.Empty,
+            ["propietario.documento"] = propietario?.TaxId ?? string.Empty,
+            ["propietario.nombre"] = propietario is null ? string.Empty : NombreVisible.De(propietario),
             ["servicio.codigo"] = servicio.ProductCode,
             ["servicio.nombre"] = servicio.Name,
             ["periodo.inicio"] = periodo.Inicio.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -120,7 +123,7 @@ public sealed class EmisionDeSolicitudDeConector(
 
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Operation, cargo.PublicId, ClaseDeOrigen, ModulosDeOrigen.Transporte, cargo.InvoiceNumber, fecha, sucursal,
-                PersonPublicId: propietario.PublicId),
+                PersonPublicId: propietario?.PublicId),
             ClavesDeEvento.ConfirmacionPor(cargo.PublicId),
             [contenido],
             new ModoDeEntrega.Sellado(DeliveryMode.Always)), ct);

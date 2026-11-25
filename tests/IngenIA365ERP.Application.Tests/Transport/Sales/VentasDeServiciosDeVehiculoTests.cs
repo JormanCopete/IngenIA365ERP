@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Transport.Notifications;
 using IngenIA365ERP.Application.Transport.Sales;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Core.Connectors;
 using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Transport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -103,9 +104,9 @@ public class VentasDeServiciosDeVehiculoTests
 
     [Theory]
     [InlineData("RET111")]
-    [InlineData("303")]
     [InlineData("NOEXISTE")]
-    public async Task Un_vehiculo_retirado_o_inexistente_no_sirve(string digitado)
+    [InlineData("12345678901")]
+    public async Task Una_placa_que_no_esta_en_el_parque_no_sirve(string digitado)
     {
         await SembrarAsync();
 
@@ -113,5 +114,51 @@ public class VentasDeServiciosDeVehiculoTests
 
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Transport.Sale.VehicleNotFound");
+    }
+
+    /// <summary>2026-11-25: los servicios también se venden a vehículos que no son de la cooperativa; se identifican por el lateral (números).</summary>
+    [Theory]
+    [InlineData("618", "618")]
+    [InlineData(" 7 ", "7")]
+    [InlineData("303", "303")] // el lateral de un vehículo retirado ya no es del parque
+    [InlineData("1234567890", "1234567890")]
+    public async Task Un_numero_fuera_del_parque_es_el_lateral_de_un_vehiculo_externo(string digitado, string guardado)
+    {
+        await SembrarAsync();
+
+        var r = await Puerto().ResolverAsync(_radio, digitado, CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Valor.Should().Be(guardado);
+        r.Value.Etiqueta.Should().Contain("fuera del parque");
+    }
+
+    [Fact]
+    public async Task El_cargo_de_un_vehiculo_externo_avisa_con_el_lateral_digitado()
+    {
+        _db.Branches.Add(new Branch { Name = "Principal" });
+        var conector = new Connector { Code = "RADIO", Name = "Radio", IsEnabled = true, CurrentVersionNumber = 1 };
+        conector.Versions.Add(new ConnectorVersion { Number = 1, BaseUrl = "https://proveedor.example.com", DefinitionJson = "{}", DefinitionSha256 = "x" });
+        var cargo = new ServiceCharge
+        {
+            VehicleReference = "618", Service = new TransportService { ProductCode = "RADIO", Name = "Radio", Priority = 1, Connector = conector },
+            Period = "202611", Origin = ChargeOrigin.Sale, InvoicePublicId = Guid.NewGuid(), InvoiceNumber = "FV-1", InvoiceLinePublicId = Guid.NewGuid(),
+            Amount = 40_000m, Route = ChargeRoute.Cash, Status = ChargeStatus.Paid,
+        };
+        _db.ServiceCharges.Add(cargo);
+        await _db.SaveChangesAsync();
+        var actor = Substitute.For<IActorActual>();
+        actor.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(new IngenIA365ERP.Application.Common.Execution.Actor(
+            Domain.Enums.Integration.ActorKind.Process, null, null, null, "Proceso de integración", null,
+            Domain.Enums.Integration.ExecutionChannel.Process, "Tarea:integracion", null, null));
+        var emision = new EmisionDeSolicitudDeConector(_db, new EmisorDeMensajes(_db, actor, _reloj), new FacturasDeServicios(_db),
+            _reloj, NullLogger<EmisionDeSolicitudDeConector>.Instance);
+
+        var envio = await emision.EmitirAsync(cargo, new PagoQueSalda("FV-1", Hoy), CancellationToken.None);
+        await _db.SaveChangesAsync();
+
+        envio.Should().NotBeNull();
+        var carga = _db.IntegrationMessages.Should().ContainSingle().Subject.PayloadJson;
+        carga.Should().Contain("\"vehiculo.radioMovil\":\"618\"").And.Contain("\"vehiculo.placa\":\"\"");
     }
 }
