@@ -211,6 +211,10 @@ public class AccountCommandsTests
         var cartera = await buscador.Handle(new SearchAccountsQuery("Caja", "CAR"), CancellationToken.None);
         cartera.Value.Select(c => c.Code).Should().Equal("11050503");
 
+        // Sin distinguir mayúsculas: el plan del CUIF viene en mayúsculas y nadie escribe así al buscar (2026-11-24).
+        var minusculas = await buscador.Handle(new SearchAccountsQuery("caja", "CAR"), CancellationToken.None);
+        minusculas.Value.Select(c => c.Code).Should().Equal("11050503");
+
         var todas = await buscador.Handle(new SearchAccountsQuery("11", OnlyMovement: false), CancellationToken.None);
         todas.Value.Select(c => c.Code).Should().Contain(["11", "1105", "110505", "11050501", "11050502", "11050503"]);
     }

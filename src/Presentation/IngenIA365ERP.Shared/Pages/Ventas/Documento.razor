@@ -28,7 +28,7 @@
     <div class="page-header">
         <h3>@(_doc is { } t ? $"{TextosDeInventario.Clase(t.Class)} {t.Numero} · {TextosDeInventario.Estado(t.Status)}" : "Documento de venta")</h3>
         <div class="toolbar">
-            <a class="e-btn e-outline" href="/ventas/documentos">Volver a las ventas</a>
+            <a class="e-btn e-outline" href="@RutaDeVuelta">Volver a las ventas</a>
             @if (_doc is { } d)
             {
                 @if (d.Status == 0)
@@ -329,6 +329,15 @@
     private enum Accion { Anular, Descartar }
 
     [Parameter] public Guid Id { get; set; }
+
+    /// <summary>
+    /// 2026-11-24: la lista de la que se vino, con sus filtros (Documentos la pasa en <c>?volver=</c>). Sólo se acepta la propia lista de
+    /// documentos de venta; cualquier otra cosa vuelve a la lista sin filtros.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "volver")] public string? Volver { get; set; }
+
+    private string RutaDeVuelta =>
+        Volver is { } v && (v == "/ventas/documentos" || v.StartsWith("/ventas/documentos?", StringComparison.Ordinal)) ? v : "/ventas/documentos";
 
     private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaCredito = new();
     private CreditoDeLaVentaDto? _credito;

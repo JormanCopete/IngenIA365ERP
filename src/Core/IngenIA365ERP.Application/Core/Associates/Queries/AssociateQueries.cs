@@ -36,6 +36,13 @@ public record ListAssociatesQuery : IRequest<Result<PagedList<AssociateRowDto>>>
     public string? SearchTerm { get; init; }
     public string? Status { get; init; }
     public Guid? AssociateGroupPublicId { get; init; }
+
+    /// <summary>2026-11-24 (pedido del dueño): los filtros de las columnas de la lista, en el servidor y sin distinguir mayúsculas.</summary>
+    public string? TaxId { get; init; }
+
+    public string? Name { get; init; }
+
+    public string? Employer { get; init; }
 }
 
 public class ListAssociatesQueryHandler(IApplicationDbContext context)
@@ -55,17 +62,32 @@ public class ListAssociatesQueryHandler(IApplicationDbContext context)
         if (request.AssociateGroupPublicId is { } grupo)
             query = query.Where(x => x.a.AssociateGroup != null && x.a.AssociateGroup.PublicId == grupo);
 
-        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        // 2026-11-24 (pedido del dueño): como en Personas, la búsqueda no distingue mayúsculas y cada palabra puede caer en un campo distinto
+        // («juan perez» encuentra a Juan Carlos Pérez… salvo la tilde). Antes era Contains literal: en PostgreSQL «perez» no encontraba «PEREZ».
+        foreach (var palabra in People.Queries.ListPeopleQueryHandler.Palabras(request.SearchTerm))
         {
-            var term = request.SearchTerm.Trim();
             query = query.Where(x =>
-                x.p.TaxId.Contains(term) ||
-                x.p.FirstName.Contains(term) ||
-                (x.p.OtherNames != null && x.p.OtherNames.Contains(term)) ||
-                x.p.LastName.Contains(term) ||
-                (x.p.SecondLastName != null && x.p.SecondLastName.Contains(term)) ||
-                (x.p.BusinessName != null && x.p.BusinessName.Contains(term)));
+                x.p.TaxId.ToLower().Contains(palabra)
+                || x.p.FirstName.ToLower().Contains(palabra)
+                || (x.p.OtherNames != null && x.p.OtherNames.ToLower().Contains(palabra))
+                || x.p.LastName.ToLower().Contains(palabra)
+                || (x.p.SecondLastName != null && x.p.SecondLastName.ToLower().Contains(palabra))
+                || (x.p.BusinessName != null && x.p.BusinessName.ToLower().Contains(palabra))
+                || (x.a.ExternalEmployerName != null && x.a.ExternalEmployerName.ToLower().Contains(palabra)));
         }
+        if (People.Queries.ListPeopleQueryHandler.Texto(request.TaxId) is { } documento)
+            query = query.Where(x => x.p.TaxId.ToLower().Contains(documento));
+        foreach (var palabra in People.Queries.ListPeopleQueryHandler.Palabras(request.Name))
+        {
+            query = query.Where(x =>
+                x.p.FirstName.ToLower().Contains(palabra)
+                || (x.p.OtherNames != null && x.p.OtherNames.ToLower().Contains(palabra))
+                || x.p.LastName.ToLower().Contains(palabra)
+                || (x.p.SecondLastName != null && x.p.SecondLastName.ToLower().Contains(palabra))
+                || (x.p.BusinessName != null && x.p.BusinessName.ToLower().Contains(palabra)));
+        }
+        if (People.Queries.ListPeopleQueryHandler.Texto(request.Employer) is { } empresa)
+            query = query.Where(x => x.a.ExternalEmployerName != null && x.a.ExternalEmployerName.ToLower().Contains(empresa));
 
         var totalCount = await query.CountAsync(ct);
 

@@ -1,0 +1,78 @@
+@* 2026-11-24 (pedido del dueño): la consulta de las cajas, igual en Comercial y en Recaudo y aparte de abrir la propia: las del día elegido y las que
+   quedaron pendientes de días anteriores (abiertas, olvidadas o con diferencia por aprobar), con un filtro por estado y las acciones de supervisión
+   que pone cada pantalla. (nuevo) *@
+<div class="toolbar caja-filtros">
+    <label class="campo">Día
+        <input type="date" class="e-input" value="@Dia.ToString("yyyy-MM-dd")" @onchange="@CambiarDiaAsync" />
+    </label>
+    <label class="campo">Mostrar
+        <select class="e-input" value="@_filtro" @onchange="@(e => _filtro = e.Value?.ToString() ?? Todas)">
+            <option value="@Todas">Todas</option>
+            <option value="@Abiertas">Abiertas</option>
+            <option value="@Pendientes">Pendientes (de otro día o con diferencia)</option>
+            <option value="@Cerradas">Cerradas</option>
+        </select>
+    </label>
+    <span class="texto-tenue">@Filtradas.Count() caja(s) · @Filas.Count(f => f.Abierta) abierta(s)</span>
+</div>
+<IndicadorDeCarga Cargando="@Cargando" Texto="Buscando las cajas…">
+    @if (!Cargando && !Filtradas.Any())
+    {
+        <p class="texto-tenue">No hay cajas con este filtro.</p>
+    }
+    else
+    {
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Día</th><th>@EtiquetaDelPunto</th><th>Caja</th><th>Cajero</th><th>Estado</th><th>Abierta</th><th>Cerrada</th><th class="numero">Base</th>
+                    <th class="numero">@EtiquetaDeLoMovido</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in Filtradas)
+                    {
+                        <tr class="@(f.Pendiente ? "fila-alerta" : null)">
+                            <td>@f.Dia.ToString("dd/MM/yyyy")</td><td>@f.Punto</td><td>@f.Caja</td><td>@f.Cajero</td><td>@f.Estado</td>
+                            <td>@f.AbiertaEl.ToLocalTime().ToString("dd/MM HH:mm")</td><td>@f.CerradaEl?.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                            <td class="numero">@f.Base.ToString("N0")</td><td class="numero">@f.Movido</td>
+                            <td class="acciones-fila">@Acciones?.Invoke(f)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</IndicadorDeCarga>
+
+@code {
+    private const string Todas = "todas", Abiertas = "abiertas", Pendientes = "pendientes", Cerradas = "cerradas";
+
+    [Parameter, EditorRequired] public IReadOnlyList<FilaDeCaja> Filas { get; set; } = [];
+
+    [Parameter] public bool Cargando { get; set; }
+
+    [Parameter] public DateOnly Dia { get; set; }
+
+    [Parameter] public EventCallback<DateOnly> DiaChanged { get; set; }
+
+    [Parameter] public string EtiquetaDelPunto { get; set; } = "Punto";
+
+    [Parameter] public string EtiquetaDeLoMovido { get; set; } = "Movido";
+
+    [Parameter] public RenderFragment<FilaDeCaja>? Acciones { get; set; }
+
+    private string _filtro = Todas;
+
+    private IEnumerable<FilaDeCaja> Filtradas => _filtro switch
+    {
+        Abiertas => Filas.Where(f => f.Abierta),
+        Pendientes => Filas.Where(f => f.Pendiente),
+        Cerradas => Filas.Where(f => !f.Abierta && !f.Pendiente),
+        _ => Filas,
+    };
+
+    private async Task CambiarDiaAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var dia)) return;
+        Dia = dia;
+        await DiaChanged.InvokeAsync(dia);
+    }
+}

@@ -46,6 +46,10 @@ builder.Services.AddTransient<RenovacionDeSesionHandler>();
 builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.Web));
 builder.Services.AddTransient<AuthBearerHandler>();
 builder.Services.AddTransient<TenantDelegatingHandler>();
+// Catálogos en memoria unos minutos (2026-11-24): va último, con el token ya puesto. Sólo aquí y en MAUI,
+// nunca en el servidor Web (ver CatalogosEnCacheHandler).
+builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Http.CacheDeCatalogos>();
+builder.Services.AddTransient<IngenIA365ERP.Shared.Services.Http.CatalogosEnCacheHandler>();
 
 // Named HttpClient used by all pages/services. Pages get this via the default
 // HttpClient injection below.
@@ -59,7 +63,8 @@ builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<RenovacionDeSesionHandler>()
     .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
     .AddHttpMessageHandler<AuthBearerHandler>()
-    .AddHttpMessageHandler<TenantDelegatingHandler>();
+    .AddHttpMessageHandler<TenantDelegatingHandler>()
+    .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CatalogosEnCacheHandler>();
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("api"));
 

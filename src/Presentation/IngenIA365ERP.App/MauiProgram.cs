@@ -56,13 +56,17 @@ namespace IngenIA365ERP.App
             builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.App));
             builder.Services.AddTransient<AuthBearerHandler>();
             builder.Services.AddTransient<TenantDelegatingHandler>();
+            // Catálogos en memoria unos minutos (2026-11-24): ver CatalogosEnCacheHandler.
+            builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Http.CacheDeCatalogos>();
+            builder.Services.AddTransient<IngenIA365ERP.Shared.Services.Http.CatalogosEnCacheHandler>();
 
             // Named HttpClient used by all pages/services.
             builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(AppMode.ApiBaseUrl))
                 .AddHttpMessageHandler<RenovacionDeSesionHandler>()
                 .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler>()
                 .AddHttpMessageHandler<AuthBearerHandler>()
-                .AddHttpMessageHandler<TenantDelegatingHandler>();
+                .AddHttpMessageHandler<TenantDelegatingHandler>()
+                .AddHttpMessageHandler<IngenIA365ERP.Shared.Services.Http.CatalogosEnCacheHandler>();
             builder.Services.AddSingleton(sp =>
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient("api"));
 

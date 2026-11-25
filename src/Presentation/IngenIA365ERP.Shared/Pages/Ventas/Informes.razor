@@ -23,7 +23,10 @@
    bonos redimidos, las aprobaciones de descuento y los indicios de deterioro. Filtros comunes (rango o corte, punto) y los propios de cada
    vista (agrupamiento, clase de medio, clase de movimiento, tratamiento, estado del bono, fecha operativa); los demás llegan por el enlace.
    Las columnas ocultas (_…) no se pintan ni se exportan. Exportar exige Inventory.Reports.Export y, con datos de clientes, además
-   Inventory.Reports.ExportPersonalData. *@
+   Inventory.Reports.ExportPersonalData.
+   2026-11-24 (pedido del dueño): la caja del punto elegido, el tipo de documento y, en el detalle de ventas por medio de pago, el cliente
+   (documento o nombre), el vendedor, la clase de documento (varias) y el usuario que hizo la venta. «Consultar» deja los filtros en la
+   dirección: al abrir una venta desde el informe y volver, el informe sale como estaba. *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -68,10 +71,56 @@
                 @if (Usa("pointOfSale") && _puntos.Count > 0)
                 {
                     <label class="campo">Punto
-                        <select class="e-input" value="@Otro("pointOfSale")" @onchange="@(e => PonerOtro("pointOfSale", e.Value?.ToString()))">
+                        <select class="e-input" value="@Otro("pointOfSale")" @onchange="@(e => CambiarPuntoAsync(e.Value?.ToString()))">
                             <option value="">Todos los del alcance</option>
                             @foreach (var p in _puntos) { <option value="@p.PointOfSalePublicId">@p.Code · @p.Name</option> }
                         </select>
+                    </label>
+                }
+                @if (Usa("cashRegister") && _cajas.Count > 0)
+                {
+                    <label class="campo">Caja
+                        <select class="e-input" value="@Otro("cashRegister")" @onchange="@(e => PonerOtro("cashRegister", e.Value?.ToString()))">
+                            <option value="">Todas las del punto</option>
+                            @foreach (var c in _cajas) { <option value="@c.CashRegisterPublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                }
+                @if (Usa("documentType") && _tipos.Count > 1)
+                {
+                    <label class="campo">Tipo de documento
+                        <select class="e-input" value="@Otro("documentType")" @onchange="@(e => PonerOtro("documentType", e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("documentClass"))
+                {
+                    <div class="campo">Clase de documento
+                        <SeleccionMultiple Opciones="@ClasesDeDocumento" Seleccionados="@Lista("documentClass")" SeleccionadosChanged="@(v => PonerLista("documentClass", v))"
+                                           TextoSinSeleccion="Todas" />
+                    </div>
+                }
+                @if (UsaPropio("customer"))
+                {
+                    <label class="campo">Cliente
+                        <input class="e-input" value="@Otro("customer")" @onchange="@(e => PonerOtro("customer", e.Value?.ToString()))" maxlength="80" placeholder="Documento o nombre" />
+                    </label>
+                }
+                @if (UsaPropio("salesperson") && _vendedores.Count > 0)
+                {
+                    <label class="campo">Vendedor
+                        <select class="e-input" value="@Otro("salesperson")" @onchange="@(e => PonerOtro("salesperson", e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId">@v.Person.Name@(v.IsActive ? "" : " (retirado)")</option> }
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("createdBy"))
+                {
+                    <label class="campo">Usuario
+                        <input class="e-input" value="@Otro("createdBy")" @onchange="@(e => PonerOtro("createdBy", e.Value?.ToString()))" maxlength="80" placeholder="Quien hizo la venta" />
                     </label>
                 }
                 @if (UsaPropio("groupBy"))
@@ -134,7 +183,7 @@
                 {
                     <label class="campo">Fecha operativa <input type="date" class="e-input" value="@Otro("operatingDate")" @onchange="@(e => PonerOtro("operatingDate", e.Value?.ToString()))" /></label>
                 }
-                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null || FaltaParaConsultar is not null)" OnClick="@AplicarAsync">Consultar</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null || FaltaParaConsultar is not null)" OnClick="@ConsultarAsync">Consultar</SfButton>
             </div>
             @if (FaltaParaConsultar is { } falta)
             {
@@ -163,7 +212,16 @@
 
 @code {
     /// <summary>Los filtros propios que la pantalla edita; los demás son «del enlace».</summary>
-    private static readonly HashSet<string> Editables = new(StringComparer.Ordinal) { "pointOfSale", "groupBy", "class", "paymentMeans", "allMeans", "kind", "treatment", "status", "operatingDate" };
+    private static readonly HashSet<string> Editables = new(StringComparer.Ordinal)
+    {
+        "pointOfSale", "groupBy", "class", "paymentMeans", "allMeans", "kind", "treatment", "status", "operatingDate",
+        "cashRegister", "documentType", "documentClass", "customer", "salesperson", "createdBy",
+    };
+
+    /// <summary>Las clases de documento de venta (facturas, POS, comprobantes y notas); viajan por número.</summary>
+    private static readonly IReadOnlyList<(string Valor, string Texto)> ClasesDeDocumento =
+        [.. TextosDeVentas.ClasesDeVenta.Concat(TextosDeVentas.ClasesDeNota).Concat(TextosDeVentas.ClasesDeNotaDebito).Distinct()
+            .Select(c => (c.ToString(System.Globalization.CultureInfo.InvariantCulture), TextosDeInventario.Clase(c)))];
 
     /// <summary>Las clases de medio en el orden de la pantalla de Ventas; viajan por nombre.</summary>
     private static readonly IReadOnlyList<(string Valor, string Texto)> ClasesDeMedio =
@@ -173,6 +231,9 @@
     private List<VistaDeInformeDto> _vistas = [];
     private List<PuntoDeVentaDto> _puntos = [];
     private List<(string Valor, string Texto)> _medios = [];
+    private List<CajaDto> _cajas = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<VendedorDto> _vendedores = [];
     private VistaDeInformeDto? _vista;
     private FiltrosDeInformeDeInventarioModelo _filtros = new();
     private FiltrosDeInformeDeInventarioModelo _aplicados = new();
@@ -211,11 +272,34 @@
             // Con un solo punto no hay nada que elegir; el cierre del día, además, lo exige (2026-11-11).
             if (_puntos.Count == 1 && !_filtros.Otros.ContainsKey("pointOfSale")) _filtros.Otros["pointOfSale"] = _puntos[0].PointOfSalePublicId.ToString();
             if (!_filtros.Otros.ContainsKey("operatingDate")) _filtros.Otros["operatingDate"] = hoy.ToString("yyyy-MM-dd");
+            // 2026-11-24: los tipos de venta y los vendedores (también los retirados, para ventas pasadas); sin permiso, no se ofrecen.
+            var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+            _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).OrderBy(t => t.Code, StringComparer.Ordinal)] : [];
+            var vendedores = await Inventario.VendedoresAsync(null, conRetirados: true, 1, 200);
+            _vendedores = vendedores.IsSuccess
+                ? [.. (vendedores.Value?.Items ?? []).OrderByDescending(v => v.IsActive).ThenBy(v => v.Person.Name, StringComparer.CurrentCulture)]
+                : [];
+            await CargarCajasAsync();
         }
 
         _vista = _vistas.FirstOrDefault(v => v.Key == Vista) ?? _vistas.FirstOrDefault();
         await EvaluarExportacionAsync();
         if (_vista is not null && !string.IsNullOrWhiteSpace(Vista) && _vista.Key == Vista) await AplicarAsync();
+    }
+
+    /// <summary>Otro punto: la caja elegida era del anterior.</summary>
+    private async Task CambiarPuntoAsync(string? punto)
+    {
+        PonerOtro("pointOfSale", punto);
+        _filtros.Otros.Remove("cashRegister");
+        await CargarCajasAsync();
+    }
+
+    private async Task CargarCajasAsync()
+    {
+        if (!Guid.TryParse(Otro("pointOfSale"), out var punto)) { _cajas = []; return; }
+        var r = await Ventas.ListarCajasAsync(punto);
+        _cajas = r.IsSuccess ? [.. (r.Value ?? []).OrderBy(c => c.Code, StringComparer.Ordinal)] : [];
     }
 
     private async Task CambiarVista(string? clave)
@@ -275,6 +359,17 @@
             && (string.IsNullOrWhiteSpace(Otro("pointOfSale")) || string.IsNullOrWhiteSpace(Otro("operatingDate")))
             ? "Para el cierre del día elija el punto de venta y la fecha operativa."
             : null;
+
+    /// <summary>«Consultar»: la consulta y, con ella, los filtros en la dirección (al iniciar no, que sería navegar en el prerenderizado).</summary>
+    private async Task ConsultarAsync()
+    {
+        await AplicarAsync();
+        if (_vista is null || FaltaParaConsultar is not null) return;
+        var query = _aplicados.ToQuery();
+        var destino = $"/ventas/informes?vista={Uri.EscapeDataString(_vista.Key)}{(query.Length > 0 ? "&" + query : "")}";
+        if (!string.Equals(Navigation.ToBaseRelativePath(Navigation.Uri), destino.TrimStart('/'), StringComparison.Ordinal))
+            Navigation.NavigateTo(destino, replace: true);
+    }
 
     private async Task AplicarAsync()
     {

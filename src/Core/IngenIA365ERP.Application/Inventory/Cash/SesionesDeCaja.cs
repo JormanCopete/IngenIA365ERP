@@ -31,8 +31,17 @@ public sealed class SesionesDeCaja(
     IApplicationDbContext db,
     IActorActual actorActual,
     IAlcanceDeInventario alcanceDeLaPeticion,
-    IPermissionChecker permisos)
+    IPermissionChecker permisos,
+    IngenIA365ERP.Application.Receipts.Common.ParametrosDeCaja? parametros = null,
+    IDateTimeService? reloj = null)
 {
+    /// <summary>
+    /// 2026-11-24: si rige el arqueo estricto (<c>Caja.ArqueoEstricto</c>, parámetro de la caja que comparten Recaudo y el punto de venta). Sin lector
+    /// de parámetros (las pruebas que construyen el servicio a mano) rige el estricto, como hasta ese día.
+    /// </summary>
+    public async Task<bool> ArqueoEstrictoAsync(CancellationToken ct) =>
+        parametros is null || reloj is null || await IngenIA365ERP.Application.Receipts.Common.ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
+
     public const string PermisoVerTodas = "Inventory.CashSessions.ViewAll";
 
     private bool? _veTodas;
@@ -135,7 +144,7 @@ public sealed class SesionesDeCaja(
     public async Task<CashSessionExpectedDto> EsperadoDtoAsync(CashSession sesion, CancellationToken ct)
     {
         var esperado = await EsperadoAsync(sesion, null, ct);
-        var ciego = sesion.IsBlindCount && !await VeTodasAsync(ct);
+        var ciego = sesion.IsBlindCount && !await VeTodasAsync(ct) && await ArqueoEstrictoAsync(ct);
         var ids = esperado.Lines.Select(l => l.Medio.PaymentMeansId).ToList();
         var medios = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => ids.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, m => new { m.PublicId, m.Name }, ct);

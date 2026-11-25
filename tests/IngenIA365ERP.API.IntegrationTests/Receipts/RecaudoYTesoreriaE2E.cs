@@ -52,8 +52,20 @@ public static class RecaudoYTesoreriaE2E
     /// <paramref name="contabilidadIniciada"/> la cooperativa nace con su primer ejercicio contable en el año de hoy (los hechos pasan a
     /// Contabilidad); sin ella, el modo de paso por defecto es «no pasa».
     /// </summary>
-    public static Task<CarteraE2E.CooperativaAislada> CooperativaAisladaAsync(CentralIdentityApiFixture fx, string nombre, bool contabilidadIniciada = false) =>
-        CarteraE2E.CooperativaAisladaAsync(fx, $"ryt_{nombre}", contabilidadIniciada ? CarteraE2E.Hoy(fx).Year : null);
+    /// <remarks>
+    /// 2026-11-24: la caja de estas e2e trabaja con el arqueo estricto (<c>Caja.ArqueoEstricto</c>, de fábrica apagado): prueban el arqueo ciego, la
+    /// aprobación de la diferencia por otra persona, el testigo y la doble custodia. El arqueo sencillo lo prueban las de Application
+    /// (<c>ArqueoSencilloTests</c>).
+    /// </remarks>
+    public static async Task<CarteraE2E.CooperativaAislada> CooperativaAisladaAsync(CentralIdentityApiFixture fx, string nombre, bool contabilidadIniciada = false)
+    {
+        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, $"ryt_{nombre}", contabilidadIniciada ? CarteraE2E.Hoy(fx).Year : null);
+        var r = await fx.Despachador.EnviarComoProcesoAsync(coop.TenantPublicId, IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea("e2e.recaudo-y-tesoreria"),
+            new AddParameterVersionCommand("RCD", "Caja.ArqueoEstricto", ParameterScopeKind.None, null, null, "true", CarteraE2E.Hoy(fx).AddDays(-30),
+                "Las e2e de la caja prueban el arqueo estricto", null) { OperationKey = Guid.NewGuid() });
+        if (r.IsFailure) r.Error.Code.Should().Contain("Overlap", $"Caja.ArqueoEstricto en la caja de prueba: {r.Error.Code} {r.Error.Message}");
+        return coop;
+    }
 
     /// <summary>El token del maestro, compartido con Inventario y Cartera: el limitador de login admite 10 por minuto por IP.</summary>
     public static Task<string> TokenMaestroAsync(CentralIdentityApiFixture fx, HttpClient http) => CarteraE2E.TokenMaestroAsync(fx, http);

@@ -153,7 +153,10 @@ public sealed class CloseCashSessionCommandHandler(
         var evaluado = await arqueos.EvaluarAsync(sesion, request.Counts, ct);
         if (evaluado.IsFailure) return Falla(evaluado.Error);
         var (resultado, preparados) = evaluado.Value;
-        var arqueo = new CashCount { CashSessionId = sesion.Id, CountedAt = reloj.UtcNow, CountedByUserId = usuario, IsBlind = sesion.IsBlindCount };
+        var arqueo = new CashCount
+        {
+            CashSessionId = sesion.Id, CountedAt = reloj.UtcNow, CountedByUserId = usuario, IsBlind = sesion.IsBlindCount && await sesiones.ArqueoEstrictoAsync(ct),
+        };
         db.CashCounts.Add(arqueo);
         await arqueos.EscribirAsync(arqueo, resultado, preparados, ct);
 
@@ -440,9 +443,15 @@ public sealed class ArqueoDeLaSesion(IApplicationDbContext db, IDateTimeService 
             preparados.Add(new ConteoPreparado(medio.Id, contado, c.Reason, denominaciones, lotes, referencias));
         }
 
-        var tratamiento = EvaluadorDeArqueo.TratamientoDelFaltanteDesde(string.IsNullOrWhiteSpace(sesion.ShortageTreatment)
-            ? EvaluadorDeArqueo.FaltanteAlGasto : sesion.ShortageTreatment);
-        var resultado = EvaluadorDeArqueo.Evaluar(esperado, preparados.Select(p => new ConteoDeMedio(p.PaymentMeansId, p.Counted, p.Reason)).ToList(), tratamiento);
+        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) el faltante va al gasto (decisión del dueño) y el motivo se pide sólo fuera de
+        // la tolerancia.
+        var estricto = await sesiones.ArqueoEstrictoAsync(ct);
+        var tratamiento = !estricto
+            ? CashDifferenceTreatment.ShortageToExpense
+            : EvaluadorDeArqueo.TratamientoDelFaltanteDesde(string.IsNullOrWhiteSpace(sesion.ShortageTreatment)
+                ? EvaluadorDeArqueo.FaltanteAlGasto : sesion.ShortageTreatment);
+        var resultado = EvaluadorDeArqueo.Evaluar(esperado, preparados.Select(p => new ConteoDeMedio(p.PaymentMeansId, p.Counted, p.Reason)).ToList(), tratamiento,
+            motivoSoloFueraDeTolerancia: !estricto);
         if (resultado.MissingReasons.Count > 0) return Falla(ErroresDeCaja.ReasonRequired(resultado.MissingReasons));
         return Result.Success<(ResultadoDeArqueo, IReadOnlyList<ConteoPreparado>)>((resultado, preparados));
 

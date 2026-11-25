@@ -1,0 +1,35 @@
+@* 2026-11-24 (pedido del dueño): lo que quedó del arqueo, igual en Comercial y en Recaudo: por medio lo esperado, lo contado, la diferencia y qué se hizo
+   con ella, y debajo los documentos y acciones de cada módulo (informe, recontar). (nuevo) *@
+<section class="info-card caja-resultado" aria-label="Resultado del arqueo">
+    <h4>@Titulo</h4>
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th>Qué se hizo</th></tr></thead>
+            <tbody>
+                @foreach (var l in Lineas)
+                {
+                    <tr><td>@l.Medio</td><td class="numero">@l.Esperado.ToString("N0")</td><td class="numero">@l.Contado.ToString("N0")</td>
+                        <td class="numero">@l.Diferencia.ToString("N0")</td><td>@l.Tratamiento</td></tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><th>Total</th><th class="numero">@Lineas.Sum(l => l.Esperado).ToString("N0")</th><th class="numero">@Lineas.Sum(l => l.Contado).ToString("N0")</th>
+                    <th class="numero">@Lineas.Sum(l => l.Diferencia).ToString("N0")</th><th></th></tr>
+            </tfoot>
+        </table>
+    </div>
+    @ChildContent
+    <div class="toolbar">
+        @Acciones
+    </div>
+</section>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "La caja quedó cerrada";
+
+    [Parameter, EditorRequired] public IReadOnlyList<LineaDelResultado> Lineas { get; set; } = [];
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public RenderFragment? Acciones { get; set; }
+}

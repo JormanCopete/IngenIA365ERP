@@ -78,7 +78,7 @@
             <option value="carta">Imprimir carta</option>
         </select>
     </label>
-    <a class="e-btn e-flat" href="/recaudo/sesiones">Sesiones</a>
+    <a class="e-btn e-flat" href="/recaudo/sesiones">Mi caja</a>
 </div>
 
 <div class="pos-contenido">
@@ -212,10 +212,13 @@
                                     <div class="fila-campos">
                                         @if (item.Target == 1)
                                         {
-                                            <label class="campo">Modalidad
-                                                <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: lo exigible, la cuota del período, la cancelación, un abono a capital, una cuota anticipada…"
+                                            @* 2026-11-24 (pedido del dueño): cada modalidad explica cómo funciona y cuándo usarla: al pasar el cursor por la lista
+                                               (la elegida) o por cada opción, y con F1. *@
+                                            <label class="campo" title="@CajaClient.AyudaDeModalidad(item.LoanModality)">Modalidad <span class="texto-tenue" aria-hidden="true">ⓘ</span>
+                                                <select class="e-input" value="@item.LoanModality" title="@CajaClient.AyudaDeModalidad(item.LoanModality)"
+                                                        data-ayuda="@CajaClient.AyudaDeModalidad(item.LoanModality)"
                                                         @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
-                                                    @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                                    @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m" title="@CajaClient.AyudaDeModalidad(m)">@CajaClient.Modalidad(m)</option> }
                                                 </select>
                                             </label>
                                             @if (item.LoanModality == 6)
@@ -592,6 +595,8 @@
         // 2026-11-17: si la consulta falló por otra cosa (la sesión del usuario venció, sin conexión), se dice eso y no «no tiene caja abierta».
         _errorDeSesion = r.IsSuccess || r.ErrorCode is null || r.ErrorCode.EndsWith("NotFound", StringComparison.Ordinal) ? null : r.ErrorMessage;
         if (_sesion is not { } s) return;
+        // Las preferencias no dependen de lo que sigue: salen ya, en paralelo con cuentas y bancos (2026-11-24).
+        var tPreferencias = Preferencias.LeerDelServidorAsync();
 
         IReadOnlyList<OpcionDeCuentaDto> cuentas = [];
         if (s.Means.Any(x => x.Class is ClaseConsignacion or ClaseTransferencia))
@@ -608,7 +613,7 @@
         _mediosDelPanel = s.Means.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal).Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas)).ToList();
 
         // 2026-11-16: el detalle de una obligación se ve con el tamaño de texto y los centavos que el usuario eligió para el estado de cuenta.
-        var preferencias = await Preferencias.LeerDelServidorAsync();
+        var preferencias = await tPreferencias;
         if (preferencias.IsSuccess && preferencias.Value is { } pref)
         {
             _tamano = pref.TamanoTextoEstadoDeCuenta;

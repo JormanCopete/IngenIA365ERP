@@ -552,7 +552,8 @@
                 </PermissionGate>
             }
             <PermissionGate Required="Inventory.CashSessions.View">
-                <NavLink href="/pos/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+                <NavLink href="/pos/sesiones" class="nav-subitem">Mi caja</NavLink>
+                <NavLink href="/pos/cajas" class="nav-subitem">Cajas del día</NavLink>
                 <NavLink href="/pos/movimientos-de-caja" class="nav-subitem">Movimientos de caja</NavLink>
                 <NavLink href="/pos/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
             </PermissionGate>
@@ -667,9 +668,10 @@
                 <NavLink href="/recaudo/recibos" class="nav-subitem">Recibos</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Session.Open">
-                <NavLink href="/recaudo/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+                <NavLink href="/recaudo/sesiones" class="nav-subitem">Mi caja</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Session.View">
+                <NavLink href="/recaudo/cajas" class="nav-subitem">Cajas del día</NavLink>
                 <NavLink href="/recaudo/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Vault.View">

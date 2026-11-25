@@ -89,7 +89,10 @@ public sealed class FacturacionElectronicaClient(HttpClient http, CentralAuthCli
         CancellationToken ct = default) =>
         Enviar<PaginaDeInventarioDto<DocumentoElectronicoDto>>(HttpMethod.Get, Q(Rutas.Documentos,
             ("status", f.Status), ("kind", f.Kind), ("from", Texto(f.From)), ("to", Texto(f.To)), ("prefix", f.Prefix), ("number", f.Number),
-            ("contingency", Texto(f.Contingency)), ("overdue", Texto(f.Overdue)), ("retrying", Texto(f.Retrying)), ("dead", Texto(f.Dead)), ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize))),
+            ("contingency", Texto(f.Contingency)), ("overdue", Texto(f.Overdue)), ("retrying", Texto(f.Retrying)), ("dead", Texto(f.Dead)), ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize)),
+            ("customer", string.IsNullOrWhiteSpace(f.Customer) ? null : f.Customer.Trim()),
+            ("minTotal", f.MinTotal?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("maxTotal", f.MaxTotal?.ToString(System.Globalization.CultureInfo.InvariantCulture))),
             null, null, ct);
 
     public Task<ResultadoDeInventario<DetalleDeDocumentoElectronicoDto>> DocumentoAsync(Guid id, CancellationToken ct = default) =>
