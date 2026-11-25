@@ -154,6 +154,8 @@ public static class PerfilesSugeridos
             [
                 // Lending.CreditLines.View: respuesta del dueño del 2026-10-14 (sólo consultar; cada cooperativa lo quita o lo agrega en Seguridad › Roles).
                 "Lending.CreditLines.View", "Lending.Simulations.Run", "Lending.Applications.Read", "Lending.Applications.Create", "Lending.Applications.Submit",
+                // 2026-11-25 (pedido del dueño): corrige la solicitud radicada sin devolverla, con motivo (Originacion.EditarRadicadaSinDevolver).
+                "Lending.Applications.EditSubmitted",
                 "Lending.PrepaymentPreferences.Manage", "Lending.CreditBureau.Query", "Lending.Guarantees.Read", "Lending.Guarantees.Manage",
                 "Lending.PromissoryNotes.Manage", "Lending.CreditLimits.Read", "Lending.Loans.Read", "Lending.Payoffs.Read",
                 "Lending.Documents.Read", "Lending.Documents.Issue", "Lending.DebtorMessages.Read", "Lending.DebtorMessages.Send",

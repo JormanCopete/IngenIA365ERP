@@ -40,6 +40,8 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.PrepaymentChoice).HasConversion<int?>();
         builder.Property(e => e.PayoffRequest);
         builder.Property(e => e.ReturnSnapshot);
+        // 2026-11-25 (migración EdicionDeSolicitudRadicada): las ediciones de la radicada sin devolverla; las de antes, cero.
+        builder.Property(e => e.EditsAfterSubmission).IsRequired();
         builder.Property(e => e.PolicyExceptionRequested).IsRequired();
         builder.Property(e => e.PolicyExceptionReason).HasMaxLength(500);
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();

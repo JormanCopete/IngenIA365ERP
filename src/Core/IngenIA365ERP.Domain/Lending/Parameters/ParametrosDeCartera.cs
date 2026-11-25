@@ -240,6 +240,13 @@ public static class ParametrosDeCartera
     public const string OriginacionGruposEditablesAlDevolver = "Originacion.GruposEditablesAlDevolver";
 
     /// <summary>
+    /// 2026-11-25 (pedido del dueño): si una solicitud ya radicada (en decisión) se edita sin devolverla. Lo editable son los grupos de
+    /// <see cref="OriginacionGruposEditablesAlDevolver"/>; se edita con motivo y con el permiso <c>Lending.Applications.EditSubmitted</c>, queda en
+    /// <c>LND_CreditApplicationEdits</c> y vuelve a correr las validaciones y el enrutamiento. Por cooperativa o por línea. De fábrica, sí. (nuevo)
+    /// </summary>
+    public const string OriginacionEditarRadicadaSinDevolver = "Originacion.EditarRadicadaSinDevolver";
+
+    /// <summary>
     /// 2026-11-24 (pedido del dueño): si registrar la autorización de tratamiento general o de trámite de crédito exige adjuntar el soporte
     /// firmado. De fábrica, no. La consulta y el reporte a centrales y el canal de contacto la exigen siempre (salvo la migrada): sin soporte
     /// <c>HasEvidence</c> saldría verdadero por el origen y habilitaría lo que FR-006 reserva a lo probado. (nuevo)
@@ -846,7 +853,7 @@ public static class ParametrosDeCartera
         Texto(SegregacionIncompatibilidades,
             "Pares de acciones que una misma persona no puede hacer sobre el mismo expediente, en JSON "
             + "[{ \"a\": acción, \"b\": acción, \"activo\": true|false }] (Radicar, Analizar, Decidir, Votar, Desembolsar, "
-            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias, Aplicar). Por defecto (F6, T0290) "
+            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias, Aplicar, EditarRadicada). Por defecto (F6, T0290) "
             + "Decidir × Desembolsar activo y sugeridos inactivos Analizar × Decidir, Desembolsar × AnularOrdenDeGiro, "
             + "ArmarLoteDeCastigo × AplicarCastigo y CargarMigracion × AceptarDiferencias.",
             "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", K1, patron: @"(?s)^\s*\[.*\]\s*$")
@@ -859,11 +866,16 @@ public static class ParametrosDeCartera
             with { PermisoAdicional = PermisoDeSegregacion },
 
         Texto(OriginacionGruposEditablesAlDevolver,
-            "Qué se puede corregir en una solicitud devuelta para corregir, separado por coma: Condiciones (monto, cuotas, fechas), Linea, "
+            "Qué se puede corregir en una solicitud devuelta para corregir o, si se permite, en una radicada sin devolverla, separado por coma: "
+            + "Condiciones (monto, cuotas, fechas), Linea, "
             + "Oficina, Destino, FormaDePago, Seguros, Capacidad (ingresos y gastos del solicitante), Codeudores, Recogidas, ExcepcionDePolitica, "
             + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica, todo.",
             Origination.GruposEditablesAlDevolver.Defecto, K1, patron: Origination.GruposEditablesAlDevolver.Patron)
             with { AmbitosAdmitidos = [General, Linea], OpcionesMultiples = Origination.GruposEditablesAlDevolver.Nombres },
+        SiNo(Modulo, OriginacionEditarRadicadaSinDevolver,
+            "Una solicitud ya radicada (en decisión) se edita sin devolverla: quien tenga el permiso cambia lo que deja «qué se puede corregir», con "
+            + "motivo; el cambio queda registrado y se vuelven a correr las validaciones y el enrutamiento. Con «No», hay que devolverla para corregirla.",
+            true, K1, General, Linea),
         SiNo(Modulo, AutorizacionesExigenEvidencia,
             "Registrar la autorización de tratamiento general o de trámite de crédito de un titular exige adjuntar el soporte firmado (el "
             + "formato o la grabación). Con «No» se registran sin él. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.",

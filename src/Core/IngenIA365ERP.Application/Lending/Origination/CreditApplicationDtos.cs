@@ -199,7 +199,17 @@ public sealed record CreditApplicationDto(
 
     /// <summary>2026-11-23: la compra con descuento condicionado (valor del bien, proveedor, opción y lo que paga el fondo); nula si no hay.</summary>
     public SubsidizedPurchaseDto? SubsidizedPurchase { get; init; }
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): las ediciones de la solicitud ya radicada, sin devolverla, de la más reciente a la más antigua: quién,
+    /// cuándo, por qué y qué cambió (<c>LND_CreditApplicationEdits</c>).
+    /// </summary>
+    public IReadOnlyList<CreditApplicationEditDto> SubmittedEdits { get; init; } = [];
 }
+
+/// <summary>2026-11-25: una edición de la solicitud radicada: quién, cuándo, en qué estado, el motivo, lo que cambió y el nivel antes y después.</summary>
+public sealed record CreditApplicationEditDto(DateTime EditedAt, string EditedBy, CreditApplicationStatus StatusAtEdit, string Reason,
+    IReadOnlyList<CreditApplicationChangeDto> Changes, string? LevelBefore, string? LevelAfter);
 
 /// <summary>Una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
 public sealed record SubsidizedPurchaseDto(decimal AssetValue, PersonaRefDto? Supplier, string OptionCode, string OptionName, decimal Fraction,
@@ -290,7 +300,29 @@ public static class ConsultasDeSolicitudes
                 ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes), ct)
                 : [],
             SubsidizedPurchase = await CompraAsync(db, s, version, ct),
+            SubmittedEdits = await EdicionesAsync(db, s.Id, ct),
         };
+    }
+
+    /// <summary>2026-11-25: el historial de ediciones de la radicada, de la más reciente a la más antigua, con quién y los niveles por su nombre.</summary>
+    private static async Task<IReadOnlyList<CreditApplicationEditDto>> EdicionesAsync(IApplicationDbContext db, int solicitudId, CancellationToken ct)
+    {
+        var ediciones = await db.CreditApplicationEdits.AsNoTracking().Where(e => e.ApplicationId == solicitudId && !e.IsDeleted)
+            .OrderByDescending(e => e.EditedAt).ThenByDescending(e => e.Id).ToListAsync(ct);
+        if (ediciones.Count == 0) return [];
+        var usuarioIds = ediciones.Select(e => e.EditedByUserId).Distinct().ToList();
+        var usuarios = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => usuarioIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.PersonId, u.Username }).ToListAsync(ct);
+        var personas = await ReferenciasDeGobierno.PersonasAsync(db, usuarios.Where(u => u.PersonId is not null).Select(u => u.PersonId!.Value), ct);
+        var nombres = usuarios.ToDictionary(u => u.Id,
+            u => u.PersonId is { } p && personas.TryGetValue(p, out var persona) ? persona.FullName : u.Username);
+        var nivelIds = ediciones.SelectMany(e => new[] { e.LevelBeforeId, e.LevelAfterId }).OfType<int>().Distinct().ToList();
+        var niveles = await db.AttributionLevels.AsNoTracking().IgnoreQueryFilters().Where(n => nivelIds.Contains(n.Id))
+            .ToDictionaryAsync(n => n.Id, n => n.Name, ct);
+        return ediciones.Select(e => new CreditApplicationEditDto(e.EditedAt, nombres.GetValueOrDefault(e.EditedByUserId, "?"), e.StatusAtEdit, e.Reason,
+            JsonSerializer.Deserialize<List<CreditApplicationChangeDto>>(e.Changes, Json) ?? [],
+            e.LevelBeforeId is { } antes ? niveles.GetValueOrDefault(antes) : null,
+            e.LevelAfterId is { } despues ? niveles.GetValueOrDefault(despues) : null)).ToList();
     }
 
     /// <summary>La compra con descuento de la solicitud, con la opción leída de la versión de la línea que selló.</summary>
@@ -306,7 +338,7 @@ public static class ConsultasDeSolicitudes
     }
 
     /// <summary>Las diferencias entre la foto de la devolución y la solicitud de ahora, con líneas, oficinas y personas por su nombre.</summary>
-    private static async Task<IReadOnlyList<CreditApplicationChangeDto>> CambiosAsync(IApplicationDbContext db, FotoDeSolicitud antes,
+    internal static async Task<IReadOnlyList<CreditApplicationChangeDto>> CambiosAsync(IApplicationDbContext db, FotoDeSolicitud antes,
         FotoDeSolicitud ahora, CancellationToken ct)
     {
         var diferencias = antes.Diferencias(ahora);

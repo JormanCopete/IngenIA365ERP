@@ -95,6 +95,13 @@ public class CreditApplication : AuditableEntity
     public string? ReturnSnapshot { get; set; }
 
     /// <summary>
+    /// 2026-11-25 (pedido del dueño): cuántas veces se editó la solicitud ya radicada, sin devolverla (cada una deja su fila en
+    /// <c>LND_CreditApplicationEdits</c>). Entra a la huella del enrutamiento cuando es mayor que cero: quien decide o el acta que la tenía a la
+    /// vista ve que cambió (<c>Lending.Decision.ContentChanged</c>), aunque lo editado no esté en la huella. (nuevo)
+    /// </summary>
+    public int EditsAfterSubmission { get; set; }
+
+    /// <summary>
     /// 2026-11-23 (descuento condicionado, el caso del SOAT): el valor del bien que se compra al proveedor. El crédito es este valor menos lo que
     /// paga el fondo según <see cref="DiscountOptionCode"/>. Nulo si la línea no financia un bien con descuento.
     /// </summary>
@@ -195,6 +202,12 @@ public class CreditApplication : AuditableEntity
 
     /// <summary>Se edita (datos, partes y documentos propios del borrador) sólo en <c>Draft</c> y <c>Returned</c>.</summary>
     public bool Editable => Status is CreditApplicationStatus.Draft or CreditApplicationStatus.Returned;
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): radicada y sin decidir (<c>Submitted</c> o <c>PendingDecision</c>). Se edita sin devolverla si el parámetro
+    /// <c>Originacion.EditarRadicadaSinDevolver</c> de su línea lo deja, con motivo y con el permiso <c>Lending.Applications.EditSubmitted</c>.
+    /// </summary>
+    public bool Radicada => Status is CreditApplicationStatus.Submitted or CreditApplicationStatus.PendingDecision;
 
     /// <summary>
     /// Ya decidida (o terminada): aprobada, negada, desembolsada, otorgada o anulada. Desde ahí los documentos quedan bloqueados (T81,

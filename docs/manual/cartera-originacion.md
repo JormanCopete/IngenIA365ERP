@@ -428,6 +428,45 @@ De fábrica se puede corregir **todo**, línea y oficina incluidas (desde el 202
 - **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia, créditos que recoge o convenio de libranza, porque no
   maneja esos datos. Esas se corrigen por la integración, o se anulan y se radica otra.
 
+## Editar una solicitud radicada sin devolverla (2026-11-25)
+
+Una solicitud ya radicada, que espera decisión, se puede editar **sin devolverla**. En su detalle aparece **«Editar radicada»**, que abre la
+misma pantalla de corrección con lo guardado y un campo obligatorio: **«Motivo del cambio»**.
+
+**Qué se controla y dónde:**
+
+| Qué | Dónde | De fábrica |
+|---|---|---|
+| Si se puede editar la radicada | Parámetro `Originacion.EditarRadicadaSinDevolver` (Parámetros de Cartera, para la cooperativa o por línea) | Sí |
+| Qué se puede cambiar | El mismo parámetro de la devuelta, `Originacion.GruposEditablesAlDevolver` | Todo |
+| Quién la edita | Permiso `Lending.Applications.EditSubmitted` (Seguridad → Roles) | El administrador de la cooperativa; la plantilla «Asesor de crédito» lo trae |
+| Que quien la edita no la decida | Par `EditarRadicada × Decidir` en `Segregacion.Incompatibilidades` | Apagado |
+
+**Qué pasa al guardar:**
+
+- **Se vuelven a correr todas las validaciones** (listas, capacidad, endeudamiento, concentración, usura, requisitos, documentos, puntaje) y
+  **el enrutamiento**: si el cambio sube o baja el nivel de atribución, la solicitud pasa al nivel nuevo. Lo que niega la radicación
+  (concentración excedida, usura, la ley de vivienda) también niega la edición, y no se guarda nada.
+- **Un codeudor nuevo necesita su autorización** de tratamiento de datos para el estudio del crédito, como al radicar.
+- **Queda el historial.** El detalle muestra **«Ediciones después de radicar»**: quién, cuándo, el motivo, cada dato con su valor antes y
+  después, y el nivel antes y después. Cada edición queda además como intervención del expediente y en la auditoría
+  (`Lending.Application.EditedAfterSubmission`). Una edición sin nada distinto no deja rastro.
+- **Quien decide ve que cambió.** La huella del enrutamiento cambia con cada edición: si alguien tenía la solicitud abierta para decidir, o
+  estaba en un acta, al decidir recibe `Lending.Decision.ContentChanged` y tiene que mirarla de nuevo.
+- **No cambia el estado.** La solicitud sigue esperando decisión con su mismo radicado.
+
+Errores que puede ver quien edita:
+
+| Código | Qué pasó |
+|---|---|
+| `Lending.Application.SubmittedNotEditable` | La cooperativa (o la línea) no deja editar la radicada: hay que devolverla. |
+| `Lending.Application.EditReasonRequired` | Falta el motivo del cambio. |
+| `Lending.Application.FieldNotEditable` | Cambió algo que «qué se puede corregir» deja fijo. |
+| `Lending.Application.UseSubmittedEditRoute` | Se intentó por la ruta del borrador (`PUT /{id}`); la radicada va por `PUT /{id}/submitted`. |
+
+Lo de la devuelta también vale aquí: el solicitante no cambia y la pantalla no edita las solicitudes con cuotas extraordinarias, gracia,
+créditos que recoge o convenio de libranza. Ya aprobada, negada o desembolsada, una solicitud no se edita.
+
 ## Descuento condicionado: financiar un bien con un fondo (2026-11-23)
 
 Es el caso del SOAT. El asociado compra un bien a un proveedor y la entidad decide cuánto de su valor paga un fondo.
