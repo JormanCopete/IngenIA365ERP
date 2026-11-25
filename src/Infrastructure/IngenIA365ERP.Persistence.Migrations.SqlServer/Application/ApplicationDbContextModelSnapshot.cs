@@ -68983,7 +68983,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<short>("Origin")
                         .HasColumnType("smallint");
 
-                    b.Property<int>("OwnerPersonId")
+                    b.Property<int?>("OwnerPersonId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("PaidAt")
@@ -69029,8 +69029,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("VehicleId")
+                    b.Property<int?>("VehicleId")
                         .HasColumnType("int");
+
+                    b.Property<string>("VehicleReference")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
@@ -85830,8 +85834,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "OwnerPerson")
                         .WithMany()
                         .HasForeignKey("OwnerPersonId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Transport.TransportService", "Service")
                         .WithMany()
@@ -85842,8 +85845,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Transport.Vehicle", "Vehicle")
                         .WithMany()
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("BillingRun");
 

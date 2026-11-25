@@ -318,7 +318,7 @@ public sealed class GetBillingRunQueryHandler(IApplicationDbContext db) : IReque
     }
 }
 
-public sealed record ServiceChargeDto(Guid PublicId, Guid VehiclePublicId, string Plate, string InternalNumber, string Service, string Period, string InvoiceNumber,
+public sealed record ServiceChargeDto(Guid PublicId, Guid? VehiclePublicId, string Plate, string? InternalNumber, string Service, string Period, string InvoiceNumber,
     decimal Amount, decimal Paid, ChargeRoute Route, ChargeStatus Status, DateTime? PaidAt, ChargeReviewFlag ReviewFlag, Guid ExternalId);
 
 public sealed record ListServiceChargesQuery(Guid? VehiclePublicId = null, string? Period = null, ChargeStatus? Status = null) : IRequest<Result<IReadOnlyList<ServiceChargeDto>>>;
@@ -332,7 +332,8 @@ public sealed class ListServiceChargesQueryHandler(IApplicationDbContext db) : I
         if (!string.IsNullOrWhiteSpace(request.Period)) q = q.Where(c => c.Period == request.Period);
         if (request.Status is { } s) q = q.Where(c => c.Status == s);
         var filas = await q.OrderByDescending(c => c.Period).ThenBy(c => c.Vehicle!.InternalNumber).Take(2000)
-            .Select(c => new ServiceChargeDto(c.PublicId, c.Vehicle!.PublicId, c.Vehicle.Plate, c.Vehicle.InternalNumber, c.Service!.Name, c.Period, c.InvoiceNumber,
+            .Select(c => new ServiceChargeDto(c.PublicId, c.Vehicle != null ? c.Vehicle.PublicId : null,
+                c.Vehicle != null ? c.Vehicle.Plate : "Externo, lateral " + c.VehicleReference, c.Vehicle != null ? c.Vehicle.InternalNumber : null, c.Service!.Name, c.Period, c.InvoiceNumber,
                 c.Amount, c.Allocations.Where(a => !a.IsDeleted).Sum(a => a.Amount), c.Route, c.Status, c.PaidAt, c.ReviewFlag, c.ExternalId))
             .ToListAsync(ct);
         return Result.Success<IReadOnlyList<ServiceChargeDto>>(filas);

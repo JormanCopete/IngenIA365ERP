@@ -7,6 +7,10 @@ using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Transport.Notifications;
 using IngenIA365ERP.Application.Transport.Sales;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Core.Connectors;
+using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Transport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -103,9 +107,9 @@ public class VentasDeServiciosDeVehiculoTests
 
     [Theory]
     [InlineData("RET111")]
-    [InlineData("303")]
     [InlineData("NOEXISTE")]
-    public async Task Un_vehiculo_retirado_o_inexistente_no_sirve(string digitado)
+    [InlineData("12345678901")]
+    public async Task Una_placa_que_no_esta_en_el_parque_no_sirve(string digitado)
     {
         await SembrarAsync();
 
@@ -113,5 +117,91 @@ public class VentasDeServiciosDeVehiculoTests
 
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be("Transport.Sale.VehicleNotFound");
+    }
+
+    /// <summary>2026-11-25: los servicios también se venden a vehículos que no son de la cooperativa; se identifican por el lateral (números).</summary>
+    [Theory]
+    [InlineData("618", "618")]
+    [InlineData(" 7 ", "7")]
+    [InlineData("303", "303")] // el lateral de un vehículo retirado ya no es del parque
+    [InlineData("1234567890", "1234567890")]
+    public async Task Un_numero_fuera_del_parque_es_el_lateral_de_un_vehiculo_externo(string digitado, string guardado)
+    {
+        await SembrarAsync();
+
+        var r = await Puerto().ResolverAsync(_radio, digitado, CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Valor.Should().Be(guardado);
+        r.Value.Etiqueta.Should().Contain("fuera del parque");
+    }
+
+    [Fact]
+    public async Task El_cargo_de_un_vehiculo_externo_avisa_con_el_lateral_digitado()
+    {
+        _db.Branches.Add(new Branch { Name = "Principal" });
+        var conector = new Connector { Code = "RADIO", Name = "Radio", IsEnabled = true, CurrentVersionNumber = 1 };
+        conector.Versions.Add(new ConnectorVersion { Number = 1, BaseUrl = "https://proveedor.example.com", DefinitionJson = "{}", DefinitionSha256 = "x" });
+        var cargo = new ServiceCharge
+        {
+            VehicleReference = "618", Service = new TransportService { ProductCode = "RADIO", Name = "Radio", Priority = 1, Connector = conector },
+            Period = "202611", Origin = ChargeOrigin.Sale, InvoicePublicId = Guid.NewGuid(), InvoiceNumber = "FV-1", InvoiceLinePublicId = Guid.NewGuid(),
+            Amount = 40_000m, Route = ChargeRoute.Cash, Status = ChargeStatus.Paid,
+        };
+        _db.ServiceCharges.Add(cargo);
+        await _db.SaveChangesAsync();
+        var actor = Substitute.For<IActorActual>();
+        actor.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(new IngenIA365ERP.Application.Common.Execution.Actor(
+            Domain.Enums.Integration.ActorKind.Process, null, null, null, "Proceso de integración", null,
+            Domain.Enums.Integration.ExecutionChannel.Process, "Tarea:integracion", null, null));
+        var emision = new EmisionDeSolicitudDeConector(_db, new EmisorDeMensajes(_db, actor, _reloj), new FacturasDeServicios(_db),
+            _reloj, NullLogger<EmisionDeSolicitudDeConector>.Instance);
+
+        var envio = await emision.EmitirAsync(cargo, new PagoQueSalda("FV-1", Hoy), CancellationToken.None);
+        await _db.SaveChangesAsync();
+
+        envio.Should().NotBeNull();
+        var carga = _db.IntegrationMessages.Should().ContainSingle().Subject.PayloadJson;
+        carga.Should().Contain("\"vehiculo.radioMovil\":\"618\"").And.Contain("\"vehiculo.placa\":\"\"");
+    }
+
+    /// <summary>El POS (documento equivalente) valida y confirma por el mismo camino que la factura: el externo pasa y deja su cargo.</summary>
+    [Theory]
+    [InlineData(DocumentClass.PosEquivalentDocument, "618", null, "618")]
+    [InlineData(DocumentClass.PosEquivalentDocument, "101", "ABC123", null)]
+    [InlineData(DocumentClass.SalesInvoice, "618", null, "618")]
+    public async Task La_venta_del_POS_y_de_la_factura_acepta_vehiculos_externos(DocumentClass clase, string digitado, string? placa, string? externo)
+    {
+        await SembrarAsync();
+        var producto = new Product { Code = "RADIO", Name = "Radio", CategoryId = 1, BaseUnitId = 1, PublicId = _radio };
+        _db.Products.Add(producto);
+        await _db.SaveChangesAsync();
+        var venta = new InventoryDocument { Class = clase, DocumentTypeId = 1, Prefix = "POS", Number = 1, OperationDate = Hoy, Currency = "COP", BranchId = 1 };
+        venta.Lines.Add(new InventoryDocumentLine
+        {
+            Document = venta, LineNumber = 1, ProductId = producto.Id, UnitId = 1, Quantity = 1m, UnitPrice = 40_000m, GrossAmount = 40_000m,
+            NetAmount = 40_000m, ItemReference = digitado,
+        });
+        _db.InventoryDocuments.Add(venta);
+        await _db.SaveChangesAsync();
+        _db.DocumentPayments.Add(new DocumentPayment
+        {
+            DocumentId = venta.Id, LineNumber = 1, PaymentMeansId = 1, Amount = 40_000m, MeansCode = "EFECTIVO", MeansName = "Efectivo",
+            MeansClass = Domain.Enums.Core.PaymentMeansClass.Cash, DianPaymentMeansCode = "10",
+        });
+
+        var falta = await ReferenciaDeLinea.ValidarAsync(_db, [Puerto()], venta, CancellationToken.None);
+        falta.Should().BeNull();
+        venta.Lines.Single().ItemReference.Should().Be(placa ?? externo);
+        await _db.SaveChangesAsync();
+
+        var r = await Puerto().AlConfirmarVentaAsync(venta.PublicId, CancellationToken.None);
+        await _db.SaveChangesAsync();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var cargo = _db.ServiceCharges.Should().ContainSingle().Subject;
+        cargo.VehicleReference.Should().Be(externo);
+        (cargo.VehicleId is null).Should().Be(externo is not null);
+        cargo.Status.Should().Be(ChargeStatus.Paid);
     }
 }

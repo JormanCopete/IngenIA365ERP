@@ -1017,6 +1017,10 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     venta no confirma (`Inventory.Line.ReferenceRequired`). Al confirmar nace un cargo por línea (`ChargeOrigin.Sale`, sin corrida; el
     índice único por vehículo, servicio y período es sólo de `Billing`); el contado se reparte por prioridad y lo demás va a la primera forma
     a crédito, con `RequiresPaidOff` si esa obligación cubre más que el servicio. Migración aditiva `ServiciosDeVehiculoEnVentas`.
+  - **Vehículos externos** (2026-11-25, pedido del dueño): lo digitado que no es del parque y es un número de 1 a 10 dígitos
+    (`VentasDeServiciosDeVehiculo.LateralExterno`) es el lateral de un vehículo de fuera; el cargo nace con `VehicleId` nulo y
+    `VehicleReference`, y avisa con ese lateral en `vehiculo.radioMovil` (placa vacía). Una placa fuera del parque se sigue rechazando.
+    Migración aditiva `VentaDeServicioAVehiculoExterno` (`VehicleId` y `OwnerPersonId` nulos).
 
   Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
   `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,
