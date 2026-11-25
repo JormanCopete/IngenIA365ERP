@@ -83,8 +83,10 @@ public static class DocumentErrors
             availableFrom = PrefijosDeDocumentosDeCartera.DeCaptaciones.TryGetValue(clase, out var entrega) ? entrega.ToString() : EntregaDeK5,
         });
 
+    /// <summary>2026-11-24: el mensaje dice las dos claves y dónde se registran (antes sólo decía «en los parámetros de Cartera»).</summary>
     public static Error SinFirmante() => new(CodigoSinFirmante,
-        "Falta configurar el firmante de los documentos (nombre y cargo) en los parámetros de Cartera.");
+        "Falta configurar quién firma los documentos: en Cartera › Parámetros registre «Documentos.Firmante.Nombre» (el nombre) y "
+        + "«Documentos.Firmante.Cargo» (el cargo), con vigencia desde hoy o antes.");
 
     public static Error FechaFutura(DateOnly fecha) => new ErrorConDatos(CodigoFechaFutura,
         $"El certificado de saldo es a hoy o a una fecha que ya pasó: el {fecha:dd/MM/yyyy} todavía no llega.", new { cutoffDate = fecha });

@@ -231,9 +231,12 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         }
     }
 
-    public Task<ResultadoDeInventario<IReadOnlyList<ReciboDto>>> RecibosAsync(DateOnly? desde, DateOnly? hasta, string? numero, CancellationToken ct = default) =>
+    /// <remarks>2026-11-24 (pedido del dueño): <paramref name="pagador"/> filtra por la persona que pagó (la del recibo).</remarks>
+    public Task<ResultadoDeInventario<IReadOnlyList<ReciboDto>>> RecibosAsync(DateOnly? desde, DateOnly? hasta, string? numero, CancellationToken ct = default,
+        Guid? pagador = null) =>
         EnvioDeVentas.EnviarAsync<IReadOnlyList<ReciboDto>>(http, auth, HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/receipts",
-            EnvioDeVentas.Query(("from", EnvioDeVentas.Texto(desde)), ("to", EnvioDeVentas.Texto(hasta)), ("number", numero))), null, null, ct);
+            EnvioDeVentas.Query(("from", EnvioDeVentas.Texto(desde)), ("to", EnvioDeVentas.Texto(hasta)), ("number", numero),
+                ("person", EnvioDeVentas.Texto(pagador)))), null, null, ct);
 
     /// <summary>
     /// 2026-11-18 (pedido del dueño): el recibo por su número como lo dice la persona. El número se guarda con ceros a la izquierda («000005»), así que
@@ -310,5 +313,27 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         6 => "Cuota específica",
         7 => "Valor libre",
         _ => "—",
+    };
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): cómo funciona cada modalidad y cuándo usarla, para el tooltip de la lista y la ayuda F1 de la Caja (antes sólo se veía
+    /// el nombre y, al simular, códigos como «Lending.Payment.AdvanceDoesNotReduceInterest»).
+    /// </summary>
+    public static string AyudaDeModalidad(int? modalidad) => modalidad switch
+    {
+        1 => "Cancelación total: paga todo lo que debe el crédito a hoy —capital, intereses, seguros y cargos— y lo deja cancelado. Usa primero el anticipo "
+             + "que tenga. Úsela cuando el asociado quiere saldar el crédito: el valor se propone solo; lo que sobre se devuelve.",
+        2 => "Lo vencido: paga sólo las cuotas ya vencidas, con su mora. Úsela para poner al día un crédito atrasado; lo que pase de lo vencido no se aplica.",
+        3 => "Cuota del ciclo: paga lo vencido y la cuota del período. Si esa cuota todavía no vence, lo que le toca queda como anticipo de esa cuota (no "
+             + "reduce intereses). Es la de todos los meses.",
+        4 => "Anticipo: paga lo vencido y el resto queda guardado como anticipo; cada cuota se paga sola con él cuando vence. No reduce intereses ni "
+             + "abona a capital antes de tiempo. Úsela cuando el asociado deja plata para las próximas cuotas.",
+        5 => "Abono extraordinario a capital: paga lo vencido y el resto baja el capital; el deudor elige si se reduce el plazo o la cuota. Sí reduce "
+             + "intereses. Si alcanza todo el capital, se aplica como cancelación.",
+        6 => "Cuota específica: paga sólo la cuota que indique (el número), si las anteriores están pagas o la línea lo permite. Si todavía no vence, "
+             + "queda como anticipo de esa cuota.",
+        7 => "Valor libre: paga lo vencido por la prelación y el resto queda como anticipo general (como «Anticipo»). Úsela cuando el asociado trae un "
+             + "valor que no corresponde a una cuota.",
+        _ => "Cómo se aplica el pago al crédito: elija la modalidad y pase el cursor sobre ella para ver cómo funciona.",
     };
 }

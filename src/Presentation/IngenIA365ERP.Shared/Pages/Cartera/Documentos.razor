@@ -259,6 +259,7 @@
                         Queda numerado, con su código de verificación, y no se edita: si algo está mal se anula y se emite otro.
                     </p>
                     @if (_errorEmision is not null) { <p class="aviso aviso-error" role="alert">@_errorEmision</p> }
+                    @if (_faltaFirmante) { <AvisoDeFirmanteFaltante /> }
                     @if (_obligacionesQueNiegan.Count > 0)
                     {
                         <p class="aviso aviso-error">Obligaciones con saldo:</p>
@@ -314,6 +315,9 @@
     private long _total;
     private int _pagina = 1;
     private string? _clase, _estado, _buscarFiltro, _buscarCredito, _numeroDelFiltro, _errorEmision, _errorAnulacion, _motivo;
+
+    /// <summary>2026-11-24: la emisión falló por el firmante sin configurar (se muestra dónde se registra).</summary>
+    private bool _faltaFirmante;
     private DateOnly? _desde, _hasta, _corte, _periodoDesde, _periodoHasta;
     private int _anio = DateTime.Today.Year - 1;
     private Guid? _filtroDeCredito, _titular;
@@ -438,6 +442,7 @@
     private void LimpiarNegativa()
     {
         _errorEmision = null;
+        _faltaFirmante = false;
         _obligacionesQueNiegan = [];
         _ventasQueNiegan = [];
     }
@@ -455,6 +460,7 @@
         if (!r.IsSuccess)
         {
             _errorEmision = r.ErrorMessage ?? "No se pudo emitir el documento.";
+            _faltaFirmante = r.ErrorCode == AvisoDeFirmanteFaltante.CodigoSinFirmante;
             if (r.ErrorCode == ClearanceDenied)
             {
                 _obligacionesQueNiegan = [.. r.Dato<List<ObligacionQueNiegaDto>>("obligations") ?? []];

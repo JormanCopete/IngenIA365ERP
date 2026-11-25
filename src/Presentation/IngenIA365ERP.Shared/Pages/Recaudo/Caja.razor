@@ -212,10 +212,13 @@
                                     <div class="fila-campos">
                                         @if (item.Target == 1)
                                         {
-                                            <label class="campo">Modalidad
-                                                <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: lo exigible, la cuota del período, la cancelación, un abono a capital, una cuota anticipada…"
+                                            @* 2026-11-24 (pedido del dueño): cada modalidad explica cómo funciona y cuándo usarla: al pasar el cursor por la lista
+                                               (la elegida) o por cada opción, y con F1. *@
+                                            <label class="campo" title="@CajaClient.AyudaDeModalidad(item.LoanModality)">Modalidad <span class="texto-tenue" aria-hidden="true">ⓘ</span>
+                                                <select class="e-input" value="@item.LoanModality" title="@CajaClient.AyudaDeModalidad(item.LoanModality)"
+                                                        data-ayuda="@CajaClient.AyudaDeModalidad(item.LoanModality)"
                                                         @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
-                                                    @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                                    @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m" title="@CajaClient.AyudaDeModalidad(m)">@CajaClient.Modalidad(m)</option> }
                                                 </select>
                                             </label>
                                             @if (item.LoanModality == 6)

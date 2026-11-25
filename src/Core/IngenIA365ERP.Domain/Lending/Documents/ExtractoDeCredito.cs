@@ -75,7 +75,9 @@ public sealed record ExtractoArmado(
 /// <item>el <b>saldo final</b> por concepto (el estado del último día).</item>
 /// </list>
 /// Saldo inicial + movimientos = saldo final al centavo en cada concepto de <see cref="LoanConcept"/>: si no cuadra es un error de programación y
-/// lanza. Un período sin movimientos y sin saldo (por ejemplo, posterior a la cancelación) no se extracta: lanza <see cref="ReglaDeCarteraException"/>
+/// lanza. 2026-11-24 (pedido del dueño): todo va en el sentido de <b>lo que se debe</b>, así que el anticipo y el saldo a favor —dinero del deudor que
+/// el crédito guarda— van con signo menos (<see cref="SignoDeDeuda"/>): un anticipo recibido baja el saldo y su aplicación a una cuota no lo mueve.
+/// Antes se sumaban como si fueran deuda y el saldo final de un crédito con anticipo salía más alto. Un período sin movimientos y sin saldo (por ejemplo, posterior a la cancelación) no se extracta: lanza <see cref="ReglaDeCarteraException"/>
 /// con <see cref="CodigoNadaQueExtractar"/> (§8.1: «período con movimientos o saldo»). Motor puro: sólo <c>DateOnly</c> y <c>decimal</c>. (nuevo)
 /// </summary>
 public static class ExtractoDeCredito
@@ -87,6 +89,12 @@ public static class ExtractoDeCredito
 
     /// <summary>Todos los conceptos, en el orden del enum.</summary>
     public static IReadOnlyList<LoanConcept> Conceptos { get; } = Enum.GetValues<LoanConcept>().OrderBy(c => (int)c).ToList();
+
+    /// <summary>
+    /// El sentido de un concepto en el extracto (2026-11-24): +1 lo que el deudor debe; −1 lo que el crédito le guarda a su favor (el anticipo y el saldo
+    /// a favor), que el libro lleva en positivo. Así el total es lo que de verdad se debe.
+    /// </summary>
+    public static int SignoDeDeuda(LoanConcept concepto) => concepto is LoanConcept.Advance or LoanConcept.CreditBalance ? -1 : 1;
 
     /// <summary>Arma el extracto de <paramref name="desde"/> a <paramref name="hasta"/> (ver la clase).</summary>
     public static ExtractoArmado Armar(EstadoDelCredito? alInicio, EstadoDelCredito alFinal, DateOnly desde, DateOnly hasta,
@@ -171,10 +179,10 @@ public static class ExtractoDeCredito
 
     /// <summary>Los saldos por concepto del estado, con todos los conceptos (cero los que no tiene); todo en cero si el estado es nulo.</summary>
     private static Dictionary<LoanConcept, decimal> PorConcepto(EstadoDelCredito? estado) =>
-        Conceptos.ToDictionary(c => c, c => estado?.Saldo(c) ?? 0m);
+        Conceptos.ToDictionary(c => c, c => SignoDeDeuda(c) * (estado?.Saldo(c) ?? 0m));
 
     private static Dictionary<LoanConcept, decimal> Sumar(IReadOnlyList<MovimientoDeLibro> filas) =>
-        filas.GroupBy(f => f.Concepto).Select(g => (g.Key, Suma: g.Sum(f => f.Monto))).Where(x => x.Suma != 0m)
+        filas.GroupBy(f => f.Concepto).Select(g => (g.Key, Suma: SignoDeDeuda(g.Key) * g.Sum(f => f.Monto))).Where(x => x.Suma != 0m)
             .OrderBy(x => (int)x.Key).ToDictionary(x => x.Key, x => x.Suma);
 
     private static ClaseDeLineaDeExtracto ClaseDe(LoanOperationKind clase, IReadOnlyList<MovimientoDeLibro> filas) => clase switch
