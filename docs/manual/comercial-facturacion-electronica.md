@@ -118,8 +118,29 @@ las palabras en cualquier orden), fechas, estado y tipo. En «Más filtros»: pr
 filtros» los borra todos. Los estados son: pendiente de transmitir, enviado sin respuesta, validado, validado con notificaciones, rechazado, en
 contingencia del facturador (03), en contingencia de la DIAN (04) y anulado sin reemplazo.
 
-El detalle muestra las versiones del documento (con sus archivos), cada transmisión con los mensajes traducidos al
-español y las correcciones. Las acciones aparecen sólo cuando proceden:
+El **número** abre el detalle en una ventana (desde el 2026-11-25; antes se pintaba al final de la página). Trae:
+
+- el resumen ante la DIAN: cliente con su identificación, fecha, total, canal, resolución, cuándo se validó, se entregó
+  y se envió el correo, y el código único (CUFE, CUDE o CUDS);
+- si salió de una venta, la **venta completa**: subtotal, descuentos, impuestos, retenciones y total, cada producto con
+  su cantidad, precio, descuentos e impuestos, y los pagos por medio. Sin permiso para ver ventas, la ventana lo dice y
+  muestra lo demás;
+- las versiones del documento con sus archivos, cada transmisión con los mensajes traducidos al español y las
+  correcciones.
+
+En el pie de la ventana:
+
+- **«Imprimir»** saca una copia con la marca «COPIA», como «Reimprimir» en la venta (permiso
+  `Inventory.Documents.Reprint`): en tirilla se imprime en el acto y en carta baja la representación gráfica con su
+  código y QR. Propone tirilla para el documento equivalente POS y carta para lo demás.
+- **«PDF»** baja la representación gráfica vigente.
+- **«Enviar por correo»**, sólo validado o en contingencia: manda el PDF y el XML en un ZIP, como en la entrega al
+  comprador. El correo propuesto es el de la venta; vacío, sale al correo de recepción que quedó en la copia fiscal, y
+  se puede escribir otro. Sale aunque el correo al comprador lo entregue el canal, porque lo pide una persona. Un envío
+  a otra dirección es una copia: la fecha de «Correo» sólo cambia cuando va al correo de recepción. Cada envío queda en la
+  auditoría con la dirección.
+
+Las acciones aparecen arriba en la ventana, sólo cuando proceden:
 
 - «Reintentar ahora»: no hace falta esperar el próximo reintento automático.
 - «Consultar a la DIAN»: pregunta el estado de lo enviado.

@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Notifications;
 using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
@@ -64,8 +65,7 @@ public sealed class EntregaAlComprador(
 
         var canonico = await reconstruccion.ReconstruirAsync(documento, version, ct);
         if (canonico.IsFailure) return Result.Failure<bool>(canonico.Error);
-        var comprador = canonico.Value.Documento.Counterparty;
-        var destino = comprador.ReceptionEmail;
+        var destino = canonico.Value.Documento.Counterparty.ReceptionEmail;
         if (string.IsNullOrWhiteSpace(destino))
         {
             logger.LogWarning("[FE.SinCorreoDeRecepcion] {Numero}: la copia fiscal no tiene correo de recepción; no se envió.", documento.Number);
@@ -74,9 +74,68 @@ public sealed class EntregaAlComprador(
 
         pdf ??= await LeerAsync(version.GraphicPdfAttachmentPublicId, ct);
         attachedDocument ??= await LeerAsync(version.AttachedDocumentAttachmentPublicId, ct);
-        var emisor = canonico.Value.Documento.Issuer;
+        await correo.SendAsync(await CorreoAsync(documento, canonico.Value, destino!, pdf, attachedDocument, ct), ct);
+        documento.EmailSentAt = ahora;
+        documento.DeliveredAt ??= ahora;
+        await db.SaveChangesAsync(ct);
+        return Result.Success(true);
+    }
 
-        // Asunto y nombre del adjunto según el anexo técnico (NIT;nombre;número;tipo;nombre): POR COTEJAR (T761).
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): el envío que pide una persona desde la bandeja de documentos electrónicos, al correo de recepción de la
+    /// copia fiscal o al que ella escriba. Sale aunque el correo lo entregue el canal (<c>EmailDeliveryBy = Channel</c>): es el acto de una
+    /// persona, no la entrega automática, así que la regla de «nunca los dos» no aplica. Exige la representación gráfica (el PDF que el
+    /// comprador lee); sin ella, <c>ElectronicInvoicing.Document.RepresentationPending</c>. Sólo el envío a la dirección de la copia fiscal anota
+    /// <c>EmailSentAt</c> y la entrega; a otra dirección es una copia. Devuelve la dirección a la que salió y si era la de la copia fiscal.
+    /// El que llama guarda.
+    /// </summary>
+    public async Task<Result<(string Destino, bool AlCorreoDeRecepcion)>> EnviarAPedidoAsync(ElectronicDocument documento, ElectronicDocumentVersion version,
+        string? correoPedido, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(documento);
+        ArgumentNullException.ThrowIfNull(version);
+        if (!Entregable(documento.Status)) return Result.Failure<(string, bool)>(ErroresDeDocumentosElectronicos.NotDeliverable(documento.Status));
+        if (version.GraphicPdfAttachmentPublicId is null) return Result.Failure<(string, bool)>(ErroresDeDocumentosElectronicos.RepresentationPending());
+
+        var canonico = await reconstruccion.ReconstruirAsync(documento, version, ct);
+        if (canonico.IsFailure) return Result.Failure<(string, bool)>(canonico.Error);
+        var recepcion = canonico.Value.Documento.Counterparty.ReceptionEmail?.Trim();
+        var destino = string.IsNullOrWhiteSpace(correoPedido) ? recepcion : correoPedido.Trim();
+        if (string.IsNullOrWhiteSpace(destino)) return Result.Failure<(string, bool)>(ErroresDeDocumentosElectronicos.EmailRequired());
+
+        var pdf = await LeerAsync(version.GraphicPdfAttachmentPublicId, ct);
+        if (pdf is not { Length: > 0 }) return Result.Failure<(string, bool)>(ErroresDeDocumentosElectronicos.RepresentationPending());
+        var attachedDocument = await LeerAsync(version.AttachedDocumentAttachmentPublicId, ct);
+        var mensaje = await CorreoAsync(documento, canonico.Value, destino, pdf, attachedDocument, ct);
+        try
+        {
+            await correo.SendAsync(mensaje, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "[FE.EnvioAPedidoFallido] {Numero}: el servidor de correo no aceptó el envío.", documento.Number);
+            return Result.Failure<(string, bool)>(ErroresDeDocumentosElectronicos.EmailFailed());
+        }
+
+        var alCorreoDeRecepcion = string.Equals(destino, recepcion, StringComparison.OrdinalIgnoreCase);
+        if (alCorreoDeRecepcion)
+        {
+            var ahora = reloj.UtcNow;
+            documento.EmailSentAt = ahora;
+            documento.DeliveredAt ??= ahora;
+        }
+        return Result.Success((destino, alCorreoDeRecepcion));
+    }
+
+    /// <summary>
+    /// El correo del documento: el asunto y el nombre del adjunto según el anexo técnico (NIT;nombre;número;tipo;nombre, POR COTEJAR, T761), el
+    /// ZIP con el <c>AttachedDocument</c> y el PDF, y la plantilla <see cref="Plantilla"/>. Lo comparten la entrega y el envío a pedido.
+    /// </summary>
+    private async Task<EmailMessage> CorreoAsync(ElectronicDocument documento, CanonicoConstruido canonico, string destino, byte[]? pdf,
+        byte[]? attachedDocument, CancellationToken ct)
+    {
+        var comprador = canonico.Documento.Counterparty;
+        var emisor = canonico.Documento.Issuer;
         var asunto = string.Join(';', emisor.TaxId, emisor.Name, documento.Number, documento.DianDocumentTypeCode, emisor.Name);
         var adjuntos = new List<EmailAttachment>();
         var zip = Empaquetar(documento.Number, attachedDocument, pdf);
@@ -94,12 +153,7 @@ public sealed class EntregaAlComprador(
         var html = plantillas is null ? null : await plantillas.RenderHtmlAsync(Plantilla, modelo, ct);
         html ??= $"<p>{WebUtility.HtmlEncode(comprador.Name)}:</p><p>Adjuntamos el documento electrónico {WebUtility.HtmlEncode(documento.Number)} " +
                  $"de {WebUtility.HtmlEncode(emisor.Name)}.</p>";
-
-        await correo.SendAsync(new EmailMessage(destino!, asunto, html, Attachments: adjuntos), ct);
-        documento.EmailSentAt = ahora;
-        documento.DeliveredAt ??= ahora;
-        await db.SaveChangesAsync(ct);
-        return Result.Success(true);
+        return new EmailMessage(destino, asunto, html, Attachments: adjuntos);
     }
 
     /// <summary>

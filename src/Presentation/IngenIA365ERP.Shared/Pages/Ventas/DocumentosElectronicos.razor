@@ -4,9 +4,14 @@
 @using IngenIA365ERP.Shared.Services.FacturacionElectronica
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Ventas
 @using static IngenIA365ERP.Shared.Services.FacturacionElectronica.TextosDeFacturacionElectronica
 @inject FacturacionElectronicaClient Facturacion
 @inject AdjuntosClient Adjuntos
+@inject VentasClient Ventas
+@inject IImpresionDeDocumentos Impresion
+@inject DescargaDeArchivos Descargas
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
@@ -21,7 +26,10 @@
    el servidor; la pantalla sólo evita ofrecer lo que no procede (AccionesDelDocumentoElectronico).
    2026-11-24 (pedido del dueño): los filtros en un panel (PanelDeFiltros): a la vista número, cliente (identificación o nombre, tal como
    salió en el documento), fechas, estado y tipo; en «Más filtros» prefijo, valor desde y hasta, contingencia, demorados, en reintento y
-   muertos. *@
+   muertos.
+   2026-11-25 (pedido del dueño): el número abre el detalle en una ventana —con la venta completa: líneas, impuestos, retenciones y pagos— en
+   lugar de pintarlo al final de la página; desde la ventana se imprime una copia, se baja el PDF y se envía por correo al comprador o a otra
+   dirección (POST …/send-email). *@
 <PermissionGate Required="ElectronicInvoicing.Documents.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -104,128 +112,268 @@
             <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
         </div>
     </IndicadorDeCarga>
-
-    <IndicadorDeCarga Cargando="@(_cargaDetalle.Activa || _accion.Activa)" Texto="@(_accion.Activa ? "Procesando…" : "Cargando el documento…")">
-        @if (_detalle is { } det)
-        {
-            var d = det.Document;
-            <div class="page-header">
-                <h4>@TipoDeDocumento(d.Kind) @d.Number · <span class="aviso @ClaseDeEstado(d.Status)">@Estado(d.Status)</span></h4>
-                <div class="toolbar">
-                    <PermissionGate Required="ElectronicInvoicing.Documents.Transmit">
-                        @if (AccionesDelDocumentoElectronico.PuedeReintentar(d.Status)) { <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@ReintentarAsync">Reintentar ahora</SfButton> }
-                        @if (AccionesDelDocumentoElectronico.PuedeConsultar(d.Status)) { <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@ConsultarAsync">Consultar a la DIAN</SfButton> }
-                    </PermissionGate>
-                    <PermissionGate Required="ElectronicInvoicing.Documents.Correct">
-                        @if (AccionesDelDocumentoElectronico.PuedeCorregirCasoA(d.Status)) { <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@AbrirCasoA">Corregir la copia fiscal (caso a)</SfButton> }
-                        @if (AccionesDelDocumentoElectronico.PuedeReemplazarOCancelar(d.Status, det.RechazoConfirmado))
-                        {
-                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@PrepararReemplazoAsync">Preparar reemplazo</SfButton>
-                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@AbrirCasoB">Reemplazar (caso b)</SfButton>
-                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.CasoC))">Anular sin reemplazo (caso c)</SfButton>
-                        }
-                    </PermissionGate>
-                    <PermissionGate Required="ElectronicInvoicing.Documents.TransmitByCurrentChannel">
-                        @if (AccionesDelDocumentoElectronico.PuedeTransmitirPorElCanalVigente(d.Status)) { <SfButton CssClass="e-flat" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.CanalVigente))">Transmitir por el canal vigente</SfButton> }
-                    </PermissionGate>
-                    <SfButton CssClass="e-flat" OnClick="@(() => _detalle = null)">Cerrar</SfButton>
-                </div>
-            </div>
-            @if (d.Status == EstadoRechazado && !det.RechazoConfirmado)
-            {
-                <p class="aviso aviso-info">El rechazo todavía no está confirmado: «Consultar a la DIAN» lo confirma y habilita el reemplazo o la anulación (casos b y c).</p>
-            }
-            <div class="form-grid">
-                <div class="kpi-card"><span class="label">Documento del ERP</span><span>@if (AccionesDelDocumentoElectronico.PantallaDelOrigen(d.Source.Route) is { } origen) { <a href="@origen">Abrir</a> } else { <span>—</span> }</span></div>
-                <div class="kpi-card"><span class="label">Contraparte</span><span>@(d.CounterpartyName ?? "—")</span></div>
-                <div class="kpi-card"><span class="label">Total</span><span>@d.Total.ToString("N0")</span></div>
-                <div class="kpi-card"><span class="label">@CodigoUnico(d.UniqueCodeKind)</span><span class="texto-partido">@(d.UniqueCode ?? "—")</span></div>
-                <div class="kpi-card"><span class="label">Canal · ambiente</span><span>@d.ChannelCode · @Ambiente(d.Environment)</span></div>
-                <div class="kpi-card"><span class="label">Resolución</span><span>@(det.Resolution is { } res ? $"{res.Number} ({res.Prefix})" : "—")</span></div>
-                <div class="kpi-card"><span class="label">Validado</span><span>@(det.ValidatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</span></div>
-                <div class="kpi-card"><span class="label">Entregado</span><span>@(det.DeliveredAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")@(det.EmailSentAt is { } c ? $" · correo {c.ToLocalTime():dd/MM HH:mm}" : "")</span></div>
-                @if (d.RejectedBy is { } rechazo) { <div class="kpi-card"><span class="label">Rechazado por</span><span>@Rechazador(rechazo)</span></div> }
-                @if (det.Contingency is { } cont)
-                {
-                    <div class="kpi-card"><span class="label">Contingencia</span><span><a href="/ventas/contingencias-dian">@TipoDeContingencia(cont.Type)</a> desde @cont.StartedAt.ToLocalTime().ToString("dd/MM HH:mm")@(cont.DeadlineAt is { } pl ? $" · plazo {pl.ToLocalTime():dd/MM/yyyy HH:mm}" : "")</span></div>
-                }
-            </div>
-            @if (det.CorrectsDocument is { } corrige)
-            {
-                <p>Corrige a <a href="@($"/ventas/documentos-electronicos?documento={corrige.ElectronicDocumentPublicId}")" @onclick="@(() => AbrirAsync(corrige.ElectronicDocumentPublicId))" @onclick:preventDefault>@corrige.Number</a></p>
-            }
-            @if (det.CorrectedBy.Count > 0)
-            {
-                <p>Corregido por:
-                    @foreach (var cor in det.CorrectedBy)
-                    {
-                        <a href="@($"/ventas/documentos-electronicos?documento={cor.ElectronicDocumentPublicId}")" @onclick="@(() => AbrirAsync(cor.ElectronicDocumentPublicId))" @onclick:preventDefault>@TipoDeDocumento(cor.Kind) @cor.Number (@Estado(cor.Status))</a><span> </span>
-                    }
-                </p>
-            }
-            @if (det.Cancellation is { } anulacion)
-            {
-                <p class="aviso aviso-info">Anulado sin reemplazo@(anulacion.ByName is { } quien ? $" por {quien}" : "")@(anulacion.At is { } cuando ? $" el {cuando.ToLocalTime():dd/MM/yyyy HH:mm}" : ""): @anulacion.Reason</p>
-            }
-            @if (_camposEconomicos.Count > 0)
-            {
-                <div class="aviso aviso-alerta">La corrección cambia datos económicos (@string.Join(", ", _camposEconomicos)): no es un caso a. Corrija por el caso b («Preparar reemplazo»).</div>
-            }
-
-            <h4>Versiones</h4>
-            <table class="data-grid">
-                <thead><tr><th>#</th><th>Motivo</th><th>Creada</th><th>Huella</th><th>Artefactos</th><th>Cambio de la copia fiscal</th></tr></thead>
-                <tbody>
-                    @foreach (var v in det.Versions.OrderBy(x => x.VersionNumber))
-                    {
-                        <tr>
-                            <td>@v.VersionNumber</td>
-                            <td>@MotivoDeVersion(v.Reason)</td>
-                            <td>@v.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                            <td class="texto-tenue">@v.CanonicalSha256[..Math.Min(12, v.CanonicalSha256.Length)]…</td>
-                            <td>
-                                @foreach (var a in v.Artifacts)
-                                {
-                                    <SfButton CssClass="e-flat" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(v.VersionNumber, a))">@Artefacto(a.Artifact)</SfButton>
-                                }
-                            </td>
-                            <td class="texto-tenue">@(v.PartySnapshotChange?.ToString())</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-
-            <h4>Transmisiones</h4>
-            @if (det.Transmissions.Count == 0)
-            {
-                <p class="texto-tenue">Todavía no hay intentos ante el canal.</p>
-            }
-            else
-            {
-                <div class="tabla-desplazable">
-                    <table class="data-grid">
-                        <thead><tr><th>#</th><th>Operación</th><th>Cuándo</th><th>Quién</th><th class="numero">Duración (ms)</th><th>Resultado</th><th>Códigos</th><th>Mensajes</th></tr></thead>
-                        <tbody>
-                            @foreach (var t in det.Transmissions.OrderBy(x => x.AttemptNumber))
-                            {
-                                <tr>
-                                    <td>@t.AttemptNumber</td>
-                                    <td>@Operacion(t.Operation) · @t.ChannelCode</td>
-                                    <td>@t.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
-                                    <td>@Actor(t.RequestedBy.Kind): @t.RequestedBy.Name</td>
-                                    <td class="numero">@t.DurationMs</td>
-                                    <td>@Resultado(t.Outcome)</td>
-                                    <td>@t.ProviderCode @t.DianStatusCode</td>
-                                    <td>@if (t.Messages.Count > 0) { <ul>@foreach (var m in t.Messages) { <li>@m.Rule: @(m.Translation ?? m.Text)</li> }</ul> }</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        }
-    </IndicadorDeCarga>
 </div>
+
+@* 2026-11-25 (pedido del dueño): el detalle se abre en una ventana, no al final de la página: el resumen ante la DIAN, la venta completa (líneas,
+   impuestos, retenciones y pagos), las versiones con sus archivos y las transmisiones; las acciones según el estado arriba, y en el pie
+   «Imprimir» (tirilla o carta, como copia), el PDF de la representación y «Enviar por correo» al comprador o a otra dirección. *@
+<SfDialog @bind-Visible="_verDetalle" Header="@TituloDelDetalle" Width="1100px" IsModal="true" ShowCloseIcon="true" CloseOnEscape="true"
+          CssClass="dialogo-de-detalle" AllowDragging="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_cargaDetalle.Activa || _accion.Activa)" Texto="@(_accion.Activa ? "Procesando…" : "Cargando el documento…")">
+                @if (_detalle is { } det)
+                {
+                    var d = det.Document;
+                    <div class="toolbar">
+                        <span class="aviso @ClaseDeEstado(d.Status)">@Estado(d.Status)</span>
+                        @if (EstadoVisible(d) is { } visible) { <span class="texto-tenue">@visible</span> }
+                        <PermissionGate Required="ElectronicInvoicing.Documents.Transmit">
+                            @if (AccionesDelDocumentoElectronico.PuedeReintentar(d.Status)) { <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@ReintentarAsync">Reintentar ahora</SfButton> }
+                            @if (AccionesDelDocumentoElectronico.PuedeConsultar(d.Status)) { <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@ConsultarAsync">Consultar a la DIAN</SfButton> }
+                        </PermissionGate>
+                        <PermissionGate Required="ElectronicInvoicing.Documents.Correct">
+                            @if (AccionesDelDocumentoElectronico.PuedeCorregirCasoA(d.Status)) { <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@AbrirCasoA">Corregir la copia fiscal (caso a)</SfButton> }
+                            @if (AccionesDelDocumentoElectronico.PuedeReemplazarOCancelar(d.Status, det.RechazoConfirmado))
+                            {
+                                <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@PrepararReemplazoAsync">Preparar reemplazo</SfButton>
+                                <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@AbrirCasoB">Reemplazar (caso b)</SfButton>
+                                <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.CasoC))">Anular sin reemplazo (caso c)</SfButton>
+                            }
+                        </PermissionGate>
+                        <PermissionGate Required="ElectronicInvoicing.Documents.TransmitByCurrentChannel">
+                            @if (AccionesDelDocumentoElectronico.PuedeTransmitirPorElCanalVigente(d.Status)) { <SfButton CssClass="e-flat" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.CanalVigente))">Transmitir por el canal vigente</SfButton> }
+                        </PermissionGate>
+                    </div>
+                    @if (d.Status == EstadoRechazado && !det.RechazoConfirmado)
+                    {
+                        <p class="aviso aviso-info">El rechazo todavía no está confirmado: «Consultar a la DIAN» lo confirma y habilita el reemplazo o la anulación (casos b y c).</p>
+                    }
+                    @if (det.Cancellation is { } anulacion)
+                    {
+                        <p class="aviso aviso-info">Anulado sin reemplazo@(anulacion.ByName is { } quien ? $" por {quien}" : "")@(anulacion.At is { } cuando ? $" el {cuando.ToLocalTime():dd/MM/yyyy HH:mm}" : ""): @anulacion.Reason</p>
+                    }
+                    @if (_camposEconomicos.Count > 0)
+                    {
+                        <div class="aviso aviso-alerta">La corrección cambia datos económicos (@string.Join(", ", _camposEconomicos)): no es un caso a. Corrija por el caso b («Preparar reemplazo»).</div>
+                    }
+
+                    <dl class="caja-resumen">
+                        <div><dt>Cliente</dt><dd>@(_venta?.Counterparty is { } comprador ? $"{comprador.Name}{(comprador.IdNumber is { } nit ? $" · {comprador.IdType} {nit}" : "")}" : d.CounterpartyName ?? "—")</dd></div>
+                        <div><dt>Expedido</dt><dd>@d.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
+                        <div><dt>Total</dt><dd>@d.Total.ToString("N0")</dd></div>
+                        <div><dt>Canal · ambiente</dt><dd>@d.ChannelCode · @Ambiente(d.Environment)</dd></div>
+                        <div><dt>Resolución</dt><dd>@(det.Resolution is { } res ? $"{res.Number} ({res.Prefix})" : "—")</dd></div>
+                        <div><dt>Validado</dt><dd>@(det.ValidatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</dd></div>
+                        <div><dt>Entregado</dt><dd>@(det.DeliveredAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</dd></div>
+                        <div><dt>Correo</dt><dd>@(det.EmailSentAt is { } enviado ? $"enviado {enviado.ToLocalTime():dd/MM/yyyy HH:mm}" : "sin enviar")@(det.EmailDeliveryBy == CorreoPorElCanal ? " · lo entrega el canal" : "")</dd></div>
+                        @if (_venta is { } v)
+                        {
+                            <div><dt>Sucursal / punto</dt><dd>@v.Branch.Name@(v.PointOfSale is { } punto ? $" · {punto.Name}" : "")@(v.CashRegister is { } caja ? $" · caja {caja.Code}" : "")</dd></div>
+                            <div><dt>Vendedor</dt><dd>@(v.Salesperson?.Name ?? "—")</dd></div>
+                            <div><dt>Registró</dt><dd>@v.CreatedBy.Name@(v.ConfirmedBy is { } cb && cb.Name != v.CreatedBy.Name ? $" · confirmó {cb.Name}" : "")</dd></div>
+                        }
+                        @if (d.RejectedBy is { } rechazo) { <div><dt>Rechazado por</dt><dd>@Rechazador(rechazo)</dd></div> }
+                        @if (det.Contingency is { } cont)
+                        {
+                            <div><dt>Contingencia</dt><dd><a href="/ventas/contingencias-dian">@TipoDeContingencia(cont.Type)</a> desde @cont.StartedAt.ToLocalTime().ToString("dd/MM HH:mm")@(cont.DeadlineAt is { } pl ? $" · plazo {pl.ToLocalTime():dd/MM/yyyy HH:mm}" : "")</dd></div>
+                        }
+                        <div><dt>Documento del ERP</dt><dd>@if (AccionesDelDocumentoElectronico.PantallaDelOrigen(d.Source.Route) is { } origen) { <a href="@origen">Abrir</a> } else { <span>—</span> }</dd></div>
+                    </dl>
+                    <p class="texto-partido"><span class="texto-tenue">@CodigoUnico(d.UniqueCodeKind):</span> @(d.UniqueCode ?? "pendiente de validación de la DIAN")</p>
+                    @if (det.CorrectsDocument is { } corrige)
+                    {
+                        <p>Corrige a <a href="@($"/ventas/documentos-electronicos?documento={corrige.ElectronicDocumentPublicId}")" @onclick="@(() => AbrirAsync(corrige.ElectronicDocumentPublicId))" @onclick:preventDefault>@corrige.Number</a></p>
+                    }
+                    @if (det.CorrectedBy.Count > 0)
+                    {
+                        <p>Corregido por:
+                            @foreach (var cor in det.CorrectedBy)
+                            {
+                                <a href="@($"/ventas/documentos-electronicos?documento={cor.ElectronicDocumentPublicId}")" @onclick="@(() => AbrirAsync(cor.ElectronicDocumentPublicId))" @onclick:preventDefault>@TipoDeDocumento(cor.Kind) @cor.Number (@Estado(cor.Status))</a><span> </span>
+                            }
+                        </p>
+                    }
+
+                    @if (_venta is { } venta)
+                    {
+                        <div class="kpi-grid kpi-compacto">
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.Subtotal.ToString("N0")</span><span class="kpi-label">Subtotal</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.DiscountTotal.ToString("N0")</span><span class="kpi-label">Descuentos</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.TaxTotal.ToString("N0")</span><span class="kpi-label">Impuestos</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.WithholdingTotal.ToString("N0")</span><span class="kpi-label">Retenciones</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.Total.ToString("N0")</span><span class="kpi-label">Total</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@venta.Totals.AmountDue.ToString("N0")</span><span class="kpi-label">A pagar</span></div>
+                        </div>
+
+                        <h5>Productos y servicios</h5>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th>Descuentos</th><th>Impuestos</th><th class="numero">Total</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in venta.Lines.OrderBy(x => x.LineNumber))
+                                    {
+                                        <tr>
+                                            <td>@l.LineNumber</td>
+                                            <td>@l.Product.Code · @l.Product.Name@(l.ItemReference is { } referencia ? $" · {referencia}" : "")</td>
+                                            <td>@l.Unit.Code</td>
+                                            <td class="numero">@l.Quantity.ToString("0.####")</td>
+                                            <td class="numero">@l.UnitPrice.ToString("N0")</td>
+                                            <td>@string.Join("; ", l.Discounts.Select(x => $"{(x.Percent is { } pct ? $"{pct * 100m:0.##} % " : "")}{x.Amount:N0}"))</td>
+                                            <td>@string.Join("; ", l.Taxes.Select(x => $"{x.TaxRateCode} {x.Amount:N0}"))</td>
+                                            <td class="numero">@l.Total.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr><td colspan="7">Total</td><td class="numero">@venta.Totals.Total.ToString("N0")</td></tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        @if (venta.Withholdings.Count > 0)
+                        {
+                            <p class="texto-tenue">Retenciones: @string.Join(" · ", venta.Withholdings.Select(r => $"{r.TaxRateCode} sobre {r.Base:N0} = {r.Amount:N0}"))</p>
+                        }
+
+                        <h5>Pagos</h5>
+                        @if (venta.Payments.Count == 0)
+                        {
+                            <p class="texto-tenue">Sin pagos.</p>
+                        }
+                        else
+                        {
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Medio</th><th class="numero">Valor</th><th class="numero">Entregado / vueltas</th><th>Referencia</th><th>Tarjeta</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var p in venta.Payments.OrderBy(x => x.LineNumber))
+                                        {
+                                            <tr>
+                                                <td>@p.MeansCode · @TextosDeVentas.ClaseDeMedio(p.MeansClass)</td>
+                                                <td class="numero">@p.Amount.ToString("N0")</td>
+                                                <td class="numero">@p.Tendered?.ToString("N0")@(p.Change > 0m ? $" / {p.Change:N0}" : "")</td>
+                                                <td>@p.Reference @p.AuthorizationCode</td>
+                                                <td>@(p.Last4 is { } ultimos ? $"{p.NetworkCode} ****{ultimos}" : "")@(p.BatchNumber is { } lote ? $" lote {lote}" : "")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    else if (_avisoDeVenta is { } aviso)
+                    {
+                        <p class="texto-tenue">@aviso</p>
+                    }
+
+                    <h5>Versiones y archivos</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>#</th><th>Motivo</th><th>Creada</th><th>Huella</th><th>Archivos</th><th>Cambio de la copia fiscal</th></tr></thead>
+                            <tbody>
+                                @foreach (var ver in det.Versions.OrderBy(x => x.VersionNumber))
+                                {
+                                    <tr>
+                                        <td>@ver.VersionNumber</td>
+                                        <td>@MotivoDeVersion(ver.Reason)</td>
+                                        <td>@ver.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="texto-tenue">@ver.CanonicalSha256[..Math.Min(12, ver.CanonicalSha256.Length)]…</td>
+                                        <td>
+                                            @foreach (var a in ver.Artifacts)
+                                            {
+                                                <SfButton CssClass="e-flat" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(ver.VersionNumber, a))">@Artefacto(a.Artifact)</SfButton>
+                                            }
+                                        </td>
+                                        <td class="texto-tenue">@(ver.PartySnapshotChange?.ToString())</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h5>Transmisiones</h5>
+                    @if (det.Transmissions.Count == 0)
+                    {
+                        <p class="texto-tenue">Todavía no hay intentos ante el canal.</p>
+                    }
+                    else
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>#</th><th>Operación</th><th>Cuándo</th><th>Quién</th><th class="numero">Duración (ms)</th><th>Resultado</th><th>Códigos</th><th>Mensajes</th></tr></thead>
+                                <tbody>
+                                    @foreach (var t in det.Transmissions.OrderBy(x => x.AttemptNumber))
+                                    {
+                                        <tr>
+                                            <td>@t.AttemptNumber</td>
+                                            <td>@Operacion(t.Operation) · @t.ChannelCode</td>
+                                            <td>@t.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                            <td>@Actor(t.RequestedBy.Kind): @t.RequestedBy.Name</td>
+                                            <td class="numero">@t.DurationMs</td>
+                                            <td>@Resultado(t.Outcome)</td>
+                                            <td>@t.ProviderCode @t.DianStatusCode</td>
+                                            <td>@if (t.Messages.Count > 0) { <ul>@foreach (var m in t.Messages) { <li>@m.Rule: @(m.Translation ?? m.Text)</li> }</ul> }</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+        <FooterTemplate>
+            @if (_detalle is { } pie)
+            {
+                var documento = pie.Document;
+                @if (_pie == Pie.Correo)
+                {
+                    <div class="toolbar dialogo-de-cobro-pie">
+                        <label class="campo">Correo
+                            <input class="e-input" type="email" @bind="_correo" maxlength="200" placeholder="Vacío: el de recepción del documento"
+                                   data-ayuda="Se envía el PDF y el XML del documento en un ZIP. Vacío: al correo de recepción que quedó en la copia fiscal." />
+                        </label>
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-send" Disabled="@_accion.Activa" OnClick="@EnviarPorCorreoAsync">Enviar</SfButton>
+                        <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@(() => _pie = Pie.Botones)">Cancelar</SfButton>
+                    </div>
+                }
+                else if (_pie == Pie.Imprimir)
+                {
+                    <div class="toolbar dialogo-de-cobro-pie">
+                        <label class="campo">Formato
+                            <select class="e-input" value="@_formato" @onchange="@(e => _formato = int.TryParse(e.Value?.ToString(), out var f) ? f : 80)">
+                                @foreach (var (valor, texto) in TextosDeVentas.FormatosDeImpresion) { <option value="@valor">@texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Motivo de la copia <input class="e-input" @bind="_motivoDeCopia" maxlength="250" placeholder="Opcional" /></label>
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-print" Disabled="@_accion.Activa" OnClick="@ImprimirAsync">Imprimir</SfButton>
+                        <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@(() => _pie = Pie.Botones)">Cancelar</SfButton>
+                    </div>
+                }
+                else
+                {
+                    <div class="toolbar dialogo-de-cobro-pie">
+                        @if (EsDelInventario(documento))
+                        {
+                            <PermissionGate Required="Inventory.Documents.Reprint">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_accion.Activa" OnClick="@AbrirImpresion">Imprimir</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (PdfVigente(pie) is { } pdf)
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(pdf.Version, pdf.Artefacto))">PDF</SfButton>
+                        }
+                        @if (AccionesDelDocumentoElectronico.Entregable(documento.Status))
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@_accion.Activa" OnClick="@AbrirCorreo">Enviar por correo</SfButton>
+                        }
+                        <SfButton CssClass="e-primary" OnClick="@(() => _verDetalle = false)">Cerrar</SfButton>
+                    </div>
+                }
+            }
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
 
 <SfDialog @bind-Visible="_mostrarCasoA" Header="Corregir la copia fiscal (caso a)" Width="640px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -295,6 +443,17 @@
 @code {
     private enum Accion { CasoC, CanalVigente }
 
+    /// <summary>Lo que muestra el pie de la ventana: los botones, el correo a enviar o el formato de la copia.</summary>
+    private enum Pie { Botones, Correo, Imprimir }
+
+    /// <summary><c>EmailDeliveryBy.Channel</c>: el correo al comprador lo entrega el proveedor.</summary>
+    private const int CorreoPorElCanal = 2;
+
+    /// <summary><c>CashRegisterPrintFormat.Letter</c>.</summary>
+    private const int FormatoCarta = 216;
+
+    private const string ArtefactoPdf = "GraphicRepresentation";
+
     private sealed class FormularioCasoA
     {
         public string? Nombre { get; set; }
@@ -317,6 +476,12 @@
         _claveMotivo = new();
     private List<DocumentoElectronicoDto> _filas = [];
     private DetalleDeDocumentoElectronicoDto? _detalle;
+    private DocumentoDeVentaDto? _venta;
+    private string? _avisoDeVenta, _correo, _motivoDeCopia;
+    private bool _verDetalle;
+    private Pie _pie;
+    private int _formato = FormatoCarta;
+    private ClaveDeOperacion _claveCorreo = new(), _claveImpresion = new();
     private BorradorDeReemplazoDto? _borrador;
     private List<string> _camposEconomicos = [];
     private FormularioCasoA _casoA = new();
@@ -389,14 +554,103 @@
         _total = r.Value.TotalCount;
     }
 
+    /// <summary>
+    /// Abre (o recarga) el detalle en la ventana: el documento electrónico y, si salió de una venta, la venta completa para ver sus líneas,
+    /// impuestos y pagos. Sin permiso para ver la venta, la ventana muestra lo demás y lo dice.
+    /// </summary>
     private async Task AbrirAsync(Guid id)
     {
         _camposEconomicos = [];
         _borrador = null;
+        _pie = Pie.Botones;
+        if (_detalle?.Document.ElectronicDocumentPublicId != id)
+        {
+            _detalle = null;
+            _venta = null;
+            _avisoDeVenta = null;
+        }
+        _verDetalle = true;
         using var carga = _cargaDetalle.Iniciar();
         var r = await Facturacion.DocumentoAsync(id);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el documento."); return; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el documento.");
+            if (_detalle is null) _verDetalle = false;
+            return;
+        }
         _detalle = r.Value;
+
+        var origen = r.Value.Document.Source;
+        if (origen.Route?.StartsWith("/ventas/documentos/", StringComparison.Ordinal) == true)
+        {
+            var venta = await Ventas.ObtenerDocumentoAsync(origen.DocumentPublicId);
+            _venta = venta.IsSuccess ? venta.Value : null;
+            _avisoDeVenta = venta.IsSuccess ? null : $"No se pudo mostrar el detalle de la venta: {venta.ErrorMessage ?? "sin respuesta"}.";
+        }
+        else
+        {
+            _venta = null;
+            _avisoDeVenta = "Las líneas de este documento se ven en su módulo: «Abrir» en Documento del ERP.";
+        }
+    }
+
+    private string TituloDelDetalle => _detalle is { } d ? $"{TipoDeDocumento(d.Document.Kind)} {d.Document.Number}" : "Documento electrónico";
+
+    /// <summary>¿Lo originó Inventario (ventas, notas, documento soporte)? Su copia se imprime por la reimpresión de Inventario.</summary>
+    private static bool EsDelInventario(DocumentoElectronicoDto d) => d.Source.Module == "INV";
+
+    /// <summary>La representación gráfica (PDF) de la versión vigente, si ya está.</summary>
+    private static (int Version, ArtefactoDeVersionDto Artefacto)? PdfVigente(DetalleDeDocumentoElectronicoDto det) =>
+        det.Versions.OrderByDescending(v => v.VersionNumber)
+            .Select(v => (v.VersionNumber, Artefacto: v.Artifacts.FirstOrDefault(a => a.Artifact == ArtefactoPdf)))
+            .FirstOrDefault() is { Artefacto: { } pdf } vigente ? (vigente.VersionNumber, pdf) : null;
+
+    private void AbrirCorreo()
+    {
+        // Cada envío que la persona pide lleva su clave: dos envíos seguidos a la misma dirección son dos correos, y un doble clic, uno.
+        _claveCorreo = new ClaveDeOperacion();
+        _correo = _venta?.Counterparty?.Email;
+        _pie = Pie.Correo;
+    }
+
+    private async Task EnviarPorCorreoAsync()
+    {
+        if (_detalle is null) return;
+        using var accion = _accion.Iniciar();
+        var r = await Facturacion.EnviarPorCorreoAsync(_detalle.Document.ElectronicDocumentPublicId, string.IsNullOrWhiteSpace(_correo) ? null : _correo.Trim(),
+            _claveCorreo);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el correo."); return; }
+        _pie = Pie.Botones;
+        await Notification.SuccessAsync($"Enviado a {r.Value.Email}{(r.Value.ToReceptionEmail ? "" : " (copia: el correo de recepción del documento no cambia)")}.");
+        if (r.Value.ToReceptionEmail) await AbrirAsync(_detalle.Document.ElectronicDocumentPublicId);
+    }
+
+    private void AbrirImpresion()
+    {
+        _claveImpresion = new ClaveDeOperacion();
+        // El documento equivalente POS y su nota salen en tirilla; lo demás, en carta (la representación con su código y QR).
+        _formato = _detalle?.Document.Kind is 4 or 5 ? 80 : FormatoCarta;
+        _motivoDeCopia = null;
+        _pie = Pie.Imprimir;
+    }
+
+    /// <summary>
+    /// La copia por la reimpresión de Inventario (con la marca «COPIA» y auditada): la tirilla se imprime en el acto; la carta de un electrónico
+    /// es su representación gráfica guardada, que baja por el enlace firmado.
+    /// </summary>
+    private async Task ImprimirAsync()
+    {
+        if (_detalle is null) return;
+        var d = _detalle.Document;
+        using var accion = _accion.Iniciar();
+        var request = new EntregaRequest(TextosDeVentas.NombreDeFormato(_formato), Reason: string.IsNullOrWhiteSpace(_motivoDeCopia) ? null : _motivoDeCopia.Trim());
+        var r = await Ventas.ReimprimirAsync(d.Source.DocumentPublicId, request, _claveImpresion);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imprimir."); return; }
+        _pie = Pie.Botones;
+        if (r.Value.Archivo is { } archivo) await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+        if (r.Value.Link is { Url: { } url }) await Adjuntos.DescargarAsync(url, $"{d.Number}.pdf");
+        if (r.Value.Ticket is { } tirilla && !await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), d.Number))
+            await Notification.WarningAsync("El navegador no abrió la impresión: elija «Carta» para bajar el PDF.");
     }
 
     private async Task RecargarAsync()

@@ -152,7 +152,7 @@ public static partial class MapaDelMenu
         new("Ventas", null, "Remisiones", "/ventas/remisiones", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),
         new("Ventas", null, "Notas débito", "/ventas/notas-debito", ["Inventory.Sales.View"], ["Inventory.Sales.View"], ["Inventory.Sales.Create"]),
         new("Ventas", null, "Nueva factura", "/ventas/facturas/nueva", ["Inventory.Sales.Create"], ["Inventory.Sales.Create"], ["Inventory.Sales.Confirm", "Inventory.Sales.View"]),
-        new("Ventas", null, "Documentos electrónicos", "/ventas/documentos-electronicos", ["ElectronicInvoicing.Documents.View"], ["ElectronicInvoicing.Documents.View"], ["ElectronicInvoicing.Documents.Transmit", "ElectronicInvoicing.Documents.Correct", "ElectronicInvoicing.Documents.TransmitByCurrentChannel"]),
+        new("Ventas", null, "Documentos electrónicos", "/ventas/documentos-electronicos", ["ElectronicInvoicing.Documents.View"], ["ElectronicInvoicing.Documents.View"], ["ElectronicInvoicing.Documents.Transmit", "ElectronicInvoicing.Documents.Correct", "ElectronicInvoicing.Documents.TransmitByCurrentChannel", "Inventory.Documents.Reprint"]),
         new("Ventas", null, "Contingencias DIAN", "/ventas/contingencias-dian", ["ElectronicInvoicing.Contingencies.View"], ["ElectronicInvoicing.Contingencies.View"], ["ElectronicInvoicing.Contingencies.Declare", "Inventory.Reports.Export"]),
         new("Ventas", null, "Puntos de venta", "/ventas/puntos-de-venta", ["Inventory.PointsOfSale.View"], ["Inventory.PointsOfSale.View"], ["Inventory.PointsOfSale.Manage"]),
         new("Ventas", null, "Listas de precios", "/ventas/listas-de-precios", ["Inventory.Prices.View"], ["Inventory.Prices.View"], ["Inventory.Prices.Manage"]),

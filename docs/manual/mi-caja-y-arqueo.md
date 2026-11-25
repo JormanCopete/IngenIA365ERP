@@ -12,6 +12,32 @@ son comunes (`Components/Comunes`): `AperturaDeCaja`, `MiCajaAbierta`, `ArqueoDe
 
 Si la sesión abierta es de un día anterior, «Mi caja» y las pantallas de cobro lo avisan (`AvisoSesionDeOtroDia`).
 
+## Ver el detalle en una ventana
+
+Desde el 2026-11-25 (pedido del dueño), el detalle se abre en una **ventana** con su resumen. Antes aparecía al final de la página o sólo se podía
+descargar. Los faltantes salen en rojo, los sobrantes en ámbar, y cada medio que difiere va en su propia fila con el motivo. La ventana se cierra con
+**Esc** o con «Cerrar».
+
+- **Cierre del día del punto de venta** (`/pos/cierre-del-dia` → «Ver», y al cerrar el día): la ventana tiene estas partes.
+  - El resumen: punto, fecha, versión, estado con el motivo de la reapertura, y quién cerró y cuándo.
+  - Las cifras: sesiones, esperado, contado y diferencia.
+  - El detalle por medio de pago, y el de tarjetas por adquirente y datáfono, que avisa si no se registró el lote.
+  - **Sesiones y diferencias.** Cada sesión con su caja, cajero, horario, base, esperado, contado, diferencia y quién arqueó. Debajo de cada sesión
+    van los medios que difieren, con su tratamiento (sobrante, a cargo del cajero o al gasto) y el motivo que escribió el cajero. Así se ve a quién
+    corresponde cada descuadre sin abrir sesión por sesión.
+  - La sesión unida a Recaudo (caja única) dice «se arquea en Recaudo».
+  - Desde la ventana se imprime (la hoja también lleva las diferencias por sesión) y se exporta a PDF o Excel.
+  - Los datos salen de `GET /api/inventory/day-closes/{id}`, cuyas `sessions` traen `openingBase`, `expected`, `counted`, `difference`,
+    `countedByName`, `linkedToCollection` y `differences`.
+- **Cajas del día de Recaudo** (`/recaudo/cajas` → «Ver»): la ventana tiene estas partes.
+  - El resumen: punto, caja, cajero, día, estado, horario y base.
+  - Las cifras del último arqueo y lo que falta por aprobar.
+  - Lo esperado por medio: base, recibos, anulados, entradas, salidas y esperado. Con arqueo ciego no se muestra hasta contar.
+  - Cada arqueo (cierre, sorpresivo o cierre de la caja olvidada) con sus medios, diferencias, tratamiento, motivo y si espera aprobación.
+  - El botón «Informe (PDF)» de la caja cerrada se pasó a la ventana.
+- **Cierre del día de Recaudo** (`/recaudo/cierre-del-dia`): al cerrar el día, el resultado (código de verificación, cifras y detalle por medio) se
+  abre en la ventana, con el informe del cierre.
+
 ## El arqueo en dos pasos
 
 `/recaudo/sesiones/{id}/cierre` y `/pos/sesiones/{id}/cierre`:
