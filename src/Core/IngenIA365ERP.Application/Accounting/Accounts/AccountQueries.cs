@@ -65,9 +65,12 @@ public sealed class SearchAccountsQueryHandler(IApplicationDbContext db) : IRequ
         if (request.OnlyMovement) consulta = consulta.Where(a => a.IsMovement && a.IsActive);
         if (request.Module is { } modulo && ModuloContable.Bandera(modulo) is { } bandera)
             consulta = consulta.Where(a => (a.EnabledModules & bandera) == bandera);
+        // Sin distinguir mayúsculas en los dos motores: en PostgreSQL Contains es LIKE y distingue, así que «caja» no
+        // encontraba «CAJA» (el plan del CUIF viene en mayúsculas); en SQL Server la intercalación ya lo ignoraba.
+        var mayusculas = termino.ToUpperInvariant();
         consulta = termino.All(char.IsDigit)
             ? consulta.Where(a => a.Code.StartsWith(termino))
-            : consulta.Where(a => a.Name.Contains(termino) || a.Code.StartsWith(termino));
+            : consulta.Where(a => a.Name.ToUpper().Contains(mayusculas) || a.Code.StartsWith(termino));
 
         var lista = await consulta.OrderBy(a => a.Code).Take(request.Take)
             .Select(a => new CuentaBuscadaDto(a.PublicId, a.Code, a.Name, a.Nature.ToString(), a.RequiresThirdParty, a.RequiresCrossDocument, a.RequiresCostCenter, a.RequiresBranch, a.RequiresTaxBase))

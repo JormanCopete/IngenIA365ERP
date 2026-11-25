@@ -442,8 +442,9 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             .Select(d => d.Id).ToHashSet();
         documentos = documentos.Where(d => !porElectronico.ContainsKey(d.PublicId)).ToList();
         if (documentos.Count == 0) return resueltos;
+        // !Forwarded: ver AuditoriaDelPuntoDeVenta.ExisteAsync (sólo las pendientes conservan la carga; usa el índice de pendientes).
         var cargas = await db.AuditOutbox.AsNoTracking()
-            .Where(e => e.Module == ModuloDeAuditoria.Inventory && e.PayloadJson != null && e.PayloadJson.Contains(AuditEventTypes.InventoryDocumentDelivered))
+            .Where(e => !e.Forwarded && e.Module == ModuloDeAuditoria.Inventory && e.PayloadJson != null && e.PayloadJson.Contains(AuditEventTypes.InventoryDocumentDelivered))
             .Select(e => e.PayloadJson!).ToListAsync(ct);
         var entregados = cargas.Select(AuditoriaEncadenada.LeerCarga).Where(e => e.Action == AuditEventTypes.InventoryDocumentDelivered)
             .Select(e => e.EntityPublicId).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
