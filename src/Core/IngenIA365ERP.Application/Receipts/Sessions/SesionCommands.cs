@@ -232,7 +232,7 @@ public sealed class GetCashSessionQueryHandler(IApplicationDbContext db, IAlcanc
 /// </summary>
 public sealed record GetSessionExpectedQuery(Guid SessionPublicId) : IRequest<Result<SessionExpectedDto>>;
 
-public sealed class GetSessionExpectedQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance)
+public sealed class GetSessionExpectedQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, ParametrosDeCaja parametros, IDateTimeService reloj)
     : IRequestHandler<GetSessionExpectedQuery, Result<SessionExpectedDto>>
 {
     public async Task<Result<SessionExpectedDto>> Handle(GetSessionExpectedQuery request, CancellationToken ct)
@@ -241,7 +241,9 @@ public sealed class GetSessionExpectedQueryHandler(IApplicationDbContext db, IAl
         if (sesion is null) return Result.Failure<SessionExpectedDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
         var sellados = ValoresSelladosDeLaSesion.De(sesion);
         var contado = await db.ReceiptsCashCounts.AsNoTracking().AnyAsync(c => c.CashSessionId == sesion.Id && c.Kind != CashCountKind.Surprise, ct);
-        if (sellados.BlindCount && !contado) return Result.Success(new SessionExpectedDto(sesion.PublicId, true, [], null, false));
+        // 2026-11-24: el arqueo ciego rige sólo con el arqueo estricto (Caja.ArqueoEstricto).
+        if (sellados.BlindCount && !contado && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct))
+            return Result.Success(new SessionExpectedDto(sesion.PublicId, true, [], null, false));
         var esperado = await SesionesDeCaja.EsperadoAsync(db, sesion, ct);
         var efectivo = esperado.Where(e => e.Medio.PaymentMeansId == sellados.CashMeansId).Sum(e => e.Expected);
         var dtos = esperado.Select(e =>
@@ -294,7 +296,8 @@ public sealed class RegisterCashMovementCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     NumeradorDeRecaudo numerador,
     SegregacionDeRecaudo segregacion,
-    EmisionDeRecaudo emision) : IRequestHandler<RegisterCashMovementCommand, Result<CashMovementDto>>
+    EmisionDeRecaudo emision,
+    ParametrosDeCaja parametros) : IRequestHandler<RegisterCashMovementCommand, Result<CashMovementDto>>
 {
     public async Task<Result<CashMovementDto>> Handle(RegisterCashMovementCommand request, CancellationToken ct)
     {
@@ -328,8 +331,9 @@ public sealed class RegisterCashMovementCommandHandler(
             boveda = await db.Vaults.FirstOrDefaultAsync(v => v.BranchId == oficina, ct);
             if (boveda is null) return Result.Failure<CashMovementDto>(ErroresDeRecaudo.NoEncontrado("La bóveda de la oficina"));
             if (boveda.Status != ReceiptsCatalogStatus.Active) return Result.Failure<CashMovementDto>(ErroresDeRecaudo.BovedaInactiva());
+            // 2026-11-24: la doble custodia de la sesión rige sólo con el arqueo estricto (Caja.ArqueoEstricto).
             var custodia = await MovimientosDeBoveda.SegundoCustodioAsync(db, segregacion, boveda, usuario, request.SecondCustodianUserPublicId,
-                sellados.DoubleCustody, hoy, ct);
+                sellados.DoubleCustody && await ArqueoEstricto.EsAsync(parametros, hoy, ct), hoy, ct);
             if (custodia.IsFailure) return Result.Failure<CashMovementDto>(custodia.Error);
             segundo = custodia.Value;
         }
@@ -453,7 +457,8 @@ public sealed class ReclassifyMeansCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     NumeradorDeRecaudo numerador,
     AprobacionPresenteEnCaja aprobacion,
-    EmisionDeRecaudo emision) : IRequestHandler<ReclassifyMeansCommand, Result<CashMovementDto>>
+    EmisionDeRecaudo emision,
+    ParametrosDeCaja parametros) : IRequestHandler<ReclassifyMeansCommand, Result<CashMovementDto>>
 {
     public async Task<Result<CashMovementDto>> Handle(ReclassifyMeansCommand request, CancellationToken ct)
     {
@@ -469,7 +474,9 @@ public sealed class ReclassifyMeansCommandHandler(
         var hacia = sellados.Means.FirstOrDefault(m => m.PublicId == request.ToMeansPublicId);
         if (desde is null || hacia is null) return Result.Failure<CashMovementDto>(ErroresDeRecaudo.NoEncontrado("El medio de la sesión"));
         var desdeEfectivo = desde.Class == PaymentMeansClass.Cash;
-        if (desdeEfectivo && request.SupportAttachmentPublicId is null) return Result.Failure<CashMovementDto>(ErroresDeRecaudo.SoporteRequerido());
+        // 2026-11-24: el soporte lo exige sólo el arqueo estricto (Caja.ArqueoEstricto).
+        if (desdeEfectivo && request.SupportAttachmentPublicId is null && await ArqueoEstricto.EsAsync(parametros, hoy, ct))
+            return Result.Failure<CashMovementDto>(ErroresDeRecaudo.SoporteRequerido());
 
         var (_, punto) = await SesionesDeCaja.OficinaYPuntoAsync(db, sesion, ct);
         await cerrojo.TomarSetupAsync(ct: ct);

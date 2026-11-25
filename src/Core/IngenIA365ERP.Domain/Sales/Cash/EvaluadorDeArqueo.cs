@@ -80,7 +80,12 @@ public static class EvaluadorDeArqueo
             $"Caja.TratamientoFaltante admite «{FaltanteAlGasto}» o «{FaltanteACargoDelCajero}»."),
     };
 
-    public static ResultadoDeArqueo Evaluar(EsperadoDeLaSesion esperado, IReadOnlyList<ConteoDeMedio> conteos, CashDifferenceTreatment tratamientoDelFaltante)
+    /// <param name="motivoSoloFueraDeTolerancia">
+    /// 2026-11-24, arqueo sencillo (<c>Caja.ArqueoEstricto</c> apagado): el motivo se exige sólo cuando la diferencia pasa la tolerancia. Sin él, en
+    /// toda diferencia.
+    /// </param>
+    public static ResultadoDeArqueo Evaluar(EsperadoDeLaSesion esperado, IReadOnlyList<ConteoDeMedio> conteos, CashDifferenceTreatment tratamientoDelFaltante,
+        bool motivoSoloFueraDeTolerancia = false)
     {
         ArgumentNullException.ThrowIfNull(esperado);
         ArgumentNullException.ThrowIfNull(conteos);
@@ -118,7 +123,7 @@ public static class EvaluadorDeArqueo
             diferencias.Add(new LineaDeDiferencia((short)(diferencias.Count + 1), e.Medio.PaymentMeansId, e.Medio.Code,
                 (short)Math.Sign(diferencia), Math.Abs(diferencia), t, dentro, motivo));
             if (!dentro) aAprobar += Math.Abs(diferencia);
-            if (motivo is null) sinMotivo.Add(e.Medio.Code);
+            if (motivo is null && (!motivoSoloFueraDeTolerancia || !dentro)) sinMotivo.Add(e.Medio.Code);
         }
 
         return new ResultadoDeArqueo(lineas, lineas.Sum(l => l.Expected), lineas.Sum(l => l.Counted), lineas.Sum(l => l.Difference),

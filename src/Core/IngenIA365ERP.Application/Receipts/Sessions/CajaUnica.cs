@@ -190,7 +190,7 @@ public sealed class CajaUnica(IApplicationDbContext db, ISender sender, Parametr
         if (sesion is null) return Result.Failure<CajaUnicaDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
         var leida = await sender.Send(new GetLinkedCashSessionQuery(sesionDeRecaudo), ct);
         var vinculada = leida.IsSuccess ? leida.Value : null;
-        var ciego = ValoresSelladosDeLaSesion.De(sesion).BlindCount;
+        var ciego = ValoresSelladosDeLaSesion.De(sesion).BlindCount && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
         var medios = vinculada is { Open: true }
             ? vinculada.Means.Where(m => m.Expected != 0m).Select(m => new CajaUnicaMedioDto(m.PaymentMeansPublicId, m.Code, ciego ? null : m.Expected)).ToList()
             : [];

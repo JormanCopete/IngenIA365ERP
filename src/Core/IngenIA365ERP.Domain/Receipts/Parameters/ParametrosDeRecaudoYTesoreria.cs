@@ -59,6 +59,14 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaCajeroApruebaSuDiferencia = "Caja.CajeroApruebaSuDiferencia";
 
     /// <summary>
+    /// 2026-11-24 (pedido del dueño): el arqueo estricto, en la caja de Recaudo y en la del punto de venta. Apagado (el defecto) el arqueo es sencillo:
+    /// sin arqueo ciego, el motivo sólo cuando la diferencia pasa la tolerancia, la diferencia queda resuelta al cerrar (el faltante al gasto, sin que otra
+    /// persona la apruebe), la sesión olvidada la cierra su cajero o un supervisor sin testigo, el movimiento con la bóveda sin segundo custodio y los
+    /// adjuntos (acta, soporte) opcionales. Encendido, todo eso como hasta ese día, con sus parámetros.
+    /// </summary>
+    public const string CajaArqueoEstricto = "Caja.ArqueoEstricto";
+
+    /// <summary>
     /// 2026-11-23 (pedido del dueño): cómo se cuenta el efectivo al abrir y al arquear, en la caja de Recaudo y en la del punto de venta:
     /// por billetes y monedas, con un solo valor, o lo elige quien cuenta (el defecto). Los movimientos con la bóveda siguen por denominaciones.
     /// </summary>
@@ -197,6 +205,9 @@ public static class ParametrosDeRecaudoYTesoreria
             SiNo(ModuloRecaudo, CajaSesionUnica,
                 "Caja única: quien vende y recauda abre y cierra una sola caja. La sesión de Recaudo abre con ella la caja del punto de venta vinculada a su caja (Configuración de Recaudo → Cajas) y al cerrar la cierra cuadrada y arquea todo junto. El efectivo del punto de venta pasa a la caja fuerte y entra a Recaudo por el rol «Puente de la caja del punto de venta»: configure las dos cuentas iguales.",
                 false, R0),
+            SiNo(ModuloRecaudo, CajaArqueoEstricto,
+                "Arqueo estricto en la caja de Recaudo y en la del punto de venta. Con «No» (el defecto) el arqueo es sencillo: se ve lo esperado, el motivo se pide sólo si la diferencia pasa la tolerancia, la diferencia queda resuelta al cerrar con el faltante al gasto, la sesión olvidada la cierra su cajero o un supervisor sin testigo, el movimiento con la bóveda no pide segundo custodio y el acta y los soportes son opcionales. Con «Sí» rigen el arqueo ciego, la doble custodia, el tratamiento del faltante y la aprobación por otra persona.",
+                false, R1),
             SiNo(ModuloRecaudo, CajaCajeroApruebaSuDiferencia,
                 "Quien contó o cerró la sesión aprueba con motivo su propia diferencia de arqueo sobre la tolerancia (sin otra persona): para cooperativas donde una sola persona atiende la caja. El tope del permiso Receipts.Count.ApproveDifference sigue rigiendo.",
                 false, R1),

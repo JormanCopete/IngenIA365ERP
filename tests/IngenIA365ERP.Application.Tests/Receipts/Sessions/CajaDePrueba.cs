@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Receipts.Parameters;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
@@ -48,8 +49,13 @@ internal sealed class CajaDePrueba
     public CashDenomination B1 { get; }
     public Vault Boveda { get; }
 
-    public CajaDePrueba()
+    /// <param name="estricto">
+    /// 2026-11-24: el arqueo estricto (<c>Caja.ArqueoEstricto</c>). Las pruebas de siempre lo prueban encendido (testigo, aprobación por otra persona,
+    /// arqueo ciego, doble custodia); las del arqueo sencillo lo dejan como viene de fábrica, apagado.
+    /// </param>
+    public CajaDePrueba(bool estricto = true)
     {
+        if (estricto) E.Parametro(ParametrosDeRecaudoYTesoreria.CajaArqueoEstricto, "true");
         E.Reloj.AhoraLocal.Returns(new DateTimeOffset(2026, 12, 1, 10, 0, 0, TimeSpan.FromHours(-5)));
         Contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null));
@@ -97,15 +103,15 @@ internal sealed class CajaDePrueba
     public AprobacionPresenteEnCaja Presente => new(E.Db, Motor, E.Actor, new ServiceCollection().BuildServiceProvider());
 
     public OpenCashSessionCommandHandler Abrir() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Parametros);
-    public GetSessionExpectedQueryHandler Esperado() => new(E.Db, E.Alcance);
+    public GetSessionExpectedQueryHandler Esperado() => new(E.Db, E.Alcance, E.Parametros, E.Reloj);
     public GetCurrentSessionQueryHandler Actual() => new(E.Db, E.Actor);
-    public RegisterCashMovementCommandHandler Mover() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, Emision);
-    public ReclassifyMeansCommandHandler Reclasificar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision);
+    public RegisterCashMovementCommandHandler Mover() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, Emision, E.Parametros);
+    public ReclassifyMeansCommandHandler Reclasificar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision, E.Parametros);
     public RegisterClosingCountCommandHandler Contar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos, E.Alertas, E.Parametros, E.Segregacion);
     public ApproveCountDifferenceCommandHandler Aprobar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas, E.Parametros);
-    public CloseForgottenSessionCommandHandler CerrarOlvidada() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas);
-    public RegisterSessionAdjustmentCommandHandler Ajustar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision);
-    public RegisterSurpriseCountCommandHandler Sorpresivo() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos);
+    public CloseForgottenSessionCommandHandler CerrarOlvidada() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas, E.Parametros);
+    public RegisterSessionAdjustmentCommandHandler Ajustar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision, E.Parametros);
+    public RegisterSurpriseCountCommandHandler Sorpresivo() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos, E.Parametros);
     public CloseCollectionPointDayCommandHandler CerrarDia() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo);
     public RegisterVaultMovementCommandHandler MoverBoveda() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, E.Parametros, Emision, []);
     public AttachPayrollDeductionAuthorizationCommandHandler Autorizar() => new(E.Db, E.Alcance);
