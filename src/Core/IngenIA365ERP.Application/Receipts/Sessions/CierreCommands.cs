@@ -65,25 +65,9 @@ public sealed class RegisterClosingCountCommandHandler(
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
-        var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: true, ct);
-        if (sesion is null) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
-        // 2026-11-16 (pedido del dueño): con Caja.CajeroCierraSuSesionOlvidada, el mismo cajero cierra su sesión olvidada —en las cooperativas pequeñas una
-        // sola persona atiende la caja—; queda como arqueo diferido sin testigo y atiende la alerta de la sesión olvidada. Sin el parámetro, la cierra el
-        // supervisor con testigo (CloseForgottenSessionCommand).
-        var olvidada = sesion.Status == CashSessionState.ForgottenOpen;
-        if (olvidada)
-        {
-            if (!await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, reloj.HoyLocal, ct)
-                && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct))
-                return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
-            if (!await segregacion.MismaPersonaAsync(usuario, sesion.CashierUserId, ct))
-                return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
-        }
-        else
-        {
-            var operable = SesionesDeCaja.Operable(sesion);
-            if (operable.IsFailure) return Result.Failure<CashCountDto>(operable.Error);
-        }
+        var previa = await PrecondicionesDelCierre.DelArqueoAsync(db, alcance, parametros, segregacion, reloj, request.SessionPublicId, usuario, seguir: true, ct);
+        if (previa.IsFailure) return Result.Failure<CashCountDto>(previa.Error);
+        var (sesion, olvidada) = (previa.Value.Sesion, previa.Value.Olvidada);
 
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeRecaudo.DiaDelPunto, TablasDeRecaudo.DiasDelPunto, [sesion.CollectionPointDayId], exclusivo: false, ct);
@@ -295,20 +279,10 @@ public sealed class CloseForgottenSessionCommandHandler(
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } supervisor) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
-        var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: true, ct);
-        if (sesion is null) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
-        if (sesion.Status != CashSessionState.ForgottenOpen) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEsOlvidada());
-        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) el testigo es opcional; si viene, sigue siendo otra persona.
-        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
-        int? idTestigo = null;
-        if (request.WitnessUserPublicId is { } pedido && pedido != Guid.Empty)
-        {
-            idTestigo = await db.Users.AsNoTracking().Where(u => u.PublicId == pedido).Select(u => (int?)u.Id).FirstOrDefaultAsync(ct);
-            if (idTestigo is not { } t || await segregacion.AlgunaEsLaMismaAsync(t, [supervisor, sesion.CashierUserId], ct))
-                return Result.Failure<CashCountDto>(ErroresDeRecaudo.TestigoRequerido());
-        }
-        if (estricto && (idTestigo is null || await segregacion.MismaPersonaAsync(supervisor, sesion.CashierUserId, ct)))
-            return Result.Failure<CashCountDto>(ErroresDeRecaudo.TestigoRequerido());
+        var previa = await PrecondicionesDelCierre.DeLaOlvidadaAsync(db, alcance, parametros, segregacion, reloj, request.SessionPublicId,
+            request.WitnessUserPublicId, supervisor, seguir: true, ct);
+        if (previa.IsFailure) return Result.Failure<CashCountDto>(previa.Error);
+        var (sesion, idTestigo) = (previa.Value.Sesion, previa.Value.Testigo);
 
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeRecaudo.DiaDelPunto, TablasDeRecaudo.DiasDelPunto, [sesion.CollectionPointDayId], exclusivo: false, ct);
@@ -320,6 +294,115 @@ public sealed class CloseForgottenSessionCommandHandler(
         var dto = await CierreDeSesion.CerrarAsync(db, arqueos, alertas, sesion, registrado.Value, supervisor, reloj, ct);
         await alertas.AtenderPorProcesoAsync($"Recaudo.SesionOlvidada:{sesion.PublicId:N}", "Sesión cerrada con arqueo diferido.", ct);
         return Result.Success(dto);
+    }
+}
+
+/// <summary>
+/// Lo que se comprueba antes de arquear para cerrar, sin tocar nada (2026-11-25): lo comparten los comandos del cierre y la comprobación previa de la caja
+/// única (<see cref="CheckClosingCountQuery"/>), así la comprobación y el cierre deciden lo mismo. (nuevo)
+/// </summary>
+internal static class PrecondicionesDelCierre
+{
+    /// <summary>El arqueo de cierre de <c>POST …/count</c>: la sesión abierta y operable, o la olvidada que su cajero puede cerrar.</summary>
+    public static async Task<Result<(CashSession Sesion, bool Olvidada)>> DelArqueoAsync(IApplicationDbContext db, IAlcanceDeRecaudo alcance,
+        ParametrosDeCaja parametros, SegregacionDeRecaudo segregacion, IDateTimeService reloj, Guid sesionPublicId, int usuario, bool seguir, CancellationToken ct)
+    {
+        var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, sesionPublicId, seguir, ct);
+        if (sesion is null) return Falla(ErroresDeRecaudo.NoEncontrado("La sesión"));
+        // 2026-11-16 (pedido del dueño): con Caja.CajeroCierraSuSesionOlvidada, el mismo cajero cierra su sesión olvidada —en las cooperativas pequeñas una
+        // sola persona atiende la caja—; queda como arqueo diferido sin testigo y atiende la alerta de la sesión olvidada. Sin el parámetro, la cierra el
+        // supervisor con testigo (CloseForgottenSessionCommand).
+        var olvidada = sesion.Status == CashSessionState.ForgottenOpen;
+        if (olvidada)
+        {
+            if (!await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, reloj.HoyLocal, ct)
+                && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct))
+                return Falla(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
+            if (!await segregacion.MismaPersonaAsync(usuario, sesion.CashierUserId, ct))
+                return Falla(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
+        }
+        else
+        {
+            var operable = SesionesDeCaja.Operable(sesion);
+            if (operable.IsFailure) return Falla(operable.Error);
+        }
+        return Result.Success((sesion, olvidada));
+
+        static Result<(CashSession, bool)> Falla(Error e) => Result.Failure<(CashSession, bool)>(e);
+    }
+
+    /// <summary>La sesión olvidada que cierra un supervisor (<c>POST …/close-forgotten</c>) y su testigo.</summary>
+    public static async Task<Result<(CashSession Sesion, int? Testigo)>> DeLaOlvidadaAsync(IApplicationDbContext db, IAlcanceDeRecaudo alcance,
+        ParametrosDeCaja parametros, SegregacionDeRecaudo segregacion, IDateTimeService reloj, Guid sesionPublicId, Guid? testigoPublicId, int supervisor,
+        bool seguir, CancellationToken ct)
+    {
+        var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, sesionPublicId, seguir, ct);
+        if (sesion is null) return Falla(ErroresDeRecaudo.NoEncontrado("La sesión"));
+        if (sesion.Status != CashSessionState.ForgottenOpen) return Falla(ErroresDeRecaudo.NoEsOlvidada());
+        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) el testigo es opcional; si viene, sigue siendo otra persona.
+        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
+        int? idTestigo = null;
+        if (testigoPublicId is { } pedido && pedido != Guid.Empty)
+        {
+            idTestigo = await db.Users.AsNoTracking().Where(u => u.PublicId == pedido).Select(u => (int?)u.Id).FirstOrDefaultAsync(ct);
+            if (idTestigo is not { } t || await segregacion.AlgunaEsLaMismaAsync(t, [supervisor, sesion.CashierUserId], ct))
+                return Falla(ErroresDeRecaudo.TestigoRequerido());
+        }
+        if (estricto && (idTestigo is null || await segregacion.MismaPersonaAsync(supervisor, sesion.CashierUserId, ct)))
+            return Falla(ErroresDeRecaudo.TestigoRequerido());
+        return Result.Success((sesion, idTestigo));
+
+        static Result<(CashSession, int?)> Falla(Error e) => Result.Failure<(CashSession, int?)>(e);
+    }
+}
+
+/// <summary>
+/// 2026-11-25, caja única: ¿el arqueo de cierre (o el de la olvidada, con <see cref="Forgotten"/>) pasaría, contando lo que la caja vinculada del punto de
+/// venta recibió y todavía no entró a Recaudo (<see cref="FromPointOfSale"/>, por <c>PaymentMeansId</c>)? Lo pregunta el coordinador antes de cerrar esa
+/// caja; no escribe nada ni deja auditoría. Sin ruta. (nuevo)
+/// </summary>
+public sealed record CheckClosingCountQuery(Guid SessionPublicId, IReadOnlyList<ConteoDeMedioDto> Means, bool Forgotten, Guid? WitnessUserPublicId,
+    IReadOnlyDictionary<int, decimal> FromPointOfSale) : IRequest<Result>;
+
+public sealed class CheckClosingCountQueryValidator : AbstractValidator<CheckClosingCountQuery>
+{
+    public CheckClosingCountQueryValidator()
+    {
+        RuleFor(x => x.SessionPublicId).NotEmpty();
+        RuleFor(x => x.Means).NotNull();
+        RuleForEach(x => x.Means).ChildRules(m => m.RuleFor(c => c.Reason).MaximumLength(500));
+    }
+}
+
+public sealed class CheckClosingCountQueryHandler(
+    IApplicationDbContext db,
+    IAlcanceDeRecaudo alcance,
+    IActorActual actorActual,
+    IDateTimeService reloj,
+    ArqueosDeSesion arqueos,
+    ParametrosDeCaja parametros,
+    SegregacionDeRecaudo segregacion) : IRequestHandler<CheckClosingCountQuery, Result>
+{
+    public async Task<Result> Handle(CheckClosingCountQuery request, CancellationToken ct)
+    {
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (actor.UserId is not { } usuario) return Result.Failure(ErroresDeRecaudo.NoEncontrado("El usuario"));
+        CashSession sesion;
+        if (request.Forgotten)
+        {
+            var previa = await PrecondicionesDelCierre.DeLaOlvidadaAsync(db, alcance, parametros, segregacion, reloj, request.SessionPublicId,
+                request.WitnessUserPublicId, usuario, seguir: false, ct);
+            if (previa.IsFailure) return Result.Failure(previa.Error);
+            sesion = previa.Value.Sesion;
+        }
+        else
+        {
+            var previa = await PrecondicionesDelCierre.DelArqueoAsync(db, alcance, parametros, segregacion, reloj, request.SessionPublicId, usuario,
+                seguir: false, ct);
+            if (previa.IsFailure) return Result.Failure(previa.Error);
+            sesion = previa.Value.Sesion;
+        }
+        return await arqueos.ComprobarAsync(sesion, request.Means, request.FromPointOfSale, ct);
     }
 }
 
@@ -430,6 +513,13 @@ public sealed record RegisterSurpriseCountCommand(Guid SessionPublicId, Guid? Mi
     Guid? WitnessUserPublicId = null) : IRequest<Result<CashCountDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>
+    /// 2026-11-25, caja única: lo que la caja vinculada del punto de venta lleva recibido (por <c>PaymentMeansId</c>), que se cuenta en el mismo cajón. Lo
+    /// pone la ruta con el coordinador; no viaja en el cuerpo.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyDictionary<int, decimal>? DelPuntoDeVenta { get; init; }
 }
 
 public sealed class RegisterSurpriseCountCommandValidator : AbstractValidator<RegisterSurpriseCountCommand>
@@ -472,7 +562,7 @@ public sealed class RegisterSurpriseCountCommandHandler(
         await cerrojo.BloquearAsync(NivelDeRecaudo.Sesion, TablasDeRecaudo.Sesiones, [sesion.Id], ct: ct);
 
         var registrado = await arqueos.RegistrarAsync(sesion, CashCountKind.Surprise, request.Means, usuario, testigo, acta,
-            reloj.UtcNow, ct);
+            reloj.UtcNow, ct, request.DelPuntoDeVenta);
         if (registrado.IsFailure) return Result.Failure<CashCountDto>(registrado.Error);
         await db.SaveChangesAsync(ct);
         return Result.Success(await SesionesDeCaja.ArqueoDtoAsync(db, registrado.Value.Arqueo, sesion.Status, ct));

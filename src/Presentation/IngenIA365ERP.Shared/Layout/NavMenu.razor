@@ -766,6 +766,10 @@
             <PermissionGate Required="Receipts.Scope.Manage">
                 <NavLink href="/recaudo/configuracion/alcance" class="nav-subitem">Alcance de los usuarios</NavLink>
             </PermissionGate>
+            @* 2026-11-25: los parámetros de Recaudo (la caja, el arqueo, la caja única), que no tenían pantalla. *@
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
             @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
             <PermissionGate Required="Receipts.Imports.Run" AnyOf="@(new[] { "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare" })">
                 <NavLink href="/recaudo/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
@@ -871,6 +875,10 @@
             @* US21 (T0316): los informes de T0 del centro de informes de Tesorería. *@
             <PermissionGate Required="Treasury.Reports.View">
                 <NavLink href="/tesoreria/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
+            @* 2026-11-25: los parámetros de Tesorería (TES), que no tenían pantalla. *@
+            <PermissionGate Required="Treasury.Parameters.View">
+                <NavLink href="/tesoreria/parametros" class="nav-subitem">Parámetros</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

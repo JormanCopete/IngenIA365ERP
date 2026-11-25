@@ -170,7 +170,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
         // Feature 015 (T0042, TR43): las reglas de RCD (la hora de corte contra el inicio del ciclo de Cartera, el de la API o 00:30) y de TES.
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => new Receipts.Setup.ReglasDeParametrosDeRecaudo(
-            sp.GetService<Lending.Processes.ParametrosDeLaPasada>()?.HoraDeInicio ?? Receipts.Setup.ReglasDeParametrosDeRecaudo.InicioPorDefecto));
+            sp.GetService<Lending.Processes.ParametrosDeLaPasada>()?.HoraDeInicio ?? Receipts.Setup.ReglasDeParametrosDeRecaudo.InicioPorDefecto,
+            sp.GetRequiredService<Common.Interfaces.IApplicationDbContext>(), sp.GetService<Common.Integration.Accounting.IContabilidadParaRecaudo>()));
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo, Treasury.Common.ReglasDeParametrosDeTesoreria>();
         services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => new Common.Parameters.ReglasDeParametrosPorModulo(
             sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>(),
