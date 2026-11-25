@@ -118,6 +118,7 @@
                 }
             </div>
             @foreach (var e in _erroresDeEmision) { <p class="aviso aviso-error" role="alert">@e</p> }
+            @if (_faltaFirmante) { <AvisoDeFirmanteFaltante /> }
         </IndicadorDeCarga>
     </PermissionGate>
 
@@ -188,7 +189,7 @@
     private DateOnly _desde = new(Hoy.Year, Hoy.Month, 1), _hasta = Hoy;
     private short _año = (short)(Hoy.Year - 1);
     private string _clase = "AccountStatement", _entrega = "Download";
-    private bool _conRestricciones, _conPermanente;
+    private bool _conRestricciones, _conPermanente, _faltaFirmante;
     private ClaveDeOperacion _clave = new();
     private (Guid Persona, Guid? Cuenta) _leido;
 
@@ -250,6 +251,7 @@
     {
         using var carga = _emision.Iniciar();
         _erroresDeEmision = [];
+        _faltaFirmante = false;
         var deCuenta = _clase is "AccountStatement" or "AccountBalanceCertificate";
         var pedido = new EmitirDocumentoRequest(_clase, PersonaPublicId, null,
             _clase is "AccountBalanceCertificate" or "ContributionCertificate" ? _corte : null,
@@ -262,6 +264,7 @@
         if (!r.IsSuccess || r.Value is not { } emitido)
         {
             _erroresDeEmision.Add(r.ErrorMessage ?? "No se pudo emitir el documento.");
+            _faltaFirmante = r.ErrorCode == AvisoDeFirmanteFaltante.CodigoSinFirmante;
             return;
         }
         _clave = new ClaveDeOperacion();

@@ -52,11 +52,15 @@ Se pide desde el diálogo de emitir con la clase **Extracto**, el crédito, el t
 El documento tiene tres partes:
 
 1. **Saldo inicial**: lo que se debía la víspera del primer día del período, por concepto (capital, interés corriente, interés de
-   mora, sus suspensos, seguros, gastos de cobranza, otros cargos, anticipo y saldo a favor).
+   mora, sus suspensos, seguros, gastos de cobranza, otros cargos, anticipo y saldo a favor). El **anticipo** y el **saldo a favor**
+   son dinero del deudor que el crédito guarda: van con signo **−** («Anticipo (a favor del deudor)», «Saldo a favor del deudor») y
+   restan del total (desde el 2026-11-24; antes se sumaban y el saldo final de un crédito con anticipo salía más alto).
 2. **Operaciones del período**, ordenadas por **fecha valor**: el desembolso, cada pago con lo que aplicó a capital, intereses y
    otros conceptos, los cargos, condonaciones, ajustes y traslados, y la **causación** —los intereses y seguros que el crédito
    fue generando— agregada en un renglón por mes. Los valores van con signo: **+** aumenta la deuda, **−** la disminuye.
-3. **Saldo final**: lo que se debía el último día del período, por concepto.
+3. **Saldo final**: lo que se debía el último día del período, por concepto. Con un anticipo de 150.000 y un capital de 700.319, el
+   saldo final es 550.319. Cuando el anticipo paga una cuota al vencer, el renglón «Aplicación del anticipo» baja el capital y el
+   interés y sube el anticipo lo mismo: el total no cambia.
 
 Saldo inicial + operaciones = saldo final, al centavo, en cada concepto: si no cuadrara, el documento no se emite. Un pago
 **reversado** ya no hace parte del crédito: el extracto lo informa en su propio renglón («Pago … reversado por …», con su valor y
@@ -171,8 +175,10 @@ Por la API es `GET /api/lending/documents/verify/{código}?sha256={huella en hex
 ## 8. Configuración
 
 1. **Firmante** (obligatorio): en Cartera → Parámetros, `Documentos.Firmante.Nombre` y `Documentos.Firmante.Cargo`, con
-   vigencia desde una fecha y motivo. Sin ellos no se emite nada (`Lending.Document.SignerMissing`). El documento guarda el
-   nombre y el cargo vigentes al emitir.
+   vigencia desde una fecha y motivo. Sin ellos no se emite nada (`Lending.Document.SignerMissing`): ni los documentos de los
+   créditos ni los de captaciones y aportes (extracto de cuenta, certificados, constancia). Desde el 2026-11-24 el mensaje nombra
+   las dos claves y, bajo el error, quien puede ver los parámetros tiene el enlace a Cartera › Parámetros ya filtrado. El documento
+   guarda el nombre y el cargo vigentes al emitir. Una vigencia que empieza mañana no sirve hoy.
 2. **Codeudas en el paz y salvo general**: `Documentos.PazYSalvoIncluyeCodeudas` (por defecto no). El certificado tributario no
    tiene esta opción: certifica sólo como deudor.
 3. **Saldo del certificado tributario** (desde el 2026-10-16): `Documentos.CertificadoTributario.SaldoIncluye`, los conceptos

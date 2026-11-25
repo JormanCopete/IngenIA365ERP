@@ -650,8 +650,9 @@ public static class DocumentosDeCarteraReport
             LoanConcept.Insurance => "Seguros",
             LoanConcept.CollectionFee => "Gastos de cobranza",
             LoanConcept.OtherCharge => "Otros cargos",
-            LoanConcept.Advance => "Anticipo",
-            LoanConcept.CreditBalance => "Saldo a favor",
+            // 2026-11-24: en el extracto van con signo menos (restan de lo que se debe); el nombre lo dice.
+            LoanConcept.Advance => "Anticipo (a favor del deudor)",
+            LoanConcept.CreditBalance => "Saldo a favor del deudor",
             LoanConcept.Administration => "Administración",
             // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado.
             LoanConcept.RecognizedInterest or LoanConcept.RecognizedInterestDirect => "Interés reconocido por causar",

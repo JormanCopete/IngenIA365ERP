@@ -19,11 +19,22 @@
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@BuscarAsync">Buscar</SfButton>
         </div>
     </div>
+    @* 2026-11-24 (pedido del dueño): también por el pagador, buscado por su documento o su nombre; con pagador, las fechas pueden quedar vacías para
+       ver todos sus recibos. *@
     <div class="form-grid">
         <label class="campo">Desde <input class="e-input" type="date" @bind="_desde" /></label>
         <label class="campo">Hasta <input class="e-input" type="date" @bind="_hasta" /></label>
         <label class="campo">Número <input class="e-input" @bind="_numero" /></label>
+        <label class="campo campo-ancho">Pagador (documento o nombre)
+            <PersonSearchPicker Selected="@_pagador" SelectedChanged="@CambiarPagadorAsync" Compacto="true" ShowHelpText="false"
+                                Placeholder="Documento o nombre del pagador…" />
+        </label>
     </div>
+    @if (_pagador is not null)
+    {
+        <p class="texto-tenue">Recibos de @_pagador.FullName@(_desde is null && _hasta is null ? " en cualquier fecha" : " en el rango de fechas"). Borre las fechas para
+            ver todos.</p>
+    }
 
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Buscando…">
         <table class="data-grid">
@@ -80,6 +91,13 @@
     private ReciboDto? _detalle;
     private DateOnly? _desde = DateOnly.FromDateTime(DateTime.Now), _hasta = DateOnly.FromDateTime(DateTime.Now);
     private string? _numero;
+    private PersonSearchPicker.PersonSearchItem? _pagador;
+
+    private async Task CambiarPagadorAsync(PersonSearchPicker.PersonSearchItem? pagador)
+    {
+        _pagador = pagador;
+        await BuscarAsync();
+    }
 
     protected override Task OnInitializedAsync() => BuscarAsync();
 
@@ -94,7 +112,7 @@
             _recibos = uno.Value is { } x ? [x] : [];
             return;
         }
-        var r = await Cliente.RecibosAsync(_desde, _hasta, null);
+        var r = await Cliente.RecibosAsync(_desde, _hasta, null, pagador: _pagador?.PublicId);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los recibos."); return; }
         _recibos = r.Value ?? [];
     }

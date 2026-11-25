@@ -490,6 +490,7 @@ public static class ManualCatalogo
             "Vincular a una persona como asociada de la cooperativa: fecha de ingreso, agencia, aportes y beneficiarios.",
             [
                 P("Asociados → Registro", null, "/asociados/registro", "Abrir Registro de asociados"),
+                P("Buscar un asociado", "La caja de arriba busca mientras escribe, desde la tercera letra (con una o dos, pulse Enter), sin distinguir mayúsculas y por palabras: «juan perez» encuentra a Juan Carlos Pérez (salvo la tilde). También busca por documento y por empresa empleadora. Las cajas de las columnas Documento, Nombre completo y Empresa empleadora filtran igual."),
                 P("Buscar la persona", "«Buscar Persona» abre el buscador del registro único. Si no existe, se crea desde ahí mismo."),
                 P("Datos de vinculación", "Fecha de ingreso, agencia, tipo de asociado, el grupo del asociado (opcional: la clasificación libre de la cooperativa, que reemplazó al antiguo centro de costo del asociado) y la información socioeconómica que pida la cooperativa."),
                 // Sin botón: la pantalla de beneficiarios no existe todavía (tampoco tiene enlace en el menú).

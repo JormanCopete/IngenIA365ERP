@@ -61,8 +61,9 @@ public class ExtractoDeCreditoTests
         var despues = MotorDeCartera.Reconstruir(entrada, hasta);
         foreach (var concepto in Enum.GetValues<LoanConcept>())
         {
-            x.SaldoInicial[concepto].Should().Be(antes.Saldo(concepto), $"el saldo inicial de {concepto} es el de la víspera");
-            x.SaldoFinal[concepto].Should().Be(despues.Saldo(concepto), $"el saldo final de {concepto} es el del último día");
+            // 2026-11-24: en el sentido de lo que se debe (el anticipo y el saldo a favor, con signo menos).
+            x.SaldoInicial[concepto].Should().Be(ExtractoDeCredito.SignoDeDeuda(concepto) * antes.Saldo(concepto), $"el saldo inicial de {concepto} es el de la víspera");
+            x.SaldoFinal[concepto].Should().Be(ExtractoDeCredito.SignoDeDeuda(concepto) * despues.Saldo(concepto), $"el saldo final de {concepto} es el del último día");
         }
         Cuadra(x);
         x.Lineas.Select(l => l.FechaValor).Should().BeInAscendingOrder("las operaciones van por fecha valor");
@@ -169,5 +170,28 @@ public class ExtractoDeCreditoTests
         var otraR = () => ExtractoDeCredito.Armar(MotorDeCartera.Reconstruir(entrada with { InformacionHasta = CreditosDePrueba.Instante(hasta) }, desde.AddDays(-1)),
             final, desde, hasta);
         otraR.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void El_anticipo_baja_el_saldo_final_y_su_aplicacion_no_lo_mueve()
+    {
+        // 2026-11-24 (pedido del dueño): el extracto sumaba el anticipo al saldo («Capital 700.319 + Anticipo 150.000 = 850.319»); es dinero del deudor.
+        var entrada = Credito(Pago("A1", new DateOnly(2027, 1, 25), 150_000m, 10, PaymentModality.Advance));
+        var desde = new DateOnly(2027, 1, 15);
+        var conAnticipo = Extracto(entrada, desde, new DateOnly(2027, 1, 31));
+
+        Cuadra(conAnticipo);
+        conAnticipo.SaldoFinal[LoanConcept.Advance].Should().Be(-150_000m, "el anticipo va a favor del deudor");
+        conAnticipo.TotalFinal.Should().Be(conAnticipo.SaldoFinal.Where(k => k.Key != LoanConcept.Advance).Sum(k => k.Value) - 150_000m);
+        var pago = conAnticipo.Lineas.Single(l => l.Clase == ClaseDeLineaDeExtracto.Pago);
+        pago.Neto.Should().Be(-150_000m, "el pago del anticipo baja lo que se debe");
+
+        // Cuando vence la cuota, el anticipo la paga: el capital y el interés bajan, el anticipo también, y el total no cambia por esa aplicación.
+        var despuesDeVencer = Extracto(entrada, new DateOnly(2027, 2, 1), new DateOnly(2027, 2, 28));
+        Cuadra(despuesDeVencer);
+        var aplicacion = despuesDeVencer.Lineas.Where(l => l.Clase == ClaseDeLineaDeExtracto.AplicacionDeAnticipo).ToList();
+        aplicacion.Should().NotBeEmpty();
+        aplicacion.Sum(l => l.Neto).Should().Be(0m, "aplicar el anticipo a la cuota no cambia lo que se debe en total");
+        despuesDeVencer.SaldoFinal[LoanConcept.Advance].Should().BeInRange(-150_000m, 0m);
     }
 }
