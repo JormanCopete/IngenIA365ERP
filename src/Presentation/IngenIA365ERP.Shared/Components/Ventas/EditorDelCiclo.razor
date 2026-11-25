@@ -266,6 +266,7 @@
                     TextoConfirmar="@($"Confirmar la {Nombre}")" TextoVolver="Volver"
                     PuedeConfirmar="@(_cobro.Problema(_cliente is not null) is null)" Ocupado="@_guardado.Activa"
                     Confirmar="@ConfirmarAsync" Volver="@(() => { _mostrarPagos = false; })" Abierto="@EnfocarPanelAsync">
+        <AvisoSesionDeOtroDia Dia="@_sesion?.OperatingDate" UrlParaCerrar="@($"/pos/sesiones/{_sesion?.CashSessionPublicId}/cierre")" />
         @if (_sesion is null) { <p class="aviso aviso-info">No tiene una sesión de caja abierta: los pagos que se arquean (efectivo, tarjetas) no se pueden registrar hasta abrirla.</p> }
         @if (_cobro.Pagos.Any(p => p.Medio.EsCredito))
         {

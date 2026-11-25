@@ -92,6 +92,7 @@
         }
         else if (_sesion is not null)
         {
+            <AvisoSesionDeOtroDia Dia="@_sesion.BusinessDate" UrlParaCerrar="/recaudo/sesiones" />
             <div class="caja-recaudo @(_disposicion == Columnas ? "caja-columnas" : "caja-apilada")">
                 <section class="caja-columna caja-zona-persona" aria-label="Persona y lo que puede pagar" data-zona-teclado>
                     <div class="caja-zona-cabecera">
