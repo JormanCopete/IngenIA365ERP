@@ -1,0 +1,12 @@
+@page "/recaudo/configuracion/parametros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+<PageTitle>Parámetros de Recaudo - IngenIA365ERP</PageTitle>
+
+@* 2026-11-25 (pedido del dueño): los parámetros de Recaudo (RCD) —la caja, el arqueo, la caja única, los recibos—, con la caja primero. La pantalla es la
+   común de los módulos con ruta propia (ParametrosDelModulo), la misma de Tesorería. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+    <ParametrosDelModulo Modulo="@ConfiguracionDeRecaudoClient.ModuloRecaudo" Titulo="Parámetros de Recaudo" TemaPrimero="Caja"
+                         PermisoAdministrar="Receipts.Setup.Manage" />
+</PermissionGate>

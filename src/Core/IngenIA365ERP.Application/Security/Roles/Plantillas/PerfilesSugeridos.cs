@@ -373,6 +373,8 @@ public static class PerfilesSugeridos
             "Administra cuentas propias y chequeras, prepara lotes, genera y envía archivos de pago, registra resultados y confirma remesas.",
             [
                 "Treasury.BankAccounts.*", "Treasury.BankBalances.View", "Treasury.Orders.*", "Treasury.Batches.Prepare", "Treasury.PaymentFiles.*",
+                // 2026-11-25: ve los parámetros de Tesorería; cambiarlos es del administrador.
+                "Treasury.Parameters.View",
                 "Treasury.Results.Register", "Treasury.Checkbooks.*", "Treasury.Checks.*", "Treasury.Remittances.*", "Treasury.LiquidityFund.Request",
                 "Treasury.Reports.View", "Treasury.Reports.Export", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Request",
                 // T1 (fases 33 y 34): pide traslados, prepara órdenes manuales y lleva los firmantes y tokens (no los aprueba).

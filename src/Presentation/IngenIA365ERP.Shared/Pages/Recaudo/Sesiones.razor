@@ -55,6 +55,12 @@
                             <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode de @cu.PointOfSaleName está abierta con esta sesión. Venda allí sin abrir
                                 otra caja; al «Arquear y cerrar» aquí se cierra sola y se cuenta todo junto.</p>
                         }
+                        else if (cu.PosSessionPublicId is not null)
+                        {
+                            @* 2026-11-25: cerrada con el arqueo, no se abre otra en la misma sesión (lo de una segunda caja no entraba a Recaudo). *@
+                            <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode del punto de venta ya se cerró con el arqueo de esta sesión.
+                                Termine el arqueo con «Arquear y cerrar».</p>
+                        }
                         else if (s.Status == 1)
                         {
                             <p class="aviso aviso-alerta">Caja única: la caja del punto de venta de esta caja no está abierta.

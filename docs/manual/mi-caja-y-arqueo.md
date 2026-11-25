@@ -25,7 +25,8 @@ En Recaudo la misma pantalla sirve para el arqueo sorpresivo (`?modo=sorpresivo`
 
 ## El parámetro `Caja.ArqueoEstricto`
 
-Es un parámetro de `RCD` que leen las dos cajas. **De fábrica viene apagado**, y entonces el arqueo es sencillo:
+Es un parámetro de `RCD` que leen las dos cajas; se cambia en **Recaudo → Configuración → Parámetros** (desde el 2026-11-25). **De fábrica
+viene apagado**, y entonces el arqueo es sencillo:
 
 - La base es lo que el cajero cuenta al abrir, con un valor o billete por billete (la suma de los billetes). En el punto de venta con
   `Caja.BaseModo = FondoFijo`, hasta el 2026-11-25 la sesión heredaba en silencio la base de la sesión anterior de la caja: se abría con 30.000

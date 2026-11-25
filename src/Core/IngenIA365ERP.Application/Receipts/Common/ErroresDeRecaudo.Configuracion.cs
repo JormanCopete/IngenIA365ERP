@@ -69,4 +69,10 @@ public static partial class ErroresDeRecaudo
 
     public static Error CustodiosInsuficientes() => new(CodigoCustodiosInsuficientes,
         "La bóveda exige doble custodia (Caja.DobleCustodia): asigne al menos dos custodios distintos.");
+
+    /// <summary>2026-11-25: la caja única (<c>Caja.SesionUnica</c>) no se enciende sin sus requisitos (<c>RequisitosDeLaCajaUnica</c>). (nuevo)</summary>
+    public const string CodigoCajaUnicaSinRequisitos = "Receipts.Setup.SingleSessionNotReady";
+
+    public static Error CajaUnicaSinRequisitos(IReadOnlyList<string> faltan) => new ErrorConDatos(CodigoCajaUnicaSinRequisitos,
+        "La caja única todavía no se puede encender. " + string.Join(" ", faltan), new { missing = faltan });
 }

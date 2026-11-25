@@ -602,4 +602,62 @@ public class CashCommandsTests
 
         r.Error.Code.Should().Be(ErroresDeCaja.ReasonRequiredCode);
     }
+
+    // ------------------------------------------------------------------------------------------- caja única (2026-11-25) --
+
+    private GetLinkedCashSessionQueryHandler Vinculada() => new(Db, Sesiones());
+
+    [Fact]
+    public async Task La_caja_unica_cierra_la_sesion_vinculada_de_otro_cajero_aunque_quien_arquea_no_vea_las_ajenas()
+    {
+        var t = await CrearAsync();
+        var vinculada = t.SesionEn(t._caja2, 0m, OtraCajera, vinculada: Guid.NewGuid());
+        t.K.Permisos.HasPermissionAsync(SesionesDeCaja.PermisoVerTodas, Arg.Any<CancellationToken>()).Returns(false);
+
+        var porSuCuenta = await t.Cerrar().Handle(new CloseCashSessionCommand(vinculada.PublicId, [Efectivo(t.V, 0m)]), default);
+        var dto = (await t.Vinculada().Handle(new GetLinkedCashSessionQuery(vinculada.LinkedSessionPublicId!.Value), default)).Value!;
+        var desdeRecaudo = await t.Cerrar().Handle(CajaVinculada.Cierre(dto, Guid.NewGuid()), default);
+
+        porSuCuenta.Error.Code.Should().Be(ErroresDeCaja.SessionNotFoundCode, "sin ViewAll la sesión ajena no se ve por la ruta del punto de venta");
+        desdeRecaudo.IsSuccess.Should().BeTrue(desdeRecaudo.IsFailure ? $"{desdeRecaudo.Error.Code}: {desdeRecaudo.Error.Message}" : null);
+    }
+
+    [Fact]
+    public async Task Cerrada_la_sesion_vinculada_informa_lo_que_conto_su_cierre_y_no_su_esperado_en_vivo()
+    {
+        var t = await CrearAsync();
+        var recaudo = Guid.NewGuid();
+        var vinculada = t.SesionEn(t._caja2, 0m, vinculada: recaudo);
+        vinculada.Cerrar(KardexDePrueba.Usuario, new DateTime(2026, 9, 25, 23, 0, 0, DateTimeKind.Utc));
+        t.Db.CashCounts.Add(new CashCount
+        {
+            CashSessionId = vinculada.Id, CountedAt = DateTime.UtcNow, CountedByUserId = KardexDePrueba.Usuario, TotalExpected = 50_000m, TotalCounted = 50_000m,
+            Lines = [new CashCountLine { PaymentMeansId = t.V.Efectivo.Id, CountMethod = Domain.Enums.Core.CashCountMethod.PhysicalCount, ExpectedAmount = 50_000m,
+                CountedAmount = 50_000m }],
+        });
+        await t.Db.SaveChangesAsync();
+
+        var dto = (await t.Vinculada().Handle(new GetLinkedCashSessionQuery(recaudo), default)).Value!;
+
+        dto.Open.Should().BeFalse();
+        dto.Means.Should().ContainSingle(m => m.PaymentMeansId == t.V.Efectivo.Id).Which.Expected.Should().Be(50_000m,
+            "lo que entra a Recaudo es lo contado al cerrar: después del retiro a la caja fuerte el esperado del efectivo es cero");
+    }
+
+    [Fact]
+    public async Task El_cierre_del_dia_no_remesa_el_efectivo_que_la_caja_unica_ya_paso_a_Recaudo()
+    {
+        var t = await CrearAsync();
+        var hoy = Catalog.CatalogoDePrueba.Hoy;
+        (await t.Cerrar().Handle(new CloseCashSessionCommand(t.V.Sesion.PublicId, [Efectivo(t.V, 0m)]), default)).IsSuccess.Should().BeTrue();
+        var vinculada = t.SesionEn(t._caja2, 50_000m, vinculada: Guid.NewGuid());
+        var dto = (await t.Vinculada().Handle(new GetLinkedCashSessionQuery(vinculada.LinkedSessionPublicId!.Value), default)).Value!;
+        (await t.Cerrar().Handle(CajaVinculada.Cierre(dto, Guid.NewGuid()), default)).IsSuccess.Should().BeTrue();
+
+        var cierre = await new ExecuteDayCloseCommandHandler(t.Db, t.K.Actor, t.V.Compras.C.Reloj, t.K.Alcance, t._cerrojo, t._auditoria,
+                Substitute.For<IngenIA365ERP.Application.Common.Integration.Treasury.IRemesasDeTesoreria>())
+            .Handle(new ExecuteDayCloseCommand(t.V.Punto.PublicId, hoy) { Remittance = new RemesaDelCierreDelDia(Guid.NewGuid(), 50_000m) }, default);
+
+        cierre.Error.Code.Should().Be(ErroresDeCaja.DayCloseRemittanceOverCashCode, "el efectivo de la sesión vinculada ya está en Recaudo");
+    }
 }
