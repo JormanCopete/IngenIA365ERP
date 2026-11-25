@@ -122,7 +122,7 @@
                             }
                             else if (p.Type == "Time")
                             {
-                                <input type="time" class="e-input" @bind="_valor" />
+                                <input type="time" class="e-input" value="@_valor" @onchange="@(e => _valor = e.Value?.ToString() ?? "")" />
                             }
                             else
                             {

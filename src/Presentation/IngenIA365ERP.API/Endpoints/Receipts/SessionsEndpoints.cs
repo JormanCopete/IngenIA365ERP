@@ -86,13 +86,16 @@ public class SessionsEndpoints : ICarterModule
                 await s.Send(new ReclassifyMeansCommand(id, body.FromMeansPublicId, body.ToMeansPublicId, body.Amount, body.Reason ?? string.Empty,
                     body.SupportAttachmentPublicId) { OperationKey = http.ClaveDeOperacion(), ApprovalRequestPublicId = SolicitudDeAprobacion(http) }, ct))
             .WithName("Receipts_Sessions_Reclassify").ConClaveDeOperacion().RequirePermission(Reclasificar);
-        // 2026-11-23, caja única: antes del arqueo se cierra cuadrada la caja del punto de venta vinculada y lo que recibió entra a la sesión.
+        // 2026-11-23, caja única: antes del arqueo se cierra cuadrada la caja del punto de venta vinculada y lo que recibió entra a la sesión. 2026-11-25:
+        // primero se comprueba el arqueo con lo del punto de venta, sin escribir; si se va a rechazar, la caja del punto de venta sigue abierta.
         g.MapPost("/{id:guid}/count", async (Guid id, ConteoRequest body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
             {
                 var clave = http.ClaveDeOperacion();
-                var preparada = await cajaUnica.PrepararCierreAsync(id, clave, ct);
+                var contado = body.Means ?? [];
+                var preparada = await cajaUnica.PrepararCierreAsync(id, clave,
+                    pendiente => s.Send(new CheckClosingCountQuery(id, contado, false, null, pendiente), ct), ct);
                 if (preparada.IsFailure) return Result.Failure<CashCountDto>(preparada.Error);
-                return await s.Send(new RegisterClosingCountCommand(id, body.Means ?? []) { OperationKey = clave }, ct);
+                return await s.Send(new RegisterClosingCountCommand(id, contado) { OperationKey = clave }, ct);
             })
             .WithName("Receipts_Sessions_Count").ConClaveDeOperacion().RequirePermission(Cerrar);
         g.MapPost("/{id:guid}/differences/{lineId:guid}/approve", async (Guid id, Guid lineId, AprobacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
@@ -101,9 +104,11 @@ public class SessionsEndpoints : ICarterModule
         g.MapPost("/{id:guid}/close-forgotten", async (Guid id, OlvidadaRequest body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
             {
                 var clave = http.ClaveDeOperacion();
-                var preparada = await cajaUnica.PrepararCierreAsync(id, clave, ct);
+                var contado = body.Means ?? [];
+                var preparada = await cajaUnica.PrepararCierreAsync(id, clave,
+                    pendiente => s.Send(new CheckClosingCountQuery(id, contado, true, body.WitnessUserPublicId, pendiente), ct), ct);
                 if (preparada.IsFailure) return Result.Failure<CashCountDto>(preparada.Error);
-                return await s.Send(new CloseForgottenSessionCommand(id, body.WitnessUserPublicId, body.Means ?? []) { OperationKey = clave }, ct);
+                return await s.Send(new CloseForgottenSessionCommand(id, body.WitnessUserPublicId, contado) { OperationKey = clave }, ct);
             })
             .WithName("Receipts_Sessions_CloseForgotten").ConClaveDeOperacion().RequirePermission(CerrarOlvidada);
         g.MapPost("/{id:guid}/adjustments", async (Guid id, AjusteRequest body, HttpContext http, ISender s, CancellationToken ct) =>
@@ -122,11 +127,16 @@ public class SessionsEndpoints : ICarterModule
 
     private static void Otros(RouteGroupBuilder g)
     {
-        g.MapPost("/surprise-counts", async (SorpresivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new RegisterSurpriseCountCommand(body.SessionPublicId, body.MinutesAttachmentPublicId, body.Means ?? [], body.WitnessUserPublicId)
+        // 2026-11-25, caja única: el sorpresivo cuenta el cajón entero, también lo que la caja vinculada del punto de venta lleva recibido.
+        g.MapPost("/surprise-counts", async (SorpresivoRequest body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
+            {
+                var (_, _, pendiente) = await cajaUnica.PendienteAsync(body.SessionPublicId, ct);
+                return await s.Send(new RegisterSurpriseCountCommand(body.SessionPublicId, body.MinutesAttachmentPublicId, body.Means ?? [], body.WitnessUserPublicId)
                 {
                     OperationKey = http.ClaveDeOperacion(),
-                }, ct))
+                    DelPuntoDeVenta = pendiente,
+                }, ct);
+            })
             .WithName("Receipts_SurpriseCounts_Register").ConClaveDeOperacion().RequirePermission(ArquearSorpresa);
         g.MapGet("/surprise-counts/{id:guid}/minutes", async (Guid id, ISender s, IDocumentosDeRecaudoEnPdf pdf, CancellationToken ct) =>
             {

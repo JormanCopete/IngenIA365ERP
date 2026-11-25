@@ -714,6 +714,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   cuadrada (efectivo a la caja fuerte) y entra lo recibido (`CashMovementKindR.FromPointOfSale`; el efectivo emite `Caja` ← `PuenteDelPuntoDeVenta`)
   para un solo arqueo. Coordinador sin transacción propia, `CajaUnica`, con claves derivadas. Migración aditiva `CajaUnica`. Receta:
   `docs/manual/caja-unica.md`.
+  - **Revisión del 2026-11-25** (pedido del dueño: «simple y seguro»):
+    - Los parámetros `RCD` se cambian en Recaudo → Configuración → Parámetros (`/api/receipts/parameters`, `Receipts.Setup.*`). Antes no tenían pantalla.
+    - `Caja.SesionUnica` no se enciende sin una caja unida ni sin la cuenta puente (`RequisitosDeLaCajaUnica`).
+    - El arqueo se comprueba antes de cerrar el punto de venta (`CheckClosingCountQuery`, sin escribir ni auditar).
+    - Entra lo **contado** por ese cierre, y no se pide dos veces.
+    - No se abre una segunda caja vinculada en la misma sesión, y un medio en negativo se rechaza antes.
+    - El sorpresivo suma lo vendido.
+    - La remesa del cierre del día excluye las sesiones vinculadas.
 
 - **Autorización general y cambio de plazo (2026-11-24, pedido del dueño)**: «Autorización general (todas las finalidades)», preseleccionada en
   Autorizaciones del titular, registra en un paso **una decisión por finalidad y canal** (`AutorizacionGeneral`, `POST …/authorizations/general`): con
