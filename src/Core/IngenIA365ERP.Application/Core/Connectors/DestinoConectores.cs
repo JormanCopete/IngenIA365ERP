@@ -196,7 +196,12 @@ public sealed class DestinoConectores(
         return new ResultadoDeConsumo.Rejected(codigo, motivo.Length > 500 ? motivo[..500] : motivo);
     }
 
-    /// <summary>Las variables del mensaje con su tipo del catálogo (las fechas como fecha, los valores como número).</summary>
+    /// <summary>
+    /// Las variables del mensaje con su tipo del catálogo (las fechas como fecha, los valores como número). Un vehículo sin placa —el externo,
+    /// que sólo se conoce por el lateral— va con el lateral como placa (2026-11-25, pedido del dueño: el conector de la radio exige
+    /// <c>hcplaca</c> y el envío quedaba «revisar» con «Faltan datos para el envío: vehiculo.placa»). Se aplica al enviar, así vale también para
+    /// los avisos emitidos antes, que se reintentan con sus mismas variables.
+    /// </summary>
     public static Dictionary<string, object?> Valores(IReadOnlyDictionary<string, string> variables)
     {
         var valores = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -210,8 +215,14 @@ public sealed class DestinoConectores(
                 _ => texto,
             };
         }
+        if (string.IsNullOrWhiteSpace(variables.GetValueOrDefault(Placa)) && variables.GetValueOrDefault(Lateral) is { } lateral
+            && !string.IsNullOrWhiteSpace(lateral))
+            valores[Placa] = lateral.Trim();
         return valores;
     }
+
+    private const string Placa = "vehiculo.placa";
+    private const string Lateral = "vehiculo.radioMovil";
 
     /// <summary>Una unidad por mensaje: cada aviso es su propio recibo.</summary>
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas)

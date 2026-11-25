@@ -68,11 +68,16 @@ public class DestinoConectoresTests
         _envio = new ConnectorRequest { MessagePublicId = _mensaje, ConnectorId = _conector.Id, VersionNumber = 1, OriginRef = "TRN:x", ExternalId = _externo };
         _db.ConnectorRequests.Add(_envio);
         _db.SaveChanges();
+        Mensaje(new Dictionary<string, string> { ["vehiculo.placa"] = "ABC123", ["pago.valor"] = "50000", ["envio.id"] = _externo.ToString("D") });
+    }
 
+    /// <summary>El aviso que lee el consumidor, con estas variables.</summary>
+    private void Mensaje(Dictionary<string, string> variables)
+    {
         var solicitud = new SolicitudDeConectorV1
         {
             ConnectorPublicId = _conector.PublicId, ConnectorVersion = 1, ExternalId = _externo, OriginRef = "TRN:x",
-            Variables = new Dictionary<string, string> { ["vehiculo.placa"] = "ABC123", ["pago.valor"] = "50000", ["envio.id"] = _externo.ToString("D") },
+            Variables = variables,
         };
         var json = System.Text.Json.JsonSerializer.Serialize(solicitud);
         var sobre = new IntegrationEnvelopeV1 { MessageId = _mensaje, Type = SolicitudDeConectorV1.Type, Version = 1, Kind = IntegrationMessageKind.Business, OriginModule = "TRN" };
@@ -177,6 +182,41 @@ public class DestinoConectoresTests
 
         _ejecutor.Llamadas.Should().HaveCount(2);
         _ejecutor.Llamadas.Should().OnlyContain(s => s.Cuerpo!.Contains(_externo.ToString("D")));
+    }
+
+    [Fact]
+    public async Task Un_vehiculo_externo_sin_placa_va_con_el_lateral_como_placa()
+    {
+        // 2026-11-25: el aviso de una venta a un vehículo fuera del parque trae la placa vacía y el lateral; antes quedaba «revisar» con
+        // «Faltan datos para el envío: vehiculo.placa» sin llamar al sistema externo.
+        Mensaje(new Dictionary<string, string>
+        {
+            ["vehiculo.placa"] = "", ["vehiculo.numeroInterno"] = "", ["vehiculo.radioMovil"] = "1111", ["pago.valor"] = "37000",
+            ["envio.id"] = _externo.ToString("D"),
+        });
+        _ejecutor.Responder(200);
+
+        (await ConsumirAsync()).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        _envio.Status.Should().Be(ConnectorRequestStatus.Sent);
+        _ejecutor.Llamadas.Should().ContainSingle().Which.Cuerpo.Should().Contain("\"placa\":\"1111\"");
+    }
+
+    [Fact]
+    public async Task Sin_placa_ni_lateral_sigue_pidiendo_revision()
+    {
+        Mensaje(new Dictionary<string, string> { ["vehiculo.placa"] = "", ["vehiculo.radioMovil"] = "", ["pago.valor"] = "37000", ["envio.id"] = _externo.ToString("D") });
+
+        (await ConsumirAsync()).Should().BeOfType<ResultadoDeConsumo.Rejected>();
+        _envio.Status.Should().Be(ConnectorRequestStatus.Review);
+        _ejecutor.Llamadas.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void La_placa_del_vehiculo_no_se_cambia_por_el_lateral()
+    {
+        var valores = DestinoConectores.Valores(new Dictionary<string, string> { ["vehiculo.placa"] = "WDL254", ["vehiculo.radioMovil"] = "1047" });
+
+        valores["vehiculo.placa"].Should().Be("WDL254");
     }
 
     private sealed class EjecutorFalso : IEjecutorDeConector
