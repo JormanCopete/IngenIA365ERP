@@ -202,6 +202,20 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
     public Task<ResultadoDeInventario<EmptyResponse>> QuitarCuentaDeTransferenciaAsync(Guid id, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{Base}/transfer-accounts/{id}/disable", null, clave, ct);
 
+    // ------------------------------------------------------------------------------------------- parámetros (2026-11-25) --
+
+    /// <summary>Las claves de Recaudo (<c>RCD</c>) con su valor vigente (<c>Receipts.Setup.View</c>).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<ParametroDto>>> ParametrosAsync(CancellationToken ct = default) =>
+        Get<IReadOnlyList<ParametroDto>>($"{Base}/parameters", ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<VigenciaDeParametroDto>>> HistorialDeParametroAsync(string clave, CancellationToken ct = default) =>
+        Get<IReadOnlyList<VigenciaDeParametroDto>>($"{Base}/parameters/{Uri.EscapeDataString(clave)}/history", ct);
+
+    /// <summary>Una vigencia nueva de una clave de Recaudo (<c>Receipts.Setup.Manage</c>): el valor, desde cuándo y el motivo.</summary>
+    public Task<ResultadoDeInventario<VigenciaCreadaDto>> NuevaVigenciaAsync(string clave, NuevaVigenciaDeRecaudoRequest r, ClaveDeOperacion operacion,
+        CancellationToken ct = default) =>
+        Enviar<VigenciaCreadaDto>(HttpMethod.Post, $"{Base}/parameters/{Uri.EscapeDataString(clave)}/versions", r, operacion, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion clave, CancellationToken ct) =>

@@ -114,3 +114,6 @@ public sealed record CuentaDeTransferenciaDto(Guid PublicId, Guid CollectionPoin
     Guid PaymentMeansPublicId, string PaymentMeansCode, Guid OwnBankAccountPublicId, string AccountLabel);
 
 public sealed record HabilitarCuentaDeTransferenciaRequest(Guid CollectionPointPublicId, Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, Guid? CashBoxPublicId);
+
+/// <summary>2026-11-25: el cuerpo de <c>POST /api/receipts/parameters/{key}/versions</c>: el valor, desde cuándo rige y el motivo. (nuevo)</summary>
+public sealed record NuevaVigenciaDeRecaudoRequest(string Value, DateOnly ValidFrom, string Reason);

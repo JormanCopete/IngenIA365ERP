@@ -228,6 +228,7 @@ public static partial class MapaDelMenu
         new("Recaudo", "Configuración", "Talonarios de contingencia", "/recaudo/configuracion/talonarios", ["Receipts.Setup.View"], ["Receipts.Setup.View"], ["Receipts.Setup.Manage"]),
         new("Recaudo", "Configuración", "Suplencias", "/recaudo/configuracion/suplencias", ["Receipts.Setup.View"], ["Receipts.Setup.View"], ["Receipts.Setup.Manage"]),
         new("Recaudo", "Configuración", "Alcance de los usuarios", "/recaudo/configuracion/alcance", ["Receipts.Scope.Manage"], ["Receipts.Scope.Manage"], []),
+        new("Recaudo", "Configuración", "Parámetros", "/recaudo/configuracion/parametros", ["Receipts.Setup.View"], ["Receipts.Setup.View"], ["Receipts.Setup.Manage"]),
         new("Recaudo", "Configuración", "Puesta en marcha", "/recaudo/puesta-en-marcha", ["Receipts.Imports.Run", "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare"], ["Receipts.Imports.Run", "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare"], []),
         new("Recaudo", "Configuración", "Activación", "/recaudo/activacion", ["Receipts.Activation.View", "Receipts.Activation.Activate"], ["Receipts.Activation.View", "Receipts.Activation.Activate"], []),
         new("Recaudo", "Configuración", "Informes", "/recaudo/informes", ["Receipts.Reports.View"], ["Receipts.Reports.View"], ["Receipts.Reports.Export"]),

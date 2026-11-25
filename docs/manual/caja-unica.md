@@ -6,7 +6,7 @@ cooperativa: con un solo valor o billete por billete.
 
 ## 1. Cómo se cuenta el efectivo
 
-Parámetro **`Caja.FormaDeConteoDelEfectivo`** (módulo Recaudo, en Parámetros del sistema). Rige en las dos cajas, Recaudo y punto de
+Parámetro **`Caja.FormaDeConteoDelEfectivo`** (en **Recaudo → Configuración → Parámetros**). Rige en las dos cajas, Recaudo y punto de
 venta, al abrir y al arquear.
 
 | Valor | Qué ve el cajero |
@@ -39,10 +39,15 @@ El testigo y el acta aparecen solo cuando se exigen: sesión olvidada y arqueo s
 1. **Recaudo → Configuración → Cajas y cajeros** (`/recaudo/configuracion/cajas`): en la fila de la caja de Recaudo, el botón «Punto de
    venta», y elegir el punto y la caja del punto de venta donde vende la misma persona. La columna «Punto de venta» queda en «Unida». Una
    caja del punto de venta va con una sola caja de Recaudo. Ver la opción pide `Receipts.Setup.View`; el botón, `Receipts.Setup.Manage`.
-2. **Parámetros del sistema**: `Caja.SesionUnica` = Sí (módulo Recaudo; apagado por defecto).
-3. **Contabilidad**: en la matriz de Recaudo, el rol nuevo **«Puente de la caja del punto de venta»** (`PuenteDelPuntoDeVenta`). Póngale
+2. **Contabilidad**: en la matriz de Recaudo, el rol **«Puente de la caja del punto de venta»** (`PuenteDelPuntoDeVenta`). Póngale
    la **misma cuenta** que tiene la **caja fuerte** en la matriz de Comercial. Así el efectivo del punto de venta sale de la caja de
    Comercial y entra a la de Recaudo sin descuadrar nada. Lo decide la contadora.
+3. **Recaudo → Configuración → Parámetros** (`/recaudo/configuracion/parametros`, desde el 2026-11-25): «Cambiar» en `Caja.SesionUnica`, valor
+   Sí, la fecha desde la que rige y el motivo. Apagado por defecto.
+
+   **Es seguro**: no se deja encender mientras falte el paso 1 (ninguna caja unida) o el 2 (sin la cuenta puente, cuando la falta de regla
+   bloquea, `Contabilidad.FaltaDeRegla` de Recaudo). El mensaje dice qué falta (`Receipts.Setup.SingleSessionNotReady`). Apagarla no pide nada:
+   las cajas vuelven a abrir y cerrar por separado desde la próxima apertura.
 
 ### Cómo se trabaja
 
