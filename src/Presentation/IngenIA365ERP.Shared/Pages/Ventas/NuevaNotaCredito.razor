@@ -32,6 +32,7 @@
     </div>
 
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        <AvisoSesionDeOtroDia Dia="@_sesion?.OperatingDate" UrlParaCerrar="@($"/pos/sesiones/{_sesion?.CashSessionPublicId}/cierre")" />
         @if (_origen is { } o)
         {
             <p class="texto-apoyo">Sobre @TextosDeInventario.Clase(o.Class) @o.Numero del @o.OperationDate.ToString("dd/MM/yyyy") a @(o.Counterparty?.Name ?? "consumidor final") por @o.Totals.Total.ToString("N0").</p>

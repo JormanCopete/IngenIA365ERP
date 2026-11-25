@@ -34,6 +34,7 @@
         }
         else
         {
+            <AvisoSesionDeOtroDia Dia="@_sesion.BusinessDate" UrlParaCerrar="/recaudo/sesiones" />
             <p class="texto-apoyo">Sesión de la caja @_sesion.CashBoxCode (@_sesion.CollectionPointCode), día @_sesion.BusinessDate.ToString("dd/MM/yyyy").</p>
             <PermissionGate Required="Receipts.Disbursements.Register">
                 <section class="info-card">
