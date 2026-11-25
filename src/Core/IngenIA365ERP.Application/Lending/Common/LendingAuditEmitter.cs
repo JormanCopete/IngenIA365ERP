@@ -182,6 +182,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingAccrualProcessConfirmed, "AccrualProcess", processPublicId, resumen, ct);
 
     /// <summary>
+    /// 2026-11-25 (pedido del dueño): la edición de una solicitud radicada sin devolverla —motivo, estado, lo que cambió y el nivel antes y
+    /// después—, en la transacción de la edición (se llama después de su guardado). No es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirSolicitudRadicadaEditadaAsync(Guid applicationPublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingApplicationEditedAfterSubmission, "CreditApplication", applicationPublicId, detalle, ct);
+
+    /// <summary>
     /// Feature 014, US4 (T123; api.md §4): las operaciones o el libro de una cuenta de un titular vistos en la pantalla (FR-003). Como los archivos de módulo,
     /// no va en <see cref="LecturasSensibles"/>, la lista cerrada de la 013.
     /// </summary>

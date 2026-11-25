@@ -21,11 +21,17 @@ public static class AccionesDeSegregacion
     /// <summary>K3: aplicar una novedad o una condonación ya aprobada; quien la radicó no la aplica (regla fija, T0863).</summary>
     public const string Aplicar = nameof(Aplicar);
 
-    /// <summary>Los diez de T66 y, desde K3, <see cref="Aplicar"/>.</summary>
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): editar una solicitud ya radicada sin devolverla. Con el par <c>EditarRadicada × Decidir</c> activo en
+    /// <c>Segregacion.Incompatibilidades</c>, quien la editó no la decide.
+    /// </summary>
+    public const string EditarRadicada = nameof(EditarRadicada);
+
+    /// <summary>Los diez de T66, desde K3 <see cref="Aplicar"/> y desde el 2026-11-25 <see cref="EditarRadicada"/>.</summary>
     public static IReadOnlyList<string> Todas { get; } =
     [
         Radicar, Analizar, Decidir, Votar, Desembolsar, AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion,
-        AceptarDiferencias, Aplicar,
+        AceptarDiferencias, Aplicar, EditarRadicada,
     ];
 
     public static bool Existe(string? accion) => accion is not null && Todas.Contains(accion, StringComparer.Ordinal);

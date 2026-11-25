@@ -265,7 +265,8 @@ internal sealed class OriginacionDePrueba : IDisposable
 
     public CreateCreditApplicationCommandHandler Crear() => new(Db, Armado(), Autorizaciones, G.Actor, G.Reloj);
     public GruposEditablesDeSolicitud Editables() => new(Parametros());
-    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj, Editables());
+    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj, Editables(),
+        Evaluacion(), Enrutamiento(), G.Intervenciones(), Cerrojo);
     public AttachCreditApplicationDocumentCommandHandler Adjuntar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public RemoveCreditApplicationDocumentCommandHandler Quitar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public GetCreditApplicationQueryHandler Leer() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());

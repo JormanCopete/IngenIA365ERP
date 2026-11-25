@@ -22,6 +22,9 @@ public static class ErroresDeOriginacion
     public const string CodigoParteRepetida = CreditApplicationParty.CodigoParteRepetida;
     public const string CodigoNoEditable = CreditApplication.CodigoNoEditable;
     public const string CodigoNoCorregible = "Lending.Application.FieldNotEditable";
+    public const string CodigoRadicadaNoEditable = "Lending.Application.SubmittedNotEditable";
+    public const string CodigoMotivoDeEdicion = "Lending.Application.EditReasonRequired";
+    public const string CodigoEdicionRadicadaPorSuRuta = "Lending.Application.UseSubmittedEditRoute";
     public const string CodigoCompraIncompleta = "Lending.Application.SubsidizedPurchaseIncomplete";
     public const string CodigoLineaSinDescuento = "Lending.Application.LineWithoutDiscount";
     public const string CodigoOpcionDesconocida = "Lending.Application.DiscountOptionUnknown";
@@ -77,14 +80,34 @@ public static class ErroresDeOriginacion
         "La solicitud ya no se puede modificar: sólo se edita en borrador o cuando se devolvió para corregir.", new { status = estado });
 
     /// <summary>2026-11-23: la solicitud devuelta cambia algo que el parámetro <c>Originacion.GruposEditablesAlDevolver</c> deja fijo.</summary>
-    public static Error NoCorregible(IReadOnlyList<GrupoEditableAlDevolver> grupos)
+    public static Error NoCorregible(IReadOnlyList<GrupoEditableAlDevolver> grupos, bool radicada = false)
     {
         var nombres = string.Join(", ", grupos.Select(GruposEditablesAlDevolver.Texto));
         return new ErrorConDatos(CodigoNoCorregible,
-            $"En una solicitud devuelta para corregir no se puede cambiar: {nombres}. "
+            $"En una solicitud {(radicada ? "radicada" : "devuelta para corregir")} no se puede cambiar: {nombres}. "
             + "Déjelo como estaba o, si hay que cambiarlo, anule la solicitud y radique otra.",
             new { groups = grupos.Select(g => g.ToString()).ToList() });
     }
+
+    /// <summary>
+    /// 2026-11-25: la solicitud está radicada y el parámetro <c>Originacion.EditarRadicadaSinDevolver</c> de su línea no deja editarla sin
+    /// devolverla.
+    /// </summary>
+    public static Error RadicadaNoEditable(string estado) => new ErrorConDatos(CodigoRadicadaNoEditable,
+        "La solicitud ya está radicada y esta cooperativa (o su línea) no deja editarla sin devolverla: quien decide la devuelve para corregir.",
+        new { status = estado });
+
+    /// <summary>2026-11-25: editar una solicitud radicada pide el motivo del cambio (queda en su historial de ediciones).</summary>
+    public static Error MotivoDeEdicionRequerido() => new ErrorConDatos(CodigoMotivoDeEdicion,
+        "Diga por qué cambia la solicitud radicada: el motivo queda en su historial y lo ve quien decide.", new { field = "editReason" });
+
+    /// <summary>
+    /// 2026-11-25: una solicitud radicada no se edita por el PUT del borrador (permiso <c>Lending.Applications.Create</c>) sino por
+    /// <c>PUT /{id}/submitted</c>, que exige <c>Lending.Applications.EditSubmitted</c>.
+    /// </summary>
+    public static Error EdicionRadicadaPorSuRuta(string estado) => new ErrorConDatos(CodigoEdicionRadicadaPorSuRuta,
+        "La solicitud ya está radicada: se edita con «Editar radicada», que pide el permiso para editar solicitudes radicadas y un motivo.",
+        new { status = estado });
 
     /// <summary>2026-11-23 (descuento condicionado): la línea financia un bien con descuento y falta el valor, el proveedor o la opción.</summary>
     public static Error CompraIncompleta() => new ErrorConDatos(CodigoCompraIncompleta,
