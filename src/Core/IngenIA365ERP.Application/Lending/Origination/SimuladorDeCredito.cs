@@ -194,13 +194,16 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
 
         var banda = version.Bandas.OrderBy(x => x.Order)
             .FirstOrDefault(x => x.Casa(pedido.Amount, meses, perfil.TipoDeDeudor, perfil.EsEmpleado, perfil.AntiguedadMeses));
-        var tasa = PlanTipoDeLinea.TasaEfectiva(b, banda is null ? null : b.RateBands.First(r => r.Order == banda.Order), indice.Value);
+        var bandaPactada = banda is null ? null : b.RateBands.First(r => r.Order == banda.Order);
+        var tasa = PlanTipoDeLinea.TasaEfectiva(b, bandaPactada, indice.Value);
 
         // K6b (T1053): un crédito de vivienda sella la versión de reglas de vivienda (Ley 546 de 1999); los demás, la vigente.
         var esVivienda = ReglasDeLineaDeCredito.EsVivienda(b.ModalityCode.Trim().ToUpperInvariant(), combinacion.Value);
         var entrada = new EntradaDePlan(pedido.Amount, fecha, cuotas, periodicidad, sistema, tasa, b.DayCount, b.RateEquivalence, version.Version.Redondeo())
         {
             RulesVersion = VersionesDeReglas.ParaCreditoNuevo(esVivienda),
+            // 2026-11-24 (feature 025, HU2): con la línea en MV, el plan calcula con la mensual exacta y la sella el desembolso.
+            TasaMensual = PlanTipoDeLinea.TasaMensual(b, bandaPactada),
             PrimerVencimiento = periodicidad == RepaymentPeriodicity.SinglePayment ? pedido.FirstDueDate ?? fecha.AddMonths(Math.Max(1, meses)) : pedido.FirstDueDate,
             DiaDePago = b.PaymentDay,
             Extraordinarias = extraordinarias,
@@ -267,6 +270,8 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
             .Enumeracion("periodicity", (RepaymentPeriodicity?)e.Periodicidad)
             .Enumeracion("system", (AmortizationSystem?)e.Sistema)
             .Decimal("rate", e.TasaEfectivaAnual)
+            // 2026-11-24 (feature 025, HU2): la MV sólo si la hay, para que las huellas en E.A. no cambien.
+            .Si(e.TasaMensual is not null, h => h.Decimal("monthlyRate", e.TasaMensual))
             .Fecha("firstDueDate", e.PrimerVencimiento)
             .Entero("paymentDay", e.DiaDePago)
             .Enumeracion("graceKind", (GraceKind?)e.Gracia)

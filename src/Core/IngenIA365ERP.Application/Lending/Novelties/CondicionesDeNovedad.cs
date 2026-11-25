@@ -41,6 +41,9 @@ public static class CondicionesDeNovedad
             InterestTaxTreatment = v.InterestTaxTreatment,
             RateKind = v.RateKind,
             AnnualRate = entrada.TasaEfectivaAnual,
+            // 2026-11-24 (feature 025, HU2): la base sigue la del plan nuevo (una tasa nueva en E.A. la deja en E.A.).
+            RateBasis = entrada.TasaMensual is null ? RateBasis.EffectiveAnnual : RateBasis.MonthlyNominal,
+            MonthlyRate = entrada.TasaMensual,
             IndexCode = v.IndexCode,
             IndexKey = v.IndexKey,
             Margin = v.Margin,

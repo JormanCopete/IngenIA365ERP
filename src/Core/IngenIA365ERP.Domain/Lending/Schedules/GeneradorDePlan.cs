@@ -43,8 +43,9 @@ public static class GeneradorDePlan
         Validar(e);
         var r = e.Redondeo;
         var n = e.Periodos;
-        var tasaDiaria = EquivalenciaDeTasas.TasaDiaria(e.TasaEfectivaAnual, e.Convencion, e.Equivalencia, e.Periodicidad);
-        var nominal = EquivalenciaDeTasas.NominalDelPeriodo(e.TasaEfectivaAnual, e.Periodicidad);
+        // 2026-11-24 (feature 025, HU2): la tasa con su base; en MV la diaria es MV / 30, lineal.
+        var tasaDiaria = EquivalenciaDeTasas.TasaDiaria(e.Tasa, e.Convencion, e.Equivalencia, e.Periodicidad);
+        var nominal = EquivalenciaDeTasas.NominalDelPeriodo(e.Tasa, e.Periodicidad);
         var fechas = FechasDeVencimiento.Generar(e.FechaDesembolso, e.Periodicidad, n, e.DiaDePago, e.PrimerVencimiento);
 
         var desde = new DateOnly[n];
@@ -70,8 +71,11 @@ public static class GeneradorDePlan
             .Linea($"Reglas {e.RulesVersion}; convención {e.Convencion}, equivalencia {e.Equivalencia}, redondeo a "
                 + $"{ExplicacionDeCartera.Numero(r.Unidad)} {r.Modo} {r.Momento}.")
             .Linea(TextoDeLaTasaDiaria(e, tasaDiaria))
-            .Linea($"Nominal del período (informativa): (1 + {ExplicacionDeCartera.Numero(e.TasaEfectivaAnual)})^(1/"
-                + $"{EquivalenciaDeTasas.PeriodosPorAnio(e.Periodicidad).ToString(Inv)}) − 1 = {ExplicacionDeCartera.Numero(nominal)}.");
+            .Linea(e.TasaMensual is { } mv
+                ? $"Nominal del período (informativa): {ExplicacionDeCartera.Numero(mv)} MV × días del período / {EquivalenciaDeTasas.DiasDelMesComercial.ToString(Inv)} = "
+                  + $"{ExplicacionDeCartera.Numero(nominal)}."
+                : $"Nominal del período (informativa): (1 + {ExplicacionDeCartera.Numero(e.TasaEfectivaAnual)})^(1/"
+                  + $"{EquivalenciaDeTasas.PeriodosPorAnio(e.Periodicidad).ToString(Inv)}) − 1 = {ExplicacionDeCartera.Numero(nominal)}.");
 
         var a = 0m;
         decimal? cuotaNivelada = null;
@@ -255,10 +259,13 @@ public static class GeneradorDePlan
         var e = anterior.Entrada;
         var red = e.Redondeo;
         var eaNueva = r.NuevaTasaEfectivaAnual ?? e.TasaEfectivaAnual;
-        var rdNueva = r.NuevaTasaEfectivaAnual is { } ea
-            ? EquivalenciaDeTasas.TasaDiaria(ea, e.Convencion, e.Equivalencia, e.Periodicidad)
+        // 2026-11-24 (feature 025, HU2): la base viaja con la tasa: una tasa nueva trae la suya (el reajuste, E.A.); sin tasa nueva sigue la del plan.
+        var mvNueva = r.NuevaTasaEfectivaAnual is null ? e.TasaMensual : r.NuevaTasaMensual;
+        var tasaNueva = TasaPactada.De(eaNueva, mvNueva);
+        var rdNueva = r.NuevaTasaEfectivaAnual is not null
+            ? EquivalenciaDeTasas.TasaDiaria(tasaNueva, e.Convencion, e.Equivalencia, e.Periodicidad)
             : anterior.TasaDiaria;
-        var nominal = EquivalenciaDeTasas.NominalDelPeriodo(eaNueva, e.Periodicidad);
+        var nominal = EquivalenciaDeTasas.NominalDelPeriodo(tasaNueva, e.Periodicidad);
         var cuotas = anterior.Cuotas;
         var k = -1;
         for (var j = 0; j < cuotas.Count; j++)
@@ -271,7 +278,7 @@ public static class GeneradorDePlan
                 throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoSinCuotasPorRegenerar,
                     $"No quedan cuotas que venzan después del {ExplicacionDeCartera.Fecha(r.Fecha)}: el capital no se puede repartir.", "date", r.Fecha));
             explicacion.Linea($"Desde el {ExplicacionDeCartera.Fecha(r.Fecha)} la tasa es {ExplicacionDeCartera.Numero(eaNueva)} EA; no quedan cuotas por regenerar.");
-            return anterior with { Entrada = e with { TasaEfectivaAnual = eaNueva }, TasaDiaria = rdNueva, TasaNominalDelPeriodo = nominal, Explicacion = explicacion };
+            return anterior with { Entrada = e with { TasaEfectivaAnual = eaNueva, TasaMensual = mvNueva }, TasaDiaria = rdNueva, TasaNominalDelPeriodo = nominal, Explicacion = explicacion };
         }
         if (anterior.PeriodosDeGracia.Count > 0 && r.Fecha < cuotas[0].Desde)
             throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoRegeneracionEnGraciaTotal,
@@ -304,7 +311,7 @@ public static class GeneradorDePlan
         var n = cuotas.Count;
         var tasas = cuotas.Select(c => EquivalenciaDeTasas.TasaDelPeriodo(rdNueva, c.Dias, e.Equivalencia)).ToArray();
         var montoTotal = cuotas.Take(k).Sum(c => c.Capital) + despues;
-        var entrada = e with { Monto = montoTotal, TasaEfectivaAnual = eaNueva };
+        var entrada = e with { Monto = montoTotal, TasaEfectivaAnual = eaNueva, TasaMensual = mvNueva };
 
         if (r.Eleccion == PrepaymentChoice.ReduceTerm && despues < x.SaldoInicial)
             return ReducirPlazo(anterior, r, k, tramos, i1, despues, tasas, montoTotal, entrada, rdNueva, nominal, eaNueva, explicacion);
@@ -430,7 +437,9 @@ public static class GeneradorDePlan
             FechaDesembolso = n.Fecha,
             Periodos = n.Cuotas,
             Periodicidad = periodicidad,
-            TasaEfectivaAnual = n.TasaEfectivaAnual ?? b.TasaEfectivaAnual,
+            // 2026-11-24 (feature 025, HU2): una tasa nueva en MV trae su E.A. derivada; una en E.A. deja la base en E.A.; sin tasa nueva, la del plan.
+            TasaEfectivaAnual = n.TasaMensual is { } mvNueva ? EquivalenciaDeTasas.EfectivaInformativaDeMensual(mvNueva) : n.TasaEfectivaAnual ?? b.TasaEfectivaAnual,
+            TasaMensual = n.TasaMensual ?? (n.TasaEfectivaAnual is null ? b.TasaMensual : null),
             DiaDePago = periodicidad == RepaymentPeriodicity.SinglePayment ? null : dia,
             PrimerVencimiento = n.PrimerVencimiento,
             Extraordinarias = [],
@@ -498,7 +507,7 @@ public static class GeneradorDePlan
         if (n.PrimeraCuota < 1) throw Falla("La primera cuota es 1 o más.", "firstInstallment", n.PrimeraCuota);
         switch (n.Mecanismo)
         {
-            case NoveltyMechanism.RateChange when n.TasaEfectivaAnual is null:
+            case NoveltyMechanism.RateChange when n.TasaEfectivaAnual is null && n.TasaMensual is null:
                 throw Falla("Un cambio de tasa lleva la tasa nueva.", "rate", null);
             case NoveltyMechanism.PaymentDateChange when n.DiaDePago is null && n.PrimerVencimiento is null:
                 throw Falla("Un cambio de fecha lleva el día de pago o el primer vencimiento nuevos.", "paymentDay", null);
@@ -509,9 +518,11 @@ public static class GeneradorDePlan
             case NoveltyMechanism.Novation when n.SaldosRecogidos.Count > 0:
                 throw Falla("Una novación no recoge otros créditos: eso es una refinanciación.", "payoffLoans", n.SaldosRecogidos.Count);
         }
-        if (n.TasaEfectivaAnual is { } t && !EquivalenciaDeTasas.EsTasaPactable(t))
+        if (n.TasaMensual is null && n.TasaEfectivaAnual is { } t && !EquivalenciaDeTasas.EsTasaPactable(t))
             throw new ReglaDeCarteraException(ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
                 "La tasa nueva tiene más de seis decimales de fracción.", "rate", t));
+        // 2026-11-24 (feature 025, HU2): la tasa nueva en MV admite ocho decimales y exige 30/360 lineal.
+        if (n.TasaMensual is { } mv) EquivalenciaDeTasas.ValidarMensual(mv, n.Base.Convencion, n.Base.Equivalencia);
     }
 
     /// <summary>
@@ -628,7 +639,7 @@ public static class GeneradorDePlan
         ArgumentNullException.ThrowIfNull(m);
         if (m.Cuotas.Count == 0) throw new ArgumentException("Un plan migrado tiene al menos una cuota.", nameof(m));
         var red = m.Redondeo;
-        var rd = EquivalenciaDeTasas.TasaDiaria(m.TasaEfectivaAnual, m.Convencion, m.Equivalencia, m.Periodicidad);
+        var rd = EquivalenciaDeTasas.TasaDiaria(m.Tasa, m.Convencion, m.Equivalencia, m.Periodicidad);
         var filas = m.Cuotas.OrderBy(c => c.Numero).ToList();
         var capitales = filas.Select(c => c.Capital).ToArray();
         var residuo = m.SaldoDeCapital - capitales.Sum();
@@ -665,8 +676,8 @@ public static class GeneradorDePlan
                 + "causa el motor desde el corte.")
             .Linea($"La última cuota absorbe la diferencia entre el saldo de capital y las cuotas cargadas: {ExplicacionDeCartera.Numero(residuo)}.");
         var entrada = new EntradaDePlan(m.SaldoDeCapital, m.Corte, filas.Count, m.Periodicidad, m.Sistema, m.TasaEfectivaAnual, m.Convencion,
-            m.Equivalencia, red) { RulesVersion = m.RulesVersion };
-        return new PlanDePagos(m.RulesVersion, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
+            m.Equivalencia, red) { RulesVersion = m.RulesVersion, TasaMensual = m.TasaMensual };
+        return new PlanDePagos(m.RulesVersion, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.Tasa, m.Periodicidad),
             null, 0m, residuo, cuotas, explicacion);
     }
 
@@ -775,6 +786,11 @@ public static class GeneradorDePlan
     {
         var b = ContadorDeDias.Base(e.Convencion).ToString(Inv);
         var ea = ExplicacionDeCartera.Numero(e.TasaEfectivaAnual);
+        // 2026-11-24 (feature 025, HU2): la MV no pasa por la E.A.: es lineal sobre el mes comercial.
+        if (e.TasaMensual is { } mv)
+            return $"Tasa pactada {ExplicacionDeCartera.Numero(mv)} MV (E.A. derivada {ExplicacionDeCartera.Numero(e.Tasa.EfectivaAnual)}): r_d = MV / "
+                + $"{EquivalenciaDeTasas.DiasDelMesComercial.ToString(Inv)} = {ExplicacionDeCartera.Numero(tasaDiaria)}, redondeada a "
+                + $"{EquivalenciaDeTasas.DecimalesDeTasa.ToString(Inv)} decimales; la del período es lineal (días × r_d).";
         return e.Equivalencia == RateEquivalence.Linear
             ? $"Tasa diaria lineal (D1): NA_m = m·((1 + {ea})^(1/m) − 1) con m = {EquivalenciaDeTasas.PeriodosPorAnio(e.Periodicidad).ToString(Inv)}; "
               + $"r_d = NA_m / {b} = {ExplicacionDeCartera.Numero(tasaDiaria)}, redondeada a {EquivalenciaDeTasas.DecimalesDeTasa.ToString(Inv)} decimales."

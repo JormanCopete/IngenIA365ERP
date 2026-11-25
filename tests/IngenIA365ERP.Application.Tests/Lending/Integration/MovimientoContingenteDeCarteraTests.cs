@@ -267,6 +267,8 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
             CorreccionMonetariaUvrCausadaV1.Type,
             // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR lo emite la corrida de corrección.
             PagoRedistribuidoPorValorNacionalV1.Type,
+            // Feature 025 (fase 3): el interés del período al corte lo emite el proceso de causación CutoverRecalculation.
+            InteresDelCorteV1.Type,
             // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emite el ciclo diario o el proceso.
             "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
             "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",

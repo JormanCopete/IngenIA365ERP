@@ -34,7 +34,14 @@ public sealed record AccrualProcessInput(
     IReadOnlyList<AccrualProcessConcepts> Concepts,
     Guid? CreditLinePublicId = null,
     Guid? BranchPublicId = null,
-    Guid? PaymasterPersonPublicId = null);
+    Guid? PaymasterPersonPublicId = null,
+    AccrualPaymentForm? PaymentForm = null,
+    AccrualInstallmentScope? InstallmentScope = null,
+    AccrualDiscountCycle? DiscountCycle = null)
+{
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): ¿trae la forma de pago, las cuotas o el ciclo de descuento? (nuevo)</summary>
+    public bool ConFiltrosDeCausacion => PaymentForm is not null || InstallmentScope is not null || DiscountCycle is not null;
+}
 
 /// <summary>Las reglas de forma de una entrada (el validador de los dos comandos que la reciben). (nuevo)</summary>
 public sealed class AccrualProcessInputValidator : AbstractValidator<AccrualProcessInput>
@@ -52,6 +59,12 @@ public sealed class AccrualProcessInputValidator : AbstractValidator<AccrualProc
         RuleFor(x => x.CreditLinePublicId).NotEqual(Guid.Empty).When(x => x.CreditLinePublicId is not null);
         RuleFor(x => x.BranchPublicId).NotEqual(Guid.Empty).When(x => x.BranchPublicId is not null);
         RuleFor(x => x.PaymasterPersonPublicId).NotEqual(Guid.Empty).When(x => x.PaymasterPersonPublicId is not null);
+        // 2026-11-24 (feature 025, fase 5, FR-018): los filtros de la causación, si vienen, con un valor conocido.
+        RuleFor(x => x.PaymentForm).IsInEnum().When(x => x.PaymentForm is not null).WithMessage("La forma de pago es nómina o caja.");
+        RuleFor(x => x.InstallmentScope).IsInEnum().When(x => x.InstallmentScope is not null)
+            .WithMessage("Las cuotas son todas, sin extras o sólo extras.");
+        RuleFor(x => x.DiscountCycle).IsInEnum().When(x => x.DiscountCycle is not null)
+            .WithMessage("El ciclo de descuento es una quincena, una década o una semana del mes.");
     }
 }
 
@@ -87,8 +100,17 @@ public sealed class EntradaDeProcesoDeCausacion(
         }
         var enAlcance = await procesos.FiltrosEnAlcanceAsync(oficina, linea, ct);
         if (enAlcance.IsFailure) return Result.Failure<ParametrosDelProceso>(enAlcance.Error);
+        // 2026-11-24 (feature 025, fase 5, FR-018): la forma de pago, las cuotas y el ciclo de descuento son exactos sólo en el reconocimiento (cada línea es de
+        // un crédito y una cuota); un hecho de lo causado junta créditos y no se parte, así que las otras clases no los admiten.
+        if (entrada.ConFiltrosDeCausacion && clase != AccrualProcessKind.PeriodRecognition)
+            return Result.Failure<ParametrosDelProceso>(ErroresDeProcesosDeCausacion.FiltrosSoloDelReconocimiento());
 
         var hoy = reloj.HoyLocal;
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte no tiene rango ni modo: toma los créditos cargados a la fecha de la firma
+        // y sólo el interés corriente (lo que lleva su hecho InteresDelCorte); la periodicidad y el rango quedan en el día de hoy.
+        if (clase == AccrualProcessKind.CutoverRecalculation)
+            return Result.Success(new ParametrosDelProceso(clase, AccrualProcessPeriodicity.Daily, null, hoy, hoy, AccrualProcessConcepts.CurrentInterest, linea,
+                oficina, pagaduria));
         // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período elige el ciclo (puede seguir después de hoy, pero tiene que haber
         // empezado) y sólo los rubros que se reconocen (interés corriente, seguro, administración), en «Manual»: los de «Automatica» los reconoce el ciclo.
         var reconocimiento = clase == AccrualProcessKind.PeriodRecognition;
@@ -107,7 +129,10 @@ public sealed class EntradaDeProcesoDeCausacion(
             return Result.Failure<ParametrosDelProceso>(ErroresDeProcesosDeCausacion.ConceptoNoManual(concepto.Nombre));
         }
         return Result.Success(new ParametrosDelProceso(clase, entrada.Periodicity, entrada.SubPeriod, entrada.DateFrom, entrada.DateTo, conceptos, linea,
-            oficina, pagaduria));
+            oficina, pagaduria)
+        {
+            FormaDePago = entrada.PaymentForm, Cuotas = entrada.InstallmentScope, CicloDeDescuento = entrada.DiscountCycle,
+        });
     }
 
     /// <summary>¿Cartera está activada? Sin activar no hay causación que contabilizar.</summary>
@@ -134,11 +159,15 @@ public sealed record CreateAccrualProcessCommand(
     Guid? CreditLinePublicId = null,
     Guid? BranchPublicId = null,
     Guid? PaymasterPersonPublicId = null,
-    AccrualProcessKind Kind = AccrualProcessKind.Posting) : IRequest<Result<AccrualProcessDto>>, IOperacionIdempotente
+    AccrualProcessKind Kind = AccrualProcessKind.Posting,
+    AccrualPaymentForm? PaymentForm = null,
+    AccrualInstallmentScope? InstallmentScope = null,
+    AccrualDiscountCycle? DiscountCycle = null) : IRequest<Result<AccrualProcessDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 
-    public AccrualProcessInput Entrada => new(Periodicity, SubPeriod, DateFrom, DateTo, Concepts ?? [], CreditLinePublicId, BranchPublicId, PaymasterPersonPublicId);
+    public AccrualProcessInput Entrada => new(Periodicity, SubPeriod, DateFrom, DateTo, Concepts ?? [], CreditLinePublicId, BranchPublicId, PaymasterPersonPublicId,
+        PaymentForm, InstallmentScope, DiscountCycle);
 }
 
 public sealed class CreateAccrualProcessCommandValidator : AbstractValidator<CreateAccrualProcessCommand>
@@ -181,6 +210,7 @@ public sealed class CreateAccrualProcessCommandHandler(
                 Number = await numerador.NumeroDeProcesoDeCausacionAsync(ProcesosDeCausacion.Prefijo, ct),
                 Kind = p.Clase, Periodicity = p.Periodicidad, SubPeriod = p.Subperiodo, DateFrom = p.Desde, DateTo = p.Hasta, Concepts = p.Conceptos,
                 CreditLineId = p.LineaId, BranchId = p.OficinaId, PaymasterPersonId = p.PagaduriaId, CreatedByUserId = usuario,
+                PaymentForm = p.FormaDePago, InstallmentScope = p.Cuotas, DiscountCycle = p.CicloDeDescuento,
             };
             db.AccrualProcesses.Add(proceso);
             await db.SaveChangesAsync(ct);
@@ -258,6 +288,9 @@ public sealed class RecalculateAccrualProcessCommandHandler(
             proceso.CreditLineId = p.LineaId;
             proceso.BranchId = p.OficinaId;
             proceso.PaymasterPersonId = p.PagaduriaId;
+            proceso.PaymentForm = p.FormaDePago;
+            proceso.InstallmentScope = p.Cuotas;
+            proceso.DiscountCycle = p.CicloDeDescuento;
             await procesos.AplicarAsync(proceso, calculo.Value, usuario, ct);
             await db.SaveChangesAsync(ct);
             return Result.Success(await procesos.DtoAsync(proceso, ct));
@@ -441,6 +474,8 @@ public sealed class ReprocessAccrualProcessCommandHandler(
         var anterior = leido.Value;
         if (anterior.Status != AccrualProcessStatus.Confirmed)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.NoEnFirme(anterior.Status.ToString()));
+        // 2026-11-24 (feature 025, fase 3; FR-006): el recálculo de la carga desde el corte no se reprocesa.
+        if (anterior.Kind == AccrualProcessKind.CutoverRecalculation) return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.SinReproceso());
         var p = ParametrosDelProceso.De(anterior);
         if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct, p.Clase) is { } abierto)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.OtroAbierto(abierto.Number, abierto.PublicId));
@@ -456,6 +491,7 @@ public sealed class ReprocessAccrualProcessCommandHandler(
                 Number = await numerador.NumeroDeProcesoDeCausacionAsync(ProcesosDeCausacion.Prefijo, ct),
                 Kind = anterior.Kind, Periodicity = p.Periodicidad, SubPeriod = p.Subperiodo, DateFrom = p.Desde, DateTo = p.Hasta, Concepts = p.Conceptos,
                 CreditLineId = p.LineaId, BranchId = p.OficinaId, PaymasterPersonId = p.PagaduriaId, ReprocessOfId = anterior.Id, CreatedByUserId = usuario,
+                PaymentForm = p.FormaDePago, InstallmentScope = p.Cuotas, DiscountCycle = p.CicloDeDescuento,
             };
             db.AccrualProcesses.Add(proceso);
             await db.SaveChangesAsync(ct);

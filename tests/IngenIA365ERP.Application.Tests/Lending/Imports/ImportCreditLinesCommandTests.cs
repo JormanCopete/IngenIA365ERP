@@ -276,4 +276,59 @@ public sealed class ImportCreditLinesCommandTests : IDisposable
         linea.Status.Should().Be(CreditLineStatus.Closed);
         linea.ClosedReason.Should().Be(CreditLineClosedReason.Manual);
     }
+
+    // ------------------------------------------------------------------------- 2026-11-24 (feature 025, HU2; FR-011): la tasa en MV --
+
+    private static Dictionary<string, string?> LineaEnMv(string codigo)
+    {
+        var fila = Linea(codigo);
+        fila[C.TasaCorriente] = null;
+        fila[C.TasaCorrienteMV] = "1,8";
+        fila[C.ConvencionDeDias] = "30/360";
+        fila[C.Equivalencia] = "lineal";
+        return fila;
+    }
+
+    [Fact]
+    public async Task Una_linea_con_tasaCorrienteMV_se_pacta_en_MV_con_la_EA_derivada()
+    {
+        Fila(H.Lineas, LineaEnMv("MENSUAL"));
+        Fila(H.Tasas, new() { [C.Linea] = "MENSUAL", [C.VigenteDesde] = "2026-12-01", [C.MontoDesde] = "0", [C.MontoHasta] = "5000000", [C.TasaCorrienteMV] = "1,7" });
+
+        var r = await Importar(ModoDeImportacion.Apply);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var v = await _l.Db.CreditLineVersions.SingleAsync();
+        v.RateBasis.Should().Be(RateBasis.MonthlyNominal);
+        v.MonthlyRate.Should().Be(0.018m, "1,8 puntos se guardan exactos como fracción");
+        v.AnnualRate.Should().Be(0.238721m, "la E.A. derivada, informativa");
+        var banda = await _l.Db.CreditLineRateBands.SingleAsync();
+        (banda.MonthlyRate, banda.AnnualRate).Should().Be((0.017m, 0.224197m));
+    }
+
+    [Fact]
+    public async Task Traer_la_tasa_en_EA_y_en_MV_es_error_de_la_fila()
+    {
+        var fila = LineaEnMv("DOBLE");
+        fila[C.TasaCorriente] = "23";
+        Fila(H.Lineas, fila);
+
+        var r = await Importar(ModoDeImportacion.Review);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Errors.Should().Contain(e => e.Sheet == H.Lineas && e.Row == 2 && e.Column == C.TasaCorrienteMV && e.Code == ImportErrors.CellFormat);
+    }
+
+    [Fact]
+    public async Task Una_linea_en_MV_fuera_de_30_360_lineal_se_rechaza_en_la_convencion()
+    {
+        var fila = LineaEnMv("REAL");
+        fila[C.ConvencionDeDias] = "Actual365";
+        Fila(H.Lineas, fila);
+
+        var r = await Importar(ModoDeImportacion.Review);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Errors.Should().Contain(e => e.Row == 2 && e.Column == C.ConvencionDeDias && e.Code == "Lending.Rate.MonthlyRequiresThirty360");
+    }
 }

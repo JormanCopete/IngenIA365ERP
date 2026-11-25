@@ -32,6 +32,12 @@ public class CreditLineRateBand : AuditableEntity, IHechoInmutable
 
     public decimal? AnnualRate { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la mensual vencida de la banda cuando la versión se pacta en MV (<c>CreditLineVersion.RateBasis</c>);
+    /// entonces <see cref="AnnualRate"/> es su E.A. derivada. Nula en E.A. (nuevo)
+    /// </summary>
+    public decimal? MonthlyRate { get; init; }
+
     public decimal? Margin { get; init; }
 
 
@@ -48,6 +54,7 @@ public class CreditLineRateBand : AuditableEntity, IHechoInmutable
         ForEmployees = b.ForEmployees,
         MinSeniorityMonths = b.MinSeniorityMonths,
         AnnualRate = b.AnnualRate,
+        MonthlyRate = b.MonthlyRate,
         Margin = b.Margin,
     };
 

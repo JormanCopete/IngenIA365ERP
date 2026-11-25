@@ -229,7 +229,9 @@
                                     La versión vigente llega a @LineasDeCreditoClient.Porcentaje(u.EffectiveRate) EA con sus cargos
                                     @(u.Headroom is { } h ? $"({(h >= 0 ? "holgura" : "exceso")} de {LineasDeCreditoClient.Puntos(Math.Abs(h))})" : "").
                                 </p>
-                                @if (u.UsuryRate is { } tope && editada.Rates.Current.Kind == 1 && editada.Rates.Current.EffectiveAnnual is { } digitada)
+                                @if (u.UsuryRate is { } tope && editada.Rates.Current.Kind == 1
+                                     && (editada.Rates.Current.MonthlyRate is { } mvDigitada && editada.Rates.Current.Basis == TasaMensualVencida.BaseMensual
+                                         ? TasaMensualVencida.EfectivaDeMensual(mvDigitada) : editada.Rates.Current.EffectiveAnnual) is { } digitada)
                                 {
                                     var diferencia = tope - digitada;
                                     <p class="@(diferencia < 0 ? "aviso aviso-error" : "aviso aviso-info")">
@@ -358,7 +360,9 @@
     {
         if (_editada is not { } v) return;
         using var carga = _guardado.Iniciar();
-        _errores = [];
+        // 2026-11-24 (feature 025, HU2; Principio VIII): la tasa en MV se valida antes de mandarla.
+        _errores = [.. TasaMensualVencida.Problemas(v)];
+        if (_errores.Count > 0) return;
         var r = await Lineas.NuevaVersionAsync(Id, v, _clave);
         if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
         _mostrarVersion = false;

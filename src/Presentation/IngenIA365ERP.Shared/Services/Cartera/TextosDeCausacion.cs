@@ -53,8 +53,18 @@ public static class TextosDeCausacion
 
     public static string Concepto(int? valor) => Conceptos.FirstOrDefault(c => c.Valor == valor).Texto ?? "—";
 
-    public static string ConceptoDelHecho(string? tipoDeHecho) =>
-        tipoDeHecho == CuotaReconocida ? "Cuota reconocida del período" : Conceptos.FirstOrDefault(c => c.TipoDeHecho == tipoDeHecho).Texto ?? "—";
+    public static string ConceptoDelHecho(string? tipoDeHecho) => tipoDeHecho switch
+    {
+        CuotaReconocida => "Cuota reconocida del período",
+        // 2026-11-24 (feature 025, fase 3): los hechos del recálculo de la carga desde el corte.
+        InteresDelCorte => "Interés del período al corte",
+        "AjusteDeCausacionPorFechaValor" => "Ajuste de causación desde el corte",
+        "PagoRedistribuidoPorValorNacional" => "Pagos redistribuidos desde el corte",
+        _ => Conceptos.FirstOrDefault(c => c.TipoDeHecho == tipoDeHecho).Texto ?? "—",
+    };
+
+    /// <summary>2026-11-24 (feature 025, fase 3): el hecho del interés del período al corte.</summary>
+    public const string InteresDelCorte = "InteresDelCorte";
 
     /// <summary>2026-11-16 (feature 024, fase 4): el hecho del reconocimiento de la cuota del período.</summary>
     public const string CuotaReconocida = "CuotaReconocida";
@@ -65,7 +75,19 @@ public static class TextosDeCausacion
     /// <inheritdoc cref="ClaseContabilizar"/>
     public const int ClaseReconocer = 2;
 
-    public static string Clase(int clase) => clase == ClaseReconocer ? "Reconocer la cuota del período" : "Contabilizar lo causado";
+    /// <summary>2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte (<c>CutoverRecalculation</c>).</summary>
+    public const int ClaseRecalcularCorte = 3;
+
+    public static string Clase(int clase) => clase switch
+    {
+        ClaseReconocer => "Reconocer la cuota del período",
+        ClaseRecalcularCorte => "Recalcular la carga desde el corte",
+        _ => "Contabilizar lo causado",
+    };
+
+    /// <summary>2026-11-24 (feature 025, fase 3): una tasa como fracción, en porcentaje con cuatro decimales (0,018 → «1,8000 %»).</summary>
+    public static string Porcentaje(decimal? tasa) =>
+        tasa is { } t ? (t * 100m).ToString("0.0000", System.Globalization.CultureInfo.GetCultureInfo("es-CO")) + " %" : "—";
 
     /// <summary>2026-11-16 (feature 024, fase 4): los conceptos que se reconocen al inicio del ciclo (sin la mora ni los otros rubros).</summary>
     public static bool Reconocible(int concepto) => concepto is 1 or 4 or 8;
@@ -103,7 +125,35 @@ public static class TextosDeCausacion
         ("AlreadyRecognized", 11, "Ya reconocida"), ("CycleNotStarted", 12, "Su ciclo empieza después de hoy"),
         ("AccrualSuspended", 13, "Causación suspendida"), ("WrittenOff", 14, "Castigado"), ("NotActive", 15, "No vigente"),
         ("UvrLoan", 16, "Crédito en UVR"), ("DailyAccrualLine", 17, "Línea con causación diaria"),
+        // 2026-11-24 (feature 025, fase 3): los motivos del recálculo de la carga desde el corte.
+        ("AlreadyAdjusted", 18, "Ya recalculado desde el corte"), ("NotPeriodic", 19, "Sin cuota periódica posterior al corte"),
+        ("NothingToAdjust", 20, "Nada que recalcular"), ("NoInstallmentLeft", 21, "Sin cuota por vencer donde cobrar"),
+        // 2026-11-24 (feature 025, fase 5): por período calendario, el tramo de la cuota empieza después de hoy.
+        ("PeriodNotStarted", 22, "Su período empieza después de hoy"),
     ];
+
+    // 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento de la cuota del período (los valores del enum del servidor).
+
+    /// <summary>Forma de pago: nómina (nómina propia y libranza) o caja (todo lo demás).</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> FormasDePago = [(1, "Nómina"), (2, "Caja")];
+
+    /// <summary>Qué cuotas: sin extras o sólo extras (las que llevan cuota extraordinaria).</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> AlcancesDeCuotas = [(1, "Sin extras"), (2, "Sólo extras")];
+
+    /// <summary>El ciclo de descuento, por el día del mes en que vence la cuota.</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> CiclosDeDescuento =
+    [
+        (1, "Primera quincena (1 al 15)"), (2, "Segunda quincena (16 al fin)"),
+        (11, "Primera década (1 al 10)"), (12, "Segunda década (11 al 20)"), (13, "Tercera década (21 al fin)"),
+        (21, "Semana 1 del mes (1 al 7)"), (22, "Semana 2 (8 al 14)"), (23, "Semana 3 (15 al 21)"), (24, "Semana 4 (22 al 28)"), (25, "Semana 5 (29 al fin)"),
+    ];
+
+    /// <summary>¿El valor es uno de los de la lista? (la validación de la pantalla; el servidor la repite).</summary>
+    public static bool Conocido(IReadOnlyList<(int Valor, string Texto)> lista, int? valor) => valor is null || lista.Any(x => x.Valor == valor);
+
+    /// <summary>El texto de un filtro del reconocimiento, o nulo si no lo hay.</summary>
+    public static string? TextoDe(IReadOnlyList<(int Valor, string Texto)> lista, int? valor) =>
+        valor is null ? null : lista.FirstOrDefault(x => x.Valor == valor).Texto;
 
     public static string Motivo(int? motivo) => motivo is null ? "—" : Motivos.FirstOrDefault(m => m.Valor == motivo).Texto ?? "Fuera";
 

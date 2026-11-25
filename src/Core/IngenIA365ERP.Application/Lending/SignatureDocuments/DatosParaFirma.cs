@@ -283,7 +283,9 @@ public sealed class ArmadoDeDatosParaFirma(IApplicationDbContext db, SimuladorDe
                     }
 
                     campos[C.TasaEfectivaAnual] = FormatoDeFirma.Porcentaje(simulada.Value.TasaPactada);
-                    var mensual = (decimal)(Math.Pow(1d + (double)simulada.Value.TasaPactada, 1d / 12d) - 1d);
+                    // 2026-11-24 (feature 025, HU2; FR-012): pactada en MV, la mensual es la pactada (exacta); si no, la equivalente de la E.A.
+                    var mensual = simulada.Value.Entrada.TasaMensual
+                        ?? (decimal)(Math.Pow(1d + (double)simulada.Value.TasaPactada, 1d / 12d) - 1d);
                     campos[C.TasaMensual] = FormatoDeFirma.Porcentaje(mensual);
                     if (plan.Cuotas.Count > 0)
                     {

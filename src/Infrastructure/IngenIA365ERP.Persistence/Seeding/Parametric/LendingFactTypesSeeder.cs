@@ -95,6 +95,8 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR, por lotes con el ajuste de la corrida.
         [PagoRedistribuidoPorValorNacionalV1.Type] = new("Pago redistribuido por corrección de valor nacional", "CA", PorLotes, FinDeCausacion,
             EntregaDeCartera.K6b),
+        // 2026-11-24 (feature 025, fase 3): el interés del período al corte de los créditos cargados, en línea y en CA.
+        [InteresDelCorteV1.Type] = new("Interés del período al corte", "CA", EnLinea, null, EntregaDeCartera.K1),
         // Feature 014 (T048; contracts/mensajes.md §1.1 y contabilidad.md §3 y §5 de la 014): los 33 de captaciones y aportes. Los acompañantes
         // llevan el modo y el comprobante de su principal más frecuente; rige el del principal (C01 de la 013).
         [ConsignacionEnCuentaAplicadaV1.Type] = new("Consignación en cuenta aplicada", "MA", EnLinea, null, EntregaDeCartera.K8),

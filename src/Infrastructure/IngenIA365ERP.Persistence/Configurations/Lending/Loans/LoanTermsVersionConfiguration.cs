@@ -31,6 +31,9 @@ public class LoanTermsVersionConfiguration : IEntityTypeConfiguration<LoanTermsV
 
         builder.Property(e => e.RateKind).HasConversion<int>().IsRequired();
         builder.Property(e => e.AnnualRate).TasaAnual();
+        // 2026-11-24 (feature 025, HU2): la base de la tasa (E.A. de fábrica: lo existente no cambia) y la MV pactada.
+        builder.Property(e => e.RateBasis).HasConversion<int>().IsRequired().HasDefaultValue(RateBasis.EffectiveAnnual);
+        builder.Property(e => e.MonthlyRate).TasaMensual();
         builder.Property(e => e.IndexCode).HasMaxLength(20);
         builder.Property(e => e.IndexKey).HasMaxLength(20);
         builder.Property(e => e.Margin).TasaAnual();

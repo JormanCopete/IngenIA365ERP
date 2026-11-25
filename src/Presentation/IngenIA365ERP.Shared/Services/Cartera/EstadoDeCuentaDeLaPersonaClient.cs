@@ -154,6 +154,9 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     /// completa que se ofrece para pagar.
     /// </summary>
     public decimal? ReconocidoPorCausar { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la tasa mensual vencida pactada, en puntos (1,8 = 1,8 % MV); nula si se pactó en E.A. (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 }
 
 /// <summary>
@@ -258,7 +261,8 @@ public static class ColumnasDelEstadoDeCuenta
         new("periodicidad", "Periodicidad", true, false, (p, _) => T(p.Periodicidad)),
         new("plazo", "Plazo", true, true, (p, _) => N(p.Plazo)),
         new("plazoMeses", "Plazo (meses)", false, true, (p, _) => N(p.PlazoMeses)),
-        new("tasa", "Tasa E.A.", true, true, (p, _) => p.Tasa is { } t ? $"{t:N2} %" : "—"),
+        // 2026-11-24 (feature 025, HU2; FR-012): la E.A. y, si se pactó en MV, también la mensual.
+        new("tasa", "Tasa E.A.", true, true, (p, _) => p.Tasa is { } t ? $"{t:N2} %{(p.TasaMensual is { } mv ? $" ({mv:0.####} % MV)" : "")}" : "—"),
         new("tipoDeCuota", "Tipo de cuota", true, false, (p, _) => T(p.TipoDeCuota)),
         new("primerVencimiento", "Primer venc.", true, false, (p, _) => F(p.PrimerVencimiento)),
         new("proximoVencimiento", "Próximo venc.", false, false, (p, _) => F(p.ProximoVencimiento)),

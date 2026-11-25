@@ -19,6 +19,14 @@ public enum AccrualProcessKind
     /// <c>PeriodRecognition</c>, emite los hechos <c>CuotaReconocida</c> y ordena su lote en la misma transacción. (nuevo)
     /// </summary>
     PeriodRecognition = 2,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1 + HU3): el <b>recálculo de la carga desde el corte</b>. Por cada crédito nacido de una carga de migración:
+    /// sella la tasa en mensual vencida redonda (si la E.A. sellada está a menos de 0,005 puntos de una), carga en la primera cuota sin vencer el interés
+    /// que la primera cuota posterior al corte dejó por fuera (sin mora) y asienta como filas nuevas lo que cambia la reconstrucción desde el corte. Con
+    /// borrador, firme a cuatro ojos y lote contable, como las demás clases; un crédito ajustado queda marcado y no vuelve a entrar. (nuevo)
+    /// </summary>
+    CutoverRecalculation = 3,
 }
 
 /// <summary>
@@ -135,4 +143,62 @@ public enum AccrualExclusionReason
 
     /// <summary>La línea del crédito causa día a día (<c>Causacion.Momento = Diaria</c> para ella).</summary>
     DailyAccrualLine = 17,
+
+    // 2026-11-24 (feature 025, fase 3): los motivos propios de la clase CutoverRecalculation (el recálculo de la carga desde el corte). (nuevo)
+
+    /// <summary>El crédito ya se recalculó desde el corte (<c>LND_LoanControls.CutoverAdjustedAt</c>): no se repite.</summary>
+    AlreadyAdjusted = 18,
+
+    /// <summary>El crédito no tiene plan periódico (pago único) o no tiene cuota posterior al corte.</summary>
+    NotPeriodic = 19,
+
+    /// <summary>Al crédito no le falta interés del período al corte (o le falta un peso o menos) y su tasa no cambia.</summary>
+    NothingToAdjust = 20,
+
+    /// <summary>El crédito no tiene cuota sin vencer donde cargar el interés que faltó.</summary>
+    NoInstallmentLeft = 21,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5): con <c>Causacion.Periodo = PeriodoCalendario</c>, el tramo del calendario que contiene el vencimiento de la cuota
+    /// empieza después de hoy: se reconoce ese día (o lo reconoce el ciclo diario). Reemplaza a <see cref="CycleNotStarted"/> en ese modo. (nuevo)
+    /// </summary>
+    PeriodNotStarted = 22,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): la forma de pago que toma el proceso de causación. Nula: todas. Nómina es la nómina propia y la libranza
+/// (<c>OwnPayroll</c>, <c>PaymasterDeduction</c>); caja, las demás (caja y débito automático), según el vínculo vigente del crédito. (nuevo)
+/// </summary>
+public enum AccrualPaymentForm
+{
+    Payroll = 1,
+    Cashier = 2,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): qué cuotas toma el proceso de causación. Nulo: todas. Una cuota «extra» es la que lleva cuota extraordinaria
+/// (prima) en el plan. (nuevo)
+/// </summary>
+public enum AccrualInstallmentScope
+{
+    WithoutExtras = 1,
+    OnlyExtras = 2,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): el ciclo de descuento que toma el proceso de causación, por el día del mes en que vence la cuota. Nulo: todos.
+/// Quincenas 1–15 y 16–fin; décadas 1–10, 11–20 y 21–fin; semanas del mes de siete días desde el 1 (la quinta, del 29 al fin). (nuevo)
+/// </summary>
+public enum AccrualDiscountCycle
+{
+    FirstFortnight = 1,
+    SecondFortnight = 2,
+    FirstTenDay = 11,
+    SecondTenDay = 12,
+    ThirdTenDay = 13,
+    FirstWeek = 21,
+    SecondWeek = 22,
+    ThirdWeek = 23,
+    FourthWeek = 24,
+    FifthWeek = 25,
 }

@@ -18,6 +18,16 @@ public enum RateEquivalence
     Linear = 2,
 }
 
+/// <summary>
+/// 2026-11-24 (feature 025, HU2; FR-007): en qué se pactó la tasa corriente. Efectiva anual de fábrica; mensual vencida (MV) cuando la
+/// cooperativa la pacta y la digita así (1,8 % MV): se guarda exacta en <c>MonthlyRate</c> y la E.A. queda derivada e informativa. (nuevo)
+/// </summary>
+public enum RateBasis
+{
+    EffectiveAnnual = 1,
+    MonthlyNominal = 2,
+}
+
 /// <summary>Sistema de amortización.</summary>
 public enum AmortizationSystem
 {

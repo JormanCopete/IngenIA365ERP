@@ -38,6 +38,7 @@ public sealed class ContextoDeReconstruccion
         Entrada = entrada;
         Origen = origen;
         TasaCorrienteEA = entrada.Condiciones.TasaEfectivaAnual;
+        TasaCorrienteMensual = entrada.Condiciones.TasaMensual;
         Reestructuraciones = entrada.Condiciones.Reestructuraciones;
     }
 
@@ -52,6 +53,12 @@ public sealed class ContextoDeReconstruccion
 
     /// <summary>La corriente pactada o reajustada (EA), antes de topar.</summary>
     public decimal TasaCorrienteEA { get; private set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente en mensual vencida, si se pactó así (nula = en E.A.). (nuevo)</summary>
+    public decimal? TasaCorrienteMensual { get; private set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente con su base.</summary>
+    public TasaPactada TasaCorriente => TasaPactada.De(TasaCorrienteEA, TasaCorrienteMensual);
 
     /// <summary>
     /// K3 (T0874): las reestructuraciones que rigen desde el día siguiente al último hecho aplicado. Parte de las de las condiciones (las del
@@ -75,6 +82,15 @@ public sealed class ContextoDeReconstruccion
     public void CambiarTasa(decimal efectivaAnual)
     {
         TasaCorrienteEA = efectivaAnual;
+        TasaCorrienteMensual = null;
+        Version++;
+    }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente nueva con su base (en MV, la E.A. guardada es la derivada a seis decimales). (nuevo)</summary>
+    public void CambiarTasa(TasaPactada tasa)
+    {
+        TasaCorrienteEA = tasa.EsMensual ? EquivalenciaDeTasas.EfectivaInformativaDeMensual(tasa.Valor) : tasa.Valor;
+        TasaCorrienteMensual = tasa.MensualPactada;
         Version++;
     }
 
@@ -192,6 +208,10 @@ public sealed class ContextoDeReconstruccion
         var v = operacion.FechaValor;
         foreach (var i in distribucion.InteresPorCausar)
             Mover(v, LoanTransactionKind.UnaccruedInstallmentInterest, i.Concepto, i.Cuota, i.Monto, operacion.Id);
+        // 2026-11-24 (feature 025, fase 5, D3): por período calendario, la cancelación devuelve el interés causado de las cuotas cuyo tramo no ha empezado
+        // (RecognitionRelease de la operación que canceló, el mecanismo de devolución de la 024): no se cobra y el crédito queda en cero.
+        foreach (var i in distribucion.InteresNoCobrado)
+            Mover(v, LoanTransactionKind.RecognitionRelease, i.Concepto, i.Cuota, -i.Monto, operacion.Id);
         var clase = Condiciones.CastigoDesde is { } castigo && castigo <= v ? LoanTransactionKind.Recovery : LoanTransactionKind.PaymentAllocation;
         foreach (var u in distribucion.AnticipoUsado) Mover(v, LoanTransactionKind.AdvanceApplied, LoanConcept.Advance, u.Cuota, -u.Monto, operacion.Id);
         foreach (var l in distribucion.Lineas)
@@ -360,6 +380,8 @@ public static class ReconstruccionDeCredito
             if (tasa is { } t && !EquivalenciaDeTasas.EsTasaPactable(t))
                 throw new ReglaDeCarteraException(ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
                     $"La tasa sellada «{campo}» tiene más de seis decimales de fracción.", "field", campo));
+        // 2026-11-24 (feature 025, HU2): la mensual sellada admite ocho decimales y exige 30/360 lineal.
+        if (c.TasaMensual is { } mv) EquivalenciaDeTasas.ValidarMensual(mv, c.Convencion, c.Equivalencia);
     }
 
     /// <summary>Las operaciones que cuentan a (D, R), en orden.</summary>
@@ -505,6 +527,11 @@ public static class ReconstruccionDeCredito
             .OrderBy(r => r.Fecha).ThenBy(r => r.Cuota).ThenBy(r => (int)r.Concepto)
             .ToList();
 
+        // 2026-11-24 (feature 025, fase 3): los ajustes del corte conocidos en R hasta D, en orden; se aplican el día de su fecha, después de las operaciones.
+        private readonly Queue<AjusteDelCorte> _ajustes = new(entrada.AjustesDelCorte
+            .Where(a => a.RegistradoEn <= entrada.InformacionHasta && a.Monto != 0m && a.Fecha <= fecha)
+            .OrderBy(a => a.Fecha).ThenBy(a => a.Cuota));
+
         public EstadoDelCredito Ejecutar()
         {
             var r = entrada.InformacionHasta;
@@ -536,6 +563,7 @@ public static class ReconstruccionDeCredito
                     Aplicar(pendientes.Dequeue());
                     aplico = true;
                 }
+                if (AplicarAjustes(c)) aplico = true;
                 if (aplico) cortes = Cortes(pendientes);
                 var d = c.AddDays(1);
                 var ev = Evaluar(d);
@@ -550,6 +578,7 @@ public static class ReconstruccionDeCredito
             }
             AplicarAnticipos(fecha);
             while (pendientes.Count > 0) Aplicar(pendientes.Dequeue());
+            AplicarAjustes(fecha);
 
             var plan = _ctx.Plan!;
             Preparar();
@@ -590,7 +619,41 @@ public static class ReconstruccionDeCredito
                 AnticiposAplicados = [.. _ctx.Anticipos],
                 ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, aplicadas, e, extras),
                 Reconocidos = reconocidos,
+                InteresFueraDelPlan = InteresFueraDelPlan(fecha),
             };
+        }
+
+        /// <summary>
+        /// 2026-11-24 (feature 025, fase 3): aplica los ajustes del corte con fecha hasta <paramref name="dia"/>: cada uno suma al interés corriente de su
+        /// cuota, fuera de la causación (fila <c>CutoverInterestAdjustment</c>). Devuelve si aplicó alguno.
+        /// </summary>
+        private bool AplicarAjustes(DateOnly dia)
+        {
+            var aplico = false;
+            while (_ajustes.Count > 0 && _ajustes.Peek().Fecha <= dia)
+            {
+                var a = _ajustes.Dequeue();
+                _ctx.Mover(a.Fecha, LoanTransactionKind.CutoverInterestAdjustment, LoanConcept.CurrentInterest, a.Cuota, a.Monto, null);
+                aplico = true;
+            }
+            return aplico;
+        }
+
+        /// <summary>
+        /// 2026-11-24 (feature 025, fase 3): por cuota, el interés corriente que lleva fuera del plan a <paramref name="dia"/>: el saldo inicial de la carga
+        /// (corriente o su suspenso, con cuota) y los ajustes del corte ya aplicados.
+        /// </summary>
+        private Dictionary<int, decimal> InteresFueraDelPlan(DateOnly dia)
+        {
+            var salida = new Dictionary<int, decimal>();
+            foreach (var f in _ctx.Filas)
+            {
+                if (f.Cuota is not { } cuota || f.Dia > dia) continue;
+                if (f.Clase is not (LoanTransactionKind.OpeningBalance or LoanTransactionKind.CutoverInterestAdjustment)) continue;
+                if (f.Concepto is not (LoanConcept.CurrentInterest or LoanConcept.CurrentInterestInSuspense)) continue;
+                salida[cuota] = salida.GetValueOrDefault(cuota) + f.Monto;
+            }
+            return salida;
         }
 
         /// <summary>
@@ -721,6 +784,7 @@ public static class ReconstruccionDeCredito
                 ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, _aplicadas.Take(previas).ToList(), e, extras),
                 // 2026-11-16 (feature 024, fase 4): lo reconocido a ese día (el pago de la cuota reconocida no lleva el aviso del anticipo).
                 Reconocidos = Reconocidos(dia, Claves(), null, null),
+                InteresFueraDelPlan = InteresFueraDelPlan(dia),
             };
         }
 
@@ -801,6 +865,8 @@ public static class ReconstruccionDeCredito
                 if (d >= origen && d < fecha) s.Add(d);
             }
             foreach (var op in pendientes) Poner(op.FechaValor);
+            // 2026-11-24 (feature 025, fase 3): el día de cada ajuste del corte que falta por aplicar.
+            foreach (var a in _ajustes) Poner(a.Fecha);
             foreach (var d in _cortesDePeriodo) Poner(d);
             foreach (var d in _exigibles) Poner(d);
             foreach (var u in _usura.Concat(_topeDeVivienda))
@@ -1038,6 +1104,7 @@ public static class ReconstruccionDeCredito
             usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad)
         {
             MoraGeneralEA = MoraGeneral(d),
+            CorrienteMensual = _ctx.TasaCorrienteMensual,
         };
 
         /// <summary>
@@ -1091,6 +1158,8 @@ public static class ReconstruccionDeCredito
                         "El plan pactado es el del primer tramo: su monto y su fecha son los del desembolso.", "operation", operacion.Id));
                 // K6b (T1053): el plan lleva la versión de reglas sellada en las condiciones (la de vivienda en un crédito de vivienda).
                 var version = contexto.Condiciones.RulesVersion;
+                // 2026-11-24 (feature 025, HU2): la base de la tasa es la de las condiciones selladas.
+                if (contexto.TasaCorrienteMensual is { } mv) plan = plan with { TasaMensual = mv };
                 contexto.CambiarPlan(GeneradorDePlan.Generar(VersionesDeReglas.EsConocida(version) ? plan with { RulesVersion = version } : plan));
             }
             else
@@ -1117,6 +1186,7 @@ public static class ReconstruccionDeCredito
                 c.Periodicidad, contexto.Entrada.Plan?.Sistema ?? AmortizationSystem.LevelPayment, c.TasaEfectivaAnual, c.Convencion, c.Equivalencia, c.Redondeo)
             {
                 RulesVersion = VersionesDeReglas.EsConocida(c.RulesVersion) ? c.RulesVersion : VersionesDeReglas.Vigente,
+                TasaMensual = contexto.TasaCorrienteMensual,
             }));
             foreach (var s in operacion.Saldos)
             {
@@ -1163,9 +1233,10 @@ public static class ReconstruccionDeCredito
             var estado = contexto.Instantanea(operacion.FechaValor);
             // 2026-11-16: con la cuota completa sellada en su decisión, la cancelación cobra el interés de la cuota en curso con la proyección de la
             // causación a la fecha valor (la misma función que al simular y al aplicar).
+            // 2026-11-24 (feature 025, fase 5): con el período calendario sellado en su decisión.
             var solicitud = new SolicitudDeDistribucion(pago.Modalidad, pago.Valor, operacion.FechaValor)
             {
-                Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta,
+                Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta, PeriodoCalendario = pago.PeriodoCalendario,
             };
             // 2026-11-16 (pedido del dueño): con el orden de rubros sellado en su decisión; sin él, la prelación de la línea, la de siempre.
             var prelacion = contexto.PrelacionCon(pago.Rubros);

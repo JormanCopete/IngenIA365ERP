@@ -41,13 +41,14 @@ public class ResolutorDeReglasDeCarteraTests
         // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio; y el reparto de un pago corregido por la UVR (PRN, 2026-10-17).
         // Feature 014 (T048): los 33 de captaciones y aportes al final (30 de negocio, 3 informativos). Feature 024 (fase 2): la administración
         // causada (ACA), entre los de crédito; fase 4: la cuota reconocida del período (CUR; CRC ya era de Tesorería).
-        O.Todas.Should().HaveCount(72);
+        // Feature 025 (fase 3): el interés del período al corte (IDC), entre los de crédito.
+        O.Todas.Should().HaveCount(73);
         O.DeCaptaciones.Should().HaveCount(33);
         O.Todas.Select(o => (o.Codigo, o.Corto, o.EsInformativo)).Should().Equal(
             CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => (t.Type, t.CodigoCorto!, t.Kind == IntegrationMessageKind.Informational)),
             "el código de operación de la matriz es el Type del mensaje (§2.1, C110)");
         O.Todas.Count(o => o.EsInformativo).Should().Be(9);
-        O.DeNegocio.Should().HaveCount(63);
+        O.DeNegocio.Should().HaveCount(64);
         O.Todas.SelectMany(o => o.Roles).Should().OnlyContain(r => R.Buscar(r) != null, "todo hecho nombra roles del catálogo");
         O.Todas.Where(o => o.EsInformativo).Should().OnlyContain(o => o.Roles.Count == 0 && o.Comprobante == null);
         O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo(

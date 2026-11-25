@@ -119,6 +119,14 @@ public enum LoanTransactionKind
     /// (<c>LibroTeorico.EsDeCausacion</c>). (nuevo)
     /// </summary>
     RecognitionRelease = 23,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1; D1): el <b>interés del período al corte</b> de un crédito cargado: lo que la primera cuota posterior al corte
+    /// dejó por fuera (del vencimiento anterior al corte), <c>+</c> en el interés corriente de la <b>primera cuota sin vencer</b> a la fecha de firma, sin
+    /// mora. Lo escribe sólo <c>RegistroDeCartera</c> (el proceso de causación <c>CutoverRecalculation</c>) y es entrada de la reconstrucción
+    /// (<c>EntradaDeReconstruccion.AjustesDelCorte</c>). Lo lleva el hecho <c>InteresDelCorte</c>. Es causación (<c>LibroTeorico.EsDeCausacion</c>). (nuevo)
+    /// </summary>
+    CutoverInterestAdjustment = 24,
 }
 
 /// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>
@@ -195,6 +203,11 @@ public enum TermsVersionCause
 
     /// <summary>2026-11-24 (pedido del dueño): el cambio de plazo de un crédito sin pagos ni causación; no es modificación ni reestructuración. (nuevo)</summary>
     TermCorrection = 11,
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU3; D2): la corrección de la tasa de un crédito cargado a su mensual vencida redonda, con vigencia desde el
+    /// corte (la escribe el proceso de causación <c>CutoverRecalculation</c>). (nuevo)
+    /// </summary>
+    CutoverCorrection = 12,
 }
 
 /// <summary>Forma de un tramo de desembolso; <c>InKind</c> es la venta de Comercial y nunca emite orden de giro.</summary>

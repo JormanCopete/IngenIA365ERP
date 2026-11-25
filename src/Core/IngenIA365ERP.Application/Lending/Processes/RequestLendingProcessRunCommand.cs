@@ -56,6 +56,8 @@ public static class ErroresDeCorridas
         LendingProcessKind.MigratedCollectionStages => "registro de la etapa de cobranza migrada",
         // 2026-11-16 (feature 024, fase 4).
         LendingProcessKind.PeriodRecognition => "reconocimiento de la cuota del período",
+        // 2026-11-24 (feature 025, fase 3).
+        LendingProcessKind.CutoverRecalculation => "recálculo de la carga desde el corte",
         _ => "proceso",
     };
 }

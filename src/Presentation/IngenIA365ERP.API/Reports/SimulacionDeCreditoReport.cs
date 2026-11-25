@@ -75,6 +75,8 @@ public static class SimulacionDeCreditoReport
                 {
                     t.Span("Tasa efectiva anual: ").SemiBold();
                     t.Span(Porcentaje(s.EffectiveAnnualRate) + " EA");
+                    // 2026-11-24 (feature 025, HU2; FR-012): la pactada en MV al lado de su E.A.
+                    if (s.MonthlyRate is { } mv) t.Span($" ({Porcentaje(mv)} MV)");
                     t.Span(" · Nominal del período: ").SemiBold();
                     t.Span(Porcentaje(s.NominalPeriodRate));
                     t.Span(" · Efectiva con cargos: ").SemiBold();

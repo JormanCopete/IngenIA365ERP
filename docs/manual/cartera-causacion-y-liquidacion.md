@@ -449,3 +449,130 @@ cuatro ojos, numeración `PCA-`). Lo propio:
   (la matriz no siembra ninguna; la plantilla sugiere las filas por modalidad y rubro, y la completitud las pide en cuanto alguna línea
   reconoce al inicio del ciclo contra el diferido), si el seguro debe ir a un diferido propio, y los casos dorados 37 y 38 y los
   contables 60 a 63.
+
+### 9.7 Recálculo de la carga desde el corte (feature 025, fase 3, 2026-11-24)
+
+Una cartera cargada nace con el interés **desde el corte** (D5 de la 013): la primera cuota posterior al corte no lleva los días entre su
+vencimiento anterior y el corte, y si la tasa se trajo en E.A. redondeada (23,87 %) deja de ser la mensual pactada (1,8 % MV). El proceso
+de causación con la clase **«Recalcular la carga desde el corte»** (`/cartera/causacion`, `Kind = CutoverRecalculation`; se ofrece mientras
+haya créditos cargados sin recalcular) lo corrige **sin borrar nada** (D1, D2):
+
+- **Qué toma**: los créditos nacidos de la carga de migración, vivos, del alcance y los filtros. Quedan fuera con su motivo: castigado,
+  cancelado, en UVR, con la causación suspendida, de pago único, ya recalculado (`Lending.Cutover.AlreadyAdjusted` si se intenta dos
+  veces), sin cuota sin vencer donde cobrar o sin nada que cambiar.
+- **La tasa (HU3)**: si la E.A. sellada está a menos de 0,005 puntos de una MV redonda con dos decimales, se sella una versión de
+  condiciones nueva en esa MV (30/360 lineal), con la causa `CutoverCorrection` y **vigencia desde el corte**. Si no, conserva su tasa.
+- **El interés del período (HU1)**: el de la primera cuota posterior al corte, del vencimiento anterior (o del desembolso de la carga si
+  es la cuota 1) a su vencimiento, sobre el capital no vencido al corte, menos lo que esa cuota causa desde el corte y lo que trajo en la
+  carga. Si pasa de un peso, se carga como interés corriente en la **primera cuota sin vencer** el día de la firma (fila
+  `CutoverInterestAdjustment`, hecho `InteresDelCorte`, código `IDC`, comprobante `CA`, roles de la causación de la corriente: interés por
+  cobrar contra ingreso). No genera mora ni cambia la altura ni la calificación: la cuota destino todavía no vence. Ejemplo (caso dorado
+  39): 10.000.000 a 1,8 % MV, corte el 31-10, vencimiento el 9: faltan 21 días = **126.000,00**, cobrados en la cuota de diciembre.
+- **El recálculo**: la reconstrucción desde el corte con la tasa nueva y los **mismos pagos** se compara con el libro hasta lo causado;
+  cada diferencia es una fila nueva —ajuste de causación (`AjusteDeCausacionPorFechaValor`, causa `CutoverRecalculation`) o el reparto de un
+  pago (`PagoRedistribuidoPorValorNacional`)—, como la corrección por valor nacional (§6).
+- **El borrador** lista por crédito el capital al corte, la tasa sellada y la de desde el corte, los días que faltaron, el interés del
+  período, lo ya causado y cargado, el valor y la cuota destino, con totales por hecho y sucursal. No escribe nada: es la medición exacta
+  antes de decidir.
+- **En firme** (cuatro ojos, `Lending.AccrualProcesses.Confirm`): se vuelve a calcular con los créditos bloqueados (si algo cambió,
+  `Stale`), se escriben la versión de condiciones, el interés del corte, las diferencias, una **versión nueva del plan** (el capital no
+  cambia; la cuota destino lleva el interés del corte en su interés, así la caja, el estado de cuenta y la consulta del crédito dicen lo
+  mismo), las posiciones de los días cambiados y la marca `LND_LoanControls.CutoverAdjustedAt`. La validación previa de la falta de regla
+  (`Contabilidad.FaltaDeRegla`) puede detenerlo: la matriz tiene que resolver el `Ingreso` y el `InteresPorCobrar` del interés corriente
+  (las filas sugeridas de siempre, hecho `*`). No se reprocesa (`Lending.AccrualProcess.CutoverNotReprocessable`).
+- **La noche no lo revierte**: el ajuste y la corrección son entrada de la reconstrucción (`EntradaDeReconstruccion.AjustesDelCorte` y la
+  última versión con causa `CutoverCorrection`), así que la causación y la verificación del libro los conservan.
+- **De paso** (arreglo): el valor de una cuota al vencer (`AplicadorDePagos.ValorDeCuota`, la cuota del ciclo de la caja y la cuota
+  específica) suma el interés que la cuota trajo en la carga y su interés del corte; antes los ignoraba y la caja subestimaba la primera
+  cuota de un crédito cargado.
+
+**Migración** aditiva `AjusteDelCorte` (`20261124191735` en SQL Server, `20261124191843` en PostgreSQL):
+`LND_LoanControls.CutoverAdjustedAt` y `LND_AccrualProcessLines.Detail` (el detalle por crédito del borrador). El hecho, su mapeo a `CA` y
+su tipo son semilla. Casos dorados 39 (día 9, día 30, interés cargado, cuota destino vencida y quincenal) y 44 (recálculo con pagos).
+
+**Pendiente**: la contadora revisa el borrador de producción crédito por crédito antes de la firma (SC-002). La fase 4 (§9.8) reusa el
+ajuste, el hecho y la marca para que una carga nueva cause completo el período en curso.
+
+### 9.8 La carga causa completo el período en curso (feature 025, fase 4, 2026-11-24)
+
+Una cooperativa nueva no tiene que pasar por el recálculo de §9.7: la carga de migración (`/cartera/migracion` → «Carga nueva») trae la
+opción **«El período en curso al corte se causa completo»**, marcada por defecto (D5 de la 025; `LND_MigrationLoads.CauseFullInProgressPeriod`,
+`causeFullInProgressPeriod` en `POST /api/lending/migration/loads`). Con ella, al **activar**:
+
+- **El plan**: la primera cuota que vence después del corte toma como inicio de su período el vencimiento de la cuota cargada anterior; si no
+  la hay y es la cuota 1, el desembolso de la fila; si no, su vencimiento menos un período. El motor sigue causando **desde el corte**.
+- **Lo anterior al corte** (el interés del período completo, menos lo que el motor causa desde el corte hasta su vencimiento, menos el
+  interés corriente que la cuota trajo en la carga, que **cuenta como causado**; si pasa de un peso) entra **el día de la activación**
+  (C+1), como **ingreso de ese día**, en esa misma cuota (todavía no vence: sin mora): la misma fila `CutoverInterestAdjustment` y el mismo
+  hecho `InteresDelCorte` (`IDC`, comprobante `CA`) de §9.7, de una corrida `CutoverRecalculation` a nombre de quien activa, y una versión
+  nueva del plan con el interés completo en esa cuota. Se calcula con la misma regla de §9.7 sobre la reconstrucción, con la firma el día
+  del corte.
+- **No se cuadra contra el balance al corte**: es ingreso del día de la activación, no un saldo a C. El cuadre de la carga sigue igual.
+- **La marca**: cada crédito evaluado queda con `LND_LoanControls.CutoverAdjustedAt`, sume o no, así que el recálculo de §9.7 no lo vuelve a
+  tomar (la HU1 y la HU4 no se suman). Quedan como hoy, sin ajuste ni marca, los castigados, los de causación suspendida al corte o que
+  llegan con intereses en suspenso (lo de
+  antes del corte no es ingreso de un crédito en suspenso), los de UVR, los de pago único y los que no se pudieron reconstruir; el recálculo
+  puede tomarlos después.
+- **La noche no lo revierte**: el ajuste es entrada de la reconstrucción, como en §9.7.
+- **La vista previa**: en la pestaña «Partes» de la carga, «Período en curso al corte» lista por crédito la cuota, el inicio del período,
+  los días antes del corte, el interés del período completo, lo que se causa desde el corte, lo cargado y lo que suma, con el total
+  (`GET /api/lending/migration/loads/{id}/full-period-interest`, permiso `Lending.Migration.Load`). Es una estimación sin reconstrucción:
+  deja fuera lo que llega con intereses en suspenso; la activación responde lo que de verdad sumó (`fullPeriodInterest`) y lo sella en los
+  conteos de la activación (`fullPeriod`).
+- **Sin la opción**, el comportamiento de siempre (D5 de la 013): el interés nace desde el corte. Una carga creada antes de la migración
+  `CargaConPeriodoCompleto` queda sin la opción; para usarla, se crea una carga nueva (reemplaza al borrador).
+
+Ejemplo (caso dorado `26-credito-migrado-periodo-completo`): 400.000 a 25 % E.A. compuesta, corte el 30-06, cuota 5 que vence el 10-07 con
+4.000 cargados: período completo del 10-06 al 10-07 = 7.507,71; desde el corte el motor causa 2.487,07; la activación suma **1.020,64** el
+01-07. Si la matriz no resuelve el `InteresDelCorte` y `Contabilidad.FaltaDeRegla = Bloquear`, la activación responde
+`Lending.Activation.FullPeriodNotPostable`: se completa la matriz o se carga sin la opción.
+
+### 9.9 Causación por período calendario (feature 025, fase 5, 2026-11-24)
+
+Casi todas las herramientas de origen causan **por período del calendario**: el día 1 queda causada la cuota que vence en el mes y la caja la
+cobra completa. El parámetro **`Causacion.Periodo`** (Parámetros de Cartera → Causación; general con excepción por línea, como
+`Causacion.Momento`) lo permite:
+
+- **`CicloDeLaCuota`** (de fábrica): lo de siempre. El período de una cuota va del vencimiento anterior al suyo.
+- **`PeriodoCalendario`**: el período de una cuota es el **tramo del calendario que contiene su vencimiento** —mes del 1 al último día;
+  quincena del 1 al 15 y del 16 al fin; década del 1 al 10, del 11 al 20 y del 21 al fin; semana de lunes a domingo; las periodicidades de más de
+  un mes y el pago único, el mes—. Los límites salen de la periodicidad, nunca de un número escrito (`PeriodoDeCausacion.TramoQueContiene`).
+
+El cálculo sigue siendo día a día y **el monto de la cuota no cambia**. Lo que cambia con `PeriodoCalendario`:
+
+- **Reconocimiento** (con `Causacion.Momento = InicioDelCiclo`, §9.6): el ciclo diario reconoce la cuota el **primer día de su tramo**
+  (o el primero de su ciclo, si el desembolso fue a mitad del tramo), no el día siguiente al vencimiento anterior. Lo reconocido es lo que la
+  cuota va a causar desde ese día hasta su vencimiento (lo anterior ya está causado).
+- **Proceso de causación** (§9.5, clase «Reconocer la cuota del período»): con rango del 1 al 30 de noviembre toma las cuotas que **vencen**
+  en el rango, no las cuyo ciclo se cruza con él. Si el tramo de la cuota empieza después de hoy, queda fuera con `PeriodNotStarted` («Su
+  período empieza después de hoy») en vez de `CycleNotStarted`.
+- **Filtros de la herramienta anterior** (FR-018; migración `FiltrosDelProcesoDeCausacion`, columnas `PaymentForm`, `InstallmentScope` y
+  `DiscountCycle` de `LND_AccrualProcesses`): al reconocer se puede filtrar por **forma de pago** (nómina = nómina propia y libranza; caja = lo
+  demás, por el vínculo vigente), **qué causa** (todo, sin extras o sólo extras: las cuotas con prima) y **ciclo de descuento** (primera o segunda
+  quincena, una de las tres décadas o una semana del mes, por el día en que vence la cuota). Son exactos porque cada línea del reconocimiento es
+  de un crédito y una cuota; al contabilizar lo causado no se admiten (`Lending.AccrualProcess.FiltersOnlyForRecognition`): un hecho junta créditos
+  y no se parte. La pantalla y el servidor validan los valores.
+- **Caja y estado de cuenta**: la «cuota del período» es la que vence en el **tramo en curso**. El 24-11, en un crédito que vence el 9 y ya
+  pagó la de noviembre, no hay cuota del período por cobrar: pagar la de diciembre ese día es un **anticipo** (modalidad anticipo o cuota
+  específica), y la cuota del ciclo devuelve el valor como excedente. El detalle de la obligación lo avisa.
+- **Pagos dentro del período (D3)**:
+  - Un **abono** (todo pago que no cancela: cuota, anticipo, abono a capital, valor libre) cubre **primero lo causado de la cuota del tramo en
+    curso**, como si fuera exigible, y después lo que diga su modalidad. La cuota del ciclo no vuelve a anticipar lo que ya cubrió.
+  - Una **cancelación** la decide `Pagos.InteresesAlPagarAntesDelVencimiento`, que en pantalla se lee «¿Devuelve los días no corridos al
+    cancelar?»: **Sí** (`Corrido`, de fábrica) cobra lo causado hasta la fecha de pago y devuelve lo reconocido que no corrió (la devolución de la
+    024); **No** (`CuotaCompleta`) cobra completo el interés de la cuota del tramo causado. Como hoy, en vivienda y dentro del tope legal del
+    prepago (Ley 1555) siempre se devuelven.
+  - Lo causado día a día de una cuota cuyo **tramo no ha empezado** (el 24-11, lo de diciembre causado desde el 10-11) **nunca se cobra**: la
+    cancelación lo devuelve en su fecha valor (`RecognitionRelease` negativo en el interés corriente de esa cuota, de la operación que cancela;
+    pasa a Contabilidad con el ajuste de causación del pago). Si los fondos no alcanzan para cancelar, es la cancelación parcial de siempre.
+  - Lo sella cada pago en su decisión (`AccrualPeriod = "PeriodoCalendario"`; nulo por el ciclo de la cuota) para que la reconstrucción lo repita
+    aunque el parámetro cambie después. Un crédito en UVR va siempre por el ciclo de su cuota. El saldo a favor aplicado como abono no lo usa.
+
+Casos dorados (calculados con `calcular.py`): `45-periodo-calendario-mensual` (1,8 % MV sobre 10.000.000, días 9: la cuota 2 se reconoce el
+01-03 por 49.928,29 —9 días— y la caja del 03-03 cubre 133.142,12 de causado y deja 800.877,65 de anticipo), `46-periodo-calendario-quincenal`
+(reconocimientos el 01-02 y el 16-02), `47-cancelacion-periodo-causado` (el 05-03, corrido 144.237,29 o cuota completa 166.427,64; el 24-02,
+83.213,82 no cobrados con las dos opciones), `48-abono-a-mitad-de-periodo` (de 1.000.000 el 05-03, 144.237,29 al interés y 855.762,71 a capital) y
+`49-pago-el-24-es-anticipo`.
+
+Pendiente de validar por la contadora: que los abonos cubran primero lo causado del tramo (no el reconocido todavía por causar, que se
+cobra como anticipo de la cuota) y que lo no cobrado de un tramo sin empezar se lleve como ajuste de causación del pago.

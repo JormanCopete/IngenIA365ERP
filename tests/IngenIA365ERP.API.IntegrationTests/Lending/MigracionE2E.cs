@@ -72,10 +72,16 @@ public static class MigracionE2E
 
     // ----------------------------------------------------------------------------------------------------------- http --
 
-    /// <summary>Crea la carga en borrador con su corte y devuelve su <c>PublicId</c>.</summary>
-    public static async Task<Guid> CrearCargaAsync(HttpClient http, string token, DateOnly corte, string notas)
+    /// <summary>
+    /// Crea la carga en borrador con su corte y devuelve su <c>PublicId</c>. <paramref name="periodoCompleto"/> es «el período en curso al corte se
+    /// causa completo» (feature 025, fase 4): nulo deja el defecto del servidor (sí), que exige la regla de <c>InteresDelCorte</c> en la matriz.
+    /// </summary>
+    public static async Task<Guid> CrearCargaAsync(HttpClient http, string token, DateOnly corte, string notas, bool? periodoCompleto = null)
     {
-        var alta = await CarteraE2E.ConClaveAsync(http, token, HttpMethod.Post, Cargas, new { cutoffDate = corte, notes = notas });
+        object cuerpo = periodoCompleto is { } p
+            ? new { cutoffDate = corte, notes = notas, causeFullInProgressPeriod = p }
+            : new { cutoffDate = corte, notes = notas };
+        var alta = await CarteraE2E.ConClaveAsync(http, token, HttpMethod.Post, Cargas, cuerpo);
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"crear la carga: «{await alta.Content.ReadAsStringAsync()}»");
         return (await CarteraE2E.LeerAsync(alta)).GetProperty("publicId").GetGuid();
     }

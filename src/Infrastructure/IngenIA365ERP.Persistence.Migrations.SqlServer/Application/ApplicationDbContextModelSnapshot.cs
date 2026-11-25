@@ -29848,6 +29848,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("MinTermMonths")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("decimal(9,8)");
+
                     b.Property<int>("Order")
                         .HasColumnType("int");
 
@@ -30074,6 +30078,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("decimal(9,8)");
+
                     b.Property<int>("NoteRecalculation")
                         .HasColumnType("int");
 
@@ -30090,6 +30098,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)
@@ -40547,6 +40560,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("CutoverAdjustedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -40837,6 +40853,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("decimal(9,8)");
+
                     b.Property<DateOnly?>("NextResetDate")
                         .HasColumnType("date");
 
@@ -40857,6 +40877,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)
@@ -42177,6 +42202,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<bool>("CauseFullInProgressPeriod")
+                        .HasColumnType("bit");
+
                     b.Property<int>("ChargedOffCount")
                         .HasColumnType("int");
 
@@ -43481,6 +43509,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("DiscountCycle")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("ExcludedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -43496,6 +43527,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("IncludedFactCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InstallmentScope")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
@@ -43519,6 +43553,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("PaymasterPersonId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaymentForm")
                         .HasColumnType("int");
 
                     b.Property<int>("Periodicity")
@@ -43762,6 +43799,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<int?>("ExclusionReason")
                         .HasColumnType("int");

@@ -51,7 +51,7 @@ public class MigrationEndpoints : ICarterModule
 
         cargas.MapPost("/", async (CrearCargaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var r = await sender.Send(new CreateMigrationLoadCommand(body.CutoffDate, body.Notes) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var r = await sender.Send(new CreateMigrationLoadCommand(body.CutoffDate, body.Notes, body.CauseFullInProgressPeriod ?? true) { OperationKey = http.ClaveDeOperacion() }, ct);
                 return r.IsSuccess ? (object)Results.Created($"/api/lending/migration/loads/{r.Value.PublicId}", r.Value) : r;
             })
             .WithName("Lending_MigrationLoads_Create")
@@ -90,6 +90,12 @@ public class MigrationEndpoints : ICarterModule
             .WithName("Lending_MigrationLoads_BalanceCheck")
             .RequirePermission(VerCuadre);
 
+        // 2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que suma la opción «el período en curso al corte se causa completo», por crédito y en total.
+        cargas.MapGet("/{id:guid}/full-period-interest", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetMigrationFullPeriodInterestQuery(id), ct))
+            .WithName("Lending_MigrationLoads_FullPeriodInterest")
+            .RequirePermission(Permiso);
+
         cargas.MapGet("/{id:guid}/reconciliation", async (Guid id, [FromQuery] SaleReconciliationOutcome? classification, [FromQuery] int? page,
                 [FromQuery] int? pageSize, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetMigrationSalesReconciliationQuery(id, classification, page ?? 1, pageSize ?? 50), ct))
@@ -124,7 +130,8 @@ public class MigrationEndpoints : ICarterModule
     private static bool EsVerdad(string? valor) => bool.TryParse(valor, out var b) && b;
 
     /// <summary>El cuerpo del alta (§19.1, <c>{ cutoffDate, notes? }</c>).</summary>
-    public sealed record CrearCargaRequest(DateOnly CutoffDate, string? Notes);
+    /// <remarks>2026-11-24 (feature 025, fase 4, HU4; D5): <c>causeFullInProgressPeriod</c> opcional; sin él, sí.</remarks>
+    public sealed record CrearCargaRequest(DateOnly CutoffDate, string? Notes, bool? CauseFullInProgressPeriod = null);
 
     /// <summary>El cuerpo de aplicar (§19.1, <c>{ reason }</c>).</summary>
     public sealed record MotivoRequest(string? Reason);

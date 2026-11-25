@@ -138,7 +138,10 @@
                 <p class="texto-tenue">
                     @TextosDeCausacion.Clase(p.Kind) ·
                     @TextosDeCausacion.Periodicidad(p.Periodicity, p.SubPeriod) · @(p.Kind == TextosDeCausacion.ClaseReconocer ? "ciclo" : "días causados") del @TextosDeCreditos.Fecha(p.DateFrom) al @TextosDeCreditos.Fecha(p.DateTo)
-                    · @TextosDeCausacion.ListaDeConceptos(p.Concepts) · @Filtros(p.Filters.Branch?.Name, p.Filters.CreditLine is { } l ? $"{l.Code} · {l.Name}" : null, p.Filters.Paymaster?.Name)
+                    · @TextosDeCausacion.ListaDeConceptos(p.Concepts) · @Filtros(p.Filters.Branch?.Name, p.Filters.CreditLine is { } l ? $"{l.Code} · {l.Name}" : null, p.Filters.Paymaster?.Name,
+                        TextosDeCausacion.TextoDe(TextosDeCausacion.FormasDePago, p.Filters.PaymentForm),
+                        TextosDeCausacion.TextoDe(TextosDeCausacion.AlcancesDeCuotas, p.Filters.InstallmentScope),
+                        TextosDeCausacion.TextoDe(TextosDeCausacion.CiclosDeDescuento, p.Filters.DiscountCycle))
                     @if (p.ReprocessOf is { } de) { <span> · reproceso de @de.Number</span> }
                     @if (p.ReprocessedBy is { } por) { <span> · reprocesado por @por.Number</span> }
                 </p>
@@ -233,6 +236,34 @@
                 <IndicadorDeCarga Cargando="@_lineas.Activa">
                     <div class="tabla-desplazable">
                         <table class="data-grid">
+                            @if (p.Kind == TextosDeCausacion.ClaseRecalcularCorte)
+                            {
+                                <thead><tr><th>Crédito</th><th>Oficina</th><th>Línea</th><th>Hecho</th><th class="numero">Capital al corte</th><th>Tasa sellada</th><th>Tasa desde el corte</th><th class="numero">Días faltantes</th><th class="numero">Interés del período</th><th class="numero">Ya causado y cargado</th><th class="numero">Valor</th><th class="numero">Cuota destino</th><th>Estado</th><th>Motivo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in _filasDeLinea)
+                                    {
+                                        var d = l.Cutover;
+                                        <tr>
+                                            <td><a href="/cartera/creditos/@l.LoanPublicId">@l.LoanNumber</a></td>
+                                            <td>@(l.Branch ?? "—")</td>
+                                            <td>@(l.CreditLineCode ?? "—")</td>
+                                            <td>@TextosDeCausacion.ConceptoDelHecho(l.FactType)</td>
+                                            <td class="numero">@(d is null ? "—" : TextosDeCreditos.Pesos(d.PrincipalAtCutoff))</td>
+                                            <td>@(d is null ? "—" : d.MonthlyRate is { } mvActual ? $"{TextosDeCausacion.Porcentaje(mvActual)} MV" : $"{TextosDeCausacion.Porcentaje(d.AnnualRate)} E.A.")</td>
+                                            <td>@(d?.ProposedMonthlyRate is { } mv ? $"{TextosDeCausacion.Porcentaje(mv)} MV" : d is null ? "—" : "Sin cambio")</td>
+                                            <td class="numero">@(d?.MissingDays.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                            <td class="numero">@(d is null ? "—" : TextosDeCreditos.Pesos(d.FullPeriodInterest))</td>
+                                            <td class="numero">@(d is null ? "—" : TextosDeCreditos.Pesos(d.AlreadyAccrued + d.LoadedInterest))</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(l.Amount)</td>
+                                            <td class="numero">@(l.InstallmentNumber?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                                            <td>@TextosDeCausacion.EstadoDelItem(l.Status)</td>
+                                            <td>@TextosDeCausacion.Motivo(l.Reason)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            }
+                            else
+                            {
                             <thead><tr><th>Crédito</th><th>Oficina</th><th>Línea</th>@if (p.Kind == TextosDeCausacion.ClaseReconocer) { <th class="numero">Cuota</th><th>Desde</th> }<th>Concepto</th><th class="numero">Valor</th>@if (p.ReprocessOf is not null) { <th class="numero">@(p.Kind == TextosDeCausacion.ClaseReconocer ? "Reconocido antes" : "Contabilizado antes")</th> }<th>Estado</th><th>Motivo</th></tr></thead>
                             <tbody>
                                 @foreach (var l in _filasDeLinea)
@@ -254,6 +285,7 @@
                                     </tr>
                                 }
                             </tbody>
+                            }
                         </table>
                     </div>
                     @if (_totalDeLineas > TamanoDeLineas)
@@ -314,16 +346,30 @@
         <Content>
             <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Calculando el borrador…">
                 <div class="form-grid">
-                    @if (_editando is null && PuedeReconocer)
+                    @if (_editando is null && (PuedeReconocer || PuedeRecalcularCorte))
                     {
                         <label class="campo">Clase *
-                            <select class="e-input" value="@_clase" data-ayuda="Contabilizar lo causado que espera, o reconocer al inicio del ciclo la cuota del período de las líneas que lo usan."
+                            <select class="e-input" value="@_clase" data-ayuda="Contabilizar lo causado que espera, reconocer al inicio del ciclo la cuota del período de las líneas que lo usan o recalcular desde el corte los créditos cargados."
                                     @onchange="@(e => CambiarClase(e.Value?.ToString()))">
                                 <option value="@TextosDeCausacion.ClaseContabilizar">@TextosDeCausacion.Clase(TextosDeCausacion.ClaseContabilizar)</option>
-                                <option value="@TextosDeCausacion.ClaseReconocer">@TextosDeCausacion.Clase(TextosDeCausacion.ClaseReconocer)</option>
+                                @if (PuedeReconocer) { <option value="@TextosDeCausacion.ClaseReconocer">@TextosDeCausacion.Clase(TextosDeCausacion.ClaseReconocer)</option> }
+                                @if (PuedeRecalcularCorte) { <option value="@TextosDeCausacion.ClaseRecalcularCorte">@TextosDeCausacion.Clase(TextosDeCausacion.ClaseRecalcularCorte)</option> }
                             </select>
                         </label>
                     }
+                </div>
+                @if (RecalculandoCorte)
+                {
+                    <p class="texto-tenue">
+                        Toma los créditos nacidos de la carga de migración que todavía no se recalcularon. A cada uno le propone pasar a la tasa mensual vencida redonda
+                        si la E.A. sellada está a menos de 0,005 puntos de ella (con vigencia desde el corte), le carga en la primera cuota sin vencer —sin mora— el
+                        interés que la primera cuota posterior al corte dejó por fuera, y recalcula desde el corte con los mismos pagos: las diferencias van como
+                        movimientos nuevos. El borrador no escribe nada; ponerlo en firme exige la aprobación de otra persona y no se repite por crédito.
+                    </p>
+                }
+                else
+                {
+                <div class="form-grid">
                     <label class="campo">Periodicidad *
                         <select class="e-input" value="@_periodicidad" @onchange="@(e => CambiarPeriodicidad(e.Value?.ToString()))">
                             @foreach (var per in TextosDeCausacion.Periodicidades) { <option value="@per.Valor">@per.Texto</option> }
@@ -351,18 +397,25 @@
                         <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="@(e => _hasta = Fecha(e.Value) ?? _hasta)" />
                     </label>
                 </div>
-                @if (Reconociendo)
+                }
+                @if (RecalculandoCorte)
+                {
+                }
+                else if (Reconociendo)
                 {
                     <p class="texto-tenue">
                         El rango es el ciclo que se reconoce: puede terminar después de hoy pero tiene que haber empezado. De cada crédito de las líneas que reconocen al
                         inicio del ciclo se reconoce la cuota cuyo período se cruza con el rango —lo que va a causar desde el día siguiente al último causado hasta su
                         vencimiento—, contra @(_opcionesDeCausacion?.RecognitionMode == "IngresoDirecto" ? "el ingreso (directo)" : "el ingreso diferido").
+                        En las líneas que causan por período calendario (Causacion.Periodo) se toman las cuotas que vencen en el rango (del 1 al 30, la que vence en el mes).
                     </p>
                 }
                 else
                 {
                     <p class="texto-tenue">El rango se propone según el período elegido y se puede ajustar; son días causados y no puede pasar de hoy.</p>
                 }
+                @if (!RecalculandoCorte)
+                {
                 <h5>Conceptos *</h5>
                 <div class="rejilla-checks">
                     @foreach (var c in _opcionesDeCausacion?.Concepts ?? [])
@@ -376,6 +429,7 @@
                         </label>
                     }
                 </div>
+                }
                 <h5>Filtros (opcionales)</h5>
                 <div class="form-grid">
                     <label class="campo">Oficina@(_opcionesDeCausacion?.AllBranches == false ? " *" : "")
@@ -396,6 +450,31 @@
                             @foreach (var pg in _opcionesDeCausacion?.Paymasters ?? []) { <option value="@pg.PublicId">@pg.Name</option> }
                         </select>
                     </label>
+                    @* 2026-11-24 (feature 025, fase 5, FR-018): los filtros de la herramienta anterior, sólo al reconocer la cuota del período. *@
+                    @if (Reconociendo)
+                    {
+                        <label class="campo">Forma de pago
+                            <select class="e-input" value="@(_formaDePago?.ToString() ?? "")" @onchange="@(e => _formaDePago = Numero(e.Value))"
+                                    data-ayuda="Nómina: nómina propia y libranza. Caja: todo lo demás, por el vínculo vigente del crédito.">
+                                <option value="">Todas</option>
+                                @foreach (var f in TextosDeCausacion.FormasDePago) { <option value="@f.Valor">@f.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Qué causa
+                            <select class="e-input" value="@(_alcanceDeCuotas?.ToString() ?? "")" @onchange="@(e => _alcanceDeCuotas = Numero(e.Value))"
+                                    data-ayuda="Las cuotas extra son las que llevan cuota extraordinaria (prima) en el plan.">
+                                <option value="">Todo</option>
+                                @foreach (var a in TextosDeCausacion.AlcancesDeCuotas) { <option value="@a.Valor">@a.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Ciclo de descuento
+                            <select class="e-input" value="@(_cicloDeDescuento?.ToString() ?? "")" @onchange="@(e => _cicloDeDescuento = Numero(e.Value))"
+                                    data-ayuda="Por el día del mes en que vence la cuota.">
+                                <option value="">Todos</option>
+                                @foreach (var c in TextosDeCausacion.CiclosDeDescuento) { <option value="@c.Valor">@c.Texto</option> }
+                            </select>
+                        </label>
+                    }
                 </div>
                 <p class="texto-tenue">
                     Lo causado de un día, una sucursal y un concepto va en un solo hecho con todos sus créditos y no se parte: con filtro de línea o de pagaduría,
@@ -440,6 +519,8 @@
     private List<LineaDeCausacionDto> _filasDeLinea = [];
     private ProcesoDeCausacionDto? _proceso, _editando;
     private string? _estado, _estadoDeLinea, _motivoDeLinea, _buscarCredito, _error, _motivo, _oficina, _linea, _pagaduria;
+    // 2026-11-24 (feature 025, fase 5, FR-018): forma de pago, qué causa y ciclo de descuento del reconocimiento; nulos, todos.
+    private int? _formaDePago, _alcanceDeCuotas, _cicloDeDescuento;
     private bool _mostrarFormulario, _mostrarMotivo;
     private int _pagina = 1, _paginaDeLineas = 1, _periodicidad = TextosDeCausacion.Mensual, _clase = TextosDeCausacion.ClaseContabilizar;
     private long _total, _totalDeLineas;
@@ -455,9 +536,9 @@
         await CargarAsync(1);
     }
 
-    private static string Filtros(string? oficina, string? linea, string? pagaduria)
+    private static string Filtros(params string?[] filtros)
     {
-        var partes = new[] { oficina, linea, pagaduria }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        var partes = filtros.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
         return partes.Count == 0 ? "Sin filtros" : string.Join(" · ", partes);
     }
 
@@ -466,11 +547,19 @@
 
     private static Guid? Id(string? texto) => Guid.TryParse(texto, out var id) ? id : null;
 
+    private static int? Numero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+
     /// <summary>2026-11-16 (feature 024, fase 4): alguna línea reconoce la cuota al inicio del ciclo (la clase se puede elegir).</summary>
     private bool PuedeReconocer => _opcionesDeCausacion?.Kinds?.Contains(TextosDeCausacion.ClaseReconocer) == true;
 
     /// <summary>El formulario arma (o edita) un reconocimiento de la cuota del período.</summary>
     private bool Reconociendo => (_editando?.Kind ?? _clase) == TextosDeCausacion.ClaseReconocer;
+
+    /// <summary>2026-11-24 (feature 025, fase 3): hay créditos cargados sin recalcular desde el corte (la clase se puede elegir).</summary>
+    private bool PuedeRecalcularCorte => _opcionesDeCausacion?.Kinds?.Contains(TextosDeCausacion.ClaseRecalcularCorte) == true;
+
+    /// <summary>2026-11-24 (feature 025, fase 3): el formulario arma (o edita) un recálculo de la carga desde el corte: sin período ni conceptos.</summary>
+    private bool RecalculandoCorte => (_editando?.Kind ?? _clase) == TextosDeCausacion.ClaseRecalcularCorte;
 
     private void CambiarClase(string? valor)
     {
@@ -481,6 +570,13 @@
         Proponer();
         _conceptos = [.. (_opcionesDeCausacion?.Concepts ?? [])
             .Where(x => x.Manual && (!Reconociendo || TextosDeCausacion.Reconocible(x.Concept))).Select(x => x.Concept)];
+        // 2026-11-24 (feature 025, fase 3): el recálculo del corte lleva sólo el interés corriente y el día de hoy (el servidor los fija).
+        if (RecalculandoCorte)
+        {
+            _periodicidad = TextosDeCausacion.Diaria;
+            _desde = _hasta = hoy;
+            _conceptos = [1];
+        }
     }
 
     private async Task CargarOpcionesAsync()
@@ -544,6 +640,9 @@
             _oficina = p.Filters.Branch?.PublicId.ToString();
             _linea = p.Filters.CreditLine?.PublicId.ToString();
             _pagaduria = p.Filters.Paymaster?.PublicId.ToString();
+            _formaDePago = p.Filters.PaymentForm;
+            _alcanceDeCuotas = p.Filters.InstallmentScope;
+            _cicloDeDescuento = p.Filters.DiscountCycle;
         }
         else
         {
@@ -555,6 +654,7 @@
             Proponer();
             _conceptos = [.. (_opcionesDeCausacion?.Concepts ?? []).Where(c => c.Manual).Select(c => c.Concept)];
             _oficina = _linea = _pagaduria = null;
+            _formaDePago = _alcanceDeCuotas = _cicloDeDescuento = null;
         }
         _mostrarFormulario = true;
     }
@@ -594,12 +694,22 @@
     }
 
     private ProcesoDeCausacionRequest Pedido() => new(_periodicidad, TextosDeCausacion.Subperiodos(_periodicidad) > 0 ? _subperiodo : null, _desde, _hasta,
-        [.. _conceptos.Order()], Id(_linea), Id(_oficina), Id(_pagaduria), _editando?.Kind ?? _clase);
+        [.. _conceptos.Order()], Id(_linea), Id(_oficina), Id(_pagaduria), _editando?.Kind ?? _clase,
+        // 2026-11-24 (feature 025, fase 5, FR-018): los filtros sólo van al reconocer (el servidor los rechaza en las otras clases).
+        Reconociendo ? _formaDePago : null, Reconociendo ? _alcanceDeCuotas : null, Reconociendo ? _cicloDeDescuento : null);
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento con un valor conocido (el servidor lo repite). (nuevo)</summary>
+    private string? ValidarFiltros() =>
+        !TextosDeCausacion.Conocido(TextosDeCausacion.FormasDePago, _formaDePago) ? "Elija la forma de pago: nómina, caja o todas."
+        : !TextosDeCausacion.Conocido(TextosDeCausacion.AlcancesDeCuotas, _alcanceDeCuotas) ? "Elija qué causa: todo, sin extras o sólo extras."
+        : !TextosDeCausacion.Conocido(TextosDeCausacion.CiclosDeDescuento, _cicloDeDescuento) ? "Elija un ciclo de descuento de la lista."
+        : null;
 
     private async Task GuardarFormularioAsync()
     {
         using var carga = _accion.Iniciar();
         _error = null;
+        if (Reconociendo && ValidarFiltros() is { } invalido) { _error = invalido; return; }
         var r = _editando is { } p
             ? await Procesos.RecalcularAsync(p.PublicId, Pedido(), _clave)
             : await Procesos.ArmarAsync(Pedido(), _clave);

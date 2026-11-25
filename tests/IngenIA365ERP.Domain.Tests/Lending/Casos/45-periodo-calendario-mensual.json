@@ -1,0 +1,196 @@
+// Feature 025, fase 5 (HU5, FR-016; caso 45): CAUSACIÓN POR PERÍODO CALENDARIO, mensual. 10.000.000 a 1,8 % MV (6.000 diarios sobre el saldo
+// inicial, 30/360 lineal), 12 cuotas los días 9. Con Causacion.Periodo = PeriodoCalendario y Causacion.Momento = InicioDelCiclo, la cuota del
+// período de marzo es la que VENCE en marzo (la 2, del 09-03): se reconoce el 01-03, primer día del tramo del 1 al 31, no el 10-02 (día siguiente al
+// vencimiento anterior). Lo reconocido es lo que la cuota va a causar del 01-03 al 09-03 (9 días en 30/360 sobre el saldo después de la cuota 1);
+// lo causado del 10-02 al 28-02 ya está en el libro y el total de la cuota no cambia. La caja (P2, cuota del ciclo el 03-03 con período calendario)
+// cubre primero lo causado de la cuota del tramo como exigible y deja el resto como anticipo de esa cuota, sin pagar dos veces el interés.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Período calendario mensual: la cuota que vence en el mes se reconoce el día 1",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Linear",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 10000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.238721, "tasaMV": 0.018,
+    "fechaDesembolso": "2027-01-09", "diaDePago": 9, "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000045" } ],
+    "festivos": [],
+    "umbralesDeSuspension": [ { "desde": "2020-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 10000000, "fechaValor": "2027-01-09", "registradoEn": "2027-01-09T15:00:00Z" },
+    { "id": "P1", "tipo": "Payment", "modalidad": "CycleInstallment", "valor": 934019.77, "periodoCalendario": true, "fechaValor": "2027-02-09", "registradoEn": "2027-02-09T16:00:00Z" },
+    {
+      "id": "P2",
+      "tipo": "Payment",
+      "modalidad": "CycleInstallment",
+      "valor": 934019.77,
+      "periodoCalendario": true,
+      "fechaValor": "2027-03-03",
+      "registradoEn": "2027-03-03T16:00:00Z",
+      "esperado": {
+        "distribucion": [
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 133142.12 }
+        ],
+        "anticipoUsado": [],
+        "anticipo": 800877.65,
+        "cuotaDelAnticipo": 2,
+        "saldoAFavor": 0,
+        "excedente": 0,
+        "aplicado": 934019.77,
+        "cancela": false,
+        "avisos": []
+      }
+    }
+  ],
+  "reconocimientos": [
+    {
+      "id": "RC1",
+      "fecha": "2027-03-01",
+      "cuota": 2,
+      "modo": "IngresoDiferido",
+      "rubros": [
+        "CurrentInterest"
+      ],
+      "registradoEn": "2027-03-01T05:00:00Z",
+      "esperado": {
+        "montos": [
+          { "concepto": "CurrentInterest", "valor": 49928.29 }
+        ]
+      }
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2027-03-01",
+      "informacionHasta": "2027-03-01T23:00:00Z",
+      "libroDesde": "2027-02-28",
+      "esperado": {
+        "saldos": { "Principal": 9245980.23, "CurrentInterest": 122046.94 },
+        "porCuota": [
+          { "cuota": 2, "concepto": "Principal", "valor": 767592.13 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 122046.94 },
+          { "cuota": 3, "concepto": "Principal", "valor": 781408.78 },
+          { "cuota": 4, "concepto": "Principal", "valor": 795474.14 },
+          { "cuota": 5, "concepto": "Principal", "valor": 809792.68 },
+          { "cuota": 6, "concepto": "Principal", "valor": 824368.94 },
+          { "cuota": 7, "concepto": "Principal", "valor": 839207.59 },
+          { "cuota": 8, "concepto": "Principal", "valor": 854313.32 },
+          { "cuota": 9, "concepto": "Principal", "valor": 869690.96 },
+          { "cuota": 10, "concepto": "Principal", "valor": 885345.40 },
+          { "cuota": 11, "concepto": "Principal", "valor": 901281.62 },
+          { "cuota": 12, "concepto": "Principal", "valor": 917504.67 }
+        ],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 9368027.17,
+        "tasaDiariaCorriente": 0.000600000000000000,
+        "tasaDiariaMora": 0.000659415791379629,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-02-28", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 16642.76 },
+          { "dia": "2027-03-01", "clase": "PeriodRecognition", "concepto": "RecognizedInterest", "cuota": 2, "valor": 49928.29 },
+          { "dia": "2027-03-01", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-01", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 }
+        ],
+        "reconocidos": [
+          { "cuota": 2, "concepto": "RecognizedInterest", "desde": "2027-03-01", "reconocido": 49928.29, "pendiente": 44380.70 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-03-09",
+      "informacionHasta": "2027-03-09T23:00:00Z",
+      "libroDesde": "2027-03-03",
+      "conPagos": true,
+      "esperado": {
+        "saldos": { "Principal": 8478388.10 },
+        "porCuota": [
+          { "cuota": 3, "concepto": "Principal", "valor": 781408.78 },
+          { "cuota": 4, "concepto": "Principal", "valor": 795474.14 },
+          { "cuota": 5, "concepto": "Principal", "valor": 809792.68 },
+          { "cuota": 6, "concepto": "Principal", "valor": 824368.94 },
+          { "cuota": 7, "concepto": "Principal", "valor": 839207.59 },
+          { "cuota": 8, "concepto": "Principal", "valor": 854313.32 },
+          { "cuota": 9, "concepto": "Principal", "valor": 869690.96 },
+          { "cuota": 10, "concepto": "Principal", "valor": 885345.40 },
+          { "cuota": 11, "concepto": "Principal", "valor": 901281.62 },
+          { "cuota": 12, "concepto": "Principal", "valor": 917504.67 }
+        ],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 8478388.10,
+        "tasaDiariaCorriente": 0.000600000000000000,
+        "tasaDiariaMora": 0.000659415791379629,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-03-03", "clase": "PaymentAllocation", "concepto": "CurrentInterest", "cuota": 2, "valor": -133142.12 },
+          { "dia": "2027-03-03", "clase": "AdvanceReceived", "concepto": "Advance", "cuota": 2, "valor": 800877.65 },
+          { "dia": "2027-03-03", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-03", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 },
+          { "dia": "2027-03-04", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.58 },
+          { "dia": "2027-03-04", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.58 },
+          { "dia": "2027-03-05", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-05", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 },
+          { "dia": "2027-03-06", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-06", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 },
+          { "dia": "2027-03-07", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-07", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 },
+          { "dia": "2027-03-08", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.59 },
+          { "dia": "2027-03-08", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.59 },
+          { "dia": "2027-03-09", "clase": "AdvanceApplied", "concepto": "Principal", "cuota": 2, "valor": -767592.13 },
+          { "dia": "2027-03-09", "clase": "AdvanceApplied", "concepto": "CurrentInterest", "cuota": 2, "valor": -33285.52 },
+          { "dia": "2027-03-09", "clase": "AdvanceApplied", "concepto": "Advance", "cuota": 2, "valor": -800877.65 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 5547.58 },
+          { "dia": "2027-03-09", "clase": "Accrual", "concepto": "RecognizedInterest", "cuota": 2, "valor": -5547.58 }
+        ],
+        "reconocidos": [],
+        "pagos": [
+          {
+            "distribucion": [
+              { "cuota": 1, "concepto": "CurrentInterest", "valor": 180000 },
+              { "cuota": 1, "concepto": "Principal", "valor": 754019.77 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 934019.77,
+            "cancela": false,
+            "avisos": [],
+            "id": "P1"
+          },
+          {
+            "distribucion": [
+              { "cuota": 2, "concepto": "CurrentInterest", "valor": 133142.12 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 800877.65,
+            "cuotaDelAnticipo": 2,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 934019.77,
+            "cancela": false,
+            "avisos": [],
+            "id": "P2"
+          }
+        ]
+      }
+    }
+  ]
+}

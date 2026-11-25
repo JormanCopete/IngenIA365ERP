@@ -67,6 +67,24 @@ public sealed class CasoDoradoDeCartera
     /// </summary>
     public List<ReconocimientoJson> Reconocimientos { get; set; } = [];
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): los ajustes del corte del crédito (el interés del período al corte cargado en una cuota sin vencer), entrada de la
+    /// reconstrucción como en el libro.
+    /// </summary>
+    public List<AjusteDelCorteJson> AjustesDelCorte { get; set; } = [];
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): lo que propone el recálculo de la carga desde el corte (la MV redonda y el interés del período que faltó), con
+    /// lo que calculó calcular.py en «esperado».
+    /// </summary>
+    public List<PropuestaDelCorteJson> PropuestasDelCorte { get; set; } = [];
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4): la carga con la opción «el período en curso al corte se causa completo»: lo que suma al activar, con lo que calculó
+    /// calcular.py en «esperado» (que además deja su ajuste en <see cref="AjustesDelCorte"/>, el día de la activación).
+    /// </summary>
+    public List<PeriodoCompletoJson> PeriodosCompletos { get; set; } = [];
+
     /// <summary>Los reconocimientos con que se corren unas condiciones: los de su variante, o los del caso.</summary>
     public IReadOnlyList<ReconocimientoJson> ReconocimientosDe(CondicionesJson c) =>
         Variantes.FirstOrDefault(v => ReferenceEquals(v.Condiciones, c))?.Reconocimientos ?? Reconocimientos;
@@ -165,6 +183,8 @@ public sealed class CasoDoradoDeCartera
             // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, con los montos que calculó la proyección.
             Reconocimientos = ReconocimientosDe(c).SelectMany(x => (x.Esperado?.Montos ?? [])
                 .Select(m => new ReconocimientoDeCuota(x.Fecha, x.Cuota, ConceptosReconocidos.De(m.Concepto, x.Modo), m.Valor, x.RegistradoEn))).ToList(),
+            // 2026-11-24 (feature 025, fase 3): los ajustes del corte, como en el libro.
+            AjustesDelCorte = AjustesDelCorte.Select(a => new AjusteDelCorte(a.Fecha, a.Cuota, a.Valor, a.RegistradoEn)).ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -196,6 +216,9 @@ public sealed class CasoDoradoDeCartera
         public int PlazoCuotas { get; set; }
         public RepaymentPeriodicity Periodicidad { get; set; } = RepaymentPeriodicity.Monthly;
         public decimal TasaEA { get; set; }
+
+        /// <summary>2026-11-24 (feature 025, HU2; casos 40–43): la tasa pactada en mensual vencida; con ella <see cref="TasaEA"/> es la E.A. derivada.</summary>
+        public decimal? TasaMV { get; set; }
         public DateOnly FechaDesembolso { get; set; }
         public DateOnly? PrimerVencimiento { get; set; }
         public int? DiaDePago { get; set; }
@@ -250,6 +273,7 @@ public sealed class CasoDoradoDeCartera
             Piso = TasaVariable?.Piso,
             Techo = TasaVariable?.Techo,
             Prelacion = PrelacionSellada(),
+            TasaMensual = TasaMV,
         };
 
         public EntradaDePlan Entrada() => new(Monto, FechaDesembolso, PlazoCuotas, Periodicidad, Sistema, TasaEA, Convencion, Equivalencia,
@@ -257,6 +281,7 @@ public sealed class CasoDoradoDeCartera
         {
             PrimerVencimiento = PrimerVencimiento,
             DiaDePago = DiaDePago,
+            TasaMensual = TasaMV,
             Extraordinarias = Extraordinarias.Select(x => new CuotaExtraordinaria(x.Cuota, x.Valor)).ToList(),
             Gracia = Gracia?.Clase ?? GraceKind.None,
             PeriodosDeGracia = Gracia?.Periodos ?? 0,
@@ -331,6 +356,49 @@ public sealed class CasoDoradoDeCartera
         public List<ConsultaJson>? Consultas { get; set; }
         /// <summary>2026-11-16 (feature 024, fase 4): los reconocimientos de la variante (vacía: ninguno; nula: los del caso).</summary>
         public List<ReconocimientoJson>? Reconocimientos { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 3): un ajuste del corte: el día de la firma, la cuota destino, el valor y cuándo se registró (R).</summary>
+    public sealed class AjusteDelCorteJson
+    {
+        public DateOnly Fecha { get; set; }
+        public int Cuota { get; set; }
+        public decimal Valor { get; set; }
+        public DateTime RegistradoEn { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 3): una propuesta del recálculo del corte: el corte, la firma, R, el desembolso (opcional) y lo esperado.</summary>
+    public sealed class PropuestaDelCorteJson
+    {
+        public DateOnly Corte { get; set; }
+        public DateOnly Hoy { get; set; }
+        public DateTime InformacionHasta { get; set; }
+        public DateOnly? Desembolso { get; set; }
+        public EsperadoDePropuestaJson? Esperado { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 4): un período completo: el corte, el desembolso (opcional), cuándo se registró la activación (R) y lo esperado.</summary>
+    public sealed class PeriodoCompletoJson
+    {
+        public DateOnly Corte { get; set; }
+        public DateOnly? Desembolso { get; set; }
+        public DateTime RegistradoEn { get; set; }
+        public EsperadoDePropuestaJson? Esperado { get; set; }
+    }
+
+    public sealed class EsperadoDePropuestaJson
+    {
+        public decimal? MvPropuesta { get; set; }
+        public int CuotaDelCorte { get; set; }
+        public DateOnly InicioDelPeriodo { get; set; }
+        public DateOnly Vencimiento { get; set; }
+        public int DiasFaltantes { get; set; }
+        public decimal CapitalAlCorte { get; set; }
+        public decimal InteresDelPeriodo { get; set; }
+        public decimal YaCausado { get; set; }
+        public decimal Cargado { get; set; }
+        public decimal Ajuste { get; set; }
+        public int? CuotaDestino { get; set; }
     }
 
     /// <summary>2026-11-16 (feature 024, fase 4): un reconocimiento de la cuota del período y, en «esperado», lo que reconoce de cada rubro.</summary>
@@ -517,13 +585,19 @@ public sealed class CasoDoradoDeCartera
         /// <summary>2026-11-16: el orden de rubros sellado, leído.</summary>
         public OrdenDeRubros? OrdenDeRubros => Domain.Lending.Payments.OrdenDeRubros.DesdeSellado(Rubros);
 
+        /// <summary>
+        /// 2026-11-24 (feature 025, fase 5, casos 45 a 49): el pago se aplicó con <c>Causacion.Periodo = PeriodoCalendario</c>, como lo sella su decisión
+        /// (<c>AccrualPeriod</c>); sin él, el ciclo de la cuota.
+        /// </summary>
+        public bool PeriodoCalendario { get; set; }
+
         /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
         public object? Contenido() => Tipo switch
         {
             nameof(LoanOperationKind.Payment) or nameof(LoanOperationKind.ProvisionalCollection) when Valor is { } v =>
                 new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v)
                 {
-                    Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros,
+                    Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros, PeriodoCalendario = PeriodoCalendario,
                 },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
                 new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m)
@@ -573,7 +647,10 @@ public sealed class CasoDoradoDeCartera
 
         /// <summary>La solicitud del pago.</summary>
         public SolicitudDeDistribucion Solicitud() =>
-            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta };
+            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor)
+            {
+                Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, PeriodoCalendario = PeriodoCalendario,
+            };
         // US4
         public long? Secuencia { get; set; }
         public decimal? Monto { get; set; }
@@ -661,6 +738,8 @@ public sealed class CasoDoradoDeCartera
         public TopeEsperadoJson? TopeLegal { get; set; }
         /// <summary>2026-11-16 (caso 33): el interés de la cuota en curso que la cancelación con la cuota completa causa y cobra; vacío con el corrido.</summary>
         public List<LineaJson> InteresPorCausar { get; set; } = [];
+        /// <summary>2026-11-24 (feature 025, fase 5, caso 47): el interés de un tramo sin empezar que la cancelación por período calendario no cobra.</summary>
+        public List<LineaJson> InteresNoCobrado { get; set; } = [];
     }
 
     /// <summary>La distribución de un pago a (D, R), con el Id de su operación.</summary>

@@ -18,9 +18,24 @@ public sealed record ParametrosDelProceso(
     int? OficinaId,
     int? PagaduriaId)
 {
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): la forma de pago (nómina o caja); nula, todas. Sólo la clase <c>PeriodRecognition</c>. (nuevo)</summary>
+    public AccrualPaymentForm? FormaDePago { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): qué cuotas (sin extras o sólo extras); nulo, todas. (nuevo)</summary>
+    public AccrualInstallmentScope? Cuotas { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): el ciclo de descuento por el día del vencimiento de la cuota; nulo, todos. (nuevo)</summary>
+    public AccrualDiscountCycle? CicloDeDescuento { get; init; }
+
+    /// <summary>¿Trae alguno de los filtros de FR-018?</summary>
+    public bool ConFiltrosDeCausacion => FormaDePago is not null || Cuotas is not null || CicloDeDescuento is not null;
+
     /// <summary>Los parámetros sellados en un proceso.</summary>
     public static ParametrosDelProceso De(AccrualProcess p) =>
-        new(p.Kind, p.Periodicity, p.SubPeriod, p.DateFrom, p.DateTo, p.Concepts, p.CreditLineId, p.BranchId, p.PaymasterPersonId);
+        new(p.Kind, p.Periodicity, p.SubPeriod, p.DateFrom, p.DateTo, p.Concepts, p.CreditLineId, p.BranchId, p.PaymasterPersonId)
+        {
+            FormaDePago = p.PaymentForm, Cuotas = p.InstallmentScope, CicloDeDescuento = p.DiscountCycle,
+        };
 }
 
 /// <summary>
@@ -72,6 +87,12 @@ public sealed record LineaDelCalculo(
 
     /// <summary>2026-11-16 (feature 024, fase 4): en la clase <c>PeriodRecognition</c>, el día desde el que se reconoce. (nuevo)</summary>
     public DateOnly? FechaDeReconocimiento { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): en la clase <c>CutoverRecalculation</c>, el detalle del crédito en JSON (<see cref="DetalleDelCorte"/>): entra en la
+    /// huella. (nuevo)
+    /// </summary>
+    public string? Detalle { get; init; }
 }
 
 /// <summary>Un bloqueo (impide ponerlo en firme) o un aviso del cálculo. (nuevo)</summary>
@@ -109,6 +130,11 @@ public sealed record CalculoDelProceso(IReadOnlyList<HechoDelCalculo> Hechos, IR
             .Entero("creditLine", p.LineaId)
             .Entero("branch", p.OficinaId)
             .Entero("paymaster", p.PagaduriaId)
+            // 2026-11-24 (feature 025, fase 5): los filtros de FR-018, sólo si los trae (las huellas de siempre no cambian).
+            .Si(p.ConFiltrosDeCausacion, b => b
+                .Enumeracion("paymentForm", p.FormaDePago)
+                .Enumeracion("installments", p.Cuotas)
+                .Enumeracion("discountCycle", p.CicloDeDescuento))
             .Lista("facts", Hechos.OrderBy(h => h.MensajePublicId).ThenBy(h => h.Tipo, StringComparer.Ordinal).ThenBy(h => h.DiaCausado), (b, h) => b
                 .Identificador("message", h.MensajePublicId)
                 .Texto("type", h.Tipo)
@@ -130,6 +156,10 @@ public sealed record CalculoDelProceso(IReadOnlyList<HechoDelCalculo> Hechos, IR
                     .OrderBy(l => l.CreditoId).ThenBy(l => l.Cuota).ThenBy(l => l.Concepto),
                 (h, l) => h.Entero("loan", l.CreditoId).Entero("installment", l.Cuota).Enumeracion("concept", l.Concepto)
                     .Fecha("from", l.FechaDeReconocimiento).Decimal("amount", l.Monto, 2)))
+            // 2026-11-24 (feature 025, fase 3): el detalle de cada crédito del recálculo de la carga desde el corte (tasa, días, ajuste y diferencias).
+            .Si(Lineas.Any(l => l.Detalle is not null), b => b.Lista("cutover",
+                Lineas.Where(l => l.Detalle is not null).OrderBy(l => l.CreditoId).ThenBy(l => l.Tipo, StringComparer.Ordinal),
+                (h, l) => h.Entero("loan", l.CreditoId).Enumeracion<AccrualProcessItemStatus>("status", l.Estado).Texto("detail", l.Detalle)))
             .Calcular();
     }
 }

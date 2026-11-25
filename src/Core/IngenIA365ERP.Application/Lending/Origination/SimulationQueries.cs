@@ -70,6 +70,9 @@ public sealed record ScheduleSimulationDto(
 
     /// <summary>K6b (bloque 2): ¿la línea es de vivienda (Ley 546)? La solicitud pregunta entonces si el inmueble es VIS.</summary>
     public bool IsHousing { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la mensual vencida pactada (fracción); nula en E.A. La E.A. de arriba es entonces la derivada. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
 }
 
 /// <summary>La forma de la simulación (Principio VIII): lo que no necesita la base. (nuevo)</summary>
@@ -164,6 +167,7 @@ public sealed class SimulacionEnAlcance(
         {
             Uvr = Housing.ScheduleUvrDto.De(s.PlanEnUvr, s.ValorUvr, s.Fecha),
             IsHousing = Housing.ValidacionDeVivienda.EsVivienda(s),
+            MonthlyRate = s.Entrada.TasaMensual,
         };
     }
 

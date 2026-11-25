@@ -30,7 +30,8 @@ public sealed record MigrationLoadDto(
     int LoanCount,
     MigrationDifferencesDto Differences,
     DateTime? ActivatedAt,
-    IReadOnlyList<LoPrevalecidoDto>? ManualPrevails = null);
+    IReadOnlyList<LoPrevalecidoDto>? ManualPrevails = null,
+    bool CauseFullInProgressPeriod = false);
 
 /// <summary>
 /// Una tanda (un archivo) de una parte de la carga con sus filas y su huella (api.md §19.1; C64): <c>Batch</c> es el consecutivo dentro de la parte
@@ -45,9 +46,11 @@ public sealed record MigrationDifferencesDto(int Pending, int Accepted);
 /// <summary>
 /// Crea una carga de migración en borrador con su corte (feature 013, T0232, C107; api.md §19.1, <c>POST /api/lending/migration/loads</c>;
 /// data-model §29.1). La numera <see cref="NumeradorDeCartera"/>; un borrador anterior queda <c>Replaced</c> (hay a lo sumo uno). Con
-/// Cartera activada no se crean cargas (<c>Lending.Activation.AlreadyActivated</c>). US8 la completa con las partes. (nuevo)
+/// Cartera activada no se crean cargas (<c>Lending.Activation.AlreadyActivated</c>). US8 la completa con las partes. 2026-11-24 (feature 025, fase 4,
+/// HU4; FR-014, D5): <see cref="CauseFullInProgressPeriod"/>, «el período en curso al corte se causa completo», por defecto sí. (nuevo)
 /// </summary>
-public sealed record CreateMigrationLoadCommand(DateOnly CutoffDate, string? Notes) : IRequest<Result<MigrationLoadDto>>, IOperacionIdempotente
+public sealed record CreateMigrationLoadCommand(DateOnly CutoffDate, string? Notes, bool? CauseFullInProgressPeriod = true)
+    : IRequest<Result<MigrationLoadDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 }
@@ -58,6 +61,9 @@ public sealed class CreateMigrationLoadCommandValidator : AbstractValidator<Crea
     {
         RuleFor(x => x.CutoffDate).NotEqual(default(DateOnly)).WithMessage("Indicá la fecha de corte.");
         RuleFor(x => x.Notes).MaximumLength(300).WithMessage("La descripción admite hasta 300 caracteres.");
+        // 2026-11-24 (feature 025, fase 4): la opción del período completo se dice siempre (sí o no); el endpoint la propone en sí si no viene.
+        RuleFor(x => x.CauseFullInProgressPeriod).NotNull()
+            .WithMessage("Indicá si el período en curso al corte se causa completo.");
     }
 }
 
@@ -93,6 +99,8 @@ public sealed class CreateMigrationLoadCommandHandler(
                 Status = MigrationLoadStatus.Draft,
                 Description = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
                 CreatedByUserId = usuario,
+                // 2026-11-24 (feature 025, fase 4, HU4; D5): el período en curso al corte se causa completo.
+                CauseFullInProgressPeriod = request.CauseFullInProgressPeriod ?? true,
             };
             await numerador.NumerarCargaAsync(carga, ct);
             db.MigrationLoads.Add(carga);
@@ -163,7 +171,8 @@ internal static class ConsultasDeCargas
             : null;
         return new MigrationLoadDto(carga.PublicId, carga.Number, carga.CutoffDate, carga.Status, carga.Description, partes, carga.AppliedAt,
             aplicadaPor, carga.ActivationDeadline, carga.IsBalanced, carga.SalesReconciled, carga.LoanCount,
-            new MigrationDifferencesDto(diferencias.Count(a => a is null), diferencias.Count(a => a is not null)), carga.ActivatedAt, prevalece);
+            new MigrationDifferencesDto(diferencias.Count(a => a is null), diferencias.Count(a => a is not null)), carga.ActivatedAt, prevalece,
+            carga.CauseFullInProgressPeriod);
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
