@@ -35,6 +35,10 @@
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (_sesion is { } s)
         {
+            @if (s.Status == 1)
+            {
+                <AvisoSesionDeOtroDia Dia="@s.OperatingDate" UrlParaCerrar="@($"/pos/sesiones/{s.CashSessionPublicId}/cierre")" />
+            }
             <p class="texto-apoyo">Sesión de la caja @s.CashRegister.Code (@s.PointOfSale.Name) de @s.Cashier.Name · @TextosDeVentas.EstadoDeSesion(s.Status)</p>
         }
         else if (!_carga.Activa)
