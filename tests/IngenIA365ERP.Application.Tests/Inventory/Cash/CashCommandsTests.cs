@@ -14,6 +14,7 @@ using IngenIA365ERP.Application.Tests.Inventory.Sales;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Core.Payments;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Pos;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -78,6 +79,12 @@ public class CashCommandsTests
     private OpenCashSessionCommandHandler Abrir() => new(Db, K.Actor, V.Compras.C.Reloj, K.Alcance, K.Lector(), _cerrojo, new GuardiaDeEmisionFiscal(K.Lector(), Db),
         Sesiones(), V.Confirmacion(), _auditoria);
 
+    /// <summary>2026-11-25: la apertura con el lector de parámetros real, donde Caja.ArqueoEstricto viene apagado (el arqueo sencillo).</summary>
+    private OpenCashSessionCommandHandler AbrirSencillo() => new(Db, K.Actor, V.Compras.C.Reloj, K.Alcance, K.Lector(), _cerrojo,
+        new GuardiaDeEmisionFiscal(K.Lector(), Db),
+        new SesionesDeCaja(Db, K.Actor, K.Alcance, K.Permisos, new IngenIA365ERP.Application.Receipts.Common.ParametrosDeCaja(K.Lector()), V.Compras.C.Reloj),
+        V.Confirmacion(), _auditoria);
+
     private CloseCashSessionCommandHandler Cerrar() => new(Db, K.Actor, V.Compras.C.Reloj, Sesiones(), Arqueos(), V.Toque, V.Confirmacion(), _auditoria);
 
     /// <summary>2026-11-24: el cierre con el lector de parámetros real, donde Caja.ArqueoEstricto viene apagado (el arqueo sencillo).</summary>
@@ -109,13 +116,13 @@ public class CashCommandsTests
     private Task<Result<ConfirmationResultDto>> ConfirmarAsync(Guid documento) =>
         new ConfirmInventoryDocumentCommandHandler(Db, V.Confirmacion()).Handle(new ConfirmInventoryDocumentCommand(documento, DocumentClassGroup.Cash), default);
 
-    private CashSession SesionEn(CashRegister caja, decimal @base, int cajero = KardexDePrueba.Usuario)
+    private CashSession SesionEn(CashRegister caja, decimal @base, int cajero = KardexDePrueba.Usuario, Guid? vinculada = null)
     {
         var sesion = new CashSession
         {
             CashRegisterId = caja.Id, PointOfSaleId = caja.PointOfSaleId, CashierUserId = cajero, CashierName = cajero == KardexDePrueba.Usuario ? "Cajera Uno" : "Cajera Dos",
             OperatingDate = Catalog.CatalogoDePrueba.Hoy, OpenedAt = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc),
-            LastActivityAt = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc), OpeningBase = @base, ShortageTreatment = "Gasto",
+            LastActivityAt = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc), OpeningBase = @base, ShortageTreatment = "Gasto", LinkedSessionPublicId = vinculada,
         };
         Db.CashSessions.Add(sesion);
         Db.SaveChanges();
@@ -151,6 +158,58 @@ public class CashCommandsTests
         r.Value.Warnings.Select(w => w.Code).Should().Contain(ErroresDeCaja.BaseDiffersCode);
         r.Value.Session.OperatingDate.Should().Be(Catalog.CatalogoDePrueba.Hoy);
         await t._cerrojo.Received().BloquearAsync(ClavesDeCerrojo.PuntoDeVenta(t.V.Punto.Id), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Con_el_arqueo_sencillo_el_fondo_fijo_es_lo_que_el_cajero_conto_al_abrir()
+    {
+        // 2026-11-25 (pedido del dueño): se abría con 30.000 y el arqueo esperaba los 100.000 de la sesión anterior de la caja.
+        var t = await CrearAsync();
+        var anterior = t.SesionEn(t._caja2, 100_000m, OtraCajera);
+        anterior.Cerrar(OtraCajera, new DateTime(2026, 9, 24, 23, 0, 0, DateTimeKind.Utc));
+        await t.Db.SaveChangesAsync();
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 30_000m), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        r.Value.Session.OpeningBase.Should().Be(30_000m);
+        r.Value.Session.BaseMode.Should().Be(CashSession.BaseFondoFijo);
+        r.Value.Warnings.Select(w => w.Code).Should().NotContain(ErroresDeCaja.BaseDiffersCode);
+        var esperado = await new GetCashSessionExpectedQueryHandler(t.Sesiones()).Handle(new GetCashSessionExpectedQuery(r.Value.Session.CashSessionPublicId), default);
+        esperado.Value.Total.Should().Be(30_000m, "el arqueo espera la base con que se abrió");
+    }
+
+    [Fact]
+    public async Task La_base_contada_billete_por_billete_es_la_suma_de_los_billetes()
+    {
+        var t = await CrearAsync();
+        var cincuenta = new CashDenomination { Value = 50_000m, Kind = CashDenominationKind.Bill, ValidFrom = new DateOnly(2026, 1, 1) };
+        var diez = new CashDenomination { Value = 10_000m, Kind = CashDenominationKind.Bill, ValidFrom = new DateOnly(2026, 1, 1) };
+        t.Db.CashDenominations.AddRange(cincuenta, diez);
+        await t.Db.SaveChangesAsync();
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, null,
+            [new DenominationCountInput(cincuenta.PublicId, 1), new DenominationCountInput(diez.PublicId, 3)]), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        r.Value.Session.OpeningBase.Should().Be(80_000m);
+    }
+
+    [Fact]
+    public async Task Con_el_estricto_el_fondo_fijo_no_se_hereda_de_una_sesion_de_la_caja_unica()
+    {
+        var t = await CrearAsync();
+        var propia = t.SesionEn(t._caja2, 100_000m, OtraCajera);
+        propia.Cerrar(OtraCajera, new DateTime(2026, 9, 23, 23, 0, 0, DateTimeKind.Utc));
+        var vinculada = t.SesionEn(t._caja2, 0m, OtraCajera, vinculada: Guid.NewGuid());
+        vinculada.Cerrar(OtraCajera, new DateTime(2026, 9, 24, 23, 0, 0, DateTimeKind.Utc));
+        await t.Db.SaveChangesAsync();
+
+        var r = await t.Abrir().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 100_000m), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        r.Value.Session.OpeningBase.Should().Be(100_000m, "la sesión de la caja única abre en cero y no es el fondo de la caja");
+        r.Value.Warnings.Select(w => w.Code).Should().NotContain(ErroresDeCaja.BaseDiffersCode);
     }
 
     [Fact]

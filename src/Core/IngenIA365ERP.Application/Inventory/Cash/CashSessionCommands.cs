@@ -69,7 +69,8 @@ public sealed class OpenCashSessionCommandValidator : AbstractValidator<OpenCash
 /// <item>se <b>sellan</b> en la sesión <c>Caja.BaseModo</c> (por caja), <c>Caja.TratamientoFaltante</c> y <c>Caja.ArqueoCiego</c> (por
 /// punto) y <c>Caja.UnaSesionPorCajero</c>; con el faltante a cargo del cajero, su usuario tiene persona
 /// (<c>CashierWithoutPerson</c>); la persona es copia de <c>SEC_Users.PersonId</c>;</item>
-/// <item>la base: con fondo fijo hereda el de la caja (el de su sesión anterior; en la primera, lo indicado) y avisa
+/// <item>la base (la indicada, o la suma de los billetes contados): con fondo fijo y el arqueo sencillo (<c>Caja.ArqueoEstricto</c> apagado) es
+/// lo que el cajero contó; con el estricto hereda el de la caja (el de su sesión anterior no vinculada; en la primera, lo indicado) y avisa
 /// <c>BaseDiffers</c> si lo indicado difiere; con base del día la base es obligatoria y se registra como un movimiento
 /// <c>BaseIncome</c> que sigue la política de su tipo (cuenta en el esperado al confirmarse);</item>
 /// <item>el aviso temprano de <see cref="GuardiaDeEmisionFiscal"/> con los tipos de venta de la caja: bloqueada, la sesión abre con
@@ -130,9 +131,11 @@ public sealed class OpenCashSessionCommandHandler(
         var persona = await db.Users.AsNoTracking().Where(u => u.Id == usuario).Select(u => u.PersonId).FirstOrDefaultAsync(ct);
         if (faltante == EvaluadorDeArqueo.FaltanteACargoDelCajero && persona is null) return Falla(ErroresDeCaja.CashierWithoutPerson());
 
-        // (4) La base.
+        // (4) La base. 2026-11-25: contada billete por billete, la pantalla manda sólo el conteo; la base indicada es entonces su suma (hasta ese día
+        // quedaba nula: con fondo fijo la sesión heredaba otra base y con base del día no abría).
         var avisos = new List<AvisoDto>();
         decimal baseDeApertura = 0m;
+        var indicada = request.OpeningBase ?? await MovimientosDelSistema.TotalAsync(db, request.Denominations, ct);
         var efectivo = await sesiones.EfectivoAsync(ct);
         if (vinculada)
         {
@@ -140,15 +143,23 @@ public sealed class OpenCashSessionCommandHandler(
         }
         else if (modo == CashSession.BaseDelDia)
         {
-            if (request.OpeningBase is not { } delDia || delDia <= 0m) return Falla(ErroresDeCaja.BaseRequired());
+            if (indicada is not { } delDia || delDia <= 0m) return Falla(ErroresDeCaja.BaseRequired());
             if (efectivo is null) return Falla(ErroresDeCaja.CashMeansMissing());
+        }
+        else if (indicada is { } contada && !await sesiones.ArqueoEstrictoAsync(ct))
+        {
+            // 2026-11-25 (pedido del dueño): con el arqueo sencillo (Caja.ArqueoEstricto apagado) la base es lo que el cajero contó al abrir. Hasta
+            // ese día el fondo fijo heredaba en silencio la base de la sesión anterior de la caja: se abría con 30.000 y el arqueo esperaba 100.000.
+            baseDeApertura = contada;
         }
         else
         {
-            var anterior = await db.CashSessions.AsNoTracking().Where(s => s.CashRegisterId == caja.Id)
+            // Con el estricto, el fondo fijo es el de la última sesión propia de la caja —no la de la caja única, que abre en cero— y lo indicado
+            // distinto se avisa.
+            var anterior = await db.CashSessions.AsNoTracking().Where(s => s.CashRegisterId == caja.Id && s.LinkedSessionPublicId == null)
                 .OrderByDescending(s => s.Id).Select(s => (decimal?)s.OpeningBase).FirstOrDefaultAsync(ct);
-            baseDeApertura = anterior ?? request.OpeningBase ?? 0m;
-            if (request.OpeningBase is { } indicada && indicada != baseDeApertura) avisos.Add(ErroresDeCaja.BaseDiffers(indicada, baseDeApertura));
+            baseDeApertura = anterior ?? indicada ?? 0m;
+            if (indicada is { } distinta && distinta != baseDeApertura) avisos.Add(ErroresDeCaja.BaseDiffers(distinta, baseDeApertura));
         }
 
         // (5) El aviso fiscal temprano (I4, T737; contracts/dian.md §10.4): la guardia para cada rol de venta de la caja —no los de
@@ -192,7 +203,7 @@ public sealed class OpenCashSessionCommandHandler(
             var tipo = await TiposDeCaja.PorDefectoAsync(db, DocumentClass.CashMovement, ct);
             if (tipo is null) return Falla(InventoryErrors.DocumentClassNotAvailable(DocumentClass.CashMovement));
             var documento = await MovimientosDelSistema.CrearAsync(db, tipo, sesion, punto.BranchId, usuario, fecha, CashMovementKind.BaseIncome,
-                efectivo!.Id, CashMovementDestination.Safe, request.OpeningBase!.Value,
+                efectivo!.Id, CashMovementDestination.Safe, indicada!.Value,
                 await MovimientosDelSistema.DenominacionesAsync(db, request.Denominations, ct), "Base del día de la sesión", ct);
             sesion.BaseIncomeDocumentId = documento.Id;
             var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(documento.PublicId, DocumentClassGroup.Cash), ct);
@@ -296,6 +307,15 @@ public static class MovimientosDelSistema
     }
 
     /// <summary>Las denominaciones como dato (<c>[{ denominationPublicId, quantity, amount }]</c>), o nulo.</summary>
+    /// <summary>El total de un conteo por billetes (cantidad × valor de cada denominación); nulo sin conteo. (2026-11-25)</summary>
+    public static async Task<decimal?> TotalAsync(IApplicationDbContext db, IReadOnlyList<DenominationCountInput>? pedidas, CancellationToken ct)
+    {
+        if (pedidas is not { Count: > 0 }) return null;
+        var ids = pedidas.Select(d => d.CashDenominationPublicId).Distinct().ToList();
+        var valores = await db.CashDenominations.AsNoTracking().Where(d => ids.Contains(d.PublicId)).ToDictionaryAsync(d => d.PublicId, d => d.Value, ct);
+        return pedidas.Where(d => valores.ContainsKey(d.CashDenominationPublicId)).Sum(d => valores[d.CashDenominationPublicId] * d.Quantity);
+    }
+
     public static async Task<string?> DenominacionesAsync(IApplicationDbContext db, IReadOnlyList<DenominationCountInput>? pedidas, CancellationToken ct)
     {
         if (pedidas is not { Count: > 0 }) return null;
