@@ -120,7 +120,19 @@ public class DocumentsEndpoints : ICarterModule
             .RequireRateLimiting(LimiteDeAdjuntos.Politica)
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(new AlgunPermiso("Inventory.Sales.View", "Inventory.Purchases.View"));
+
+        // 2026-11-25 (pedido del dueño): enviar el PDF y el AttachedDocument por correo desde el detalle, al correo de la copia fiscal o a otro.
+        // Exige ver la bandeja; la regla del dueño del adjunto la aplica el handler (sin ella, el mismo 404).
+        group.MapPost("/{id:guid}/send-email", async (Guid id, EnviarPorCorreoRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SendElectronicDocumentByEmailCommand(id, body?.Email) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("ElectronicInvoicing_Documents_SendEmail")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Ver);
     }
+
+    /// <summary>El cuerpo del envío por correo: la dirección; vacía, la de recepción de la copia fiscal.</summary>
+    public sealed record EnviarPorCorreoRequest(string? Email);
 
     /// <summary>El cuerpo con sólo el motivo (caso c y cambio al canal vigente).</summary>
     public sealed record MotivoRequest(string? Reason);

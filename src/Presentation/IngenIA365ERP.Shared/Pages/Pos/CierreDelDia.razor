@@ -115,51 +115,131 @@
             </table>
         </div>
 
-        @if (_detalle is { } d)
-        {
-            <div class="info-card">
-                <div class="page-header">
-                    <h4>@d.DayClose.PointOfSale.Name · @d.DayClose.OperatingDate.ToString("dd/MM/yyyy") (versión @d.DayClose.Version)</h4>
-                    <div class="toolbar">
-                        <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@ImprimirAsync">Imprimir</SfButton>
-                        <a class="e-btn e-outline" href="@($"/ventas/informes?vista=day-close&dayClose={d.DayClose.DayClosePublicId}")">PDF o Excel</a>
-                    </div>
-                </div>
-                <h5>Por medio de pago</h5>
-                <table class="data-grid">
-                    <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th class="numero">Pagos</th></tr></thead>
-                    <tbody>
-                        @foreach (var l in d.Lines)
-                        {
-                            <tr><td>@l.PaymentMeansCode</td><td class="numero">@l.Expected.ToString("N0")</td><td class="numero">@l.Counted.ToString("N0")</td><td class="numero">@l.Difference.ToString("N0")</td><td class="numero">@l.PaymentsCount</td></tr>
-                        }
-                    </tbody>
-                </table>
-                @if (d.Cards.Count > 0)
-                {
-                    <h5>Tarjetas por adquirente y datáfono</h5>
-                    <table class="data-grid">
-                        <thead><tr><th>Medio</th><th>Adquirente</th><th>Datáfono</th><th>Lotes</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Pagos</th></tr></thead>
-                        <tbody>
-                            @foreach (var t in d.Cards)
-                            {
-                                <tr><td>@t.PaymentMeansCode</td><td>@t.AcquirerCode</td><td>@t.CardTerminalCode</td><td>@string.Join(", ", t.BatchNumbers)</td>
-                                    <td class="numero">@t.Expected.ToString("N0")</td><td class="numero">@t.Counted.ToString("N0")</td><td class="numero">@t.Count</td></tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-                <h5>Sesiones</h5>
-                <ul>
-                    @foreach (var s in d.Sessions)
-                    {
-                        <li><a href="@($"/pos/sesiones/{s.CashSessionPublicId}")">Caja @s.CashRegisterCode · @s.CashierName</a> · @s.OpenedAt.ToLocalTime().ToString("HH:mm") – @(s.ClosedAt?.ToLocalTime().ToString("HH:mm"))</li>
-                    }
-                </ul>
-            </div>
-        }
     </IndicadorDeCarga>
 </div>
+
+@* 2026-11-25 (pedido del dueño): «Ver» abre el cierre en una ventana, bien detallado —resumen, por medio de pago, tarjetas y cada sesión con su
+   arqueo y sus diferencias (a quién corresponde cada descuadre, con su motivo)—, en lugar de mostrarlo al final de la página. *@
+<SfDialog @bind-Visible="_verDetalle" Header="@TituloDelDetalle" Width="960px" IsModal="true" ShowCloseIcon="true" CloseOnEscape="true"
+          CssClass="dialogo-de-detalle" AllowDragging="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDelDetalle.Activa" Texto="Cargando el cierre…">
+                @if (_detalle is { } d)
+                {
+                    var c = d.DayClose;
+                    var esperado = d.Lines.Sum(l => l.Expected);
+                    var contado = d.Lines.Sum(l => l.Counted);
+                    var diferencia = d.Lines.Sum(l => l.Difference);
+                    <dl class="caja-resumen">
+                        <div><dt>Punto</dt><dd>@c.PointOfSale.Code · @c.PointOfSale.Name</dd></div>
+                        <div><dt>Fecha operativa</dt><dd>@c.OperatingDate.ToString("dd/MM/yyyy") · versión @c.Version</dd></div>
+                        <div><dt>Estado</dt><dd>@TextosDeVentas.EstadoDeCierreDelDia(c.Status)@(c.ReopenReason is { } m ? $" — {m}" : "")</dd></div>
+                        <div><dt>Cerró</dt><dd>@c.ClosedByName · @c.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
+                        @if (c.ReopenedAt is { } reabierto)
+                        {
+                            <div><dt>Reabierto</dt><dd>@reabierto.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
+                        }
+                    </dl>
+                    <div class="kpi-grid kpi-compacto">
+                        <div class="kpi-card"><span class="kpi-value">@d.Sessions.Count</span><span class="kpi-label">Sesiones</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@esperado.ToString("N0")</span><span class="kpi-label">Esperado</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@contado.ToString("N0")</span><span class="kpi-label">Contado</span></div>
+                        <div class="kpi-card"><span class="kpi-value @ClaseDeDiferencia(diferencia)">@diferencia.ToString("N0")</span><span class="kpi-label">Diferencia</span></div>
+                    </div>
+
+                    <h5>Por medio de pago</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th class="numero">Pagos</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in d.Lines)
+                                {
+                                    <tr><td>@l.PaymentMeansCode</td><td class="numero">@l.Expected.ToString("N0")</td><td class="numero">@l.Counted.ToString("N0")</td>
+                                        <td class="numero @ClaseDeDiferencia(l.Difference)">@l.Difference.ToString("N0")</td><td class="numero">@l.PaymentsCount</td></tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr><td>Total</td><td class="numero">@esperado.ToString("N0")</td><td class="numero">@contado.ToString("N0")</td>
+                                    <td class="numero @ClaseDeDiferencia(diferencia)">@diferencia.ToString("N0")</td><td class="numero">@d.Lines.Sum(l => l.PaymentsCount)</td></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    @if (d.Cards.Count > 0)
+                    {
+                        <h5>Tarjetas por adquirente y datáfono</h5>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Medio</th><th>Adquirente</th><th>Datáfono</th><th>Lotes</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Pagos</th></tr></thead>
+                                <tbody>
+                                    @foreach (var t in d.Cards)
+                                    {
+                                        <tr><td>@t.PaymentMeansCode</td><td>@t.AcquirerCode</td><td>@t.CardTerminalCode</td><td>@(t.BatchNumbers.Count > 0 ? string.Join(", ", t.BatchNumbers) : "sin lote registrado")</td>
+                                            <td class="numero">@t.Expected.ToString("N0")</td><td class="numero">@t.Counted.ToString("N0")</td><td class="numero">@t.Count</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    <h5>Sesiones y diferencias</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead>
+                                <tr><th>Caja</th><th>Cajero</th><th>Horario</th><th class="numero">Base</th><th class="numero">Esperado</th><th class="numero">Contado</th>
+                                    <th class="numero">Diferencia</th><th>Arqueó</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in d.Sessions)
+                                {
+                                    <tr>
+                                        <td><a href="@($"/pos/sesiones/{s.CashSessionPublicId}")">@s.CashRegisterCode</a></td>
+                                        <td>@s.CashierName</td>
+                                        <td>@s.OpenedAt.ToLocalTime().ToString("HH:mm") – @(s.ClosedAt?.ToLocalTime().ToString("HH:mm"))</td>
+                                        @if (s.LinkedToCollection)
+                                        {
+                                            <td colspan="5" class="texto-tenue">Caja única: se arquea en Recaudo.</td>
+                                        }
+                                        else
+                                        {
+                                            <td class="numero">@Cifra(s.OpeningBase)</td>
+                                            <td class="numero">@Cifra(s.Expected)</td>
+                                            <td class="numero">@Cifra(s.Counted)</td>
+                                            <td class="numero @ClaseDeDiferencia(s.Difference ?? 0)">@Cifra(s.Difference)</td>
+                                            <td>@(s.CountedByName ?? "—")</td>
+                                        }
+                                    </tr>
+                                    @foreach (var x in s.Differences ?? [])
+                                    {
+                                        <tr class="fila-de-diferencia">
+                                            <td></td>
+                                            <td colspan="3">@x.PaymentMeansCode · @TextosDeVentas.TratamientoDeDiferencia(x.Treatment)</td>
+                                            <td class="numero">@x.Expected.ToString("N0")</td>
+                                            <td class="numero">@x.Counted.ToString("N0")</td>
+                                            <td class="numero @ClaseDeDiferencia(x.Difference)">@x.Difference.ToString("N0")</td>
+                                            <td>@(string.IsNullOrWhiteSpace(x.Reason) ? "sin motivo" : $"«{x.Reason}»")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+        <FooterTemplate>
+            <div class="toolbar dialogo-de-cobro-pie">
+                @if (_detalle is { } pie)
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@ImprimirAsync">Imprimir</SfButton>
+                    <a class="e-btn e-outline" href="@($"/ventas/informes?vista=day-close&dayClose={pie.DayClose.DayClosePublicId}")">PDF o Excel</a>
+                }
+                <SfButton CssClass="e-primary" OnClick="@(() => _verDetalle = false)">Cerrar</SfButton>
+            </div>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
 
 <SfDialog @bind-Visible="_mostrarReapertura" Header="Reabrir el cierre del día" Width="480px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -177,7 +257,7 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaDelDetalle = new();
     private readonly ClaveDeOperacion _claveCierre = new(), _claveReapertura = new();
     private List<PuntoDeVentaDto> _puntos = [];
     private List<CierreDelDiaDto> _cierres = [];
@@ -185,7 +265,7 @@
     private DetalleDelCierreDelDiaDto? _detalle;
     private Guid? _punto, _reabrir;
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today);
-    private bool _mostrarReapertura;
+    private bool _mostrarReapertura, _verDetalle;
     private string? _motivo;
 
     protected override async Task OnInitializedAsync()
@@ -211,13 +291,25 @@
         _pendientes = sesiones.IsSuccess ? DiasPorCerrar.Calcular(sesiones.Value?.Items ?? [], _cierres) : [];
     }
 
+    /// <summary>Abre la ventana del detalle y lo carga dentro de ella (2026-11-25: antes se pintaba al final de la página).</summary>
     private async Task VerAsync(Guid id)
     {
-        using var carga = _carga.Iniciar();
+        _detalle = null;
+        _verDetalle = true;
+        using var carga = _cargaDelDetalle.Iniciar();
         var r = await Ventas.ObtenerCierreDelDiaAsync(id);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el cierre."); return; }
+        if (!r.IsSuccess) { _verDetalle = false; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el cierre."); return; }
         _detalle = r.Value;
     }
+
+    private string TituloDelDetalle => _detalle is { } d
+        ? $"Cierre del día · {d.DayClose.PointOfSale.Code} · {d.DayClose.OperatingDate:dd/MM/yyyy} (versión {d.DayClose.Version})"
+        : "Cierre del día";
+
+    private static string Cifra(decimal? valor) => valor?.ToString("N0") ?? "—";
+
+    /// <summary>Faltante en rojo y sobrante resaltado; sin diferencia, sin clase.</summary>
+    private static string ClaseDeDiferencia(decimal diferencia) => diferencia < 0 ? "diferencia-faltante" : diferencia > 0 ? "diferencia-sobrante" : "";
 
     /// <summary>Por qué no se puede cerrar el punto y la fecha elegidos, o nulo si se puede.</summary>
     private string? Motivo => DiasPorCerrar.MotivoParaNoCerrar(_punto, _fecha, _pendientes, _cierres);

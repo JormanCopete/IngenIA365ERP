@@ -336,11 +336,7 @@ public sealed class GetDayCloseQueryHandler(IApplicationDbContext db, IAlcanceDe
         var adquirentes = await db.CardAcquirers.AsNoTracking().IgnoreQueryFilters().Where(a => adquirenteIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Code, ct);
         var terminalIds = lineas.Select(l => l.CardTerminalId).OfType<int>().Distinct().ToList();
         var terminales = await db.CardTerminals.AsNoTracking().IgnoreQueryFilters().Where(t => terminalIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Code, ct);
-        var sesiones = await (from s in db.CashSessions.AsNoTracking()
-                              join c in db.CashRegisters.AsNoTracking().IgnoreQueryFilters() on s.CashRegisterId equals c.Id
-                              where s.PointOfSaleId == cierre.PointOfSaleId && s.OperatingDate == cierre.OperatingDate
-                              orderby s.Id
-                              select new DayCloseSessionDto(s.PublicId, c.Code, s.CashierName, s.OpenedAt, s.ClosedAt)).ToListAsync(ct);
+        var sesiones = await SesionesConSuArqueoAsync(cierre, ct);
 
         return Result.Success(new DayCloseDetailDto(
             (await VistaDeCierresDelDia.DtosAsync(db, [cierre], ct))[0],
@@ -354,6 +350,45 @@ public sealed class GetDayCloseQueryHandler(IApplicationDbContext db, IAlcanceDe
                     l.ExpectedAmount, l.CountedAmount, l.PaymentCount))
                 .ToList(),
             sesiones));
+    }
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): las sesiones del día con lo que dio su arqueo —base, esperado, contado, diferencia, quién arqueó— y los medios
+    /// que difieren con su motivo y tratamiento. Una sesión tiene a lo sumo un arqueo vivo (el reconteo lo reemplaza); la unida a Recaudo no tiene. (nuevo)
+    /// </summary>
+    private async Task<IReadOnlyList<DayCloseSessionDto>> SesionesConSuArqueoAsync(DayClose cierre, CancellationToken ct)
+    {
+        var sesiones = await (from s in db.CashSessions.AsNoTracking()
+                              join c in db.CashRegisters.AsNoTracking().IgnoreQueryFilters() on s.CashRegisterId equals c.Id
+                              where s.PointOfSaleId == cierre.PointOfSaleId && s.OperatingDate == cierre.OperatingDate
+                              orderby s.Id
+                              select new { s.Id, s.PublicId, Caja = c.Code, s.CashierName, s.OpenedAt, s.ClosedAt, s.OpeningBase, Unida = s.LinkedSessionPublicId != null })
+            .ToListAsync(ct);
+        var ids = sesiones.Select(s => s.Id).ToList();
+        var arqueos = (await db.CashCounts.AsNoTracking().Where(c => ids.Contains(c.CashSessionId) && !c.IsDeleted)
+                .Select(c => new { c.Id, c.CashSessionId, c.TotalExpected, c.TotalCounted, c.TotalDifference, c.CountedByUserId }).ToListAsync(ct))
+            .GroupBy(c => c.CashSessionId).ToDictionary(g => g.Key, g => g.MaxBy(c => c.Id)!);
+        var arqueoIds = arqueos.Values.Select(a => a.Id).ToList();
+        var diferencias = (await db.CashCountLines.AsNoTracking()
+                .Where(l => arqueoIds.Contains(l.CashCountId) && !l.IsDeleted && l.DifferenceAmount != 0m)
+                .OrderBy(l => l.Id)
+                .Select(l => new { l.CashCountId, l.PaymentMeansId, l.ExpectedAmount, l.CountedAmount, l.DifferenceAmount, l.Reason, l.Treatment }).ToListAsync(ct))
+            .ToLookup(l => l.CashCountId);
+        var medioIds = diferencias.SelectMany(g => g).Select(l => l.PaymentMeansId).Distinct().ToList();
+        var medios = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => medioIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, m => m.Code, ct);
+        var usuarioIds = arqueos.Values.Select(a => a.CountedByUserId).Distinct().ToList();
+        var usuarios = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => usuarioIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+
+        return sesiones.Select(s =>
+        {
+            var a = arqueos.GetValueOrDefault(s.Id);
+            return new DayCloseSessionDto(s.PublicId, s.Caja, s.CashierName, s.OpenedAt, s.ClosedAt, s.OpeningBase,
+                a?.TotalExpected, a?.TotalCounted, a?.TotalDifference, a is null ? null : usuarios.GetValueOrDefault(a.CountedByUserId), s.Unida,
+                a is null ? [] : diferencias[a.Id]
+                    .Select(l => new DayCloseSessionDifferenceDto(medios.GetValueOrDefault(l.PaymentMeansId) ?? string.Empty, l.ExpectedAmount, l.CountedAmount,
+                        l.DifferenceAmount, l.Reason, l.Treatment))
+                    .ToList());
+        }).ToList();
     }
 }
 

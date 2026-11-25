@@ -1925,3 +1925,14 @@ input[type="checkbox"], input[type="radio"] {
 .caja-filtros { align-items: flex-end; }
 .data-grid tr.fila-alerta > td { background: var(--alerta-fondo); }
 .acciones-fila { white-space: nowrap; }
+
+/* 2026-11-25 (pedido del dueño): el detalle de un cierre del día o de una caja en ventana (POS y Recaudo), en lugar de al final de la página. Las
+   diferencias se ven de un vistazo: el faltante en rojo, el sobrante en ámbar, y cada medio que difiere en su fila con el motivo. */
+.dialogo-de-detalle.e-dialog { max-height: 92vh; }
+.dialogo-de-detalle h5 { margin: var(--gap-md) 0 var(--gap-xs); }
+.dialogo-de-detalle .kpi-grid { margin-bottom: var(--gap-sm); }
+.diferencia-faltante { color: var(--peligro-texto); font-weight: var(--peso-fuerte); }
+.diferencia-sobrante { color: var(--alerta-texto); font-weight: var(--peso-fuerte); }
+.kpi-value.diferencia-faltante { color: var(--peligro-texto); }
+.kpi-value.diferencia-sobrante { color: var(--alerta-texto); }
+.data-grid tr.fila-de-diferencia > td { background: var(--peligro-fondo); font-size: var(--texto-sm); }

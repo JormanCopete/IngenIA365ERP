@@ -54,11 +54,23 @@ public static class HtmlDeCierreDelDia
             sb.Append("</tbody></table>");
         }
 
-        sb.Append("<h2>Sesiones (").Append(d.Sessions.Count).Append(")</h2><table><thead><tr><th>Caja</th><th>Cajero</th><th>Abrió</th><th>Cerró</th></tr></thead><tbody>");
+        // 2026-11-25 (pedido del dueño): cada sesión con lo que dio su arqueo y, debajo, los medios que difieren con su motivo: a quién corresponde
+        // cada descuadre queda en la hoja.
+        sb.Append("<h2>Sesiones (").Append(d.Sessions.Count).Append(")</h2><table><thead><tr><th>Caja</th><th>Cajero</th><th>Horario</th>")
+          .Append("<th class=\"n\">Base</th><th class=\"n\">Esperado</th><th class=\"n\">Contado</th><th class=\"n\">Diferencia</th></tr></thead><tbody>");
         foreach (var s in d.Sessions)
+        {
             sb.Append("<tr><td>").Append(E(s.CashRegisterCode)).Append("</td><td>").Append(E(s.CashierName)).Append("</td><td>")
-              .Append(s.OpenedAt.ToLocalTime().ToString("HH:mm", Co)).Append("</td><td>")
-              .Append(s.ClosedAt?.ToLocalTime().ToString("HH:mm", Co) ?? string.Empty).Append("</td></tr>");
+              .Append(s.OpenedAt.ToLocalTime().ToString("HH:mm", Co)).Append('–').Append(s.ClosedAt?.ToLocalTime().ToString("HH:mm", Co) ?? string.Empty).Append("</td>");
+            if (s.LinkedToCollection)
+                sb.Append("<td colspan=\"4\">Se arquea en Recaudo (caja única)</td>");
+            else
+                sb.Append(N(s.OpeningBase)).Append(N(s.Expected)).Append(N(s.Counted)).Append(N(s.Difference));
+            sb.Append("</tr>");
+            foreach (var x in s.Differences ?? [])
+                sb.Append("<tr><td></td><td colspan=\"5\">").Append(E(x.PaymentMeansCode)).Append(": ").Append(E(TextosDeVentas.TratamientoDeDiferencia(x.Treatment)))
+                  .Append(x.Reason is { Length: > 0 } r ? " — «" + E(r) + "»" : string.Empty).Append("</td>").Append(N(x.Difference)).Append("</tr>");
+        }
         sb.Append("</tbody></table>");
 
         sb.Append("<div class=\"firma\">Entrega</div><div class=\"firma\">Recibe / revisa</div>");
@@ -67,6 +79,8 @@ public static class HtmlDeCierreDelDia
     }
 
     private static string N(decimal v) => "<td class=\"n\">" + v.ToString("N0", Co) + "</td>";
+
+    private static string N(decimal? v) => v is { } x ? N(x) : "<td class=\"n\">—</td>";
 
     private static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
 }
