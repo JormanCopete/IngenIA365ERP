@@ -144,6 +144,13 @@ public sealed class FacturacionElectronicaClient(HttpClient http, CentralAuthCli
         return r.IsSuccess && r.Value is { Url: { } url } enlace ? r with { Value = enlace with { Url = EnlacesFirmados.Absoluta(http, url) } } : r;
     }
 
+    /// <summary>
+    /// 2026-11-25: envía por correo el PDF y el <c>AttachedDocument</c> (en un ZIP) al correo de recepción de la copia fiscal o, si se escribe,
+    /// a <paramref name="correo"/>. Sólo validado o en contingencia.
+    /// </summary>
+    public Task<ResultadoDeInventario<EnvioPorCorreoDto>> EnviarPorCorreoAsync(Guid id, string? correo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<EnvioPorCorreoDto>(HttpMethod.Post, $"{Rutas.Documentos}/{id}/send-email", new EnvioPorCorreoRequest(correo), clave, ct);
+
     // --------------------------------------------------------------------------------- contingencias (§24.6) --
 
     public Task<ResultadoDeInventario<IReadOnlyList<ContingenciaDianDto>>> ContingenciasAsync(bool? abiertas = null, string? tipo = null,

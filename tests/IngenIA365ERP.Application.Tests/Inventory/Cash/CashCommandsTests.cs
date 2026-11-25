@@ -603,6 +603,29 @@ public class CashCommandsTests
         r.Error.Code.Should().Be(ErroresDeCaja.ReasonRequiredCode);
     }
 
+    // 2026-11-25 (pedido del dueño: «ver el cierre del día bien detallado»): cada sesión del cierre trae lo que dio su arqueo y los medios que difieren
+    // con su tratamiento, para saber a quién corresponde cada descuadre sin abrir sesión por sesión.
+    [Fact]
+    public async Task El_detalle_del_cierre_del_dia_trae_por_sesion_su_arqueo_y_los_medios_que_difieren()
+    {
+        var t = await CrearAsync();
+        var total = await t.VentaEnEfectivoAsync();
+        var cerrada = await t.CerrarSencillo().Handle(new CloseCashSessionCommand(t.V.Sesion.PublicId, [Efectivo(t.V, total - 500m)]), default);
+        cerrada.IsSuccess.Should().BeTrue(cerrada.IsFailure ? $"{cerrada.Error.Code}: {cerrada.Error.Message}" : null);
+        var cierre = await t.CerrarDia().Handle(new ExecuteDayCloseCommand(t.V.Punto.PublicId, Catalog.CatalogoDePrueba.Hoy), default);
+        cierre.IsSuccess.Should().BeTrue(cierre.IsFailure ? $"{cierre.Error.Code}: {cierre.Error.Message}" : null);
+
+        var detalle = await new GetDayCloseQueryHandler(t.Db, t.K.Alcance).Handle(new GetDayCloseQuery(cierre.Value.DayClosePublicId), default);
+
+        var sesion = detalle.Value.Sessions.Should().ContainSingle().Subject;
+        sesion.OpeningBase.Should().Be(t.V.Sesion.OpeningBase);
+        sesion.Difference.Should().Be(-500m);
+        (sesion.Counted - sesion.Expected).Should().Be(-500m);
+        sesion.LinkedToCollection.Should().BeFalse();
+        sesion.Differences.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new { PaymentMeansCode = "EFECTIVO", Difference = -500m, Treatment = CashDifferenceTreatment.ShortageToExpense });
+    }
+
     // ------------------------------------------------------------------------------------------- caja única (2026-11-25) --
 
     private GetLinkedCashSessionQueryHandler Vinculada() => new(Db, Sesiones());

@@ -28,6 +28,7 @@
     <TablaDeCajas Filas="@_filas" Cargando="@_carga.Activa" Dia="@_dia" DiaChanged="@CambiarDiaAsync" EtiquetaDelPunto="Punto de recaudo">
         <Acciones Context="f">
             @{ var s = _sesiones.First(x => x.PublicId == f.Id); }
+            <SfButton CssClass="e-flat" OnClick="@(() => VerAsync(s))">Ver</SfButton>
             @if (s.Status == SesionesClient.EstadoOlvidada)
             {
                 <PermissionGate Required="Receipts.Session.CloseForgotten">
@@ -52,10 +53,6 @@
                     <SfButton CssClass="e-flat" OnClick="@(() => AbrirAjuste(s))">Ajuste</SfButton>
                 </PermissionGate>
             }
-            @if (s.Status is 3 or 4)
-            {
-                <SfButton CssClass="e-flat" OnClick="@(() => DescargarCierreAsync(s))">Informe</SfButton>
-            }
         </Acciones>
     </TablaDeCajas>
 
@@ -65,6 +62,107 @@
                                      Cancelada="@(() => _aprobacion = null)" />
     }
 </div>
+
+@* 2026-11-25 (pedido del dueño, igual que «Ver» en el cierre del día del punto de venta): el detalle de una caja en una ventana —quién, cuándo, la
+   base, lo esperado por medio y cada arqueo con sus diferencias, su tratamiento, su motivo y si espera aprobación—, con el informe desde ahí. Antes
+   sólo se podía descargar el informe. *@
+<SfDialog @bind-Visible="_verDetalle" Header="@TituloDelDetalle" Width="960px" IsModal="true" ShowCloseIcon="true" CloseOnEscape="true"
+          CssClass="dialogo-de-detalle" AllowDragging="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDelDetalle.Activa" Texto="Cargando la caja…">
+                @if (_sesionVista is { } v)
+                {
+                    var ultimo = _arqueosVistos.Where(a => a.Kind != 2).OrderByDescending(a => a.CountedAt).FirstOrDefault();
+                    <dl class="caja-resumen">
+                        <div><dt>Punto</dt><dd>@v.CollectionPointCode</dd></div>
+                        <div><dt>Caja</dt><dd>@v.CashBoxCode</dd></div>
+                        <div><dt>Cajero</dt><dd>@v.CashierName</dd></div>
+                        <div><dt>Día</dt><dd>@v.BusinessDate.ToString("dd/MM/yyyy")</dd></div>
+                        <div><dt>Estado</dt><dd>@SesionesClient.Estado(v.Status)</dd></div>
+                        <div><dt>Horario</dt><dd>@v.OpenedAt.ToLocalTime().ToString("dd/MM HH:mm") – @(v.ClosedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? "abierta")</dd></div>
+                        <div><dt>Base</dt><dd>@v.OpeningBase.ToString("N0")</dd></div>
+                    </dl>
+                    @if (ultimo is not null)
+                    {
+                        <div class="kpi-grid kpi-compacto">
+                            <div class="kpi-card"><span class="kpi-value">@ultimo.TotalExpected.ToString("N0")</span><span class="kpi-label">Esperado</span></div>
+                            <div class="kpi-card"><span class="kpi-value">@ultimo.TotalCounted.ToString("N0")</span><span class="kpi-label">Contado</span></div>
+                            <div class="kpi-card"><span class="kpi-value @ClaseDeDiferencia(ultimo.TotalDifference)">@ultimo.TotalDifference.ToString("N0")</span><span class="kpi-label">Diferencia</span></div>
+                            @if (ultimo.AmountToApprove != 0)
+                            {
+                                <div class="kpi-card"><span class="kpi-value diferencia-sobrante">@ultimo.AmountToApprove.ToString("N0")</span><span class="kpi-label">Por aprobar</span></div>
+                            }
+                        </div>
+                    }
+
+                    <h5>Lo esperado por medio</h5>
+                    @if (_esperadoVisto is { Hidden: true })
+                    {
+                        <p class="texto-tenue">Arqueo ciego: lo esperado se ve después de contar.</p>
+                    }
+                    else if (_esperadoVisto is { } e && e.Means.Any(m => m.Expected != 0 || m.Receipts != 0 || m.Base != 0))
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Medio</th><th class="numero">Base</th><th class="numero">Recibos</th><th class="numero">Anulados</th><th class="numero">Entradas</th>
+                                    <th class="numero">Salidas</th><th class="numero">Esperado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var m in e.Means.Where(m => m.Expected != 0 || m.Receipts != 0 || m.Base != 0 || m.In != 0 || m.Out != 0))
+                                    {
+                                        <tr><td>@m.Code</td><td class="numero">@m.Base.ToString("N0")</td><td class="numero">@m.Receipts.ToString("N0")</td><td class="numero">@m.Voided.ToString("N0")</td>
+                                            <td class="numero">@m.In.ToString("N0")</td><td class="numero">@m.Out.ToString("N0")</td><td class="numero">@m.Expected.ToString("N0")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="texto-tenue">Sin movimientos en la caja.</p>
+                    }
+
+                    <h5>Arqueos</h5>
+                    @if (_arqueosVistos.Count == 0)
+                    {
+                        <p class="texto-tenue">Todavía no tiene arqueos.</p>
+                    }
+                    @foreach (var a in _arqueosVistos.OrderBy(a => a.CountedAt))
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <caption>@SesionesClient.ClaseDeArqueo(a.Kind) · @a.CountedAt.ToLocalTime().ToString("dd/MM HH:mm") · esperado @a.TotalExpected.ToString("N0") ·
+                                    contado @a.TotalCounted.ToString("N0") · diferencia <span class="@ClaseDeDiferencia(a.TotalDifference)">@a.TotalDifference.ToString("N0")</span></caption>
+                                <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th>Tratamiento</th><th>Motivo</th><th>Aprobación</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in a.Lines.Where(l => l.Expected != 0 || l.Counted != 0 || l.Difference != 0))
+                                    {
+                                        <tr class="@(l.Difference != 0 ? "fila-de-diferencia" : "")">
+                                            <td>@l.MeansCode</td><td class="numero">@l.Expected.ToString("N0")</td><td class="numero">@l.Counted.ToString("N0")</td>
+                                            <td class="numero @ClaseDeDiferencia(l.Difference)">@l.Difference.ToString("N0")</td>
+                                            <td>@(l.Difference == 0 ? "" : SesionesClient.Tratamiento(l.Treatment))</td>
+                                            <td>@(l.Difference == 0 ? "" : string.IsNullOrWhiteSpace(l.Reason) ? "sin motivo" : $"«{l.Reason}»")</td>
+                                            <td>@(l.PendingApproval ? "Pendiente" : l.ApprovedAt is { } ap ? $"Aprobada {ap.ToLocalTime():dd/MM HH:mm}" : "")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+        <FooterTemplate>
+            <div class="toolbar dialogo-de-cobro-pie">
+                @if (_sesionVista is { Status: 3 or 4 } cerrada)
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => DescargarCierreAsync(cerrada))">Informe (PDF)</SfButton>
+                }
+                <SfButton CssClass="e-primary" OnClick="@(() => _verDetalle = false)">Cerrar</SfButton>
+            </div>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
 
 <SfDialog @bind-Visible="_diferenciasVisible" Header="Diferencias por aprobar" Width="620px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -122,8 +220,12 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaDelDetalle = new();
     private ClaveDeOperacion _clave = new();
+    private SesionDeCajaDto? _sesionVista;
+    private EsperadoDeSesionDto? _esperadoVisto;
+    private IReadOnlyList<ArqueoDto> _arqueosVistos = [];
+    private bool _verDetalle;
     private PoliticaDeCaja _politica = PoliticaDeCaja.PorDefecto;
     private DateOnly _dia = DiaDeCaja.Hoy();
     private IReadOnlyList<SesionDeCajaDto> _sesiones = [];
@@ -165,6 +267,31 @@
             s.Status is 1 or 5, s.OpenedAt, s.ClosedAt, s.OpeningBase,
             Pendiente: s.Status is 3 or 5 || (s.Status == 1 && s.BusinessDate < hoy))).ToList();
     }
+
+    /// <summary>
+    /// 2026-11-25: abre la ventana del detalle de la caja y carga dentro de ella lo esperado por medio y sus arqueos. Si lo esperado no se puede consultar
+    /// (permiso o caja sin movimientos), la ventana muestra igual los arqueos.
+    /// </summary>
+    private async Task VerAsync(SesionDeCajaDto sesion)
+    {
+        _sesionVista = sesion;
+        _esperadoVisto = null;
+        _arqueosVistos = [];
+        _verDetalle = true;
+        using var carga = _cargaDelDetalle.Iniciar();
+        var arqueos = await Cliente.ArqueosAsync(sesion.PublicId);
+        if (!arqueos.IsSuccess) await Notification.ErrorAsync(arqueos.ErrorMessage ?? "No se pudieron consultar los arqueos de la caja.");
+        _arqueosVistos = arqueos.Value ?? [];
+        var esperado = await Cliente.EsperadoAsync(sesion.PublicId);
+        _esperadoVisto = esperado.IsSuccess ? esperado.Value : null;
+    }
+
+    private string TituloDelDetalle => _sesionVista is { } v
+        ? $"Caja {v.CashBoxCode} · {v.CashierName} · {v.BusinessDate:dd/MM/yyyy}"
+        : "Detalle de la caja";
+
+    /// <summary>Faltante en rojo y sobrante resaltado; sin diferencia, sin clase.</summary>
+    private static string ClaseDeDiferencia(decimal diferencia) => diferencia < 0 ? "diferencia-faltante" : diferencia > 0 ? "diferencia-sobrante" : "";
 
     private async Task VerDiferenciasAsync(SesionDeCajaDto sesion)
     {

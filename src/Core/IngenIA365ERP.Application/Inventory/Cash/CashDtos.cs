@@ -163,8 +163,29 @@ public sealed record DayCloseLineDto(string PaymentMeansCode, decimal Expected, 
 public sealed record DayCloseCardDto(string PaymentMeansCode, string? AcquirerCode, string? CardTerminalCode, IReadOnlyList<string> BatchNumbers,
     decimal Expected, decimal Counted, int Count);
 
-/// <summary>Una sesión consolidada en el cierre del día (§21.4 <c>sessions</c>). (nuevo)</summary>
-public sealed record DayCloseSessionDto(Guid CashSessionPublicId, string CashRegisterCode, string CashierName, DateTime OpenedAt, DateTime? ClosedAt);
+/// <summary>
+/// Una sesión consolidada en el cierre del día (§21.4 <c>sessions</c>). 2026-11-25 (pedido del dueño: «ver el cierre del día bien detallado»): suma
+/// lo que dio su arqueo —base, esperado, contado, diferencia y quién arqueó— y cada medio que difiere con su motivo y su tratamiento, para saber a
+/// quién corresponde cada descuadre sin ir sesión por sesión. Una sesión unida a la de Recaudo (caja única) no tiene arqueo propio: se arquea allá.
+/// Los campos nuevos van al final y opcionales. (nuevo)
+/// </summary>
+public sealed record DayCloseSessionDto(
+    Guid CashSessionPublicId,
+    string CashRegisterCode,
+    string CashierName,
+    DateTime OpenedAt,
+    DateTime? ClosedAt,
+    decimal? OpeningBase = null,
+    decimal? Expected = null,
+    decimal? Counted = null,
+    decimal? Difference = null,
+    string? CountedByName = null,
+    bool LinkedToCollection = false,
+    IReadOnlyList<DayCloseSessionDifferenceDto>? Differences = null);
+
+/// <summary>Un medio que difiere en el arqueo de una sesión del cierre del día: lo esperado, lo contado, la diferencia, el motivo y el tratamiento. (nuevo)</summary>
+public sealed record DayCloseSessionDifferenceDto(string PaymentMeansCode, decimal Expected, decimal Counted, decimal Difference, string? Reason,
+    CashDifferenceTreatment? Treatment);
 
 /// <summary>El detalle del cierre del día (<c>GET /day-closes/{id}</c>, §21.4). (nuevo)</summary>
 public sealed record DayCloseDetailDto(
