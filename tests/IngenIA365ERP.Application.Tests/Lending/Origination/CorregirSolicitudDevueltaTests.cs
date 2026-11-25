@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Attributions;
 using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -76,6 +77,35 @@ public sealed class CorregirSolicitudDevueltaTests : IAsyncLifetime
         var leida = (await _o.Leer().Handle(new GetCreditApplicationQuery(s.PublicId), default)).Value;
         leida.ChangesSinceReturn.Select(c => (c.Field, c.Before, c.After)).Should().Contain(
             [("Monto", "3000000", "2500000"), ("Destino", "Libre inversión", "Compra de vehículo")]);
+    }
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño, «que por defecto todo se pueda modificar»): sin valor guardado del parámetro, una devuelta cambia a la vez
+    /// condiciones, oficina, destino, preferencia de abono, capacidad y codeudores, y el detalle lo dice grupo por grupo.
+    /// </summary>
+    [Fact]
+    public async Task Con_el_defecto_se_corrige_todo_a_la_vez()
+    {
+        var s = await DevueltaAsync();
+        var sur = new Branch { Name = "Oficina Sur", CreatedBy = "test" };
+        _o.Db.Branches.Add(sur);
+        await _o.Db.SaveChangesAsync();
+        _o.Db.ChangeTracker.Clear();
+
+        var r = await CorregirAsync(s, _o.Solicitud(2_000_000m, 12, null, _o.Beto) with
+        {
+            OfficePublicId = sur.PublicId,
+            Purpose = "Educación",
+            PrepaymentPreference = PrepaymentChoice.ReduceInstallment,
+            ApplicantCapacity = new CapacityInput(6_000_000m, 2_000_000m, 100_000m),
+        });
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Office!.PublicId.Should().Be(sur.PublicId);
+        var leida = (await _o.Leer().Handle(new GetCreditApplicationQuery(s.PublicId), default)).Value;
+        leida.ChangesSinceReturn.Select(c => c.Field).Should().Contain(
+            ["Monto", "Cuotas", "Oficina", "Destino", "Preferencia de abono a capital", "Ingreso mensual", "Codeudores"]);
+        leida.ChangesSinceReturn.Single(c => c.Field == "Oficina").Should().Match<CreditApplicationChangeDto>(c => c.Before == "Oficina Norte" && c.After == "Oficina Sur");
     }
 
     [Fact]
