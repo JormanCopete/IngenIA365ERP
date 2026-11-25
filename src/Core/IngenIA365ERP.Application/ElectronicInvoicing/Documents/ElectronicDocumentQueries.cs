@@ -121,8 +121,8 @@ public sealed record ElectronicDocumentDetailDto(
     CancelacionDelDocumentoDto? Cancellation);
 
 /// <summary>
-/// La bandeja (api.md §24.4 <c>GET /documents</c>): filtros por estado, tipo, fechas de expedición, prefijo, número, módulo, contingencia y
-/// <c>overdue</c> —los que llevan más de <c>Dian.MinutosAlertaSinValidar</c> sin validar—, con el alcance de bodega y punto de venta que decide
+/// La bandeja (api.md §24.4 <c>GET /documents</c>): filtros por estado, tipo, fechas de expedición, prefijo, número, módulo, contingencia,
+/// cliente y valor (2026-11-24) y <c>overdue</c> —los que llevan más de <c>Dian.MinutosAlertaSinValidar</c> sin validar—, con el alcance de bodega y punto de venta que decide
 /// cada módulo fuente (<see cref="IConsultaDeFuenteElectronica"/>). Del más reciente al más antiguo. (nuevo)
 /// </summary>
 public sealed record ListElectronicDocumentsQuery(
@@ -138,7 +138,10 @@ public sealed record ListElectronicDocumentsQuery(
     int Page = 1,
     int PageSize = 20,
     bool? Retrying = null,
-    bool? Dead = null) : IRequest<Result<PagedResult<ElectronicDocumentDto>>>;
+    bool? Dead = null,
+    string? Customer = null,
+    decimal? MinTotal = null,
+    decimal? MaxTotal = null) : IRequest<Result<PagedResult<ElectronicDocumentDto>>>;
 
 public sealed class ListElectronicDocumentsQueryValidator : AbstractValidator<ListElectronicDocumentsQuery>
 {
@@ -147,7 +150,10 @@ public sealed class ListElectronicDocumentsQueryValidator : AbstractValidator<Li
         RuleFor(x => x.Prefix).MaximumLength(10);
         RuleFor(x => x.Number).MaximumLength(20);
         RuleFor(x => x.SourceModule).MaximumLength(3);
+        RuleFor(x => x.Customer).MaximumLength(80);
         RuleFor(x => x).Must(x => x.From is null || x.To is null || x.From <= x.To).WithMessage("La fecha inicial no puede ser posterior a la final.");
+        RuleFor(x => x).Must(x => x.MinTotal is null || x.MaxTotal is null || x.MinTotal <= x.MaxTotal)
+            .WithMessage("El valor mínimo no puede ser mayor que el máximo.");
     }
 }
 
@@ -181,6 +187,16 @@ public sealed class ListElectronicDocumentsQueryHandler(
             var modulo = request.SourceModule.Trim().ToUpperInvariant();
             q = q.Where(d => d.SourceModule == modulo);
         }
+        // 2026-11-24 (pedido del dueño, filtros de Ventas): la contraparte por identificación o nombre, tal como salió en el documento
+        // (cada palabra escrita tiene que estar, en cualquier orden), y el total en un rango.
+        if (!string.IsNullOrWhiteSpace(request.Customer))
+        {
+            foreach (var termino in request.Customer.Trim().ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct())
+                q = q.Where(d => (d.CounterpartyTaxId != null && d.CounterpartyTaxId.ToLower().Contains(termino))
+                    || (d.CounterpartyName != null && d.CounterpartyName.ToLower().Contains(termino)));
+        }
+        if (request.MinTotal is { } minimo) q = q.Where(d => d.TotalAmount >= minimo);
+        if (request.MaxTotal is { } maximo) q = q.Where(d => d.TotalAmount <= maximo);
         if (request.Contingency is { } conContingencia)
             q = conContingencia ? q.Where(d => d.ContingencyType != null) : q.Where(d => d.ContingencyType == null);
         if (request.Overdue == true)

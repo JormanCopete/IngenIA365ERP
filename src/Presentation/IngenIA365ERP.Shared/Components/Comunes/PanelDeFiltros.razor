@@ -1,0 +1,54 @@
+@* 2026-11-24 (pedido del dueño, filtros de Ventas): el panel de filtros de una lista. Los principales siempre a la vista; los demás detrás de
+   «Más filtros», que dice cuántos de ellos están puestos y abre solo si alguno lo está (por ejemplo, al volver de un documento). «Quitar
+   filtros» aparece cuando hay alguno y lo hace la pantalla (Limpiar). Cada pantalla decide sus campos y cuándo consulta. *@
+<div class="info-card panel-de-filtros">
+    <div class="form-grid filtros-de-lista">
+        @Principales
+        @if (MasFiltros is not null || HayFiltros)
+        {
+            <div class="filtros-de-lista-acciones">
+                @if (MasFiltros is not null)
+                {
+                    <SfButton CssClass="e-flat" IconCss="@(_abierto ? "e-icons e-chevron-up" : "e-icons e-chevron-down")" aria-expanded="@(_abierto ? "true" : "false")"
+                              OnClick="@(() => _abierto = !_abierto)">@(_abierto ? "Menos filtros" : ActivosOcultos > 0 ? $"Más filtros ({ActivosOcultos})" : "Más filtros")</SfButton>
+                }
+                @if (HayFiltros)
+                {
+                    <SfButton CssClass="e-flat" IconCss="e-icons e-close" OnClick="@(() => Limpiar.InvokeAsync())">Quitar filtros</SfButton>
+                }
+            </div>
+        }
+    </div>
+    @if (_abierto && MasFiltros is not null)
+    {
+        <div class="form-grid filtros-de-lista filtros-de-lista-mas">
+            @MasFiltros
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Los filtros que siempre se ven.</summary>
+    [Parameter, EditorRequired] public RenderFragment? Principales { get; set; }
+
+    /// <summary>Los demás, detrás de «Más filtros».</summary>
+    [Parameter] public RenderFragment? MasFiltros { get; set; }
+
+    /// <summary>Cuántos de los de «Más filtros» están puestos.</summary>
+    [Parameter] public int ActivosOcultos { get; set; }
+
+    /// <summary>Hay algún filtro puesto: se ofrece «Quitar filtros».</summary>
+    [Parameter] public bool HayFiltros { get; set; }
+
+    [Parameter] public EventCallback Limpiar { get; set; }
+
+    private bool _abierto, _decidido;
+
+    protected override void OnParametersSet()
+    {
+        // Abre solo la primera vez, si llega con alguno de los ocultos puesto; después lo decide la persona.
+        if (_decidido) return;
+        _decidido = true;
+        _abierto = ActivosOcultos > 0;
+    }
+}
