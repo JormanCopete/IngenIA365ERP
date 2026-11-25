@@ -283,6 +283,15 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
         _ => "—",
     };
 
+    /// <summary>La clase de un arqueo en palabras (<c>CashCountKind</c>).</summary>
+    public static string ClaseDeArqueo(int clase) => clase switch
+    {
+        1 => "Cierre",
+        2 => "Sorpresivo",
+        3 => "Cierre de la caja olvidada",
+        _ => "Arqueo",
+    };
+
     /// <summary>El tratamiento de una diferencia en palabras.</summary>
     public static string Tratamiento(int tratamiento) => tratamiento switch
     {

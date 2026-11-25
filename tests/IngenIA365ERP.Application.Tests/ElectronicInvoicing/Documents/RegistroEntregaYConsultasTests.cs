@@ -9,7 +9,10 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 using IngenIA365ERP.Application.ElectronicInvoicing.Documents;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;
+using IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions;
+using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -119,6 +122,114 @@ public class RegistroEntregaYConsultasTests
         await correo.DidNotReceive().SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
         d.DeliveredAt.Should().NotBeNull();
         d.EmailSentAt.Should().BeNull();
+    }
+
+    // ------------------------------------------------------------------ envío por correo a pedido (2026-11-25) --
+
+    /// <summary>La representación gráfica guardada de la versión, que el almacén devuelve al leerla.</summary>
+    private async Task<IBlobStore> ConPdfAsync(ElectronicDocument d)
+    {
+        var adjunto = new Attachment
+        {
+            OwnerEntityType = AdjuntosDeModulo.DocumentoElectronicoDeVenta, OwnerEntityPublicId = d.PublicId, FileName = "SETP990000123.pdf",
+            ContentType = "application/pdf", SizeBytes = 3, Sha256Hex = new string('a', 64), StoragePath = "fe/pdf", Status = EstadoDeAdjunto.Available,
+            CreatedBy = "test",
+        };
+        _s.E.Db.Attachments.Add(adjunto);
+        d.Versions.Single().FijarArtefacto(ArtefactoDeVersion.RepresentacionGrafica, adjunto.PublicId);
+        await _s.E.Db.SaveChangesAsync();
+        var almacen = Substitute.For<IBlobStore>();
+        almacen.GetAsync(Arg.Any<BlobReference>(), Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult<Stream>(new MemoryStream([1, 2, 3])));
+        return almacen;
+    }
+
+    private EntregaAlComprador Entrega(IEmailSender correo, IBlobStore almacen) =>
+        new(_s.E.Db, correo, almacen, _s.Reconstruccion, _s.E.Reloj, NullLogger<EntregaAlComprador>.Instance);
+
+    [Fact]
+    public async Task A_pedido_sin_correo_escrito_sale_a_la_copia_fiscal_y_anota_el_envio()
+    {
+        var d = await _s.FacturaAsync();
+        d.Status = ElectronicDocumentStatus.Validated;
+        var correo = Substitute.For<IEmailSender>();
+
+        var r = await Entrega(correo, await ConPdfAsync(d)).EnviarAPedidoAsync(d, d.Versions.Single(), null, default);
+
+        r.Value.Should().Be(("ana@correo.co", true));
+        await correo.Received(1).SendAsync(Arg.Is<EmailMessage>(m => m.To == "ana@correo.co" && m.Attachments!.Single().FileName == "SETP990000123.zip"),
+            Arg.Any<CancellationToken>());
+        d.EmailSentAt.Should().NotBeNull();
+        d.DeliveredAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task A_pedido_sale_al_correo_escrito_aunque_lo_entregue_el_canal_y_es_una_copia()
+    {
+        var d = await _s.FacturaAsync();
+        d.Status = ElectronicDocumentStatus.Validated;
+        d.EmailDeliveryBy = EmailDeliveryBy.Channel;
+        var correo = Substitute.For<IEmailSender>();
+
+        var r = await Entrega(correo, await ConPdfAsync(d)).EnviarAPedidoAsync(d, d.Versions.Single(), " otro@correo.co ", default);
+
+        r.Value.Should().Be(("otro@correo.co", false), "la persona lo pidió: no es la entrega automática");
+        await correo.Received(1).SendAsync(Arg.Is<EmailMessage>(m => m.To == "otro@correo.co"), Arg.Any<CancellationToken>());
+        d.EmailSentAt.Should().BeNull("a otra dirección es una copia: la entrega al comprador no cambia");
+    }
+
+    [Fact]
+    public async Task A_pedido_no_sale_sin_validar_ni_sin_la_representacion_grafica_ni_si_el_correo_falla()
+    {
+        var d = await _s.FacturaAsync();
+        var correo = Substitute.For<IEmailSender>();
+
+        (await Entrega(correo).EnviarAPedidoAsync(d, d.Versions.Single(), null, default)).Error.Code
+            .Should().Be(ErroresDeDocumentosElectronicos.NotDeliverableCode);
+
+        d.Status = ElectronicDocumentStatus.Validated;
+        (await Entrega(correo).EnviarAPedidoAsync(d, d.Versions.Single(), null, default)).Error.Code
+            .Should().Be(ErroresDeDocumentosElectronicos.RepresentationPendingCode);
+
+        var almacen = await ConPdfAsync(d);
+        correo.SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("SMTP caído")));
+        (await Entrega(correo, almacen).EnviarAPedidoAsync(d, d.Versions.Single(), null, default)).Error.Code
+            .Should().Be(ErroresDeDocumentosElectronicos.EmailFailedCode);
+        d.EmailSentAt.Should().BeNull();
+        await correo.Received(1).SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Sin_el_permiso_del_dueno_el_envio_responde_lo_mismo_que_si_no_existiera_y_no_envia()
+    {
+        var d = await _s.FacturaAsync();
+        d.Status = ElectronicDocumentStatus.Validated;
+        var correo = Substitute.For<IEmailSender>();
+        var permisos = Substitute.For<IPermissionChecker>();
+        permisos.HasPermissionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var handler = new SendElectronicDocumentByEmailCommandHandler(_s.E.Db, [], permisos, Entrega(correo, await ConPdfAsync(d)),
+            new ServiceCollection().BuildServiceProvider());
+
+        var r = await handler.Handle(new SendElectronicDocumentByEmailCommand(d.PublicId, "otro@correo.co"), default);
+
+        r.Error.Code.Should().Be(ErroresDeDocumentosElectronicos.NotFoundCode);
+        await correo.DidNotReceive().SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Con_el_permiso_del_dueno_el_envio_sale_y_responde_a_donde()
+    {
+        var d = await _s.FacturaAsync();
+        d.Status = ElectronicDocumentStatus.Validated;
+        var correo = Substitute.For<IEmailSender>();
+        var permisos = Substitute.For<IPermissionChecker>();
+        permisos.HasPermissionAsync("Inventory.Sales.View", Arg.Any<CancellationToken>()).Returns(true);
+        var handler = new SendElectronicDocumentByEmailCommandHandler(_s.E.Db, [], permisos, Entrega(correo, await ConPdfAsync(d)),
+            new ServiceCollection().BuildServiceProvider());
+
+        var r = await handler.Handle(new SendElectronicDocumentByEmailCommand(d.PublicId), default);
+
+        r.Value.Should().Be(new EnvioPorCorreoDto(d.PublicId, "ana@correo.co", true));
+        await correo.Received(1).SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

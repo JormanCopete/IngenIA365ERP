@@ -299,6 +299,12 @@ public sealed record ReemplazoRequest(Guid ReplacementDocumentPublicId, string R
 
 public sealed record MotivoDeFacturacionRequest(string Reason);
 
+/// <summary>2026-11-25: el cuerpo de <c>POST /documents/{id}/send-email</c>; vacío, al correo de recepción de la copia fiscal.</summary>
+public sealed record EnvioPorCorreoRequest(string? Email);
+
+/// <summary>A dónde salió el correo y si era el de recepción de la copia fiscal.</summary>
+public sealed record EnvioPorCorreoDto(Guid ElectronicDocumentPublicId, string Email, bool ToReceptionEmail);
+
 /// <summary>El borrador de reemplazo del caso b; <see cref="EditRoute"/> es la ruta de API (la pantalla la traduce).</summary>
 public sealed record BorradorDeReemplazoDto(Guid ReplacementDraftPublicId, string SourceModule, string EditRoute);
 

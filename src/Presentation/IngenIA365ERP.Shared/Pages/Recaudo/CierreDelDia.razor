@@ -48,15 +48,52 @@
             </PermissionGate>
             <SfButton CssClass="e-outline" Disabled="@string.IsNullOrEmpty(_punto)" OnClick="@DescargarAsync">Informe del cierre</SfButton>
         </div>
-        @if (_cierre is not null)
-        {
-            <div class="info-card">
-                <h4>Día cerrado · código @_cierre.VerificationCode</h4>
-                <p>Sesiones @_cierre.SessionCount · esperado @_cierre.Expected.ToString("N0") · contado @_cierre.Counted.ToString("N0") · diferencia @_cierre.Difference.ToString("N0")
-                    @(_cierre.ByDelegate ? " · cerrado por el suplente" : "")</p>
-            </div>
-        }
     </IndicadorDeCarga>
+
+    @* 2026-11-25 (pedido del dueño, igual que el punto de venta): el día cerrado se muestra en una ventana con su detalle por medio, en lugar de una
+       tarjeta en la página. *@
+    <SfDialog @bind-Visible="_verCierre" Header="@($"Día cerrado · código {_cierre?.VerificationCode}")" Width="760px" IsModal="true" ShowCloseIcon="true"
+              CloseOnEscape="true" CssClass="dialogo-de-detalle" AllowDragging="true">
+        <DialogTemplates>
+            <Content>
+                @if (_cierre is { } c)
+                {
+                    <dl class="caja-resumen">
+                        <div><dt>Punto</dt><dd>@(_puntos.FirstOrDefault(p => p.PublicId == c.CollectionPointPublicId)?.Code ?? "—")</dd></div>
+                        <div><dt>Día</dt><dd>@c.BusinessDate.ToString("dd/MM/yyyy")</dd></div>
+                        <div><dt>Cerrado</dt><dd>@c.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(c.ByDelegate ? " · por el suplente" : "")</dd></div>
+                        <div><dt>Recibos</dt><dd>@c.ReceiptCount · anulaciones @c.VoidingCount</dd></div>
+                    </dl>
+                    <div class="kpi-grid kpi-compacto">
+                        <div class="kpi-card"><span class="kpi-value">@c.SessionCount</span><span class="kpi-label">Sesiones</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@c.Expected.ToString("N0")</span><span class="kpi-label">Esperado</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@c.Counted.ToString("N0")</span><span class="kpi-label">Contado</span></div>
+                        <div class="kpi-card"><span class="kpi-value @ClaseDeDiferencia(c.Difference)">@c.Difference.ToString("N0")</span><span class="kpi-label">Diferencia</span></div>
+                    </div>
+                    <h5>Por medio de pago</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in c.Lines.Where(l => l.Expected != 0 || l.Counted != 0 || l.Difference != 0))
+                                {
+                                    <tr class="@(l.Difference != 0 ? "fila-de-diferencia" : "")"><td>@l.MeansCode</td><td class="numero">@l.Expected.ToString("N0")</td>
+                                        <td class="numero">@l.Counted.ToString("N0")</td><td class="numero @ClaseDeDiferencia(l.Difference)">@l.Difference.ToString("N0")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="texto-tenue">El detalle de cada caja (quién, sus arqueos y sus diferencias) está en «Cajas del día» → «Ver».</p>
+                }
+            </Content>
+            <FooterTemplate>
+                <div class="toolbar dialogo-de-cobro-pie">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@DescargarAsync">Informe del cierre</SfButton>
+                    <SfButton CssClass="e-primary" OnClick="@(() => _verCierre = false)">Cerrar</SfButton>
+                </div>
+            </FooterTemplate>
+        </DialogTemplates>
+    </SfDialog>
 
     <PermissionGate Required="Receipts.Reports.View">
         <div class="page-header"><h4>Cuadre diario</h4></div>
@@ -127,6 +164,10 @@
     private CierreDelDiaDto? _cierre;
     private string _punto = "";
     private string? _explicacion;
+    private bool _verCierre;
+
+    /// <summary>Faltante en rojo y sobrante resaltado; sin diferencia, sin clase.</summary>
+    private static string ClaseDeDiferencia(decimal diferencia) => diferencia < 0 ? "diferencia-faltante" : diferencia > 0 ? "diferencia-sobrante" : "";
     private DateOnly _dia = DateOnly.FromDateTime(DateTime.Now);
 
     protected override async Task OnInitializedAsync()
@@ -166,6 +207,7 @@
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el día."); return; }
         _clave = new ClaveDeOperacion();
         _cierre = r.Value;
+        _verCierre = _cierre is not null;
         await Notification.SuccessAsync("Día cerrado.");
         await CargarAsync();
     }

@@ -54,6 +54,26 @@ public static class ErroresDeDocumentosElectronicos
 
     public static Error ArtifactNotFound() => new(ArtifactNotFoundCode, "Ese archivo del documento electrónico no existe.");
 
+    // ------------------------------------------------------------------ envío por correo a pedido (2026-11-25) --
+
+    /// <summary>La representación gráfica (el PDF) todavía no está lista: la arma el seguimiento después de validar. (nuevo)</summary>
+    public const string RepresentationPendingCode = "ElectronicInvoicing.Document.RepresentationPending";
+
+    /// <summary>Ni la copia fiscal tiene correo de recepción ni se escribió uno. (nuevo)</summary>
+    public const string EmailRequiredCode = "ElectronicInvoicing.Document.EmailRequired";
+
+    /// <summary>El servidor de correo no aceptó el envío. (nuevo)</summary>
+    public const string EmailFailedCode = "ElectronicInvoicing.Document.EmailFailed";
+
+    public static Error RepresentationPending() =>
+        new(RepresentationPendingCode, "La representación gráfica (PDF) del documento todavía no está lista. Intente en unos minutos.");
+
+    public static Error EmailRequired() =>
+        new(EmailRequiredCode, "El comprador no tiene correo de recepción en el documento: escriba la dirección a la que se envía.");
+
+    public static Error EmailFailed() =>
+        new(EmailFailedCode, "El servidor de correo no aceptó el envío. Intente de nuevo en un momento.");
+
     // ------------------------------------------------------------------------------------ casos a, b y c (T722–T725) --
 
     /// <summary>Caso a con la huella económica distinta: se sigue por el caso b (contracts/dian.md §8.2; api.md §24.5).</summary>
