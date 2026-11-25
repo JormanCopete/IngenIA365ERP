@@ -729,6 +729,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   supervisor), y el mismo arqueo en dos pasos (`…/sesiones/{id}/cierre`), con piezas comunes en `Components/Comunes`.
   - `Caja.ArqueoEstricto` (RCD, **apagado**, lo leen las dos cajas al operar, no se sella): apagado no hay arqueo ciego, el motivo se pide sólo fuera de
     la tolerancia, la diferencia se resuelve al cerrar con el faltante al gasto, no hay testigo ni segundo custodio y los adjuntos son opcionales.
+  - Apagado, la base del punto de venta es lo que el cajero contó al abrir, aun con fondo fijo (hasta el 2026-11-25 heredaba la de la sesión anterior).
   - Encendido, rigen los controles de siempre.
   - Receta: `docs/manual/mi-caja-y-arqueo.md`.
 

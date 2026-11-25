@@ -36,8 +36,9 @@ El testigo y el acta aparecen solo cuando se exigen: sesión olvidada y arqueo s
 
 ### Cómo se enciende
 
-1. **Recaudo → Configuración → Cajas**: en la caja de Recaudo, «Punto de venta» y elegir la caja del punto de venta donde vende la
-   misma persona. Una caja del punto de venta va con una sola caja de Recaudo.
+1. **Recaudo → Configuración → Cajas y cajeros** (`/recaudo/configuracion/cajas`): en la fila de la caja de Recaudo, el botón «Punto de
+   venta», y elegir el punto y la caja del punto de venta donde vende la misma persona. La columna «Punto de venta» queda en «Unida». Una
+   caja del punto de venta va con una sola caja de Recaudo. Ver la opción pide `Receipts.Setup.View`; el botón, `Receipts.Setup.Manage`.
 2. **Parámetros del sistema**: `Caja.SesionUnica` = Sí (módulo Recaudo; apagado por defecto).
 3. **Contabilidad**: en la matriz de Recaudo, el rol nuevo **«Puente de la caja del punto de venta»** (`PuenteDelPuntoDeVenta`). Póngale
    la **misma cuenta** que tiene la **caja fuerte** en la matriz de Comercial. Así el efectivo del punto de venta sale de la caja de
@@ -45,7 +46,7 @@ El testigo y el acta aparecen solo cuando se exigen: sesión olvidada y arqueo s
 
 ### Cómo se trabaja
 
-- **Abrir.** El cajero abre su caja en **Recaudo → Sesiones de caja**, con una sola base. La caja del punto de venta se abre sola,
+- **Abrir.** El cajero abre su caja en **Recaudo → Mi caja**, con una sola base. La caja del punto de venta se abre sola,
   vinculada y con base cero. Si no se pudo abrir (por ejemplo, porque ya tenía una abierta por su cuenta), la sesión lo dice y ofrece
   «Abrir la caja del punto de venta».
 - **Durante el día.** Vende en el punto de venta y recauda en la Caja sin abrir nada más.

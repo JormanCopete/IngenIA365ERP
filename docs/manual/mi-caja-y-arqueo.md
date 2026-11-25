@@ -27,6 +27,10 @@ En Recaudo la misma pantalla sirve para el arqueo sorpresivo (`?modo=sorpresivo`
 
 Es un parámetro de `RCD` que leen las dos cajas. **De fábrica viene apagado**, y entonces el arqueo es sencillo:
 
+- La base es lo que el cajero cuenta al abrir, con un valor o billete por billete (la suma de los billetes). En el punto de venta con
+  `Caja.BaseModo = FondoFijo`, hasta el 2026-11-25 la sesión heredaba en silencio la base de la sesión anterior de la caja: se abría con 30.000
+  y el arqueo esperaba 100.000. Con el estricto encendido se sigue heredando el fondo de la caja (sin contar las sesiones de la caja única, que
+  abren en cero) y lo digitado distinto sólo se avisa.
 - No hay arqueo ciego, aunque `Caja.ArqueoCiego` esté encendido.
 - El motivo se pide sólo si la diferencia pasa la tolerancia del medio.
 - La diferencia queda resuelta al cerrar, sin que otra persona la apruebe. El faltante va **al gasto** (decisión del dueño). En Recaudo, la línea
