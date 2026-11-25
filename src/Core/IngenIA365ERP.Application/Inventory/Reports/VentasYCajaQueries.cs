@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Inventory.Cash;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
+using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Approvals;
 using IngenIA365ERP.Domain.Enums.Core;
@@ -431,9 +432,12 @@ public sealed class SalesByPaymentMeansReportQueryHandler(IApplicationDbContext 
 /// documento y el valor de ese medio. Los filtros propios <c>paymentMeans</c> (PublicId) y <c>class</c> admiten varios valores separados
 /// por coma; con <c>allMeans=true</c> la venta que usó alguno de los elegidos muestra todos sus medios. Una venta con dos medios sale en
 /// dos filas, cada una con su valor. Pedido del dueño del 2026-11-23: el agregado de <c>sales-by-payment-means</c> no mostraba la venta.
+/// 2026-11-24 (pedido del dueño, filtros de Ventas): también por cliente (documento o nombre, <see cref="BusquedaDeClienteDeVenta"/>), vendedor,
+/// clase de documento (varias), tipo de documento (<c>documentType</c>, filtro común) y usuario que hizo la venta; la tabla dice el vendedor.
 /// </summary>
 public sealed record SalesPaymentsDetailReportQuery(
-    FiltrosDeInformeDeInventario Filtros, IReadOnlyList<Guid>? PaymentMeans = null, IReadOnlyList<PaymentMeansClass>? Classes = null, bool AllMeans = false)
+    FiltrosDeInformeDeInventario Filtros, IReadOnlyList<Guid>? PaymentMeans = null, IReadOnlyList<PaymentMeansClass>? Classes = null, bool AllMeans = false,
+    string? Customer = null, Guid? Salesperson = null, IReadOnlyList<DocumentClass>? DocumentClasses = null, string? CreatedBy = null)
     : IRequest<Result<TablaExportable>>;
 
 public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IDateTimeService reloj)
@@ -442,12 +446,13 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
     public static readonly VistaDeInformeDeInventario Vista = new(
         "sales-payments-detail", "Detalle de ventas por medio de pago",
         "Cada venta con el valor pagado por cada medio; se pueden elegir varios medios o clases de medio.",
-        "detalle-de-ventas-por-medio-de-pago", ["from", "to", "pointOfSale", "cashRegister", "session"], ["paymentMeans", "class", "allMeans"],
+        "detalle-de-ventas-por-medio-de-pago", ["from", "to", "pointOfSale", "cashRegister", "session", "documentType"],
+        ["paymentMeans", "class", "allMeans", "customer", "salesperson", "documentClass", "createdBy"],
         PersonalData: true);
 
     public static readonly IReadOnlyList<ColumnaExportable> Columnas =
     [
-        new("Fecha", TipoDeColumna.Fecha), new("Documento"), new("Tipo"), new("Punto"), new("Caja"), new("Cliente"),
+        new("Fecha", TipoDeColumna.Fecha), new("Documento"), new("Tipo"), new("Punto"), new("Caja"), new("Cliente"), new("Vendedor"),
         new("Total del documento", TipoDeColumna.Moneda), new("Medio"), new("Clase de medio"), new("Referencia"), new("Valor del medio", TipoDeColumna.Moneda),
         new("Documento", TipoDeColumna.Texto, "_documento"),
     ];
@@ -475,7 +480,17 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
         var filtros = await datos.FiltrosAsync(f, ct);
         if (filtros.IsFailure) return Result.Failure<TablaExportable>(filtros.Error);
 
-        var documentos = (await datos.DocumentosAsync(f, filtros.Value, hoy, ct)).Where(d => d.Status == DocumentStatus.Confirmed);
+        var documentos = (await datos.DocumentosAsync(f, filtros.Value, hoy, ct)).Where(d => d.Status == DocumentStatus.Confirmed)
+            .DelCliente(db, request.Customer);
+        if (f.DocumentType is { } tipo) documentos = documentos.Where(d => db.InventoryDocumentTypes.Any(t => t.Id == d.DocumentTypeId && t.PublicId == tipo));
+        if (request.Salesperson is { } vendedor)
+            documentos = documentos.Where(d => db.Salespeople.IgnoreQueryFilters().Any(s => s.Id == d.SalespersonId && s.PublicId == vendedor));
+        if (request.DocumentClasses is { Count: > 0 } clasesDeDocumento) documentos = documentos.Where(d => clasesDeDocumento.Contains(d.Class));
+        if (!string.IsNullOrWhiteSpace(request.CreatedBy))
+        {
+            var usuario = request.CreatedBy.Trim().ToLower();
+            documentos = documentos.Where(d => db.Users.IgnoreQueryFilters().Any(u => u.Id == d.CreatedByUserId && u.Username.ToLower().Contains(usuario)));
+        }
         var pagos = from p in db.DocumentPayments.AsNoTracking()
                     join d in documentos on p.DocumentId equals d.Id
                     where !p.IsDeleted
@@ -483,7 +498,7 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
                     {
                         p.DocumentId, p.LineNumber, p.PaymentMeansId, p.MeansCode, p.MeansName, p.MeansClass, p.Direction, p.Amount, p.Reference,
                         d.PublicId, d.Prefix, d.Number, d.OperationDate, d.Class, d.DocumentTypeId, d.PointOfSaleId, d.CashRegisterId,
-                        d.CounterpartyPersonId, d.Total,
+                        d.CounterpartyPersonId, d.Total, d.SalespersonId,
                     };
 
         var publicos = request.PaymentMeans ?? [];
@@ -511,6 +526,9 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
         var puntos = await datos.PuntosAsync(lista.Where(p => p.PointOfSaleId != null).Select(p => p.PointOfSaleId!.Value), ct);
         var cajas = await datos.CajasAsync(lista.Where(p => p.CashRegisterId != null).Select(p => p.CashRegisterId!.Value), ct);
         var clientes = await datos.ClientesAsync(lista.Select(p => (p.DocumentId, p.CounterpartyPersonId)).Distinct().ToList(), ct);
+        var vendedorIds = lista.Select(p => p.SalespersonId).OfType<int>().Distinct().ToList();
+        var vendedores = await db.Salespeople.IgnoreQueryFilters().AsNoTracking().Where(s => vendedorIds.Contains(s.Id)).Include(s => s.Person)
+            .ToDictionaryAsync(s => s.Id, s => BorradorDelPos.Nombre(s.Person), ct);
         var tipoIds = lista.Select(p => p.DocumentTypeId).Distinct().ToList();
         var tipos = await db.InventoryDocumentTypes.AsNoTracking().IgnoreQueryFilters().Where(t => tipoIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
@@ -521,14 +539,15 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
         [
             p.OperationDate, VistaDeDocumentos.NumeroVisible(p.Prefix, p.Number), tipos.GetValueOrDefault(p.DocumentTypeId),
             p.PointOfSaleId is int pp ? puntos.GetValueOrDefault(pp) : null, p.CashRegisterId is int cc ? cajas.GetValueOrDefault(cc) : null,
-            clientes.GetValueOrDefault(p.DocumentId), TotalConSigno(p.Class, p.Total), $"{p.MeansCode} · {p.MeansName}", TextoDeClase(p.MeansClass),
+            clientes.GetValueOrDefault(p.DocumentId), p.SalespersonId is int sv ? vendedores.GetValueOrDefault(sv) : null,
+            TotalConSigno(p.Class, p.Total), $"{p.MeansCode} · {p.MeansName}", TextoDeClase(p.MeansClass),
             p.Reference, p.Direction == PaymentDirection.Refunded ? -p.Amount : p.Amount, p.PublicId.ToString(),
         ])).ToList();
 
         var totalDocumentos = lista.GroupBy(p => p.DocumentId).Sum(g => TotalConSigno(g.First().Class, g.First().Total));
         var totalMedios = lista.Sum(p => p.Direction == PaymentDirection.Refunded ? -p.Amount : p.Amount);
         var documentosDistintos = lista.Select(p => p.DocumentId).Distinct().Count();
-        var totales = new FilaExportable(["Total", $"{documentosDistintos} documentos", null, null, null, null, totalDocumentos, null, null, null, totalMedios, null]);
+        var totales = new FilaExportable(["Total", $"{documentosDistintos} documentos", null, null, null, null, null, totalDocumentos, null, null, null, totalMedios, null]);
 
         var notas = new List<string>
         {

@@ -1,8 +1,12 @@
 @page "/ventas/documentos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
 @using IngenIA365ERP.Shared.Services.Inventario
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject MediosDePagoClient Medios
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
@@ -11,7 +15,11 @@
 @* Feature 012, I3 (T642; FR-058, FR-066; contracts/api.md §18.1, §20.3): la consulta de los documentos de venta del alcance —facturas,
    documentos equivalentes POS, comprobantes no electrónicos y sus notas— con filtros por clase, estado, fechas, punto, cliente, número y
    pendientes de entrega. Desde aquí se abre cada uno (entregar, reimprimir, nota, anular) y se registran las ventas de oficina: la factura
-   con sus pagos y la nota crédito sobre una venta confirmada. Un punto sin POS cobra desde aquí. *@
+   con sus pagos y la nota crédito sobre una venta confirmada. Un punto sin POS cobra desde aquí.
+   2026-11-24 (pedido del dueño): los filtros en un panel (PanelDeFiltros). A la vista número, cliente (documento o nombre, en cualquier
+   orden), fechas, clase y estado; en «Más filtros» tipo de documento, punto y caja, vendedor, medio de pago, usuario que lo hizo, estado
+   ante la DIAN, valor desde y hasta, pendientes de entrega y crédito por validar. Los filtros quedan en la dirección: al volver de un
+   documento («Volver a las ventas» o «atrás») la lista sale como estaba. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -25,25 +33,96 @@
         </div>
     </div>
 
-    <div class="toolbar">
-        <label class="campo">Clase
-            <select class="e-input" value="@(_clase?.ToString() ?? "")" @onchange="@(e => { _clase = int.TryParse(e.Value?.ToString(), out var c) ? c : null; return BuscarAsync(); })">
-                <option value="">Todas</option>
-                @foreach (var c in TextosDeVentas.ClasesDeVenta.Concat(TextosDeVentas.ClasesDeNota)) { <option value="@c">@TextosDeInventario.Clase(c)</option> }
-            </select>
-        </label>
-        <label class="campo">Estado
-            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
-                <option value="">Todos</option>
-                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
-            </select>
-        </label>
-        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = Fecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = Fecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo campo-largo">Cliente <PersonSearchPicker Selected="@_cliente" SelectedChanged="@CambiarClienteAsync" ShowHelpText="false" Compacto="true" /></label>
-        <label class="campo">Número <input class="e-input" type="number" @bind="_numero" @bind:after="BuscarAsync" /></label>
-        <label class="campo-check"><input type="checkbox" @bind="_pendientesDeEntrega" @bind:after="BuscarAsync" /> Pendientes de entrega</label>
-    </div>
+    <PanelDeFiltros HayFiltros="@HayFiltros" ActivosOcultos="@ActivosOcultos" Limpiar="@LimpiarAsync">
+        <Principales>
+            <label class="campo">Número
+                <input class="e-input" type="number" min="1" @bind="_numero" @bind:after="BuscarAsync" data-ayuda="El número del documento, sin el prefijo." />
+            </label>
+            <label class="campo">Cliente
+                <input class="e-input" @bind="_cliente" @bind:after="BuscarAsync" maxlength="80" placeholder="Documento o nombre" />
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" @bind:after="BuscarAsync" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" @bind="_hasta" @bind:after="BuscarAsync" /></label>
+            <label class="campo">Clase
+                <select class="e-input" value="@(_clase?.ToString() ?? "")" @onchange="@(e => { _clase = Entero(e.Value); return BuscarAsync(); })">
+                    <option value="">Todas</option>
+                    @foreach (var c in ClasesDeLaLista) { <option value="@c">@TextosDeInventario.Clase(c)</option> }
+                </select>
+            </label>
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = Entero(e.Value); return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+        </Principales>
+        <MasFiltros>
+            @if (_tipos.Count > 1)
+            {
+                <label class="campo">Tipo de documento
+                    <select class="e-input" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => { _tipo = Id(e.Value); return BuscarAsync(); })">
+                        <option value="">Todos</option>
+                        @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (_puntos.Count > 1)
+            {
+                <label class="campo">Punto de venta
+                    <select class="e-input" value="@(_punto?.ToString() ?? "")" @onchange="@(e => CambiarPuntoAsync(Id(e.Value)))">
+                        <option value="">Todos los del alcance</option>
+                        @foreach (var p in _puntos) { <option value="@p.PointOfSalePublicId">@p.Code · @p.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (_cajas.Count > 0)
+            {
+                <label class="campo">Caja
+                    <select class="e-input" value="@(_caja?.ToString() ?? "")" @onchange="@(e => { _caja = Id(e.Value); return BuscarAsync(); })">
+                        <option value="">Todas las del punto</option>
+                        @foreach (var c in _cajas) { <option value="@c.CashRegisterPublicId">@c.Code · @c.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (_vendedores.Count > 0)
+            {
+                <label class="campo">Vendedor
+                    <select class="e-input" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => { _vendedor = Id(e.Value); return BuscarAsync(); })">
+                        <option value="">Todos</option>
+                        @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId">@v.Person.Name@(v.IsActive ? "" : " (retirado)")</option> }
+                    </select>
+                </label>
+            }
+            @if (_medios.Count > 0)
+            {
+                <label class="campo">Medio de pago
+                    <select class="e-input" value="@(_medio?.ToString() ?? "")" @onchange="@(e => { _medio = Id(e.Value); return BuscarAsync(); })">
+                        <option value="">Todos</option>
+                        @foreach (var m in _medios) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name@(m.IsActive ? "" : " (inactivo)")</option> }
+                    </select>
+                </label>
+            }
+            <label class="campo">Usuario
+                <input class="e-input" @bind="_usuario" @bind:after="BuscarAsync" maxlength="80" placeholder="Quien lo hizo" />
+            </label>
+            <label class="campo">Estado ante la DIAN
+                <select class="e-input" value="@(_dian ?? "")" @onchange="@(e => { _dian = FiltrosEnLaDireccion.Valor(e.Value?.ToString()); return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeFacturacionElectronica.Estados) { <option value="@TextosDeFacturacionElectronica.NombresDeEstado[valor]">@texto</option> }
+                </select>
+            </label>
+            <label class="campo">Valor desde
+                <input class="e-input" type="number" min="0" step="any" @bind="_valorDesde" @bind:after="BuscarAsync" />
+            </label>
+            <label class="campo">Valor hasta
+                <input class="e-input" type="number" min="0" step="any" @bind="_valorHasta" @bind:after="BuscarAsync" />
+            </label>
+            <label class="campo-check"><input type="checkbox" @bind="_pendientesDeEntrega" @bind:after="BuscarAsync" /> Pendientes de entrega</label>
+            <label class="campo-check" title="Ventas con un pago a crédito que todavía espera la validación de Cartera.">
+                <input type="checkbox" @bind="_creditoPorValidar" @bind:after="BuscarAsync" /> Crédito por validar
+            </label>
+        </MasFiltros>
+    </PanelDeFiltros>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (!_carga.Activa && _filas.Count == 0)
@@ -52,16 +131,18 @@
         }
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th>Número</th><th>Clase</th><th>Fecha</th><th>Punto / caja</th><th>Cliente</th><th>Vendedor</th><th>Pagos</th><th class="numero">Total</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Número</th><th>Clase</th><th>Fecha</th><th>Punto / caja</th><th>Cliente</th><th>Vendedor</th><th>Hecho por</th><th>Pagos</th><th class="numero">Total</th><th>Estado</th></tr></thead>
                 <tbody>
                     @foreach (var d in _filas)
                     {
                         <tr>
-                            <td><a href="@($"/ventas/documentos/{d.DocumentPublicId}")">@d.Numero</a>@(d.PendingDelivery ? " · por entregar" : "")</td>
+                            <td><a href="@($"/ventas/documentos/{d.DocumentPublicId}?volver={Uri.EscapeDataString(_rutaDeLaLista)}")">@d.Numero</a>@(d.PendingDelivery ? " · por entregar" : "")</td>
                             <td>@TextosDeInventario.Clase(d.Class)</td><td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
                             <td>@d.PointOfSaleCode@(d.CashRegisterCode is { } c ? $" / {c}" : "")</td><td>@d.CounterpartyName</td><td>@d.SalespersonName</td>
+                            <td>@(d.CreatedByName ?? "—")</td>
                             <td>@string.Join(", ", d.Payments.Select(p => $"{p.MeansCode} {p.Amount:N0}"))</td>
-                            <td class="numero">@d.Total.ToString("N0")</td><td>@TextosDeInventario.Estado(d.Status)</td>
+                            <td class="numero">@d.Total.ToString("N0")</td>
+                            <td>@TextosDeInventario.Estado(d.Status)@if (TextosDeFacturacionElectronica.EstadoPorNombre(d.ElectronicStatus) is { } dian) { <br /><small class="texto-tenue">DIAN: @TextosDeFacturacionElectronica.Estado(dian)</small> }</td>
                         </tr>
                     }
                 </tbody>
@@ -78,21 +159,108 @@
 
 @code {
     private const int TamanoDePagina = 20;
+
+    /// <summary>Las clases que lista la pantalla: ventas, notas crédito y notas débito.</summary>
+    private static readonly int[] ClasesDeLaLista =
+        [.. TextosDeVentas.ClasesDeVenta.Concat(TextosDeVentas.ClasesDeNota).Concat(TextosDeVentas.ClasesDeNotaDebito).Distinct()];
+
     private readonly EstadoDeCarga _carga = new();
     private List<ResumenDeVentaDto> _filas = [];
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<PuntoDeVentaDto> _puntos = [];
+    private List<CajaDto> _cajas = [];
+    private List<VendedorDto> _vendedores = [];
+    private List<MedioDePagoDto> _medios = [];
     private int? _clase, _estado;
     private DateOnly? _desde, _hasta;
     private long? _numero;
-    private bool _pendientesDeEntrega;
-    private PersonSearchPicker.PersonSearchItem? _cliente;
+    private decimal? _valorDesde, _valorHasta;
+    private string? _cliente, _usuario, _dian;
+    private Guid? _tipo, _punto, _caja, _vendedor, _medio;
+    private bool _pendientesDeEntrega, _creditoPorValidar;
     private int _pagina = 1;
     private long _total;
+    private string _rutaDeLaLista = "/ventas/documentos";
 
-    protected override Task OnInitializedAsync() => CargarAsync();
+    /// <summary>Cuántos de los filtros de «Más filtros» están puestos.</summary>
+    private int ActivosOcultos =>
+        new object?[] { _tipo, _punto, _caja, _vendedor, _medio, FiltrosEnLaDireccion.Valor(_usuario), _dian, _valorDesde, _valorHasta }.Count(v => v is not null)
+        + (_pendientesDeEntrega ? 1 : 0) + (_creditoPorValidar ? 1 : 0);
 
-    private Task CambiarClienteAsync(PersonSearchPicker.PersonSearchItem? cliente)
+    private bool HayFiltros =>
+        ActivosOcultos > 0 || _numero is not null || !string.IsNullOrWhiteSpace(_cliente) || _desde is not null || _hasta is not null
+        || _clase is not null || _estado is not null;
+
+    protected override async Task OnInitializedAsync()
     {
-        _cliente = cliente;
+        // Al iniciar sólo se lee la dirección: escribirla aquí sería navegar durante el prerenderizado.
+        LeerDeLaDireccion();
+        _rutaDeLaLista = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await Task.WhenAll(TraerAsync(), CargarCatalogosAsync());
+    }
+
+    private void LeerDeLaDireccion()
+    {
+        var f = new FiltrosEnLaDireccion(Nav.Uri);
+        _numero = f.Largo("numero");
+        _cliente = f.Texto("cliente");
+        _desde = f.Fecha("desde");
+        _hasta = f.Fecha("hasta");
+        _clase = f.Entero("clase");
+        _estado = f.Entero("estado");
+        _tipo = f.Id("tipo");
+        _punto = f.Id("punto");
+        _caja = f.Id("caja");
+        _vendedor = f.Id("vendedor");
+        _medio = f.Id("medio");
+        _usuario = f.Texto("usuario");
+        _dian = f.Texto("dian");
+        _valorDesde = f.Decimal("valorDesde");
+        _valorHasta = f.Decimal("valorHasta");
+        _pendientesDeEntrega = f.Marca("porEntregar");
+        _creditoPorValidar = f.Marca("porValidar");
+        _pagina = Math.Max(1, f.Entero("pagina") ?? 1);
+    }
+
+    /// <summary>Las listas de «Más filtros». La que no se puede consultar (falta de permiso) no se ofrece.</summary>
+    private async Task CargarCatalogosAsync()
+    {
+        var tipos = Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+        var puntos = Ventas.ListarPuntosAsync();
+        var vendedores = Inventario.VendedoresAsync(null, conRetirados: true, 1, 200);
+        var medios = Medios.ListarAsync();
+        await Task.WhenAll(tipos, puntos, vendedores, medios);
+        _tipos = tipos.Result.IsSuccess ? [.. (tipos.Result.Value ?? []).OrderBy(t => t.Code, StringComparer.Ordinal)] : [];
+        _puntos = puntos.Result.IsSuccess ? [.. (puntos.Result.Value ?? []).OrderBy(p => p.Code, StringComparer.Ordinal)] : [];
+        _vendedores = vendedores.Result.IsSuccess
+            ? [.. (vendedores.Result.Value?.Items ?? []).OrderByDescending(v => v.IsActive).ThenBy(v => v.Person.Name, StringComparer.CurrentCulture)]
+            : [];
+        _medios = medios.Result.IsSuccess
+            ? [.. (medios.Result.Value ?? []).OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal)]
+            : [];
+        await CargarCajasAsync();
+    }
+
+    private async Task CargarCajasAsync()
+    {
+        if (_punto is not { } punto) { _cajas = []; return; }
+        var r = await Ventas.ListarCajasAsync(punto);
+        _cajas = r.IsSuccess ? [.. (r.Value ?? []).OrderBy(c => c.Code, StringComparer.Ordinal)] : [];
+    }
+
+    private async Task CambiarPuntoAsync(Guid? punto)
+    {
+        _punto = punto;
+        _caja = null;
+        await Task.WhenAll(CargarCajasAsync(), BuscarAsync());
+    }
+
+    private Task LimpiarAsync()
+    {
+        _numero = null; _cliente = null; _desde = null; _hasta = null; _clase = null; _estado = null;
+        _tipo = null; _punto = null; _caja = null; _vendedor = null; _medio = null; _usuario = null; _dian = null;
+        _valorDesde = null; _valorHasta = null; _pendientesDeEntrega = false; _creditoPorValidar = false;
+        _cajas = [];
         return BuscarAsync();
     }
 
@@ -108,19 +276,58 @@
         await CargarAsync();
     }
 
-    private async Task CargarAsync()
+    /// <summary>Consulta por una acción de la persona: los filtros quedan en la dirección.</summary>
+    private Task CargarAsync()
     {
+        GuardarEnLaDireccion();
+        return TraerAsync();
+    }
+
+    private async Task TraerAsync()
+    {
+        if (_valorDesde is { } minimo && _valorHasta is { } maximo && minimo > maximo)
+        {
+            await Notification.WarningAsync("El valor desde no puede ser mayor que el valor hasta.");
+            return;
+        }
         using var carga = _carga.Iniciar();
         var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
         {
-            Class = _clase, Status = _estado, From = _desde, To = _hasta, Person = _cliente?.PublicId, Number = _numero,
-            PendingDelivery = _pendientesDeEntrega ? true : null, Page = _pagina, PageSize = TamanoDePagina,
+            Class = _clase, Status = _estado, From = _desde, To = _hasta, Customer = FiltrosEnLaDireccion.Valor(_cliente), Number = _numero,
+            DocumentType = _tipo, PointOfSale = _punto, CashRegister = _caja, Salesperson = _vendedor, PaymentMeans = _medio,
+            CreatedBy = FiltrosEnLaDireccion.Valor(_usuario), ElectronicStatus = _dian, MinTotal = _valorDesde, MaxTotal = _valorHasta,
+            PendingDelivery = _pendientesDeEntrega ? true : null, PendingValidation = _creditoPorValidar ? true : null,
+            Page = _pagina, PageSize = TamanoDePagina,
         });
         if (!r.IsSuccess) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas."); return; }
         _filas = [.. r.Value!.Items];
         _total = r.Value.TotalCount;
     }
 
-    private static DateOnly? Fecha(object? valor) =>
-        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+    private void GuardarEnLaDireccion() =>
+        _rutaDeLaLista = FiltrosEnLaDireccion.Guardar(Nav, new Dictionary<string, string?>
+        {
+            ["numero"] = FiltrosEnLaDireccion.Valor(_numero),
+            ["cliente"] = FiltrosEnLaDireccion.Valor(_cliente),
+            ["desde"] = FiltrosEnLaDireccion.Valor(_desde),
+            ["hasta"] = FiltrosEnLaDireccion.Valor(_hasta),
+            ["clase"] = FiltrosEnLaDireccion.Valor(_clase),
+            ["estado"] = FiltrosEnLaDireccion.Valor(_estado),
+            ["tipo"] = FiltrosEnLaDireccion.Valor(_tipo),
+            ["punto"] = FiltrosEnLaDireccion.Valor(_punto),
+            ["caja"] = FiltrosEnLaDireccion.Valor(_caja),
+            ["vendedor"] = FiltrosEnLaDireccion.Valor(_vendedor),
+            ["medio"] = FiltrosEnLaDireccion.Valor(_medio),
+            ["usuario"] = FiltrosEnLaDireccion.Valor(_usuario),
+            ["dian"] = FiltrosEnLaDireccion.Valor(_dian),
+            ["valorDesde"] = FiltrosEnLaDireccion.Valor(_valorDesde),
+            ["valorHasta"] = FiltrosEnLaDireccion.Valor(_valorHasta),
+            ["porEntregar"] = FiltrosEnLaDireccion.Valor(_pendientesDeEntrega),
+            ["porValidar"] = FiltrosEnLaDireccion.Valor(_creditoPorValidar),
+            ["pagina"] = _pagina > 1 ? FiltrosEnLaDireccion.Valor(_pagina) : null,
+        });
+
+    private static int? Entero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
 }

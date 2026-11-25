@@ -259,7 +259,10 @@ public sealed record ListSalesDocumentsQuery(
     string? Validity = null,
     string? Invoicing = null,
     string? Customer = null,
-    string? CreatedBy = null) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
+    string? CreatedBy = null,
+    Guid? PaymentMeans = null,
+    decimal? MinTotal = null,
+    decimal? MaxTotal = null) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
 
 /// <summary>
 /// 2026-11-12: <see cref="ListSalesDocumentsQuery.Validity"/> filtra las cotizaciones confirmadas vigentes o vencidas a hoy
@@ -290,14 +293,9 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         if (request.Salesperson is { } vendedor) consulta = consulta.Where(d => db.Salespeople.IgnoreQueryFilters().Any(s => s.Id == d.SalespersonId && s.PublicId == vendedor));
         if (request.Number is { } numero) consulta = consulta.Where(d => d.Number == numero);
         // 2026-11-18 (pedido del dueño, buscador de cotizaciones): el cliente por documento o nombre, y quien hizo el documento por su
-        // usuario; los dos «contiene», sin distinguir mayúsculas.
-        if (!string.IsNullOrWhiteSpace(request.Customer))
-        {
-            var texto = request.Customer.Trim().ToLower();
-            consulta = consulta.Where(d => db.People.Any(p => p.Id == d.CounterpartyPersonId && (p.TaxId.ToLower().Contains(texto)
-                || p.FirstName.ToLower().Contains(texto) || p.LastName.ToLower().Contains(texto)
-                || (p.BusinessName != null && p.BusinessName.ToLower().Contains(texto)))));
-        }
+        // usuario; los dos «contiene», sin distinguir mayúsculas. 2026-11-24: el cliente con la búsqueda común (BusquedaDeClienteDeVenta:
+        // los términos en cualquier orden y sin tildes, y también la copia fiscal del documento).
+        consulta = consulta.DelCliente(db, request.Customer);
         if (!string.IsNullOrWhiteSpace(request.CreatedBy))
         {
             var usuario = request.CreatedBy.Trim().ToLower();
@@ -305,6 +303,12 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         }
         if (request.PendingValidation is { } pendiente)
             consulta = consulta.Where(d => db.DocumentPayments.Any(p => p.DocumentId == d.Id && !p.IsDeleted && p.PendingValidation) == pendiente);
+        // 2026-11-24 (pedido del dueño, filtros de Ventas): los documentos con algún pago del medio elegido y el total en un rango.
+        if (request.PaymentMeans is { } medio)
+            consulta = consulta.Where(d => db.DocumentPayments.Any(p => p.DocumentId == d.Id && !p.IsDeleted
+                && db.PaymentMeans.IgnoreQueryFilters().Any(m => m.Id == p.PaymentMeansId && m.PublicId == medio)));
+        if (request.MinTotal is { } minimo) consulta = consulta.Where(d => d.Total >= minimo);
+        if (request.MaxTotal is { } maximo) consulta = consulta.Where(d => d.Total <= maximo);
         // I4 (T743): el estado electrónico por la fuente (SourceModule = INV); un estado que no existe no devuelve nada.
         if (!string.IsNullOrWhiteSpace(request.ElectronicStatus))
         {

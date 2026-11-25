@@ -1784,6 +1784,14 @@ input[type="checkbox"], input[type="radio"] {
 .buscador-de-cotizaciones .campo-check { margin: var(--pad-xs) 0 var(--pad-sm); }
 .buscador-de-cotizaciones-lista { max-height: 22rem; }
 .buscador-de-cotizaciones tbody tr, .lista-de-cotizaciones tbody tr { cursor: pointer; }
+
+/* 2026-11-24 (pedido del dueño): el panel de filtros de las listas de Ventas (PanelDeFiltros): los principales a la vista y los demás
+   detrás de «Más filtros», en la misma rejilla que se acomoda al ancho. */
+.filtros-de-lista { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); align-items: end; }
+.filtros-de-lista .campo-check { align-self: center; }
+.filtros-de-lista .seleccion-multiple { min-width: 0; }
+.filtros-de-lista-acciones { display: flex; flex-wrap: wrap; gap: var(--gap-sm); justify-content: flex-end; align-items: end; grid-column: -2 / -1; }
+.filtros-de-lista-mas { margin-top: var(--gap-sm); padding-top: var(--gap-sm); border-top: 1px solid var(--borde); }
 .buscador-de-cotizaciones tbody tr:focus-visible, .lista-de-cotizaciones tbody tr:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
 .buscador-de-cotizaciones tr.fila-seleccionada td { background: var(--acento-suave); }
 .buscador-de-cotizaciones tr.fila-seleccionada td:first-child { box-shadow: inset 4px 0 0 var(--acento); font-weight: var(--peso-fuerte); }
