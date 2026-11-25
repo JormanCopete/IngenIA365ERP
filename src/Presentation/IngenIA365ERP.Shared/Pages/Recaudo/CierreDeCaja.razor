@@ -1,0 +1,227 @@
+@page "/recaudo/sesiones/{Id:guid}/cierre"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject SesionesClient Cliente
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+@inject NavigationManager Nav
+
+<PageTitle>Arqueo de caja - IngenIA365ERP</PageTitle>
+
+@* 2026-11-24 (pedido del dueño): el arqueo de una caja de Recaudo con el mismo arqueo en dos pasos del punto de venta (ArqueoDeCaja). Sirve para tres
+   casos: el cajero cierra su caja (también la olvidada, con el arqueo sencillo o Caja.CajeroCierraSuSesionOlvidada), un supervisor cierra la caja
+   olvidada de otro (?modo=olvidada; el testigo sólo con el arqueo estricto) y el arqueo sorpresivo (?modo=sorpresivo; el acta sólo con el arqueo
+   estricto, y se sube como archivo). Con caja única, lo esperado suma lo de la caja del punto de venta. Reemplaza la ventana «Arquear y cerrar» de
+   Sesiones de caja. *@
+<PermissionGate Required="@PermisoDelModo" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-flat" href="@Volver">@(EsSorpresivo || !_propia ? "Volver a las cajas del día" : "Volver a mi caja")</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando lo que debería haber…">
+        @if (_sesion is { } s)
+        {
+            <p class="texto-apoyo">Caja @s.CollectionPointCode · @s.CashBoxCode de @s.CashierName · día @s.BusinessDate.ToString("dd/MM/yyyy") · @SesionesClient.Estado(s.Status)</p>
+            @if (_resultado is { } res)
+            {
+                <ResultadoDelArqueo Titulo="@(EsSorpresivo ? "Arqueo sorpresivo registrado" : res.AmountToApprove > 0 ? "La caja quedó cerrada con diferencia por aprobar" : "La caja quedó cerrada")"
+                                    Lineas="@Lineas(res)">
+                    <ChildContent>
+                        @if (res.AmountToApprove > 0)
+                        {
+                            <p class="aviso aviso-alerta">Quedó una diferencia por @res.AmountToApprove.ToString("N0") que tiene que aprobar otra persona en «Cajas del día».</p>
+                        }
+                    </ChildContent>
+                    <Acciones>
+                        @if (!EsSorpresivo)
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@DescargarAsync">Informe del cierre</SfButton>
+                        }
+                        <a class="e-btn e-primary" href="@Volver">Listo</a>
+                    </Acciones>
+                </ResultadoDelArqueo>
+            }
+            else if (!Cerrable(s))
+            {
+                <p class="aviso aviso-info">@MotivoNoCerrable(s)</p>
+            }
+            else
+            {
+                <ArqueoDeCaja @ref="_arqueo" Medios="@_medios" Denominaciones="@_denominaciones" FormaDelEfectivo="@_politica.FormaDelEfectivo"
+                              Estricto="@_politica.Estricto" Ciego="@_ciego" Ocupado="@_guardado.Activa" PuedeConfirmar="@PuedeConfirmar"
+                              TextoConfirmar="@(EsSorpresivo ? "Registrar el arqueo" : "Cerrar la caja")" Confirmar="@ConfirmarAsync">
+                    <Extra>
+                        @if (EsSorpresivo || EsOlvidadaDeOtro)
+                        {
+                            <label class="campo">Testigo@(EsOlvidadaDeOtro && _politica.Estricto ? " *" : " (opcional)")
+                                <select class="e-input" @bind="_testigo">
+                                    <option value="">Sin testigo</option>
+                                    @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                                </select>
+                                <span class="hint">Otra persona que está presente mientras se cuenta.</span>
+                            </label>
+                        }
+                        @if (EsSorpresivo)
+                        {
+                            <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.SoporteDeCaja" OwnerEntityPublicId="@s.PublicId"
+                                          Rotulo="@(_politica.Estricto ? "Subir el acta firmada *" : "Subir el acta (opcional)")" OnDisponible="@(id => _acta = id)" />
+                            @if (_acta is not null) { <p class="texto-tenue">Acta subida.</p> }
+                        }
+                    </Extra>
+                    <Cancelar>
+                        <a class="e-btn e-flat" href="@Volver">Cancelar</a>
+                    </Cancelar>
+                </ArqueoDeCaja>
+            }
+        }
+        else if (!_carga.Activa)
+        {
+            <p class="aviso aviso-alerta">@(_error ?? "No se encontró la caja.")</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int SinArqueo = 4, PorLote = 2, Efectivo = 1;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "modo")] public string? Modo { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private ArqueoDeCaja? _arqueo;
+    private SesionDeCajaDto? _sesion;
+    private bool _propia, _ciego;
+    private string? _error;
+    private PoliticaDeCaja _politica = PoliticaDeCaja.PorDefecto;
+    private List<MedioAContar> _medios = [];
+    private IReadOnlyList<DenominacionDeConteo> _denominaciones = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private string _testigo = "";
+    private Guid? _acta;
+    private ArqueoDto? _resultado;
+
+    private bool EsSorpresivo => string.Equals(Modo, "sorpresivo", StringComparison.OrdinalIgnoreCase);
+    private bool EsOlvidadaDeOtro => !EsSorpresivo && !_propia && _sesion?.Status == SesionesClient.EstadoOlvidada;
+    private string Titulo => EsSorpresivo ? "Arqueo sorpresivo" : _propia ? "Arquear y cerrar mi caja" : "Cerrar la caja de otra persona";
+    private string Volver => EsSorpresivo || !_propia ? "/recaudo/cajas" : "/recaudo/sesiones";
+    private const string PermisoSorpresivo="Receipts.Session.SurpriseCount";
+    private const string PermisoOlvidada="Receipts.Session.CloseForgotten";
+    private const string PermisoCerrar="Receipts.Session.Close";
+    private string PermisoDelModo => EsSorpresivo ? PermisoSorpresivo
+        : string.Equals(Modo, "olvidada", StringComparison.OrdinalIgnoreCase) ? PermisoOlvidada : PermisoCerrar;
+
+    private bool PuedeConfirmar => (!EsOlvidadaDeOtro || !_politica.Estricto || Guid.TryParse(_testigo, out _))
+                                   && (!EsSorpresivo || !_politica.Estricto || _acta is not null);
+
+    private bool Cerrable(SesionDeCajaDto s) => EsSorpresivo ? s.Status is 1 or 5 : _propia ? s.Status is 1 or 5 : s.Status == SesionesClient.EstadoOlvidada;
+
+    private string MotivoNoCerrable(SesionDeCajaDto s) => s.Status is 3 or 4
+        ? "Esta caja ya está cerrada."
+        : "Sólo su cajero la cierra. Si quedó abierta después de la hora de corte, aquí se puede cerrar en cuanto el sistema la marque como olvidada.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _resultado = null;
+        _politica = await Cliente.PoliticaAsync();
+        var d = await Cliente.DenominacionesAsync();
+        _denominaciones = d.IsSuccess && d.Value is not null
+            ? d.Value.Where(x => x.IsActive).Select(x => new DenominacionDeConteo(x.CashDenominationPublicId, x.Value, x.Kind != 1)).ToList()
+            : [];
+
+        // La propia sale de «mi sesión»; la de otra persona, por su id (Receipts.Session.View).
+        var actual = await Cliente.ActualAsync();
+        _propia = actual is { IsSuccess: true, Value: not null } && actual.Value.PublicId == Id;
+        if (_propia) _sesion = actual.Value;
+        else
+        {
+            var r = await Cliente.SesionAsync(Id);
+            _sesion = r.IsSuccess ? r.Value : null;
+            _error = r.IsSuccess ? null : r.ErrorMessage;
+        }
+        if (_sesion is not { } s) return;
+
+        if (EsSorpresivo || EsOlvidadaDeOtro)
+        {
+            var u = await Configuracion.UsuariosAsync();
+            _usuarios = u.IsSuccess && u.Value is not null ? u.Value.Items.Where(x => x.IsActive).ToList() : [];
+        }
+
+        // Lo esperado (sin arqueo ciego y con Receipts.Session.ViewExpected) y, con caja única, lo de la caja del punto de venta.
+        var e = await Cliente.EsperadoAsync(s.PublicId);
+        _ciego = !e.IsSuccess || e.Value is null || e.Value.Hidden;
+        var cu = await Cliente.CajaUnicaAsync(s.PublicId);
+        IReadOnlyList<CajaUnicaMedioDto> delPunto = cu is { IsSuccess: true, Value: { PosSessionOpen: true } caja } ? caja.Means : [];
+        _medios = s.Means.Where(m => m.CountMethod != SinArqueo).OrderBy(m => m.DisplayOrder).Select(m =>
+        {
+            var esperado = _ciego ? null : e.Value!.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId);
+            var extra = delPunto.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Expected ?? 0m;
+            return new MedioAContar
+            {
+                Id = m.PaymentMeansPublicId,
+                Codigo = m.Code,
+                Nombre = m.Name,
+                Forma = m.Class == Efectivo ? FormaDeContar.Efectivo : m.CountMethod == PorLote && _politica.Estricto ? FormaDeContar.Lotes : FormaDeContar.Total,
+                Esperado = esperado is null ? null : esperado.Expected + extra,
+                Tolerancia = m.Tolerance,
+                DetalleDelEsperado = esperado is null ? null
+                    : $"base {esperado.Base:N0} · recibos {esperado.Receipts:N0} · entradas {esperado.In:N0} · salidas {esperado.Out:N0}{(extra != 0m ? $" · punto de venta {extra:N0}" : "")}",
+                Datafonos = (m.CardTerminals ?? []).Select(t => new DatafonoDeConteo(t.CardTerminalPublicId, $"{t.Code} · {t.CardAcquirerCode}")).ToList(),
+            };
+        }).ToList();
+    }
+
+    private IReadOnlyList<ConteoDeMedioRequest> Conteos() => _medios.Select(m =>
+    {
+        var motivo = string.IsNullOrWhiteSpace(m.Motivo) ? null : m.Motivo.Trim();
+        if (m.Forma == FormaDeContar.Efectivo && FormasDeConteo.PorBilletes(_politica.FormaDelEfectivo, m.PorBilletes))
+            return new ConteoDeMedioRequest(m.Id, Denominations: m.Billetes.Where(b => b.Value > 0).Select(b => new DenominacionContadaRequest(b.Key, b.Value)).ToList(),
+                Reason: motivo);
+        if (m.Forma == FormaDeContar.Lotes && m.Lotes.Where(l => l.Datafono is not null && !string.IsNullOrWhiteSpace(l.Numero)).ToList() is { Count: > 0 } lotes)
+            return new ConteoDeMedioRequest(m.Id, TerminalBatches: lotes.Select(l => new LoteContadoRequest(l.Datafono!.Value, l.Numero.Trim(), l.Valor)).ToList(),
+                Reason: motivo);
+        return new ConteoDeMedioRequest(m.Id, Total: m.Contado, Reason: motivo);
+    }).ToList();
+
+    private async Task ConfirmarAsync()
+    {
+        if (_sesion is not { } s) return;
+        using var g = _guardado.Iniciar();
+        Guid? testigo = Guid.TryParse(_testigo, out var t) ? t : null;
+        var r = EsSorpresivo
+            ? await Cliente.ArqueoSorpresivoAsync(new SorpresivoRequest(s.PublicId, _acta, Conteos(), testigo), _clave)
+            : EsOlvidadaDeOtro
+                ? await Cliente.CerrarOlvidadaAsync(s.PublicId, new CerrarOlvidadaRequest(testigo, Conteos()), _clave)
+                : await Cliente.ContarAsync(s.PublicId, new ConteoRequest(Conteos()), _clave);
+        if (r.ErrorCode == "Receipts.Count.ReasonRequired")
+        {
+            await Notification.WarningAsync(r.ErrorMessage ?? "Hay diferencia: escriba el motivo.");
+            return;
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar lo contado."); return; }
+        _clave = new ClaveDeOperacion();
+        _resultado = r.Value;
+        await Notification.SuccessAsync(EsSorpresivo ? "Arqueo sorpresivo registrado." : "Caja cerrada.");
+    }
+
+    private IReadOnlyList<LineaDelResultado> Lineas(ArqueoDto a) => a.Lines.Select(l => new LineaDelResultado(
+        _medios.FirstOrDefault(m => m.Id == l.PaymentMeansPublicId)?.Nombre ?? l.MeansCode, l.Expected, l.Counted, l.Difference,
+        l.Difference == 0m ? "Cuadra" : l.PendingApproval ? "Por aprobar" : SesionesClient.Tratamiento(l.Treatment))).ToList();
+
+    private async Task DescargarAsync()
+    {
+        var r = await Cliente.InformeDeCierreAsync(Id);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el informe."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

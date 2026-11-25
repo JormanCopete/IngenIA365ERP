@@ -724,6 +724,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   filas en el libro ni hechos. Parámetros `Creditos.CambioDePlazo` (Sí) y `Segregacion.CambioDePlazoPorOtraPersona` (No). Sin migración. Receta:
   `docs/manual/cartera-novedades-y-condonaciones.md` §3a.
 
+- **Caja común y arqueo sencillo (2026-11-24, pedido del dueño)**: Recaudo y el punto de venta tienen las mismas dos opciones,
+  «Mi caja» (`/recaudo/sesiones`, `/pos/sesiones`: abrir y lo del cajero) y «Cajas del día» (`/recaudo/cajas`, `/pos/cajas`: la consulta y lo del
+  supervisor), y el mismo arqueo en dos pasos (`…/sesiones/{id}/cierre`), con piezas comunes en `Components/Comunes`.
+  - `Caja.ArqueoEstricto` (RCD, **apagado**, lo leen las dos cajas al operar, no se sella): apagado no hay arqueo ciego, el motivo se pide sólo fuera de
+    la tolerancia, la diferencia se resuelve al cerrar con el faltante al gasto, no hay testigo ni segundo custodio y los adjuntos son opcionales.
+  - Encendido, rigen los controles de siempre.
+  - Receta: `docs/manual/mi-caja-y-arqueo.md`.
+
 - **Documentos para firma (2026-11-18, pedido del dueño)**: la solicitud aprobada genera en un PDF el pagaré con espacios en blanco, su carta de
   instrucciones y la libranza cuando el crédito se paga por nómina, desde **plantillas por cooperativa** (`LND_SignatureDocumentTemplates`, por canal
   de pago y línea) con campos del sistema (`CamposDelSistema`) y **campos propios** (`LND_SignatureDocumentFields`: fijos o digitados al generar).

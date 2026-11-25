@@ -1,0 +1,72 @@
+@page "/pos/cajas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+<PageTitle>Cajas del día - IngenIA365ERP</PageTitle>
+
+@* 2026-11-24 (pedido del dueño): la consulta de las cajas del punto de venta, aparte de abrir la propia («Mi caja») e igual a la de Recaudo: las del día
+   elegido y las que siguen abiertas de días anteriores, con ver el detalle y cerrar la caja de otra persona (quien tiene Inventory.CashSessions.ViewAll
+   ve y cierra las de todos) en /pos/sesiones/{id}/cierre. Antes era la lista con filtros debajo de la apertura en Sesiones de caja. *@
+<PermissionGate Required="Inventory.CashSessions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cajas del día</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <a class="e-btn e-flat" href="/pos/sesiones">Mi caja</a>
+            <a class="e-btn e-flat" href="/pos/movimientos-de-caja">Movimientos de caja</a>
+            <a class="e-btn e-flat" href="/pos/cierre-del-dia">Cierre del día</a>
+        </div>
+    </div>
+
+    <TablaDeCajas Filas="@_filas" Cargando="@_carga.Activa" Dia="@_dia" DiaChanged="@CambiarDiaAsync" EtiquetaDelPunto="Punto de venta" EtiquetaDeLoMovido="Ventas">
+        <Acciones Context="f">
+            @{ var s = _sesiones.First(x => x.CashSessionPublicId == f.Id); }
+            <a class="e-btn e-flat" href="@($"/pos/sesiones/{s.CashSessionPublicId}")">Ver</a>
+            @if (s.Status == TextosDeVentas.SesionAbierta && s.LinkedSessionPublicId is null)
+            {
+                <PermissionGate Required="Inventory.CashSessions.Close">
+                    <a class="e-btn e-flat" href="@($"/pos/sesiones/{s.CashSessionPublicId}/cierre")">Arquear y cerrar</a>
+                </PermissionGate>
+            }
+        </Acciones>
+    </TablaDeCajas>
+</div>
+</PermissionGate>
+
+@code {
+    private const int Maximo = 200;
+    private readonly EstadoDeCarga _carga = new();
+    private DateOnly _dia = DiaDeCaja.Hoy();
+    private IReadOnlyList<SesionDeCajaDto> _sesiones = [];
+    private IReadOnlyList<FilaDeCaja> _filas = [];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private Task CambiarDiaAsync(DateOnly dia)
+    {
+        _dia = dia;
+        return CargarAsync();
+    }
+
+    /// <summary>Las del día elegido más las que siguen abiertas de cualquier día.</summary>
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var delDia = await Ventas.ListarSesionesAsync(desde: _dia, hasta: _dia, pagina: 1, tamano: Maximo);
+        var abiertas = await Ventas.ListarSesionesAsync(estado: TextosDeVentas.SesionAbierta, pagina: 1, tamano: Maximo);
+        if (!delDia.IsSuccess) await Notification.ErrorAsync(delDia.ErrorMessage ?? "No se pudieron consultar las cajas.");
+        var hoy = DiaDeCaja.Hoy();
+        _sesiones = (delDia.Value?.Items ?? []).Concat(abiertas.Value?.Items ?? []).DistinctBy(s => s.CashSessionPublicId)
+            .OrderByDescending(s => s.OperatingDate).ThenBy(s => s.PointOfSale.Code).ThenBy(s => s.CashRegister.Code).ToList();
+        _filas = _sesiones.Select(s =>
+        {
+            var abierta = s.Status == TextosDeVentas.SesionAbierta;
+            return new FilaDeCaja(s.CashSessionPublicId, s.OperatingDate, s.PointOfSale.Code, s.CashRegister.Code, s.Cashier.Name,
+                TextosDeVentas.EstadoDeSesion(s.Status), abierta, s.OpenedAt, s.ClosedAt, s.OpeningBase, $"{s.SalesCount} · {s.SalesTotal:N0}",
+                Pendiente: abierta && s.OperatingDate < hoy);
+        }).ToList();
+    }
+}
