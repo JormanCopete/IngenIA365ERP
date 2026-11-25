@@ -1,0 +1,63 @@
+@* 2026-11-24 (pedido del dueño): la caja abierta de quien entra, igual en Comercial y en Recaudo: qué caja, de qué día, la base, lo movido y lo que
+   debería haber por medio (si el arqueo no es ciego), y sólo las acciones del cajero. Si la sesión es de un día anterior lo dice primero. (nuevo) *@
+<section class="info-card caja-abierta" aria-label="Su caja abierta">
+    <AvisoSesionDeOtroDia Dia="@Dia" UrlParaCerrar="@UrlParaCerrar" />
+    <h4>Su caja abierta: @Caja</h4>
+    <dl class="caja-resumen">
+        <div><dt>Día</dt><dd>@Dia.ToString("dd/MM/yyyy")</dd></div>
+        <div><dt>Abierta</dt><dd>@AbiertaEl.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
+        <div><dt>Base</dt><dd>@Base.ToString("N0")</dd></div>
+        @if (!string.IsNullOrEmpty(Movido))
+        {
+            <div><dt>@EtiquetaDeLoMovido</dt><dd>@Movido</dd></div>
+        }
+    </dl>
+    @Avisos
+    @if (Esperados is { Count: > 0 } esperados)
+    {
+        <table class="data-grid caja-esperado">
+            <caption class="texto-tenue">Lo que debería haber en la caja ahora</caption>
+            <thead><tr><th>Medio</th><th class="numero">Esperado</th></tr></thead>
+            <tbody>
+                @foreach (var (medio, esperado) in esperados)
+                {
+                    <tr><td>@medio</td><td class="numero">@esperado.ToString("N0")</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (Ciego)
+    {
+        <p class="texto-tenue">Arqueo ciego: lo esperado se ve después de contar.</p>
+    }
+    <div class="toolbar caja-acciones">
+        @Acciones
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Caja { get; set; } = "";
+
+    [Parameter] public DateOnly Dia { get; set; }
+
+    [Parameter] public DateTime AbiertaEl { get; set; }
+
+    [Parameter] public decimal Base { get; set; }
+
+    /// <summary>Lo vendido o recaudado, en palabras («3 ventas por 120.000»).</summary>
+    [Parameter] public string? Movido { get; set; }
+
+    [Parameter] public string EtiquetaDeLoMovido { get; set; } = "Movido";
+
+    /// <summary>Lo esperado por medio; nulo o vacío si no se puede ver.</summary>
+    [Parameter] public IReadOnlyList<(string Medio, decimal Esperado)>? Esperados { get; set; }
+
+    [Parameter] public bool Ciego { get; set; }
+
+    /// <summary>Adónde lleva el aviso de sesión de otro día para cerrarla.</summary>
+    [Parameter] public string? UrlParaCerrar { get; set; }
+
+    [Parameter] public RenderFragment? Avisos { get; set; }
+
+    [Parameter] public RenderFragment? Acciones { get; set; }
+}

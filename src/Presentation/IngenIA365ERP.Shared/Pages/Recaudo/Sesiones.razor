@@ -2,127 +2,90 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Recaudo
 @using IngenIA365ERP.Shared.Services.Http
-@using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject SesionesClient Cliente
 @inject ConfiguracionDeRecaudoClient Configuracion
-@inject MediosDePagoClient CatalogoDeMedios
 @inject INotificationService Notification
-@inject DescargaDeArchivos Descargas
 
-<PageTitle>Sesiones de caja - IngenIA365ERP</PageTitle>
+<PageTitle>Mi caja - IngenIA365ERP</PageTitle>
 
-@* Feature 015, US2 (T0098; FR-022, FR-028 a FR-034, FR-182, FR-183): la sesión del cajero —abrir con la base contada por denominaciones, ver lo esperado (con
-   arqueo ciego, oculto hasta contar), mover efectivo con la bóveda u otra caja con doble custodia, reclasificar un medio con aprobador presente y cerrar
-   contando por medio— y, para el supervisor, las sesiones del día: aprobar diferencias, cerrar la olvidada con testigo, ajustar una cerrada, el arqueo
-   sorpresivo y el informe del cierre. *@
+@* 2026-11-24 (pedido del dueño): «Mi caja» de Recaudo, igual a la del punto de venta. Sólo lo del cajero: abrir su caja con la base, y con la caja
+   abierta ir a cobrar, mover efectivo y arquear y cerrar (en /recaudo/sesiones/{id}/cierre, el arqueo en dos pasos). Las cajas de todos, las diferencias
+   por aprobar, el arqueo sorpresivo y el ajuste están aparte, en «Cajas del día» (/recaudo/cajas). Con el arqueo sencillo (Caja.ArqueoEstricto apagado)
+   el movimiento con la bóveda no pide segundo custodio ni sello y la reclasificación no pide soporte. Antes (feature 015, US2, T0098) todo esto estaba
+   en una sola pantalla con la lista del supervisor debajo. *@
 <PermissionGate Required="Receipts.Session.Open" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Sesiones de caja</h3>
+        <h3>Mi caja</h3>
         <div class="toolbar">
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Session.View">
+                <a class="e-btn e-flat" href="/recaudo/cajas">Cajas del día</a>
+                <a class="e-btn e-flat" href="/recaudo/cierre-del-dia">Cierre del día</a>
+            </PermissionGate>
         </div>
     </div>
 
-    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
-        @if (_actual is null)
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Buscando su caja…">
+        @if (_actual is not { } s)
         {
-            <div class="info-card">
-                <h4>Abrir la sesión</h4>
-                <div class="form-grid">
-                    <label class="campo">Caja *
-                        <select class="e-input" @bind="_cajaElegida">
-                            <option value="">Elija la caja…</option>
-                            @foreach (var c in _cajas)
-                            {
-                                <option value="@c.PublicId">@c.CollectionPointCode · @c.Code · @c.Name</option>
-                            }
-                        </select>
-                        <span class="hint">La caja donde va a recibir el dinero hoy.</span>
-                    </label>
-                </div>
-                @* 2026-11-23: la base con un solo valor o billete por billete, según Caja.FormaDeConteoDelEfectivo. *@
-                <ConteoDelEfectivo Forma="@_forma" @bind-PorBilletes="_basePorBilletes" @bind-ValorGlobal="_baseGlobal" Etiqueta="Base"
-                                   Ayuda="El efectivo que recibe para dar vueltas; no es recaudo. Si la caja trabaja con fondo fijo, tiene que ser igual al fondo. Sin efectivo, deje 0.">
-                    <Billetes>
-                        <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="_base" />
-                        <p>Base contada: <strong>@Total(_base).ToString("N0")</strong></p>
-                    </Billetes>
-                </ConteoDelEfectivo>
-                <div class="toolbar">
-                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrEmpty(_cajaElegida))" OnClick="@AbrirAsync">Abrir la sesión</SfButton>
-                </div>
-            </div>
+            @if (!_carga.Activa)
+            {
+                <AperturaDeCaja Cajas="@_opcionesDeCaja" Denominaciones="@_denominaciones" Forma="@_politica.FormaDelEfectivo" Ocupado="@_guardado.Activa"
+                                AyudaDeLaCaja="La caja donde va a recibir el dinero hoy."
+                                AyudaDeLaBase="El efectivo que recibe para dar vueltas; no es recaudo. Si la caja trabaja con fondo fijo, tiene que ser igual al fondo. Sin efectivo, deje 0."
+                                Abrir="@AbrirAsync" />
+            }
         }
         else
         {
-            <div class="info-card">
-                <h4>Caja @_actual.CollectionPointCode · @_actual.CashBoxCode</h4>
-                <p>@SesionesClient.Estado(_actual.Status) · base @_actual.OpeningBase.ToString("N0") · abierta @_actual.OpenedAt.ToLocalTime().ToString("g")
-                    @(_actual.BlindCount ? " · arqueo ciego" : "")</p>
-                @* 2026-11-23, caja única: la caja del punto de venta abre y cierra con esta sesión. *@
-                @if (_cajaUnica is { Enabled: true, PosCashRegisterPublicId: not null } cu)
-                {
-                    @if (cu.PosSessionOpen)
+            <MiCajaAbierta Caja="@($"{s.CollectionPointCode} · caja {s.CashBoxCode}")" Dia="@s.BusinessDate" AbiertaEl="@s.OpenedAt" Base="@s.OpeningBase"
+                           Esperados="@_esperados" Ciego="@(_esperado?.Hidden == true)" UrlParaCerrar="@UrlDelCierre(s)">
+                <Avisos>
+                    @if (s.Status == SesionesClient.EstadoOlvidada)
                     {
-                        <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode de @cu.PointOfSaleName está abierta con esta sesión. Venda allí sin abrir
-                            otra caja; al «Arquear y cerrar» aquí se cierra sola y se cuenta todo junto.</p>
+                        <p class="aviso aviso-alerta">Esta caja quedó abierta después de la hora de corte y ya no recibe pagos. Ciérrela con «Arquear y cerrar».</p>
                     }
-                    else if (_actual.Status == 1)
+                    @* 2026-11-23, caja única: la caja del punto de venta abre y cierra con esta sesión. *@
+                    @if (_cajaUnica is { Enabled: true, PosCashRegisterPublicId: not null } cu)
                     {
-                        <p class="aviso aviso-alerta">Caja única: la caja del punto de venta de esta caja no está abierta.
-                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@AbrirCajaDelPuntoDeVentaAsync">Abrir la caja del punto de venta</SfButton></p>
-                    }
-                }
-                @if (_actual.Status == 5)
-                {
-                    @* 2026-11-16: la sesión olvidada no recibe operaciones; la cierra un supervisor con testigo desde «Cerrar olvidada», o el mismo cajero
-                       con «Arquear y cerrar» si la cooperativa activó Caja.CajeroCierraSuSesionOlvidada. *@
-                    <p class="aviso aviso-alerta">Esta sesión quedó abierta después de la hora de corte y ya no recibe operaciones. La cierra un supervisor con
-                        «Cerrar olvidada» y un testigo; si la cooperativa permite que el mismo cajero cierre su sesión olvidada, ciérrela aquí con «Arquear y cerrar».</p>
-                }
-                <div class="toolbar">
-                    <PermissionGate Required="Receipts.Session.ViewExpected">
-                        <SfButton CssClass="e-outline" OnClick="@VerEsperadoAsync">Ver lo esperado</SfButton>
-                    </PermissionGate>
-                    @if (_actual.Status != 5)
-                    {
-                    <PermissionGate Required="Receipts.Session.Move">
-                        <SfButton CssClass="e-outline" OnClick="@(() => _movimientoVisible = true)">Movimiento de efectivo</SfButton>
-                    </PermissionGate>
-                    <PermissionGate Required="Receipts.Session.Reclassify">
-                        <SfButton CssClass="e-outline" OnClick="@(() => _reclasificacionVisible = true)">Reclasificar un medio</SfButton>
-                    </PermissionGate>
-                    }
-                    <PermissionGate Required="Receipts.Session.Close">
-                        <SfButton CssClass="e-primary" OnClick="@(() => AbrirConteo(_actual, olvidada: false))">Arquear y cerrar</SfButton>
-                    </PermissionGate>
-                </div>
-                @if (_esperado is not null)
-                {
-                    @if (_esperado.Hidden)
-                    {
-                        <p class="texto-tenue">Arqueo ciego: lo esperado se ve después de registrar lo contado.</p>
-                    }
-                    else
-                    {
-                        <table class="data-grid">
-                            <thead><tr><th>Medio</th><th>Base</th><th>Recibos</th><th>Entradas</th><th>Salidas</th><th>Esperado</th></tr></thead>
-                            <tbody>
-                                @foreach (var m in _esperado.Means)
-                                {
-                                    <tr><td>@m.Code</td><td>@m.Base.ToString("N0")</td><td>@m.Receipts.ToString("N0")</td><td>@m.In.ToString("N0")</td><td>@m.Out.ToString("N0")</td><td><strong>@m.Expected.ToString("N0")</strong></td></tr>
-                                }
-                            </tbody>
-                        </table>
-                        @if (_esperado.CashWarnCapReached)
+                        @if (cu.PosSessionOpen)
                         {
-                            <p class="texto-alerta">El efectivo llegó al tope de aviso: traslade a la bóveda.</p>
+                            <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode de @cu.PointOfSaleName está abierta con esta sesión. Venda allí sin abrir
+                                otra caja; al «Arquear y cerrar» aquí se cierra sola y se cuenta todo junto.</p>
+                        }
+                        else if (s.Status == 1)
+                        {
+                            <p class="aviso aviso-alerta">Caja única: la caja del punto de venta de esta caja no está abierta.
+                                <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@AbrirCajaDelPuntoDeVentaAsync">Abrir la caja del punto de venta</SfButton></p>
                         }
                     }
-                }
-            </div>
+                </Avisos>
+                <Acciones>
+                    @if (s.Status == 1)
+                    {
+                        <PermissionGate Required="Receipts.Receipt.Register">
+                            <a class="e-btn e-primary" href="/recaudo/caja">Ir a la caja</a>
+                        </PermissionGate>
+                    }
+                    @if (s.Status is 1 or 5)
+                    {
+                        <PermissionGate Required="Receipts.Session.Close">
+                            <a class="e-btn @(s.Status == 5 ? "e-primary" : "e-outline")" href="@UrlDelCierre(s)">Arquear y cerrar</a>
+                        </PermissionGate>
+                    }
+                    @if (s.Status == 1)
+                    {
+                        <PermissionGate Required="Receipts.Session.Move">
+                            <SfButton CssClass="e-outline" OnClick="@AbrirMovimientoAsync">Movimiento de efectivo</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Receipts.Session.Reclassify">
+                            <SfButton CssClass="e-flat" OnClick="@(() => _reclasificacionVisible = true)">Reclasificar un medio</SfButton>
+                        </PermissionGate>
+                    }
+                </Acciones>
+            </MiCajaAbierta>
         }
     </IndicadorDeCarga>
 
@@ -131,63 +94,6 @@
         <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="@_motivoDeAprobacion" Aprobada="@RepetirConAprobacionAsync"
                                      Cancelada="@(() => _aprobacion = null)" />
     }
-
-    <PermissionGate Required="Receipts.Session.View">
-        @* 2026-11-14: además de las de hoy, las olvidadas y las de diferencia por aprobar de días anteriores. Antes sólo salían las de hoy y
-           una sesión que quedó abierta después del corte de ayer no tenía cómo cerrarse: su cajero no puede («quedó abierta después de la
-           hora de corte») y el supervisor no la veía. *@
-        <div class="page-header"><h4>Sesiones del día y pendientes</h4></div>
-        <IndicadorDeCarga Cargando="@_cargaDelDia.Activa" Texto="Cargando…">
-            @if (_delDia.Count == 0)
-            {
-                <p class="texto-tenue">No hay sesiones hoy ni pendientes de días anteriores.</p>
-            }
-            else
-            {
-                <table class="data-grid">
-                    <thead><tr><th>Día</th><th>Punto</th><th>Caja</th><th>Cajero</th><th>Estado</th><th>Base</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach (var s in _delDia)
-                        {
-                            <tr>
-                                <td>@s.BusinessDate.ToString("dd/MM/yyyy")</td><td>@s.CollectionPointCode</td><td>@s.CashBoxCode</td><td>@s.CashierName</td><td>@SesionesClient.Estado(s.Status)</td><td>@s.OpeningBase.ToString("N0")</td>
-                                <td>
-                                    @if (s.Status == 3)
-                                    {
-                                        <PermissionGate Required="Receipts.Count.ApproveDifference">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => VerDiferenciasAsync(s))">Diferencias</SfButton>
-                                        </PermissionGate>
-                                    }
-                                    @if (s.Status == 5)
-                                    {
-                                        <PermissionGate Required="Receipts.Session.CloseForgotten">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirConteo(s, olvidada: true))">Cerrar olvidada</SfButton>
-                                        </PermissionGate>
-                                    }
-                                    @if (s.Status is 1 or 5)
-                                    {
-                                        <PermissionGate Required="Receipts.Session.SurpriseCount">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirSorpresivo(s))">Arqueo sorpresivo</SfButton>
-                                        </PermissionGate>
-                                    }
-                                    @if (s.Status == 4)
-                                    {
-                                        <PermissionGate Required="Receipts.Session.Adjust">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirAjuste(s))">Ajuste</SfButton>
-                                        </PermissionGate>
-                                    }
-                                    @if (s.Status is 3 or 4)
-                                    {
-                                        <SfButton CssClass="e-flat" OnClick="@(() => DescargarCierreAsync(s))">Informe</SfButton>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-        </IndicadorDeCarga>
-    </PermissionGate>
 </div>
 
 <SfDialog @bind-Visible="_movimientoVisible" Header="Movimiento de efectivo" Width="560px" IsModal="true" ShowCloseIcon="true">
@@ -197,24 +103,21 @@
                 <div class="form-grid">
                     <label class="campo">Movimiento
                         <select class="e-input" @bind="_claseDeMovimiento">
-                            <option value="2">Abastecer desde la bóveda</option>
-                            <option value="3">Retirar a la bóveda</option>
-                            <option value="4">Trasladar a otra caja</option>
+                            <option value="2">Recibir de la bóveda</option>
+                            <option value="3">Llevar a la bóveda</option>
+                            <option value="4">Pasar a otra caja</option>
                         </select>
                     </label>
                     @if (_claseDeMovimiento == 4)
                     {
                         <label class="campo">Caja que recibe
                             <select class="e-input" @bind="_contraparte">
-                                <option value="">Elija la sesión…</option>
-                                @foreach (var s in _delDia.Where(s => s.Status == 1 && s.PublicId != _actual?.PublicId))
-                                {
-                                    <option value="@s.PublicId">@s.CashBoxCode · @s.CashierName</option>
-                                }
+                                <option value="">Elija la caja…</option>
+                                @foreach (var o in _otrasAbiertas) { <option value="@o.PublicId">@o.CashBoxCode · @o.CashierName</option> }
                             </select>
                         </label>
                     }
-                    else
+                    else if (_politica.Estricto)
                     {
                         <label class="campo">Segundo custodio
                             <select class="e-input" @bind="_segundoCustodio">
@@ -226,8 +129,8 @@
                     }
                     <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
                 </div>
-                <ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="_movimiento" />
-                <p>Total: <strong>@Total(_movimiento).ToString("N0")</strong></p>
+                <p class="hint">Cuente los billetes y monedas que se mueven.</p>
+                <BilletesYMonedas Denominaciones="@_denominaciones" Cantidades="@_movimiento" />
             </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
@@ -241,18 +144,22 @@
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
-                <p class="hint">El recibo no cambia: lo esperado pasa de un medio a otro. Desde efectivo hace falta el soporte cotejado y otra persona que apruebe.</p>
+                <p class="hint">El recibo no cambia: lo esperado pasa de un medio a otro. Desde efectivo hace falta otra persona que apruebe.</p>
                 <div class="form-grid">
                     <label class="campo">Desde
-                        <select class="e-input" @bind="_desde">@foreach (var m in _actual?.Means ?? []) { <option value="@m.PaymentMeansPublicId">@m.Code</option> }</select>
+                        <select class="e-input" @bind="_desde">@foreach (var m in _actual?.Means ?? []) { <option value="@m.PaymentMeansPublicId">@m.Name</option> }</select>
                     </label>
                     <label class="campo">Hacia
-                        <select class="e-input" @bind="_hacia">@foreach (var m in _actual?.Means ?? []) { <option value="@m.PaymentMeansPublicId">@m.Code</option> }</select>
+                        <select class="e-input" @bind="_hacia">@foreach (var m in _actual?.Means ?? []) { <option value="@m.PaymentMeansPublicId">@m.Name</option> }</select>
                     </label>
-                    <label class="campo">Valor * <input class="e-input" type="number" min="0" @bind="_valor" /></label>
-                    <label class="campo">Soporte (adjunto) <input class="e-input" @bind="_soporte" placeholder="Identificador del adjunto" /></label>
+                    <label class="campo">Valor * <CampoDeValor Valor="@_valor" ValorChanged="@(v => _valor = v ?? 0m)" /></label>
                     <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
                 </div>
+                @if (_actual is { } sesion)
+                {
+                    <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.SoporteDeCaja" OwnerEntityPublicId="@sesion.PublicId"
+                                  Rotulo="@(_politica.Estricto ? "Subir el soporte *" : "Subir el soporte (opcional)")" OnDisponible="@(id => _soporte = id)" />
+                }
             </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
@@ -261,268 +168,104 @@
         <DialogButton Content="Reclasificar" IsPrimary="true" OnClick="@(() => ReclasificarAsync(null))" Disabled="@_guardado.Activa" />
     </DialogButtons>
 </SfDialog>
-
-<SfDialog @bind-Visible="_conteoVisible" Header="@(_olvidada ? "Cerrar la sesión olvidada" : _sorpresivo ? "Arqueo sorpresivo" : "Arquear y cerrar")" Width="640px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
-                @* 2026-11-23: cada medio muestra sólo su forma de contarlo, con una línea de ayuda; el motivo aparece cuando hay diferencia. *@
-                @if (_esperadoDelConteo is null)
-                {
-                    <p class="hint">Cuente sin ver lo esperado. Si hay diferencia, se le pedirá el motivo.</p>
-                }
-                @if (_olvidada || _sorpresivo)
-                {
-                    <label class="campo">Testigo@(_olvidada ? " *" : "")
-                        <select class="e-input" @bind="_testigo">
-                            <option value="">Elija el testigo…</option>
-                            @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
-                        </select>
-                        <span class="hint">Otra persona que está presente mientras se cuenta.</span>
-                    </label>
-                }
-                @if (_sorpresivo)
-                {
-                    <label class="campo">Acta (adjunto) * <input class="e-input" @bind="_acta" placeholder="Identificador del adjunto" />
-                        <span class="hint">El acta firmada del arqueo sorpresivo, ya subida como adjunto.</span>
-                    </label>
-                }
-                @foreach (var m in (_sesionDelConteo?.Means ?? []).Where(x => x.CountMethod != SinArqueo))
-                {
-                    var id = m.PaymentMeansPublicId;
-                    <h5>@m.Code · @m.Name</h5>
-                    @if (m.Class == 1)
-                    {
-                        <ConteoDelEfectivo Forma="@_forma" PorBilletes="@PorBilletesDe(id)" PorBilletesChanged="@(v => _porBilletes[id] = v)"
-                                           ValorGlobal="@TotalDe(id)" ValorGlobalChanged="@(v => _totales[id] = v ?? 0m)"
-                                           Ayuda="Todo el efectivo que hay en la caja, incluida la base.">
-                            <Billetes><ConteoDeBilletes Denominaciones="_denominaciones" Cantidades="@CantidadesDe(id)" /></Billetes>
-                        </ConteoDelEfectivo>
-                    }
-                    else if (m.CountMethod == MetodoPorLote)
-                    {
-                        <p class="hint">Un renglón por cada cierre de lote del datáfono: el número del lote y su valor.</p>
-                        @* Feature 015, R1 (T0358; FR-031): las tarjetas se arquean por lote de datáfono. *@
-                        @foreach (var lote in LotesDe(id))
-                        {
-                            <div class="form-grid">
-                                <label class="campo">Datáfono
-                                    <select class="e-input" value="@lote.Datafono" @onchange="@(e => lote.Datafono = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
-                                        <option value="">— Elija —</option>
-                                        @foreach (var d in _datafonos) { <option value="@d.CardTerminalPublicId">@d.Code · @d.CardAcquirerCode</option> }
-                                    </select>
-                                </label>
-                                <label class="campo">Lote <input class="e-input" maxlength="20" value="@lote.Numero" @onchange="@(e => lote.Numero = e.Value?.ToString() ?? "")" /></label>
-                                <label class="campo">Valor <input class="e-input" type="number" min="0" value="@lote.Valor" @onchange="@(e => lote.Valor = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0m)" /></label>
-                            </div>
-                        }
-                        <SfButton CssClass="e-flat" OnClick="@(() => LotesDe(id).Add(new LoteDelArqueo()))">Agregar lote</SfButton>
-                    }
-                    else
-                    {
-                        <label class="campo">Total contado
-                            <CampoDeValor Valor="@TotalDe(id)" ValorChanged="@(v => _totales[id] = v ?? 0m)" />
-                            <span class="hint">La suma de los soportes de este medio: comprobantes, consignaciones o cheques.</span>
-                        </label>
-                    }
-                    var esperado = EsperadoDe(id);
-                    var diferencia = esperado is null ? (decimal?)null : ContadoDe(m) - esperado.Value;
-                    @if (esperado is not null)
-                    {
-                        <p class="@(diferencia == 0m ? "texto-tenue" : "texto-alerta")">Esperado @esperado.Value.ToString("N0") · contado @ContadoDe(m).ToString("N0") · diferencia @diferencia!.Value.ToString("N0")</p>
-                    }
-                    @if ((diferencia is not null && diferencia != 0m) || (esperado is null && _pedirMotivos) || !string.IsNullOrEmpty(MotivoDe(id)))
-                    {
-                        <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" value="@MotivoDe(id)" @onchange="@(e => _motivos[id] = e.Value?.ToString())" maxlength="500" />
-                            <span class="hint">Qué pasó: por ejemplo, un billete falso o un vuelto mal dado. Si este medio no tiene diferencia, déjelo vacío.</span>
-                        </label>
-                    }
-                }
-            </IndicadorDeCarga>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _conteoVisible = false)" />
-        <DialogButton Content="Registrar lo contado" IsPrimary="true" OnClick="@ContarAsync" Disabled="@_guardado.Activa" />
-    </DialogButtons>
-</SfDialog>
-
-<SfDialog @bind-Visible="_diferenciasVisible" Header="Diferencias por aprobar" Width="620px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Cargando…">
-                @foreach (var l in _pendientes)
-                {
-                    <div class="info-card">
-                        <p><strong>@l.MeansCode</strong>: esperado @l.Expected.ToString("N0"), contado @l.Counted.ToString("N0"), diferencia @l.Difference.ToString("N0")
-                            (tolerancia @l.Tolerance.ToString("N0")). @l.Reason</p>
-                        <div class="form-grid">
-                            @if (l.Difference < 0)
-                            {
-                                <label class="campo">Tratamiento
-                                    <select class="e-input" @bind="_tratamiento"><option value="1">A cargo del cajero</option><option value="2">Gasto</option></select>
-                                </label>
-                            }
-                            <label class="campo campo-ancho">Motivo de la aprobación * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
-                            <SfButton CssClass="e-primary" OnClick="@(() => AprobarAsync(l))">Aprobar</SfButton>
-                        </div>
-                    </div>
-                }
-            </IndicadorDeCarga>
-        </Content>
-    </DialogTemplates>
-</SfDialog>
-
-<SfDialog @bind-Visible="_ajusteVisible" Header="Ajuste de una sesión cerrada" Width="520px" IsModal="true" ShowCloseIcon="true">
-    <DialogTemplates>
-        <Content>
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
-                <div class="form-grid">
-                    <label class="campo">Clase
-                        <select class="e-input" @bind="_claseDeAjuste"><option value="1">Corrección de lo contado</option><option value="2">Corrección del medio</option></select>
-                    </label>
-                    <label class="campo">Medio
-                        <select class="e-input" @bind="_medioDeAjuste">@foreach (var m in _sesionDelConteo?.Means ?? []) { <option value="@m.PaymentMeansPublicId">@m.Code</option> }</select>
-                    </label>
-                    <label class="campo">Valor (con signo) * <input class="e-input" type="number" @bind="_valor" /></label>
-                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporte" /></label>
-                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
-                </div>
-            </IndicadorDeCarga>
-        </Content>
-    </DialogTemplates>
-    <DialogButtons>
-        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _ajusteVisible = false)" />
-        <DialogButton Content="Registrar el ajuste" IsPrimary="true" OnClick="@(() => AjustarAsync(null))" Disabled="@_guardado.Activa" />
-    </DialogButtons>
-</SfDialog>
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _cargaDelDia = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private ClaveDeOperacion _clave = new();
-    private SesionDeCajaDto? _actual, _sesionDelConteo;
+    private SesionDeCajaDto? _actual;
     private EsperadoDeSesionDto? _esperado;
-    private IReadOnlyList<SesionDeCajaDto> _delDia = [];
-    private IReadOnlyList<CajaDeRecaudoDto> _cajas = [];
-    private IReadOnlyList<DenominacionDeCajaDto> _denominaciones = [];
-    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
-    private IReadOnlyList<LineaDeArqueoDto> _pendientes = [];
-    private readonly Dictionary<Guid, int> _base = [], _movimiento = [];
-    private readonly Dictionary<Guid, Dictionary<Guid, int>> _billetesPorMedio = [];
-    private readonly Dictionary<Guid, decimal> _totales = [];
-    private readonly Dictionary<Guid, string?> _motivos = [];
-    private string _cajaElegida = "", _contraparte = "", _segundoCustodio = "", _testigo = "", _desde = "", _hacia = "", _soporte = "", _acta = "", _medioDeAjuste = "";
-    private string? _sello, _motivo, _huella, _motivoDeAprobacion;
-    private int _claseDeMovimiento = 3, _tratamiento = 1, _claseDeAjuste = 1;
-    // 2026-11-23: Caja.FormaDeConteoDelEfectivo y lo que eligió quien cuenta.
-    private string _forma = FormasDeConteo.AElegir;
-    private bool _basePorBilletes, _pedirMotivos;
-    private decimal? _baseGlobal;
-    private readonly Dictionary<Guid, bool> _porBilletes = [];
-    private IReadOnlyList<EsperadoDeMedioDto>? _esperadoDelConteo;
-    private const int SinArqueo = 4;
+    private IReadOnlyList<(string Medio, decimal Esperado)>? _esperados;
     private CajaUnicaDto? _cajaUnica;
+    private PoliticaDeCaja _politica = PoliticaDeCaja.PorDefecto;
+    private IReadOnlyList<OpcionDeCaja> _opcionesDeCaja = [];
+    private IReadOnlyList<DenominacionDeConteo> _denominaciones = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private IReadOnlyList<SesionDeCajaDto> _otrasAbiertas = [];
+    private readonly Dictionary<Guid, int> _movimiento = [];
+    private string _contraparte = "", _segundoCustodio = "", _desde = "", _hacia = "";
+    private string? _sello, _motivo, _huella, _motivoDeAprobacion;
+    private Guid? _soporte, _aprobacion;
+    private int _claseDeMovimiento = 3;
     private decimal _valor;
-    private bool _movimientoVisible, _reclasificacionVisible, _conteoVisible, _diferenciasVisible, _ajusteVisible, _olvidada, _sorpresivo;
-    private Guid? _aprobacion;
+    private bool _movimientoVisible, _reclasificacionVisible;
     private Func<Guid, Task>? _repetir;
+
+    private static string UrlDelCierre(SesionDeCajaDto s) => $"/recaudo/sesiones/{s.PublicId}/cierre";
 
     protected override async Task OnInitializedAsync()
     {
-        using (var carga = _carga.Iniciar())
+        using (_carga.Iniciar())
         {
+            _politica = await Cliente.PoliticaAsync();
             var d = await Cliente.DenominacionesAsync();
-            if (d.IsSuccess && d.Value is not null) _denominaciones = d.Value.Where(x => x.IsActive).OrderByDescending(x => x.Value).ToList();
-            var c = await Configuracion.CajasAsync();
-            if (c.IsSuccess && c.Value is not null) _cajas = c.Value;
-            if (_cajas.Count == 1) _cajaElegida = _cajas[0].PublicId.ToString();
-            _forma = await Cliente.FormaDeConteoAsync();
-            var u = await Configuracion.UsuariosAsync();
-            if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
+            _denominaciones = d.IsSuccess && d.Value is not null
+                ? d.Value.Where(x => x.IsActive).Select(x => new DenominacionDeConteo(x.CashDenominationPublicId, x.Value, x.Kind != 1)).ToList()
+                : [];
         }
         await CargarAsync();
     }
 
     private async Task CargarAsync()
     {
-        using (var carga = _carga.Iniciar())
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ActualAsync();
+        _actual = r.IsSuccess ? r.Value : null;
+        _esperado = null;
+        _esperados = null;
+        _cajaUnica = null;
+        if (_actual is { } s)
         {
-            var r = await Cliente.ActualAsync();
-            _actual = r.IsSuccess ? r.Value : null;
-            _esperado = null;
-            _cajaUnica = null;
-            if (_actual is not null)
-            {
-                var cu = await Cliente.CajaUnicaAsync(_actual.PublicId);
-                _cajaUnica = cu.IsSuccess ? cu.Value : null;
-                _desde = _actual.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
-                _hacia = _actual.Means.Skip(1).FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
-            }
+            var cu = await Cliente.CajaUnicaAsync(s.PublicId);
+            _cajaUnica = cu.IsSuccess ? cu.Value : null;
+            // Lo esperado se ve con Receipts.Session.ViewExpected; sin el permiso, la consulta falla y no se muestra.
+            var e = await Cliente.EsperadoAsync(s.PublicId);
+            _esperado = e.IsSuccess ? e.Value : null;
+            if (_esperado is { Hidden: false } esp)
+                _esperados = esp.Means.Select(m => (s.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Name ?? m.Code, m.Expected)).ToList();
+            _desde = s.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
+            _hacia = s.Means.Skip(1).FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
         }
-        using var delDia = _cargaDelDia.Iniciar();
-        _delDia = await SesionesDelDiaYPendientesAsync();
+        else
+        {
+            var c = await Configuracion.CajasAsync();
+            _opcionesDeCaja = c.IsSuccess && c.Value is not null
+                ? c.Value.Select(x => new OpcionDeCaja(x.PublicId, $"{x.CollectionPointCode} · {x.Code} · {x.Name}")).ToList()
+                : [];
+        }
     }
 
-    private static decimal Total(IReadOnlyDictionary<Guid, int> cantidades, IReadOnlyList<DenominacionDeCajaDto> denominaciones) =>
-        denominaciones.Sum(d => d.Value * cantidades.GetValueOrDefault(d.CashDenominationPublicId));
-
-    private decimal Total(IReadOnlyDictionary<Guid, int> cantidades) => Total(cantidades, _denominaciones);
+    private async Task AbrirAsync(BaseDeApertura pedido)
+    {
+        using var g = _guardado.Iniciar();
+        var r = pedido.Billetes is { } billetes
+            ? await Cliente.AbrirAsync(new AbrirSesionRequest(pedido.Caja, Billetes(billetes)), _clave)
+            : await Cliente.AbrirAsync(new AbrirSesionRequest(pedido.Caja, [], pedido.Valor ?? 0m), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja."); return; }
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Caja abierta.");
+        await CargarAsync();
+    }
 
     private static IReadOnlyList<DenominacionContadaRequest> Billetes(IReadOnlyDictionary<Guid, int> cantidades) =>
         cantidades.Where(c => c.Value > 0).Select(c => new DenominacionContadaRequest(c.Key, c.Value)).ToList();
 
-    private Dictionary<Guid, int> CantidadesDe(Guid medio) =>
-        _billetesPorMedio.TryGetValue(medio, out var c) ? c : _billetesPorMedio[medio] = [];
-
-    private decimal TotalDe(Guid medio) => _totales.GetValueOrDefault(medio);
-
-    // Feature 015, R1 (T0358): el arqueo por lote de datáfono de las tarjetas (método «total de comprobantes»).
-    private const int MetodoPorLote = 2;
-    private readonly Dictionary<Guid, List<LoteDelArqueo>> _lotes = [];
-    private IReadOnlyList<DatafonoDto> _datafonos = [];
-
-    private sealed class LoteDelArqueo
+    private async Task AbrirMovimientoAsync()
     {
-        public Guid? Datafono { get; set; }
-        public string Numero { get; set; } = "";
-        public decimal Valor { get; set; }
-    }
-
-    private List<LoteDelArqueo> LotesDe(Guid medio)
-    {
-        if (!_lotes.TryGetValue(medio, out var lista)) _lotes[medio] = lista = [];
-        return lista;
-    }
-
-    private IReadOnlyList<LoteContadoRequest>? LotesContados(Guid medio) =>
-        LotesDe(medio).Where(l => l.Datafono is not null && !string.IsNullOrWhiteSpace(l.Numero))
-            .Select(l => new LoteContadoRequest(l.Datafono!.Value, l.Numero.Trim(), l.Valor)).ToList() is { Count: > 0 } lista ? lista : null;
-
-    private string? MotivoDe(Guid medio) => _motivos.GetValueOrDefault(medio);
-
-    private async Task AbrirAsync()
-    {
-        if (!Guid.TryParse(_cajaElegida, out var caja)) return;
-        using var g = _guardado.Iniciar();
-        var r = FormasDeConteo.PorBilletes(_forma, _basePorBilletes)
-            ? await Cliente.AbrirAsync(new AbrirSesionRequest(caja, Billetes(_base)), _clave)
-            : await Cliente.AbrirAsync(new AbrirSesionRequest(caja, [], _baseGlobal ?? 0m), _clave);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la sesión."); return; }
-        _clave = new ClaveDeOperacion();
-        _base.Clear();
-        _baseGlobal = null;
-        await Notification.SuccessAsync("Sesión abierta.");
-        await CargarAsync();
-    }
-
-    private async Task VerEsperadoAsync()
-    {
-        if (_actual is null) return;
-        using var carga = _carga.Iniciar();
-        var r = await Cliente.EsperadoAsync(_actual.PublicId);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo esperado."); return; }
-        _esperado = r.Value;
+        _movimiento.Clear();
+        _motivo = null;
+        _contraparte = "";
+        _segundoCustodio = "";
+        _sello = null;
+        _movimientoVisible = true;
+        // Las otras cajas abiertas hoy (para pasar efectivo) y, con el arqueo estricto, quién puede ser segundo custodio.
+        var abiertas = await Cliente.SesionesAsync(estado: 1);
+        _otrasAbiertas = abiertas.IsSuccess && abiertas.Value is not null ? abiertas.Value.Where(x => x.PublicId != _actual?.PublicId).ToList() : [];
+        if (_politica.Estricto && _usuarios.Count == 0)
+        {
+            var u = await Configuracion.UsuariosAsync();
+            if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
+        }
     }
 
     private async Task MoverAsync()
@@ -534,8 +277,6 @@
             Guid.TryParse(_contraparte, out var c) ? c : null, Guid.TryParse(_segundoCustodio, out var s) ? s : null, _sello), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el movimiento."); return; }
         _clave = new ClaveDeOperacion();
-        _movimiento.Clear();
-        _motivo = null;
         _movimientoVisible = false;
         await Notification.SuccessAsync($"Movimiento {r.Value!.Number} registrado.");
         await CargarAsync();
@@ -546,13 +287,13 @@
         if (_actual is null || !Guid.TryParse(_desde, out var desde) || !Guid.TryParse(_hacia, out var hacia)) return;
         if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
         using var g = _guardado.Iniciar();
-        var r = await Cliente.ReclasificarAsync(_actual.PublicId, new ReclasificacionRequest(desde, hacia, _valor, _motivo.Trim(),
-            Guid.TryParse(_soporte, out var s) ? s : null), _clave, aprobacion);
+        var r = await Cliente.ReclasificarAsync(_actual.PublicId, new ReclasificacionRequest(desde, hacia, _valor, _motivo.Trim(), _soporte), _clave, aprobacion);
         if (PideAprobacion(r, $"Reclasificar {_valor:N0}", ReclasificarAsync)) return;
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reclasificar."); return; }
         _clave = new ClaveDeOperacion();
         _reclasificacionVisible = false;
         _aprobacion = null;
+        _soporte = null;
         await Notification.SuccessAsync("Medio reclasificado.");
         await CargarAsync();
     }
@@ -573,63 +314,6 @@
         if (_repetir is not null) await _repetir(solicitud);
     }
 
-    /// <summary>
-    /// Las sesiones de hoy más las que quedaron pendientes de otro día: olvidadas (las cierra el supervisor con testigo) y cerradas con
-    /// diferencia por aprobar (2026-11-14).
-    /// </summary>
-    private async Task<IReadOnlyList<SesionDeCajaDto>> SesionesDelDiaYPendientesAsync()
-    {
-        var hoy = await Cliente.SesionesAsync(dia: DateOnly.FromDateTime(DateTime.Now));
-        var olvidadas = await Cliente.SesionesAsync(estado: SesionesClient.EstadoOlvidada);
-        var porAprobar = await Cliente.SesionesAsync(estado: SesionesClient.EstadoConDiferenciaPorAprobar);
-        return SesionesClient.DelDiaYPendientes(
-            [.. hoy.Value ?? [], .. olvidadas.Value ?? [], .. porAprobar.Value ?? []]);
-    }
-
-    private void AbrirConteo(SesionDeCajaDto sesion, bool olvidada)
-    {
-        _sesionDelConteo = sesion;
-        _olvidada = olvidada;
-        _sorpresivo = false;
-        _billetesPorMedio.Clear();
-        _totales.Clear();
-        _motivos.Clear();
-        _lotes.Clear();
-        _porBilletes.Clear();
-        _pedirMotivos = false;
-        _esperadoDelConteo = null;
-        _cajaDelConteo = null;
-        _testigo = "";
-        _clave = new ClaveDeOperacion();
-        _conteoVisible = true;
-        if (sesion.Means.Any(m => m.CountMethod == MetodoPorLote) && _datafonos.Count == 0) _ = CargarDatafonosAsync();
-        if (!sesion.BlindCount) _ = CargarEsperadoDelConteoAsync(sesion);
-    }
-
-    /// <summary>Lo esperado por medio para mostrar la diferencia mientras se cuenta (sin arqueo ciego y con permiso de verlo).</summary>
-    private async Task CargarEsperadoDelConteoAsync(SesionDeCajaDto sesion)
-    {
-        var cu = await Cliente.CajaUnicaAsync(sesion.PublicId);
-        _cajaDelConteo = cu.IsSuccess ? cu.Value : null;
-        var r = await Cliente.EsperadoAsync(sesion.PublicId);
-        if (r.IsSuccess && r.Value is { Hidden: false } e && _sesionDelConteo?.PublicId == sesion.PublicId)
-        {
-            _esperadoDelConteo = e.Means;
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>Lo esperado del medio; con caja única, más lo que lleva la caja del punto de venta (al cerrar entra a esta sesión).</summary>
-    private decimal? EsperadoDe(Guid medio)
-    {
-        var propio = _esperadoDelConteo?.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected;
-        if (propio is null) return null;
-        var delPunto = _cajaDelConteo is { PosSessionOpen: true } cu ? cu.Means.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected ?? 0m : 0m;
-        return propio + delPunto;
-    }
-
-    private CajaUnicaDto? _cajaDelConteo;
-
     private async Task AbrirCajaDelPuntoDeVentaAsync()
     {
         if (_actual is null) return;
@@ -638,133 +322,5 @@
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja del punto de venta."); return; }
         await Notification.SuccessAsync("Caja del punto de venta abierta.");
         await CargarAsync();
-    }
-
-    private bool PorBilletesDe(Guid medio) => _porBilletes.GetValueOrDefault(medio);
-
-    /// <summary>Lo contado de un medio como lo va a leer el servidor.</summary>
-    private decimal ContadoDe(MedioDeSesionDto m)
-    {
-        var id = m.PaymentMeansPublicId;
-        if (m.Class == 1) return FormasDeConteo.PorBilletes(_forma, PorBilletesDe(id)) ? Total(CantidadesDe(id)) : TotalDe(id);
-        if (m.CountMethod == MetodoPorLote && LotesContados(id) is { } lotes) return lotes.Sum(l => l.Amount);
-        return TotalDe(id);
-    }
-
-    private void AbrirSorpresivo(SesionDeCajaDto sesion)
-    {
-        AbrirConteo(sesion, olvidada: false);
-        _sorpresivo = true;
-        _acta = "";
-    }
-
-    private async Task CargarDatafonosAsync()
-    {
-        var d = await CatalogoDeMedios.DatafonosAsync(activos: true);
-        if (d.IsSuccess && d.Value is not null) { _datafonos = d.Value; StateHasChanged(); }
-    }
-
-    private IReadOnlyList<ConteoDeMedioRequest> Conteos() =>
-        (_sesionDelConteo?.Means ?? []).Select(m => m.Class == 1
-            ? FormasDeConteo.PorBilletes(_forma, PorBilletesDe(m.PaymentMeansPublicId))
-                ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, Denominations: Billetes(CantidadesDe(m.PaymentMeansPublicId)), Reason: MotivoDe(m.PaymentMeansPublicId))
-                : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))
-            : m.CountMethod == MetodoPorLote && LotesContados(m.PaymentMeansPublicId) is { } lotes
-                ? new ConteoDeMedioRequest(m.PaymentMeansPublicId, TerminalBatches: lotes, Reason: MotivoDe(m.PaymentMeansPublicId))
-                : new ConteoDeMedioRequest(m.PaymentMeansPublicId, Total: TotalDe(m.PaymentMeansPublicId), Reason: MotivoDe(m.PaymentMeansPublicId))).ToList();
-
-    private async Task ContarAsync()
-    {
-        if (_sesionDelConteo is null) return;
-        using var g = _guardado.Iniciar();
-        Services.Inventario.ResultadoDeInventario<ArqueoDto> r;
-        if (_sorpresivo)
-        {
-            if (!Guid.TryParse(_acta, out var acta)) { await Notification.WarningAsync("Adjunte el acta del arqueo sorpresivo."); return; }
-            r = await Cliente.ArqueoSorpresivoAsync(new SorpresivoRequest(_sesionDelConteo.PublicId, acta, Conteos(), Guid.TryParse(_testigo, out var t) ? t : null), _clave);
-        }
-        else if (_olvidada)
-        {
-            if (!Guid.TryParse(_testigo, out var testigo)) { await Notification.WarningAsync("Elija el testigo."); return; }
-            r = await Cliente.CerrarOlvidadaAsync(_sesionDelConteo.PublicId, new CerrarOlvidadaRequest(testigo, Conteos()), _clave);
-        }
-        else
-        {
-            r = await Cliente.ContarAsync(_sesionDelConteo.PublicId, new ConteoRequest(Conteos()), _clave);
-        }
-        if (r.ErrorCode == "Receipts.Count.ReasonRequired")
-        {
-            // En el arqueo ciego la diferencia se sabe aquí: se muestran los motivos para escribirlos.
-            _pedirMotivos = true;
-            await Notification.WarningAsync(r.ErrorMessage ?? "Hay diferencia: escriba el motivo.");
-            return;
-        }
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar lo contado."); return; }
-        _clave = new ClaveDeOperacion();
-        _conteoVisible = false;
-        var arqueo = r.Value!;
-        if (arqueo.AmountToApprove > 0)
-            await Notification.WarningAsync($"La sesión quedó con diferencias por aprobar por {arqueo.AmountToApprove:N0}: otra persona tiene que aprobarlas.");
-        else
-            await Notification.SuccessAsync(_sorpresivo ? "Arqueo sorpresivo registrado." : "Sesión cerrada.");
-        await CargarAsync();
-    }
-
-    private async Task VerDiferenciasAsync(SesionDeCajaDto sesion)
-    {
-        _sesionDelConteo = sesion;
-        _motivo = null;
-        _clave = new ClaveDeOperacion();
-        _diferenciasVisible = true;
-        using var g = _guardado.Iniciar();
-        var r = await Cliente.ArqueosAsync(sesion.PublicId);
-        _pendientes = r.IsSuccess && r.Value is not null ? r.Value.SelectMany(a => a.Lines).Where(l => l.PendingApproval).ToList() : [];
-    }
-
-    private async Task AprobarAsync(LineaDeArqueoDto linea)
-    {
-        if (_sesionDelConteo is null) return;
-        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo de la aprobación."); return; }
-        using var g = _guardado.Iniciar();
-        var r = await Cliente.AprobarDiferenciaAsync(_sesionDelConteo.PublicId, linea.PublicId,
-            new AprobarDiferenciaRequest(_motivo.Trim(), linea.Difference < 0 ? _tratamiento : null), _clave);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar la diferencia."); return; }
-        _clave = new ClaveDeOperacion();
-        _diferenciasVisible = false;
-        await Notification.SuccessAsync("Diferencia aprobada.");
-        await CargarAsync();
-    }
-
-    private void AbrirAjuste(SesionDeCajaDto sesion)
-    {
-        _sesionDelConteo = sesion;
-        _medioDeAjuste = sesion.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
-        _valor = 0;
-        _soporte = "";
-        _motivo = null;
-        _clave = new ClaveDeOperacion();
-        _ajusteVisible = true;
-    }
-
-    private async Task AjustarAsync(Guid? aprobacion)
-    {
-        if (_sesionDelConteo is null || !Guid.TryParse(_medioDeAjuste, out var medio)) return;
-        if (string.IsNullOrWhiteSpace(_motivo) || !Guid.TryParse(_soporte, out var soporte)) { await Notification.WarningAsync("Escriba el motivo y adjunte el soporte."); return; }
-        using var g = _guardado.Iniciar();
-        var r = await Cliente.AjustarAsync(_sesionDelConteo.PublicId, new AjusteRequest(_claseDeAjuste, medio, _valor, _motivo.Trim(), soporte), _clave, aprobacion);
-        if (PideAprobacion(r, $"Ajuste de {_valor:N0}", AjustarAsync)) return;
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el ajuste."); return; }
-        _clave = new ClaveDeOperacion();
-        _ajusteVisible = false;
-        _aprobacion = null;
-        await Notification.SuccessAsync($"Ajuste {r.Value!.Number} registrado.");
-        await CargarAsync();
-    }
-
-    private async Task DescargarCierreAsync(SesionDeCajaDto sesion)
-    {
-        var r = await Cliente.InformeDeCierreAsync(sesion.PublicId);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el informe."); return; }
-        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 }

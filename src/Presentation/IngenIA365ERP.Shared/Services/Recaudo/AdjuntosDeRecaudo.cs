@@ -8,6 +8,9 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 public static class AdjuntosDeRecaudo
 {
     public const string FirmaDeEgreso = "ReceiptsDisbursementSignature";
+
+    /// <summary>2026-11-24: el soporte de una operación de la sesión de caja —el acta del arqueo sorpresivo, el soporte del ajuste o de la reclasificación— (dueño: la sesión).</summary>
+    public const string SoporteDeCaja = "ReceiptsCashSupport";
     public const string SoporteDeConsignacionReportada = "ReceiptsReportedDepositSupport";
     public const string ComprobanteDeCargueUiaf = "ReceiptsCashTransactionReportReceipt";
 

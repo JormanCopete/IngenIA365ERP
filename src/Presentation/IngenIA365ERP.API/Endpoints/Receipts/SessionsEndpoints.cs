@@ -30,6 +30,7 @@ public class SessionsEndpoints : ICarterModule
     public const string VerInformes = "Receipts.Reports.View";
     public const string AbrirCajaDelPuntoDeVenta = "Inventory.CashSessions.Open";
     public const string CerrarCajaDelPuntoDeVenta = "Inventory.CashSessions.Close";
+    public const string VerCajasDelPuntoDeVenta = "Inventory.CashSessions.View";
 
     /// <summary>El encabezado con la solicitud aprobada al repetir una operación con aprobador presente.</summary>
     public const string EncabezadoDeAprobacion = "X-Approval-Request";
@@ -67,6 +68,10 @@ public class SessionsEndpoints : ICarterModule
         // 2026-11-23: cómo se cuenta el efectivo (Caja.FormaDeConteoDelEfectivo); lo pide también la caja del punto de venta.
         g.MapGet("/cash-count-mode", async (ISender s, CancellationToken ct) => await s.Send(new GetCashCountModeQuery(), ct))
             .WithName("Receipts_Sessions_CashCountMode").RequirePermission(new AlgunPermiso(Abrir, Cerrar, AbrirCajaDelPuntoDeVenta, CerrarCajaDelPuntoDeVenta));
+        // 2026-11-24: la forma de contar y si el arqueo es estricto (Caja.ArqueoEstricto); la piden las dos cajas.
+        g.MapGet("/count-policy", async (ISender s, CancellationToken ct) => await s.Send(new GetCashCountPolicyQuery(), ct))
+            .WithName("Receipts_Sessions_CountPolicy")
+            .RequirePermission(new AlgunPermiso(Abrir, Cerrar, Ver, CerrarOlvidada, AbrirCajaDelPuntoDeVenta, CerrarCajaDelPuntoDeVenta, VerCajasDelPuntoDeVenta));
         g.MapGet("/current", async (ISender s, CancellationToken ct) => await s.Send(new GetCurrentSessionQuery(), ct))
             .WithName("Receipts_Sessions_Current").RequirePermission(Abrir);
         g.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetCashSessionQuery(id), ct))
@@ -165,11 +170,11 @@ public class SessionsEndpoints : ICarterModule
 
     public sealed record AprobacionRequest(string? Reason, CountTreatment? Treatment);
 
-    public sealed record OlvidadaRequest(Guid WitnessUserPublicId, IReadOnlyList<ConteoDeMedioDto>? Means);
+    public sealed record OlvidadaRequest(Guid? WitnessUserPublicId, IReadOnlyList<ConteoDeMedioDto>? Means);
 
     public sealed record AjusteRequest(SessionAdjustmentKind Kind, Guid PaymentMeansPublicId, decimal Amount, string? Reason, Guid? SupportAttachmentPublicId);
 
-    public sealed record SorpresivoRequest(Guid SessionPublicId, Guid MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioDto>? Means, Guid? WitnessUserPublicId);
+    public sealed record SorpresivoRequest(Guid SessionPublicId, Guid? MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioDto>? Means, Guid? WitnessUserPublicId);
 
     public sealed record AutorizacionRequest(Guid AttachmentPublicId);
 

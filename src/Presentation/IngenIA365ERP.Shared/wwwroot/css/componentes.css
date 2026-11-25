@@ -1906,3 +1906,22 @@ input[type="checkbox"], input[type="radio"] {
     color: var(--texto-primario);
 }
 .seleccion-multiple-acciones { display: flex; gap: var(--gap-md); font-size: var(--texto-sm); }
+
+/* 2026-11-24 (pedido del dueño): la caja común de Comercial y Recaudo — abrir, mi caja abierta, el arqueo en dos pasos y la consulta de las cajas. */
+.caja-apertura, .caja-abierta { max-width: 760px; }
+.caja-resumen { display: flex; flex-wrap: wrap; gap: var(--gap-md); margin: 0 0 var(--gap-sm); }
+.caja-resumen > div { display: flex; flex-direction: column; min-width: 110px; }
+.caja-resumen dt { font-size: var(--texto-xs); color: var(--texto-secundario); }
+.caja-resumen dd { margin: 0; font-weight: var(--peso-fuerte); }
+.caja-esperado { max-width: 420px; }
+.caja-esperado caption { text-align: left; padding-bottom: var(--pad-xs); }
+.caja-acciones { margin-top: var(--gap-sm); }
+.caja-arqueo { display: flex; flex-direction: column; gap: var(--gap-md); max-width: 900px; }
+.caja-pasos { display: flex; gap: var(--gap-sm); list-style: none; margin: 0; padding: 0; }
+.caja-pasos > li { padding: var(--pad-xs) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio-pill); color: var(--texto-secundario);
+    font-size: var(--texto-sm); }
+.caja-pasos > li.activo { border-color: var(--acento); background: var(--acento-suave); color: var(--texto-primario); font-weight: var(--peso-medio); }
+.caja-medio h5 { margin: 0 0 var(--gap-xs); }
+.caja-filtros { align-items: flex-end; }
+.data-grid tr.fila-alerta > td { background: var(--alerta-fondo); }
+.acciones-fila { white-space: nowrap; }
