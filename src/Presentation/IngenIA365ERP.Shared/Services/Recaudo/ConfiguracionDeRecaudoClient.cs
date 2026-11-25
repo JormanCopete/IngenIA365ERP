@@ -202,6 +202,27 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
     public Task<ResultadoDeInventario<EmptyResponse>> QuitarCuentaDeTransferenciaAsync(Guid id, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{Base}/transfer-accounts/{id}/disable", null, clave, ct);
 
+    // ------------------------------------------------------------------------------------------- parámetros (2026-11-25) --
+
+    /// <summary>Los módulos de parámetros de este cliente: Recaudo (<c>RCD</c>) y Tesorería (<c>TES</c>), cada uno con su ruta y su permiso.</summary>
+    public const string ModuloRecaudo = "RCD";
+    public const string ModuloTesoreria = "TES";
+
+    private static string RutaDeParametros(string modulo) => modulo == ModuloTesoreria ? "/api/treasury/parameters" : $"{Base}/parameters";
+
+    /// <summary>Las claves del módulo con su valor vigente (<c>Receipts.Setup.View</c> o <c>Treasury.Parameters.View</c>).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<ParametroDto>>> ParametrosAsync(string modulo = ModuloRecaudo, CancellationToken ct = default) =>
+        Get<IReadOnlyList<ParametroDto>>(RutaDeParametros(modulo), ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<VigenciaDeParametroDto>>> HistorialDeParametroAsync(string clave, string modulo = ModuloRecaudo,
+        CancellationToken ct = default) =>
+        Get<IReadOnlyList<VigenciaDeParametroDto>>($"{RutaDeParametros(modulo)}/{Uri.EscapeDataString(clave)}/history", ct);
+
+    /// <summary>Una vigencia nueva de una clave del módulo (<c>Receipts.Setup.Manage</c> o <c>Treasury.Parameters.Manage</c>): el valor, desde cuándo y el motivo.</summary>
+    public Task<ResultadoDeInventario<VigenciaCreadaDto>> NuevaVigenciaAsync(string clave, NuevaVigenciaDeRecaudoRequest r, ClaveDeOperacion operacion,
+        string modulo = ModuloRecaudo, CancellationToken ct = default) =>
+        Enviar<VigenciaCreadaDto>(HttpMethod.Post, $"{RutaDeParametros(modulo)}/{Uri.EscapeDataString(clave)}/versions", r, operacion, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion clave, CancellationToken ct) =>

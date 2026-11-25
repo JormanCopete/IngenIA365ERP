@@ -141,4 +141,16 @@ public static partial class ErroresDeRecaudo
         new { from = desde });
 
     public static Error SobranteNoEsPasivo() => new(CodigoSobranteNoEsPasivo, "El sobrante ya se llevó a ingreso o se devolvió.");
+
+    // 2026-11-25, caja única (nuevos).
+    public const string CodigoPuntoDeVentaYaCerrado = "Receipts.SingleSession.PointOfSaleAlreadyClosed";
+    public const string CodigoPuntoDeVentaEnNegativo = "Receipts.SingleSession.PointOfSaleNegative";
+
+    public static Error PuntoDeVentaYaCerrado() => new(CodigoPuntoDeVentaYaCerrado,
+        "La caja del punto de venta de esta sesión ya se cerró con el arqueo de Recaudo: termine el arqueo. Para vender de nuevo, abra mañana o una sesión nueva.");
+
+    public static Error PuntoDeVentaEnNegativo(string medio, decimal valor) => new ErrorConDatos(CodigoPuntoDeVentaEnNegativo,
+        $"En la caja del punto de venta salió más {medio} del que entró ({Math.Abs(valor):N0}), por ejemplo por una devolución: registre en el punto de venta "
+        + "un ingreso desde la caja fuerte por ese valor (Movimiento de caja) y vuelva a arquear.",
+        new { paymentMeans = medio, amount = valor });
 }

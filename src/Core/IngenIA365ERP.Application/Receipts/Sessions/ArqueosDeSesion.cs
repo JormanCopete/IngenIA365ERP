@@ -21,52 +21,29 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
     /// <param name="Estricto">Si rigió el arqueo estricto (<c>Caja.ArqueoEstricto</c>); sin él, el cierre resuelve las diferencias sin otra persona.</param>
     public sealed record ArqueoRegistrado(CashCount Arqueo, IReadOnlyList<CashCountLine> Lineas, ResultadoDeArqueo Resultado, bool Estricto = true);
 
-    /// <summary>Arquea e inserta; con una diferencia sin motivo, el error y nada se escribe.</summary>
-    public async Task<Result<ArqueoRegistrado>> RegistrarAsync(CashSession sesion, CashCountKind clase, IReadOnlyList<ConteoDeMedioDto> contado, int contadoPor,
-        int? testigo, Guid? acta, DateTime ahora, CancellationToken ct)
+    /// <summary>
+    /// 2026-11-25, caja única: arquea sin escribir nada, sumando a lo esperado lo que la caja vinculada del punto de venta recibió y todavía no entró a la
+    /// sesión (<paramref name="delPuntoDeVenta"/>, por <c>PaymentMeansId</c>). El coordinador lo pregunta antes de cerrar la caja del punto de venta: un
+    /// arqueo que se va a rechazar (un motivo que falta, el conteo por billetes) no la deja cerrada con Recaudo abierta.
+    /// </summary>
+    public async Task<Result> ComprobarAsync(CashSession sesion, IReadOnlyList<ConteoDeMedioDto> contado, IReadOnlyDictionary<int, decimal>? delPuntoDeVenta,
+        CancellationToken ct)
     {
+        var evaluado = await EvaluarAsync(sesion, contado, delPuntoDeVenta, ct);
+        return evaluado.IsFailure ? Result.Failure(evaluado.Error) : Result.Success();
+    }
+
+    /// <summary>
+    /// Arquea e inserta; con una diferencia sin motivo, el error y nada se escribe. <paramref name="delPuntoDeVenta"/>: lo de la caja vinculada que todavía
+    /// no entró a la sesión (el arqueo sorpresivo de una caja única, 2026-11-25: el cajón es uno solo).
+    /// </summary>
+    public async Task<Result<ArqueoRegistrado>> RegistrarAsync(CashSession sesion, CashCountKind clase, IReadOnlyList<ConteoDeMedioDto> contado, int contadoPor,
+        int? testigo, Guid? acta, DateTime ahora, CancellationToken ct, IReadOnlyDictionary<int, decimal>? delPuntoDeVenta = null)
+    {
+        var evaluado = await EvaluarAsync(sesion, contado, delPuntoDeVenta, ct);
+        if (evaluado.IsFailure) return Result.Failure<ArqueoRegistrado>(evaluado.Error);
+        var (resultado, detalle, estricto) = (evaluado.Value.Resultado, evaluado.Value.Detalle, evaluado.Value.Estricto);
         var sellados = ValoresSelladosDeLaSesion.De(sesion);
-        var esperado = await SesionesDeCaja.EsperadoAsync(db, sesion, ct);
-        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) no hay arqueo ciego, el motivo se pide sólo fuera de la tolerancia y el faltante
-        // va al gasto (decisión del dueño).
-        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
-
-        // 2026-11-23: con Caja.FormaDeConteoDelEfectivo = Denominaciones el efectivo no se registra con un solo valor.
-        if (contado.Any(c => c.Total is > 0m && (c.Denominations is null || c.Denominations.Count == 0)
-                && sellados.Means.FirstOrDefault(m => m.PublicId == c.PaymentMeansPublicId)?.Class == Domain.Enums.Core.PaymentMeansClass.Cash)
-            && await FormaDeConteoDelEfectivo.ExigeDenominacionesAsync(parametros, reloj.HoyLocal, ct))
-            return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.ConteoPorDenominaciones());
-
-        var conteos = new List<ConteoDeMedio>();
-        var detalle = new Dictionary<int, (List<(int Id, int Cantidad, decimal Valor)> Denominaciones, List<(int Terminal, string Lote, decimal Valor)> Lotes,
-            List<ReferenciaContadaDto> Referencias)>();
-        foreach (var c in contado)
-        {
-            var medio = sellados.Means.FirstOrDefault(m => m.PublicId == c.PaymentMeansPublicId);
-            if (medio is null) return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.NoEncontrado("El medio de la sesión"));
-            var denominaciones = await SesionesDeCaja.DenominacionesAsync(db, c.Denominations, ct);
-            if (denominaciones.IsFailure) return Result.Failure<ArqueoRegistrado>(denominaciones.Error);
-            var lotes = new List<(int, string, decimal)>();
-            foreach (var l in c.TerminalBatches ?? [])
-            {
-                var terminal = await db.CardTerminals.AsNoTracking().Where(t => t.PublicId == l.CardTerminalPublicId).Select(t => (int?)t.Id).FirstOrDefaultAsync(ct);
-                if (terminal is null) return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.NoEncontrado("El datáfono"));
-                lotes.Add((terminal.Value, l.BatchNumber.Trim(), l.Amount));
-            }
-            var referencias = (c.References ?? []).ToList();
-            detalle[medio.PaymentMeansId] = (denominaciones.Value.Select(d => (d.Denominacion.Id, d.Cantidad, d.Valor)).ToList(), lotes, referencias);
-            conteos.Add(new ConteoDeMedio(
-                medio.PaymentMeansId,
-                c.Total,
-                denominaciones.Value.Select(d => new DenominacionContada(d.Denominacion.Value, d.Cantidad)).ToList(),
-                referencias.Select(r => new ReferenciaContada(r.Reference, r.Amount, r.Confirmed)).ToList(),
-                lotes.Select(l => new LoteContado(l.Item1, l.Item2, l.Item3)).ToList(),
-                c.Reason));
-        }
-
-        var resultado = ArqueoDeCaja.Arquear(esperado, conteos, estricto ? sellados.ShortageTreatment : CountTreatment.Expense,
-            motivoSoloFueraDeTolerancia: !estricto);
-        if (resultado.SinMotivo.Count > 0) return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.SinMotivo(resultado.SinMotivo));
 
         var arqueo = new CashCount
         {
@@ -79,6 +56,73 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
             MinutesAttachmentPublicId = acta,
             VerificationCode = CloseCollectionPointDayCommandHandler.CodigoDeVerificacion(),
         };
+        return await InsertarAsync(arqueo, resultado, detalle, estricto, ct);
+    }
+
+    /// <summary>El detalle de lo contado en un medio, resuelto a Id (denominaciones, lotes y referencias).</summary>
+    private sealed record DetalleContado(List<(int Id, int Cantidad, decimal Valor)> Denominaciones, List<(int Terminal, string Lote, decimal Valor)> Lotes,
+        List<ReferenciaContadaDto> Referencias);
+
+    /// <summary>El arqueo evaluado, todavía sin escribir.</summary>
+    private sealed record Evaluado(ResultadoDeArqueo Resultado, Dictionary<int, DetalleContado> Detalle, bool Estricto);
+
+    /// <summary>Lo contado resuelto y arqueado contra lo esperado (más lo del punto de venta), sin escribir.</summary>
+    private async Task<Result<Evaluado>> EvaluarAsync(CashSession sesion, IReadOnlyList<ConteoDeMedioDto> contado,
+        IReadOnlyDictionary<int, decimal>? delPuntoDeVenta, CancellationToken ct)
+    {
+        var sellados = ValoresSelladosDeLaSesion.De(sesion);
+        var esperado = await SesionesDeCaja.EsperadoAsync(db, sesion, ct);
+        if (delPuntoDeVenta is { Count: > 0 })
+            esperado = esperado.Select(e => delPuntoDeVenta.TryGetValue(e.Medio.PaymentMeansId, out var v) && v > 0m ? e with { Entradas = e.Entradas + v } : e)
+                .ToList();
+        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) no hay arqueo ciego, el motivo se pide sólo fuera de la tolerancia y el faltante
+        // va al gasto (decisión del dueño).
+        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
+
+        // 2026-11-23: con Caja.FormaDeConteoDelEfectivo = Denominaciones el efectivo no se registra con un solo valor.
+        if (contado.Any(c => c.Total is > 0m && (c.Denominations is null || c.Denominations.Count == 0)
+                && sellados.Means.FirstOrDefault(m => m.PublicId == c.PaymentMeansPublicId)?.Class == Domain.Enums.Core.PaymentMeansClass.Cash)
+            && await FormaDeConteoDelEfectivo.ExigeDenominacionesAsync(parametros, reloj.HoyLocal, ct))
+            return Falla(ErroresDeRecaudo.ConteoPorDenominaciones());
+
+        var conteos = new List<ConteoDeMedio>();
+        var detalle = new Dictionary<int, DetalleContado>();
+        foreach (var c in contado)
+        {
+            var medio = sellados.Means.FirstOrDefault(m => m.PublicId == c.PaymentMeansPublicId);
+            if (medio is null) return Falla(ErroresDeRecaudo.NoEncontrado("El medio de la sesión"));
+            var denominaciones = await SesionesDeCaja.DenominacionesAsync(db, c.Denominations, ct);
+            if (denominaciones.IsFailure) return Falla(denominaciones.Error);
+            var lotes = new List<(int, string, decimal)>();
+            foreach (var l in c.TerminalBatches ?? [])
+            {
+                var terminal = await db.CardTerminals.AsNoTracking().Where(t => t.PublicId == l.CardTerminalPublicId).Select(t => (int?)t.Id).FirstOrDefaultAsync(ct);
+                if (terminal is null) return Falla(ErroresDeRecaudo.NoEncontrado("El datáfono"));
+                lotes.Add((terminal.Value, l.BatchNumber.Trim(), l.Amount));
+            }
+            var referencias = (c.References ?? []).ToList();
+            detalle[medio.PaymentMeansId] = new DetalleContado(denominaciones.Value.Select(d => (d.Denominacion.Id, d.Cantidad, d.Valor)).ToList(), lotes, referencias);
+            conteos.Add(new ConteoDeMedio(
+                medio.PaymentMeansId,
+                c.Total,
+                denominaciones.Value.Select(d => new DenominacionContada(d.Denominacion.Value, d.Cantidad)).ToList(),
+                referencias.Select(r => new ReferenciaContada(r.Reference, r.Amount, r.Confirmed)).ToList(),
+                lotes.Select(l => new LoteContado(l.Item1, l.Item2, l.Item3)).ToList(),
+                c.Reason));
+        }
+
+        var resultado = ArqueoDeCaja.Arquear(esperado, conteos, estricto ? sellados.ShortageTreatment : CountTreatment.Expense,
+            motivoSoloFueraDeTolerancia: !estricto);
+        if (resultado.SinMotivo.Count > 0) return Falla(ErroresDeRecaudo.SinMotivo(resultado.SinMotivo));
+        return Result.Success(new Evaluado(resultado, detalle, estricto));
+
+        static Result<Evaluado> Falla(Error e) => Result.Failure<Evaluado>(e);
+    }
+
+    /// <summary>Inserta el arqueo arqueado con sus líneas y su detalle.</summary>
+    private async Task<Result<ArqueoRegistrado>> InsertarAsync(CashCount arqueo, ResultadoDeArqueo resultado, Dictionary<int, DetalleContado> detalle,
+        bool estricto, CancellationToken ct)
+    {
         db.ReceiptsCashCounts.Add(arqueo);
         await db.SaveChangesAsync(ct);
         var lineas = new List<CashCountLine>();

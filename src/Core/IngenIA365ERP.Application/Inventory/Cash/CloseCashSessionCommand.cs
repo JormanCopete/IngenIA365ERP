@@ -128,8 +128,11 @@ public sealed class CloseCashSessionCommandHandler(
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Falla(ErroresDelDocumento.SinUsuario());
 
-        // (1) La sesión.
-        var sesion = await sesiones.VisibleAsync(request.CashSessionPublicId, seguir: true, ct);
+        // (1) La sesión. 2026-11-25: la que cierra la caja única la busca sin el filtro de cajero: la cierra el arqueo de Recaudo, que ya comprobó quién
+        // arquea (el cajero o, con su sesión olvidada, un supervisor que puede no ver las sesiones ajenas del punto de venta).
+        var sesion = request.DesdeLaCajaUnica
+            ? await db.CashSessions.FirstOrDefaultAsync(s => s.PublicId == request.CashSessionPublicId && s.LinkedSessionPublicId != null, ct)
+            : await sesiones.VisibleAsync(request.CashSessionPublicId, seguir: true, ct);
         if (sesion is null) return Falla(ErroresDeCaja.SessionNotFound());
         if (!sesion.EstaAbierta || !await toque.TocarAsync(sesion.Id, reloj.UtcNow, ct)) return Falla(ErroresDelPos.CashSessionNotOpen());
         if (sesion.LinkedSessionPublicId is not null && !request.DesdeLaCajaUnica) return Falla(ErroresDeCaja.ClosesWithReceipts());

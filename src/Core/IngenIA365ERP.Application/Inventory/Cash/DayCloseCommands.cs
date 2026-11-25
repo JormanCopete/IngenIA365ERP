@@ -122,7 +122,10 @@ public sealed class ExecuteDayCloseCommandHandler(
         if (request.Remittance is { } remesa)
         {
             if (remesas is null) return Falla(ErroresDeCaja.DayCloseRemittanceUnavailable());
-            var efectivo = await EfectivoContadoAsync(cierre, ct);
+            // 2026-11-25: el efectivo de las sesiones de la caja única ya pasó a Recaudo por el puente: no se remesa desde aquí.
+            var propias = sesiones.Where(s => s.LinkedSessionPublicId is null).Select(s => s.Id).ToList();
+            IEnumerable<DayCloseLine> deLasPropias = propias.Count == sesiones.Count ? cierre.Lines : await ConsolidarAsync(propias, ct);
+            var efectivo = await EfectivoContadoAsync(deLasPropias, ct);
             if (remesa.Amount > efectivo) return Falla(ErroresDeCaja.DayCloseRemittanceOverCash(remesa.Amount, efectivo));
             var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == punto.BranchId).Select(b => b.PublicId).FirstAsync(ct);
             try
@@ -244,12 +247,13 @@ public sealed class ExecuteDayCloseCommandHandler(
             IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.Confirmacion, [contenido], modo), ct);
     }
 
-    private async Task<decimal> EfectivoContadoAsync(DayClose cierre, CancellationToken ct)
+    private async Task<decimal> EfectivoContadoAsync(IEnumerable<DayCloseLine> lineas, CancellationToken ct)
     {
-        var medios = cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null).Select(l => l.PaymentMeansId).Distinct().ToList();
+        var porMedio = lineas.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null).ToList();
+        var medios = porMedio.Select(l => l.PaymentMeansId).Distinct().ToList();
         var deEfectivo = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters()
             .Where(m => medios.Contains(m.Id) && m.Class == PaymentMeansClass.Cash).Select(m => m.Id).ToListAsync(ct);
-        return cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null && deEfectivo.Contains(l.PaymentMeansId)).Sum(l => l.CountedAmount);
+        return porMedio.Where(l => deEfectivo.Contains(l.PaymentMeansId)).Sum(l => l.CountedAmount);
     }
 }
 

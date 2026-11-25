@@ -132,26 +132,57 @@ public sealed class LinkPointOfSaleRegisterCommandHandler(IApplicationDbContext 
     }
 }
 
-/// <summary>El coordinador de la caja única: abre, informa y prepara el cierre de la caja del punto de venta vinculada. Sin transacción propia. (nuevo)</summary>
-public sealed class CajaUnica(IApplicationDbContext db, ISender sender, ParametrosDeCaja parametros, IDateTimeService reloj)
+/// <summary>
+/// El coordinador de la caja única: abre, informa y prepara el cierre de la caja del punto de venta vinculada. Sin transacción propia. (nuevo)
+/// 2026-11-25 (revisión de la caja única, pedido del dueño: «simple y seguro»):
+/// <list type="bullet">
+/// <item>el cierre se <b>comprueba antes</b> de tocar la caja del punto de venta (<see cref="CheckClosingCountQuery"/> con lo que ésta recibió): un arqueo
+/// que se va a rechazar ya no la deja cerrada con Recaudo abierta;</item>
+/// <item>lo que entra a Recaudo es lo que <b>contó</b> el cierre cuadrado (no el esperado en vivo, que tras el retiro a la caja fuerte deja el efectivo en
+/// cero), y si ya entró no se vuelve a pedir: repetir el arqueo, con o sin otro cuerpo, ya no choca con su clave;</item>
+/// <item>cerrada la caja del punto de venta con el arqueo, no se abre otra en la misma sesión (lo de esa segunda nunca entraba);</item>
+/// <item>un medio que en el punto de venta quedó en negativo (salió más de lo que entró) se rechaza antes de cerrar, con qué hacer;</item>
+/// <item>la sesión de Recaudo tiene que estar al alcance de quien pregunta, y la caja del punto de venta la abre su cajero.</item>
+/// </list>
+/// </summary>
+public sealed class CajaUnica(IApplicationDbContext db, ISender sender, ParametrosDeCaja parametros, IDateTimeService reloj, IAlcanceDeRecaudo alcance,
+    IActorActual actorActual, SegregacionDeRecaudo segregacion)
 {
-    /// <summary>Si la caja única rige y qué caja del punto de venta va con la caja de la sesión.</summary>
+    private static readonly IReadOnlyDictionary<int, decimal> Nada = new Dictionary<int, decimal>();
+
+    /// <summary>Si la caja única rige y qué caja del punto de venta va con la caja de la sesión (al alcance de quien pregunta).</summary>
     private async Task<(bool Rige, Guid? Caja, CashSession? Sesion)> LeerAsync(Guid sesionDeRecaudo, CancellationToken ct)
     {
-        var sesion = await db.ReceiptsCashSessions.AsNoTracking().FirstOrDefaultAsync(s => s.PublicId == sesionDeRecaudo, ct);
+        var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, sesionDeRecaudo, seguir: false, ct);
         if (sesion is null) return (false, null, null);
         var caja = await db.CashBoxes.AsNoTracking().Where(c => c.Id == sesion.CashBoxId).Select(c => c.PosCashRegisterPublicId).FirstOrDefaultAsync(ct);
         var rige = await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaSesionUnica, reloj.HoyLocal, ct);
         return (rige, caja, sesion);
     }
 
-    /// <summary>Abre la caja del punto de venta vinculada si la caja única rige, la caja tiene una y no hay una abierta ya. El error, tal cual.</summary>
+    /// <summary>¿Ya entró a la sesión lo de la caja del punto de venta?</summary>
+    private Task<bool> YaEntroAsync(Guid sesionDeRecaudo, CancellationToken ct) =>
+        (from m in db.CashMovements.AsNoTracking()
+         join s in db.ReceiptsCashSessions.AsNoTracking() on m.CashSessionId equals s.Id
+         where s.PublicId == sesionDeRecaudo && m.Kind == CashMovementKindR.FromPointOfSale
+         select m.Id).AnyAsync(ct);
+
+    /// <summary>
+    /// Abre la caja del punto de venta vinculada si la caja única rige, la caja tiene una y no hay una abierta ya. La abre el cajero de la sesión; si la de
+    /// esta sesión ya se cerró con el arqueo, no abre otra (<c>Receipts.SingleSession.PointOfSaleAlreadyClosed</c>). El error, tal cual.
+    /// </summary>
     public async Task<Result> AbrirAsync(Guid sesionDeRecaudo, Guid clave, CancellationToken ct)
     {
         var (rige, caja, sesion) = await LeerAsync(sesionDeRecaudo, ct);
-        if (!rige || caja is not { } registro || sesion is null || sesion.Status != CashSessionState.Open) return Result.Success();
+        if (sesion is null) return Result.Failure(ErroresDeRecaudo.NoEncontrado("La sesión"));
+        if (!rige || caja is not { } registro || sesion.Status != CashSessionState.Open) return Result.Success();
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (actor.UserId is not { } usuario || !await segregacion.MismaPersonaAsync(usuario, sesion.CashierUserId, ct))
+            return Result.Failure(ErroresDeRecaudo.NoEncontrado("La sesión"));
         var vinculada = await sender.Send(new GetLinkedCashSessionQuery(sesionDeRecaudo), ct);
         if (vinculada.IsSuccess && vinculada.Value is { Open: true }) return Result.Success();
+        if ((vinculada.IsSuccess && vinculada.Value is { Open: false }) || await YaEntroAsync(sesionDeRecaudo, ct))
+            return Result.Failure(ErroresDeRecaudo.PuntoDeVentaYaCerrado());
         var abierta = await sender.Send(new Inventory.Cash.OpenCashSessionCommand(registro)
         {
             OperationKey = Derivada(clave, "abrir-punto-de-venta"),
@@ -161,39 +192,67 @@ public sealed class CajaUnica(IApplicationDbContext db, ISender sender, Parametr
     }
 
     /// <summary>
-    /// Antes del arqueo que cierra: cierra cuadrada la caja vinculada (si sigue abierta) y entra lo que recibió a la sesión de Recaudo. Sin caja
-    /// vinculada no hace nada. Repetirlo (un arqueo que pidió el motivo) no vuelve a cerrar ni a entrar nada.
+    /// Lo que la caja vinculada recibió y todavía no entró a la sesión, por <c>PaymentMeansId</c> (sólo los medios que se arquean y en positivo): abierta, su
+    /// esperado en vivo; cerrada, lo que contó su cierre. Vacío si no hay caja vinculada o si ya entró.
     /// </summary>
-    public async Task<Result> PrepararCierreAsync(Guid sesionDeRecaudo, Guid clave, CancellationToken ct)
+    public async Task<(SesionVinculadaDto? Vinculada, bool YaEntro, IReadOnlyDictionary<int, decimal> Pendiente)> PendienteAsync(Guid sesionDeRecaudo,
+        CancellationToken ct)
     {
         var leida = await sender.Send(new GetLinkedCashSessionQuery(sesionDeRecaudo), ct);
-        if (leida.IsFailure) return Result.Failure(leida.Error);
-        if (leida.Value is not { } vinculada) return Result.Success();
+        if (leida.IsFailure || leida.Value is not { } vinculada) return (null, false, Nada);
+        if (await YaEntroAsync(sesionDeRecaudo, ct)) return (vinculada, true, Nada);
+        return (vinculada, false, Pendiente(vinculada));
+    }
+
+    private static IReadOnlyDictionary<int, decimal> Pendiente(SesionVinculadaDto vinculada) =>
+        vinculada.Means.Where(m => m.CountMethod != CashCountMethod.None && m.Expected > 0m)
+            .GroupBy(m => m.PaymentMeansId).ToDictionary(g => g.Key, g => g.Sum(m => m.Expected));
+
+    /// <summary>
+    /// Antes del arqueo que cierra (o del de la olvidada), en este orden: si lo del punto de venta ya entró, nada más; un medio en negativo, rechazado;
+    /// <paramref name="comprobar"/> (el arqueo de Recaudo con lo pendiente, sin escribir); cerrar cuadrada la caja vinculada si sigue abierta, y entrar lo
+    /// que contó. Sin caja vinculada no hace nada. Cada escritura con su clave derivada: repetir es inocuo.
+    /// </summary>
+    public async Task<Result> PrepararCierreAsync(Guid sesionDeRecaudo, Guid clave, Func<IReadOnlyDictionary<int, decimal>, Task<Result>> comprobar,
+        CancellationToken ct)
+    {
+        var (vinculada, yaEntro, pendiente) = await PendienteAsync(sesionDeRecaudo, ct);
+        if (vinculada is null || yaEntro) return Result.Success();
+        if (vinculada.Open && vinculada.Means.FirstOrDefault(m => m.CountMethod != CashCountMethod.None && m.Expected < 0m) is { } negativo)
+            return Result.Failure(ErroresDeRecaudo.PuntoDeVentaEnNegativo(negativo.Code, negativo.Expected));
+
+        var comprobado = await comprobar(pendiente);
+        if (comprobado.IsFailure) return comprobado;
+
         if (vinculada.Open)
         {
             var cerrada = await sender.Send(CajaVinculada.Cierre(vinculada, Derivada(clave, "cerrar-punto-de-venta")), ct);
             if (cerrada.IsFailure) return Result.Failure(cerrada.Error);
+            var releida = await sender.Send(new GetLinkedCashSessionQuery(sesionDeRecaudo), ct);
+            if (releida.IsFailure) return Result.Failure(releida.Error);
+            vinculada = releida.Value ?? vinculada;
         }
-        return await sender.Send(new RegisterPointOfSaleIntakeCommand(sesionDeRecaudo, vinculada.PublicId, vinculada.Means)
+        return await sender.Send(new RegisterPointOfSaleIntakeCommand(sesionDeRecaudo, vinculada.PublicId,
+            vinculada.Means.Where(m => m.CountMethod != CashCountMethod.None).ToList())
         {
             OperationKey = Derivada(clave, "entrar-punto-de-venta"),
         }, ct);
     }
 
     /// <summary>
-    /// Para la pantalla: si rige, la caja del punto de venta y lo que recibió mientras sigue abierta (lo que ya entró a Recaudo está en lo esperado de
-    /// Recaudo). Con arqueo ciego, sin cifras.
+    /// Para la pantalla: si rige, la caja del punto de venta y lo que recibió y todavía no entró a Recaudo (lo que ya entró está en lo esperado de Recaudo).
+    /// Con arqueo ciego, sin cifras.
     /// </summary>
     public async Task<Result<CajaUnicaDto>> EstadoAsync(Guid sesionDeRecaudo, CancellationToken ct)
     {
         var (rige, caja, sesion) = await LeerAsync(sesionDeRecaudo, ct);
         if (sesion is null) return Result.Failure<CajaUnicaDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
-        var leida = await sender.Send(new GetLinkedCashSessionQuery(sesionDeRecaudo), ct);
-        var vinculada = leida.IsSuccess ? leida.Value : null;
+        var (vinculada, _, pendiente) = await PendienteAsync(sesionDeRecaudo, ct);
         var ciego = ValoresSelladosDeLaSesion.De(sesion).BlindCount && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
-        var medios = vinculada is { Open: true }
-            ? vinculada.Means.Where(m => m.Expected != 0m).Select(m => new CajaUnicaMedioDto(m.PaymentMeansPublicId, m.Code, ciego ? null : m.Expected)).ToList()
-            : [];
+        var medios = vinculada is null
+            ? []
+            : vinculada.Means.Where(m => pendiente.ContainsKey(m.PaymentMeansId)).GroupBy(m => m.PaymentMeansId)
+                .Select(g => new CajaUnicaMedioDto(g.First().PaymentMeansPublicId, g.First().Code, ciego ? null : pendiente[g.Key])).ToList();
         return Result.Success(new CajaUnicaDto(rige, caja, vinculada?.PublicId, vinculada?.CashRegisterCode, vinculada?.PointOfSaleName,
             vinculada?.Open ?? false, medios));
     }
