@@ -165,7 +165,7 @@
                                                     @if (_conReferencia.ContainsKey(l.ProductPublicId))
                                                     {
                                                         @* 2026-11-18 (feature 020): el vehículo del servicio; se resuelve al salir del campo y se guarda la placa. *@
-                                                        <input id="@($"linea-{indice}-referencia")" class="e-input" maxlength="40" placeholder="Placa o lateral" value="@l.Referencia" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio. Sin él la venta no se cobra."
+                                                        <input id="@($"linea-{indice}-referencia")" class="e-input" maxlength="40" placeholder="Placa o lateral" value="@l.Referencia" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números). Sin él la venta no se cobra."
                                                                disabled="@DesdeRemisiones" @onchange="@(e => ResolverReferenciaAsync(l, e.Value?.ToString()))" />
                                                         @if (l.EtiquetaDeReferencia is { Length: > 0 } etiqueta) { <div class="texto-tenue">@etiqueta</div> }
                                                     }

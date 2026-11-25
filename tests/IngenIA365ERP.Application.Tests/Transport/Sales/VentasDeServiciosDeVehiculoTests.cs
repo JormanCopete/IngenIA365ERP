@@ -8,6 +8,9 @@ using IngenIA365ERP.Application.Transport.Notifications;
 using IngenIA365ERP.Application.Transport.Sales;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Core.Connectors;
+using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Transport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -160,5 +163,45 @@ public class VentasDeServiciosDeVehiculoTests
         envio.Should().NotBeNull();
         var carga = _db.IntegrationMessages.Should().ContainSingle().Subject.PayloadJson;
         carga.Should().Contain("\"vehiculo.radioMovil\":\"618\"").And.Contain("\"vehiculo.placa\":\"\"");
+    }
+
+    /// <summary>El POS (documento equivalente) valida y confirma por el mismo camino que la factura: el externo pasa y deja su cargo.</summary>
+    [Theory]
+    [InlineData(DocumentClass.PosEquivalentDocument, "618", null, "618")]
+    [InlineData(DocumentClass.PosEquivalentDocument, "101", "ABC123", null)]
+    [InlineData(DocumentClass.SalesInvoice, "618", null, "618")]
+    public async Task La_venta_del_POS_y_de_la_factura_acepta_vehiculos_externos(DocumentClass clase, string digitado, string? placa, string? externo)
+    {
+        await SembrarAsync();
+        var producto = new Product { Code = "RADIO", Name = "Radio", CategoryId = 1, BaseUnitId = 1, PublicId = _radio };
+        _db.Products.Add(producto);
+        await _db.SaveChangesAsync();
+        var venta = new InventoryDocument { Class = clase, DocumentTypeId = 1, Prefix = "POS", Number = 1, OperationDate = Hoy, Currency = "COP", BranchId = 1 };
+        venta.Lines.Add(new InventoryDocumentLine
+        {
+            Document = venta, LineNumber = 1, ProductId = producto.Id, UnitId = 1, Quantity = 1m, UnitPrice = 40_000m, GrossAmount = 40_000m,
+            NetAmount = 40_000m, ItemReference = digitado,
+        });
+        _db.InventoryDocuments.Add(venta);
+        await _db.SaveChangesAsync();
+        _db.DocumentPayments.Add(new DocumentPayment
+        {
+            DocumentId = venta.Id, LineNumber = 1, PaymentMeansId = 1, Amount = 40_000m, MeansCode = "EFECTIVO", MeansName = "Efectivo",
+            MeansClass = Domain.Enums.Core.PaymentMeansClass.Cash, DianPaymentMeansCode = "10",
+        });
+
+        var falta = await ReferenciaDeLinea.ValidarAsync(_db, [Puerto()], venta, CancellationToken.None);
+        falta.Should().BeNull();
+        venta.Lines.Single().ItemReference.Should().Be(placa ?? externo);
+        await _db.SaveChangesAsync();
+
+        var r = await Puerto().AlConfirmarVentaAsync(venta.PublicId, CancellationToken.None);
+        await _db.SaveChangesAsync();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var cargo = _db.ServiceCharges.Should().ContainSingle().Subject;
+        cargo.VehicleReference.Should().Be(externo);
+        (cargo.VehicleId is null).Should().Be(externo is not null);
+        cargo.Status.Should().Be(ChargeStatus.Paid);
     }
 }
