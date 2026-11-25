@@ -109,8 +109,8 @@ propietario, y la línea guarda la placa. **Sin placa o lateral la venta no se c
 **Vehículos que no son de la cooperativa** (desde el 2026-11-25): los servicios también se venden a
 clientes externos. Si lo digitado no es de ningún vehículo del parque y es un **número de 1 a 10 dígitos**,
 se toma como el **lateral de un vehículo externo**: la línea muestra «lateral 618 · fuera del parque» y
-guarda ese número. El cargo nace sin vehículo y **el aviso al sistema externo sale con ese lateral** (la
-placa y el número interno van vacíos). Una placa que no está en el parque se rechaza: los externos se
+guarda ese número. El cargo nace sin vehículo y **el aviso al sistema externo sale con ese lateral**, que
+va también **como placa** (el número interno va vacío). Una placa que no está en el parque se rechaza: los externos se
 identifican sólo por el lateral. El lateral de un vehículo retirado cuenta como externo.
 
 Al confirmar la venta nace un cargo por cada línea de servicio:

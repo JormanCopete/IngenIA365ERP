@@ -76,7 +76,8 @@ public sealed class EmisionDeSolicitudDeConector(
             return null;
         }
 
-        // Un vehículo externo (vendido sin estar en el parque) se avisa con el lateral digitado; placa y número interno van vacíos.
+        // Un vehículo externo (vendido sin estar en el parque) se avisa con el lateral digitado; placa y número interno van vacíos (al enviar,
+        // DestinoConectores.Valores pone el lateral como placa).
         var vehiculo = cargo.Vehicle ?? (cargo.VehicleId is int vehiculoId ? await db.Vehicles.AsNoTracking().FirstAsync(v => v.Id == vehiculoId, ct) : null);
         var propietario = cargo.OwnerPersonId is int deudorId
             ? await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == deudorId, ct)
