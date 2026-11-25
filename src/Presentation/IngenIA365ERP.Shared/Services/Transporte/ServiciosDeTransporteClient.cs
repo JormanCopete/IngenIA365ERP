@@ -98,5 +98,5 @@ public sealed record FacturaIndividualDto(Guid? InvoicePublicId, string? Invoice
 public sealed record CorridaDeFacturacionDto(Guid PublicId, string Period, int Mode, int PaymentMode, int Status, DateTime? StartedAt, DateTime? FinishedAt, string StartedBy,
     int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<OmisionDto> Omitted, int Pending);
 
-public sealed record CargoDeServicioDto(Guid PublicId, Guid VehiclePublicId, string Plate, string InternalNumber, string Service, string Period, string InvoiceNumber,
+public sealed record CargoDeServicioDto(Guid PublicId, Guid? VehiclePublicId, string Plate, string? InternalNumber, string Service, string Period, string InvoiceNumber,
     decimal Amount, decimal Paid, int Route, int Status, DateTime? PaidAt, int ReviewFlag, Guid ExternalId);
