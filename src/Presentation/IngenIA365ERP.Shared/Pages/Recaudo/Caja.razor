@@ -595,6 +595,8 @@
         // 2026-11-17: si la consulta falló por otra cosa (la sesión del usuario venció, sin conexión), se dice eso y no «no tiene caja abierta».
         _errorDeSesion = r.IsSuccess || r.ErrorCode is null || r.ErrorCode.EndsWith("NotFound", StringComparison.Ordinal) ? null : r.ErrorMessage;
         if (_sesion is not { } s) return;
+        // Las preferencias no dependen de lo que sigue: salen ya, en paralelo con cuentas y bancos (2026-11-24).
+        var tPreferencias = Preferencias.LeerDelServidorAsync();
 
         IReadOnlyList<OpcionDeCuentaDto> cuentas = [];
         if (s.Means.Any(x => x.Class is ClaseConsignacion or ClaseTransferencia))
@@ -611,7 +613,7 @@
         _mediosDelPanel = s.Means.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal).Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas)).ToList();
 
         // 2026-11-16: el detalle de una obligación se ve con el tamaño de texto y los centavos que el usuario eligió para el estado de cuenta.
-        var preferencias = await Preferencias.LeerDelServidorAsync();
+        var preferencias = await tPreferencias;
         if (preferencias.IsSuccess && preferencias.Value is { } pref)
         {
             _tamano = pref.TamanoTextoEstadoDeCuenta;

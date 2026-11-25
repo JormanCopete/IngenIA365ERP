@@ -66,8 +66,11 @@ public sealed class AuditoriaDelPuntoDeVenta(IApplicationDbContext db, IServiceP
     public async Task<bool> ExisteAsync(string accion, Guid documentoPublicId, string formato, CancellationToken ct)
     {
         var id = documentoPublicId.ToString();
+        // !Forwarded: el reenviador vacía PayloadJson al llevar el evento a Mongo, así que sólo las pendientes tienen
+        // carga; con la condición la consulta usa IX_COR_AuditOutbox_Pending en vez de recorrer la tabla entera
+        // (2026-11-24: 1,1 s por llamada en producción, con 216 mil filas). El resultado no cambia.
         var cargas = await db.AuditOutbox.AsNoTracking()
-            .Where(e => e.Module == ModuloDeAuditoria.Inventory && e.PayloadJson != null && e.PayloadJson.Contains(id) && e.PayloadJson.Contains(accion))
+            .Where(e => !e.Forwarded && e.Module == ModuloDeAuditoria.Inventory && e.PayloadJson != null && e.PayloadJson.Contains(id) && e.PayloadJson.Contains(accion))
             .Select(e => e.PayloadJson!)
             .ToListAsync(ct);
         return cargas.Select(AuditoriaEncadenada.LeerCarga).Any(e =>

@@ -600,20 +600,29 @@
         _sesion = sesion.Value;
         if (_sesion is null) return;
         if (!_sesion.PointOfSale.PosEnabled) { _sinPos = true; return; }
-        _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
-        _puedeVerCotizaciones = await Permisos.TieneAsync("Inventory.Sales.View");
-        var conReferencia = await Ventas.ProductosConReferenciaAsync();
+        // Con la sesión en la mano, las seis lecturas que siguen no dependen entre sí: salen a la vez (2026-11-24).
+        var tModo = BusquedaDeProductos.ModoAsync();
+        var tPuedeVerCotizaciones = Permisos.TieneAsync("Inventory.Sales.View");
+        var tConReferencia = Ventas.ProductosConReferenciaAsync();
+        var tPunto = Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
+        var tBilletes = MediosDePago.DenominacionesAsync(_sesion.OperatingDate);
+        var tBorradores = Ventas.VentasDelPosAsync(sesion: SesionId);
+        await Task.WhenAll(tModo, tPuedeVerCotizaciones, tConReferencia, tPunto, tBilletes, tBorradores);
+
+        _modoDeBusqueda = await tModo;
+        _puedeVerCotizaciones = await tPuedeVerCotizaciones;
+        var conReferencia = await tConReferencia;
         _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
 
-        var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
+        var punto = await tPunto;
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
 
         // Feature 022 (FR-043): los billetes del catálogo para el efectivo del panel (Alt+1…); sin ellos queda «Exacto» y «Recibido».
-        var billetes = await MediosDePago.DenominacionesAsync(_sesion.OperatingDate);
+        var billetes = await tBilletes;
         if (billetes.IsSuccess && billetes.Value is not null)
             _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
 
-        var borradores = await Ventas.VentasDelPosAsync(sesion: SesionId);
+        var borradores = await tBorradores;
         if (borradores.IsSuccess && borradores.Value?.FirstOrDefault(b => b.Suspended is null) is { } abierta)
             await CargarVentaAsync(abierta.DraftPublicId);
     }
