@@ -105,7 +105,8 @@ public sealed class MigracionYActivacionDeCarteraTests(CentralIdentityApiFixture
         var (s1, s2, s3, s4) = (factura[100_000m], factura[200_000m], factura[300_000m], factura[400_000m]);
 
         // --------------------------------------------------------------------- la carga de 100 créditos (US8-1) --
-        var carga = await CrearCargaAsync(http, jefe, corte, "Cartera vigente al corte (e2e)");
+        // Sin la opción de la 025 (el período en curso completo): esta carga se activa sin matriz contable y el hecho InteresDelCorte no tendría regla.
+        var carga = await CrearCargaAsync(http, jefe, corte, "Cartera vigente al corte (e2e)", periodoCompleto: false);
         var numeros = Enumerable.Range(1, Creditos).Select(i => $"CR-{i:0000}").ToList();
         var creditos = numeros.Select((n, i) => i == 0
             ? Credito(n, clientes[0].Documento, oficina, corte, 100_000m, 10, factura: s1)
