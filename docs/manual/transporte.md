@@ -104,8 +104,14 @@ activo, la línea pide **placa o lateral**:
 
 Se puede escribir la placa (con o sin guion), el **lateral** (el código radio-móvil, que es el número que
 recibe el sistema externo) o el número interno. Al salir del campo se muestra el vehículo y su
-propietario, y la línea guarda la placa. **Sin placa o lateral la venta no se cobra ni se confirma**, y un
-vehículo retirado no sirve.
+propietario, y la línea guarda la placa. **Sin placa o lateral la venta no se cobra ni se confirma.**
+
+**Vehículos que no son de la cooperativa** (desde el 2026-11-25): los servicios también se venden a
+clientes externos. Si lo digitado no es de ningún vehículo del parque y es un **número de 1 a 10 dígitos**,
+se toma como el **lateral de un vehículo externo**: la línea muestra «lateral 618 · fuera del parque» y
+guarda ese número. El cargo nace sin vehículo y **el aviso al sistema externo sale con ese lateral** (la
+placa y el número interno van vacíos). Una placa que no está en el parque se rechaza: los externos se
+identifican sólo por el lateral. El lateral de un vehículo retirado cuenta como externo.
 
 Al confirmar la venta nace un cargo por cada línea de servicio:
 
@@ -114,7 +120,8 @@ Al confirmar la venta nace un cargo por cada línea de servicio:
 - lo que va **a crédito** sigue la forma de pago: por Cartera, si está activa, o como cuenta por cobrar.
   Si esa forma de pago cubre más que el servicio (otros productos, o varios servicios), el aviso espera a
   que la obligación quede **saldada**;
-- el deudor es el cliente de la venta (sin cliente, el propietario del vehículo).
+- el deudor es el cliente de la venta (sin cliente, el propietario del vehículo; un externo sin cliente
+  queda sin deudor).
 
 Anular la venta funciona igual que anular una factura de servicios (sección 8).
 
@@ -131,7 +138,18 @@ la línea. Los pagos parciales esperan.
 
 **Transporte › Envíos a sistemas externos** muestra cada aviso (pendiente, enviado, con aviso,
 reintentando, en espera, revisar, pago anulado, cerrado a mano), sus intentos con el código y un extracto
-de la respuesta, y permite **reintentar** o **cerrar a mano** con motivo.
+de la respuesta, y permite **reintentar** o **cerrar a mano** con motivo. Los envíos de vehículos externos
+salen como «Externo, lateral …».
+
+**Cómo ver el registro de un envío** (el «log»), con el permiso `Transport.Notifications.View`:
+
+1. Transporte › **Envíos a sistemas externos**; filtrar por estado y fechas. Cada fila dice la última
+   respuesta (código HTTP y extracto).
+2. **Detalle** abre el envío: el identificador que recibió el sistema externo y **cada intento** —el
+   inicio de sesión y cada llamada— con fecha y hora, código, resultado, duración, la dirección llamada,
+   el cuerpo enviado (sin credenciales) y el extracto de la respuesta.
+3. Para guardarlo o pasarlo, Transporte › **Informes**, vista de envíos, exporta a Excel o PDF el rango de
+   fechas (sin cuerpos ni datos personales).
 
 - Si un pago ya avisado **se anula o se reversa**, la anulación procede, el envío queda «pago anulado» y
   llega una alerta: **el sistema externo no deshace**, hay que revisarlo allá.

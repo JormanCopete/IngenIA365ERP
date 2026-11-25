@@ -130,8 +130,15 @@ public class BillingRun : AuditableEntity
 /// </summary>
 public class ServiceCharge : AuditableEntity
 {
-    public int VehicleId { get; set; }
+    /// <summary>El vehículo del parque; nulo en la venta a un vehículo que no está en el parque (ver <see cref="VehicleReference"/>).</summary>
+    public int? VehicleId { get; set; }
     public Vehicle? Vehicle { get; set; }
+
+    /// <summary>
+    /// El lateral digitado en la venta a un vehículo que no está en el parque de la cooperativa (2026-11-25, pedido del dueño: los servicios
+    /// también se venden a clientes externos). Es lo que se avisa al sistema externo como lateral; nulo cuando hay vehículo.
+    /// </summary>
+    public string? VehicleReference { get; set; }
     public int ServiceId { get; set; }
     public TransportService? Service { get; set; }
 
@@ -153,7 +160,8 @@ public class ServiceCharge : AuditableEntity
 
     public int? BillingRunId { get; set; }
     public BillingRun? BillingRun { get; set; }
-    public int OwnerPersonId { get; set; }
+    /// <summary>El deudor: el cliente de la venta o, sin cliente, el propietario del vehículo. Nulo en la venta sin cliente a un vehículo externo.</summary>
+    public int? OwnerPersonId { get; set; }
     public Person? OwnerPerson { get; set; }
     public Guid InvoicePublicId { get; set; }
     public string InvoiceNumber { get; set; } = string.Empty;

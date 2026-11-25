@@ -154,7 +154,7 @@
                             {
                                 <div class="toolbar">
                                     <label>Línea @conReferencia.LineNumber · @conReferencia.Product.Name · placa o lateral
-                                        <input id="@($"pos-referencia-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="40" value="@conReferencia.ItemReference" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio. Sin él la venta no se cobra."
+                                        <input id="@($"pos-referencia-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="40" value="@conReferencia.ItemReference" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números). Sin él la venta no se cobra."
                                                disabled="@(_modo != Modo.Vendiendo)" @onchange="@(e => ReferenciaDeLineaAsync(conReferencia, e.Value?.ToString()))" />
                                     </label>
                                     @if (_etiquetasDeReferencia.TryGetValue(conReferencia.LinePublicId, out var etiqueta)) { <span class="texto-tenue">@etiqueta</span> }
