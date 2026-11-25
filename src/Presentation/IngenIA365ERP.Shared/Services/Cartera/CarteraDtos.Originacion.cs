@@ -230,7 +230,17 @@ public sealed record SolicitudDto(
 
     /// <summary>2026-11-23: la compra con descuento condicionado; nula si no hay.</summary>
     public CompraConDescuentoDto? SubsidizedPurchase { get; init; }
+
+    /// <summary>2026-11-25: las ediciones de la solicitud ya radicada, sin devolverla, de la más reciente a la más antigua.</summary>
+    public IReadOnlyList<EdicionDeSolicitudDto> SubmittedEdits { get; init; } = [];
+
+    /// <summary>2026-11-25: radicada y sin decidir (radicada o pendiente de decisión).</summary>
+    public bool Radicada => Status is 2 or 3;
 }
+
+/// <summary>2026-11-25: una edición de la solicitud radicada: quién, cuándo, en qué estado, el motivo, lo que cambió y el nivel antes y después.</summary>
+public sealed record EdicionDeSolicitudDto(DateTime EditedAt, string EditedBy, int StatusAtEdit, string Reason, IReadOnlyList<CambioDeSolicitudDto> Changes,
+    string? LevelBefore, string? LevelAfter);
 
 /// <summary>2026-11-23: una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
 public sealed record CompraConDescuentoDto(decimal AssetValue, PersonaDeCarteraDto? Supplier, string OptionCode, string OptionName, decimal Fraction,

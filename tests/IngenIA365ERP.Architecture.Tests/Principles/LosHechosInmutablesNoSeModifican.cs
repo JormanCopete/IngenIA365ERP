@@ -222,6 +222,8 @@ public class LosHechosInmutablesNoSeModifican
         ["LoanTransaction"] = [], ["LoanOperation"] = ["ReversedByOperationId"], ["LoanTermsVersion"] = [], ["RepaymentScheduleVersion"] = [],
         ["RepaymentInstallment"] = [], ["LoanDailyPosition"] = [], ["CreditDecision"] = [], ["SessionVote"] = ["ReplacedAt"],
         ["CreditScore"] = [], ["CreditApplicationCheck"] = [], ["CreditLineVersion"] = [], ["CreditLineRateBand"] = [],
+        // 2026-11-25 (pedido del dueño): cada edición de una solicitud radicada sin devolverla; nada se escribe después.
+        ["CreditApplicationEdit"] = [],
         ["CreditLineDocumentRequirement"] = [], ["CreditLineInsurance"] = [], ["CreditLineCollateralRule"] = [],
         ["CommercialTermEquivalence"] = [], ["ContributionBalanceLoad"] = [], ["AttributionMatrix"] = [], ["AttributionLevel"] = [],
         ["AttributionRule"] = [], ["GoverningBodyRuleVersion"] = [], ["CaseParticipation"] = [], ["PrepaymentPreference"] = [],
@@ -511,7 +513,7 @@ public class LosHechosInmutablesNoSeModifican
         {
             ["CreditApplicationCheck"] = [], ["CreditScore"] = [], ["BureauQuery"] = [], ["CreditLimit"] = [], ["PrepaymentPreference"] = [],
             ["ContributionBalanceLoad"] = [], ["ScreeningResult"] = ["ReleasedAt", "ReleasedByUserId", "ReleaseReason"],
-            ["DebtorBlock"] = ["LiftedOn", "LiftedAt", "LiftedByUserId", "LiftReason"],
+            ["DebtorBlock"] = ["LiftedOn", "LiftedAt", "LiftedByUserId", "LiftReason"], ["CreditApplicationEdit"] = [],
         };
         foreach (var (nombre, unicas) in esperados)
         {

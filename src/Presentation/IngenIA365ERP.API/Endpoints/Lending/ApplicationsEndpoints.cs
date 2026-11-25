@@ -12,7 +12,8 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <summary>
 /// Las solicitudes de crédito (feature 013, US2, T0408; contracts/api.md §4.2, FR-035–FR-042, FR-047): lista y detalle
 /// (<c>Lending.Applications.Read</c>), el borrador con sus documentos (<c>.Create</c>), radicar (<c>.Submit</c>), el análisis y volver a
-/// correr validaciones (<c>.Analyze</c>), el enrutamiento (<c>.Read</c>) y anular o desistir (<c>.Cancel</c>). Toda escritura lleva
+/// correr validaciones (<c>.Analyze</c>), el enrutamiento (<c>.Read</c>), anular o desistir (<c>.Cancel</c>) y, desde el 2026-11-25, editar la
+/// radicada sin devolverla (<c>.EditSubmitted</c>). Toda escritura lleva
 /// <c>Idempotency-Key</c>; con Cartera sin activar responden <c>Lending.NotActivated</c> (§1.13). Fuera del alcance de oficina o línea, el
 /// 404 de la solicitud. Las decisiones viven en <see cref="DecisionsEndpoints"/>. Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
@@ -23,6 +24,9 @@ public class ApplicationsEndpoints : ICarterModule
     public const string Radicar = "Lending.Applications.Submit";
     public const string Analizar = "Lending.Applications.Analyze";
     public const string Cancelar = "Lending.Applications.Cancel";
+
+    /// <summary>2026-11-25 (pedido del dueño): editar una solicitud radicada sin devolverla, con motivo.</summary>
+    public const string EditarRadicada = "Lending.Applications.EditSubmitted";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -64,6 +68,22 @@ public class ApplicationsEndpoints : ICarterModule
             .WithName("Lending_Applications_Update")
             .ConClaveDeOperacion()
             .RequirePermission(Crear);
+
+        // 2026-11-25 (pedido del dueño): la solicitud radicada se edita sin devolverla, con el mismo cuerpo más «editReason».
+        solicitudes.MapPut("/{id:guid}/submitted", async (Guid id, JsonElement body, HttpContext http, IOptions<JsonOptions> json, ISender sender,
+                CancellationToken ct) =>
+            {
+                var (input, version) = CuerpoConVersion(body, json.Value.SerializerOptions);
+                return await sender.Send(new UpdateCreditApplicationCommand(id, input, version)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                    EditReason = Texto(body, "editReason"),
+                    EdicionRadicada = true,
+                }, ct);
+            })
+            .WithName("Lending_Applications_EditSubmitted")
+            .ConClaveDeOperacion()
+            .RequirePermission(EditarRadicada);
 
         solicitudes.MapPost("/{id:guid}/documents", async (Guid id, DocumentoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 LendingGroup.Creado(await sender.Send(new AttachCreditApplicationDocumentCommand(
@@ -134,6 +154,10 @@ public class ApplicationsEndpoints : ICarterModule
             throw new BadHttpRequestException(e.Message, e is JsonException ? e : new JsonException(e.Message, e));
         }
     }
+
+    /// <summary>Una propiedad de texto del cuerpo, si viene.</summary>
+    private static string? Texto(JsonElement body, string nombre) =>
+        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     /// <summary>Un documento ya subido con dueño <c>LoanApplicationDocument</c> (§4.2); sin requisito es un documento adicional.</summary>
     public sealed record DocumentoRequest(string? RequirementCode, Guid AttachmentPublicId, DateOnly? DocumentDate, Guid? PersonPublicId);

@@ -152,14 +152,24 @@ public sealed class CreditApplicationDraftCommandsTests : IAsyncLifetime
         vieja.Error.Code.Should().Be("Concurrency.StaleRowVersion");
         _o.Db.ChangeTracker.Clear();
 
+        // 2026-11-25: la radicada no se edita por esta ruta (la suya pide otro permiso y motivo); la decidida, por ninguna.
         fila = await _o.Db.CreditApplications.SingleAsync(a => a.PublicId == s.PublicId);
         fila.Status = CreditApplicationStatus.PendingDecision;
+        await _o.Db.SaveChangesAsync();
+        _o.Db.ChangeTracker.Clear();
+        var radicada = await _o.Actualizar().Handle(new UpdateCreditApplicationCommand(s.PublicId, _o.Solicitud()) { OperationKey = Guid.NewGuid() },
+            default);
+        radicada.Error.Code.Should().Be(ErroresDeOriginacion.CodigoEdicionRadicadaPorSuRuta);
+        OriginacionDePrueba.Datos(radicada.Error).GetProperty("status").GetString().Should().Be("PendingDecision");
+
+        fila = await _o.Db.CreditApplications.SingleAsync(a => a.PublicId == s.PublicId);
+        fila.Status = CreditApplicationStatus.Approved;
         await _o.Db.SaveChangesAsync();
         _o.Db.ChangeTracker.Clear();
         var noEditable = await _o.Actualizar().Handle(new UpdateCreditApplicationCommand(s.PublicId, _o.Solicitud()) { OperationKey = Guid.NewGuid() },
             default);
         noEditable.Error.Code.Should().Be("Lending.Application.NotEditable");
-        OriginacionDePrueba.Datos(noEditable.Error).GetProperty("status").GetString().Should().Be("PendingDecision");
+        OriginacionDePrueba.Datos(noEditable.Error).GetProperty("status").GetString().Should().Be("Approved");
     }
 
     [Fact]

@@ -21,11 +21,13 @@
    elige sola; el resumen dice desembolso, primer pago y cuota; y lo que falta para guardar se dice en vez de sólo apagar el botón.
    2026-11-23 (pedido del dueño): la misma pantalla corrige un borrador o una solicitud devuelta (/cartera/solicitudes/{id}/corregir). Abre con
    lo guardado y sólo deja cambiar los grupos que el parámetro Originacion.GruposEditablesAlDevolver de la línea permite (en borrador, todo); el
-   servidor los vuelve a revisar. El solicitante no cambia. *@
-<PermissionGate Required="Lending.Applications.Create" MostrarAviso="true">
+   servidor los vuelve a revisar. El solicitante no cambia.
+   2026-11-25 (pedido del dueño): también edita una solicitud radicada sin devolverla (permiso Lending.Applications.EditSubmitted, parámetro
+   Originacion.EditarRadicadaSinDevolver), con el motivo del cambio; el servidor vuelve a correr las validaciones y el enrutamiento. *@
+<PermissionGate Required="Lending.Applications.Create" AnyOf="@(new[] { "Lending.Applications.EditSubmitted" })" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>@(EsCorreccion ? $"Corregir la solicitud {_original?.Number ?? "en borrador"}" : "Nueva solicitud de crédito")</h3>
+        <h3>@(!EsCorreccion ? "Nueva solicitud de crédito" : EsRadicada ? $"Editar la solicitud radicada {_original?.Number}" : $"Corregir la solicitud {_original?.Number ?? "en borrador"}")</h3>
         <div class="toolbar">
             <SfButton CssClass="e-outline" OnClick="@Volver">Volver</SfButton>
         </div>
@@ -43,9 +45,13 @@
             else if (_original is { } o)
             {
                 <p class="texto-apoyo">
-                    @(o.Status == 4 ? "La solicitud fue devuelta para corregir." : "La solicitud está en borrador.")
+                    @(o.Status == 4 ? "La solicitud fue devuelta para corregir." : o.Radicada ? "La solicitud está radicada y espera decisión: se edita sin devolverla." : "La solicitud está en borrador.")
                     Puede cambiar: @string.Join(", ", o.EditableGroups.Select(TextosDeOriginacion.GrupoEditable)).
                     Lo demás queda como está.
+                    @if (o.Radicada)
+                    {
+                        <text>Al guardar se vuelven a correr las validaciones y el enrutamiento, y el cambio queda en su historial con el motivo: quien decide lo ve.</text>
+                    }
                 </p>
             }
         </IndicadorDeCarga>
@@ -182,11 +188,19 @@
             </IndicadorDeCarga>
 
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (EsRadicada)
+                {
+                    @* 2026-11-25: editar la radicada pide el motivo; queda en su historial y en la auditoría. *@
+                    <label class="campo campo-ancho">Motivo del cambio *
+                        <textarea class="e-input" rows="2" maxlength="500" @bind="_motivoDeEdicion" @bind:event="oninput"
+                                  placeholder="Por qué se cambia la solicitud ya radicada"></textarea>
+                    </label>
+                }
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 @if (Faltan.Count > 0) { <p class="texto-tenue">Para guardar falta: @string.Join(", ", Faltan).</p> }
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(_guardado.Activa || Faltan.Count > 0)" OnClick="@GuardarAsync">
-                        @(EsCorreccion ? "Guardar la corrección" : "Guardar borrador y adjuntar documentos")
+                        @(!EsCorreccion ? "Guardar borrador y adjuntar documentos" : EsRadicada ? "Guardar los cambios" : "Guardar la corrección")
                     </SfButton>
                 </div>
             </IndicadorDeCarga>
@@ -221,13 +235,16 @@
     private PersonSearchPicker.PersonSearchItem? _solicitante, _codeudor;
     private readonly List<Codeudor> _codeudores = [];
     private Guid? _oficina;
-    private string? _destino, _error, _documentoInicial, _bloqueo;
+    private string? _destino, _error, _documentoInicial, _bloqueo, _motivoDeEdicion;
     private int _formaDePago = 1, _preferencia = 1, _paso = 1;
     private decimal? _ingreso, _gasto, _externas;
     private bool _puedeCrearPersona, _mostrarPersona, _esVis;
     private ClaveDeOperacion _clave = new();
 
     private bool EsCorreccion => Id is not null;
+
+    /// <summary>2026-11-25: se edita una solicitud ya radicada, sin devolverla.</summary>
+    private bool EsRadicada => EsCorreccion && _original is { Radicada: true };
 
     /// <summary>En una nueva todo se edita; al corregir, lo que diga la solicitud.</summary>
     private bool Edita(string grupo) => !EsCorreccion || (_original?.Edita(grupo) ?? false);
@@ -251,6 +268,7 @@
         .. !EsCorreccion && _solicitante is null ? ["el solicitante"] : Array.Empty<string>(),
         .. _oficina is null ? ["la oficina"] : Array.Empty<string>(),
         .. _compra is not null && _proveedor is null ? ["el proveedor del bien"] : Array.Empty<string>(),
+        .. EsRadicada && string.IsNullOrWhiteSpace(_motivoDeEdicion) ? ["el motivo del cambio"] : Array.Empty<string>(),
     ];
 
     protected override async Task OnInitializedAsync()
@@ -271,9 +289,11 @@
         if (!r.IsSuccess || r.Value is not { } o) { _bloqueo = r.ErrorMessage ?? "No se pudo leer la solicitud."; return; }
         _original = o;
         _paso = 2;
-        if (o.Status is not (1 or 4) || o.EditableGroups.Count == 0)
+        if (o.Status is not (1 or 2 or 3 or 4) || o.EditableGroups.Count == 0)
         {
-            _bloqueo = "Esta solicitud ya no se puede corregir: sólo se corrige en borrador o cuando se devuelve para corregir.";
+            _bloqueo = o.Radicada
+                ? "Esta solicitud ya está radicada y la cooperativa (o su línea) no deja editarla sin devolverla: quien decide la devuelve para corregir."
+                : "Esta solicitud ya no se puede corregir: sólo se corrige en borrador, cuando se devuelve para corregir o, si la cooperativa lo deja, radicada.";
             return;
         }
         if (o.UsesAdvancedTerms)
@@ -410,11 +430,15 @@
             solicitud.Insurances = _simulacion?.Entrada.Insurances;
         }
 
-        var r = EsCorreccion
-            ? await Originacion.ActualizarAsync(Id!.Value, solicitud, _original!.RowVersion, _clave)
-            : await Originacion.CrearAsync(solicitud, _clave);
+        var r = !EsCorreccion
+            ? await Originacion.CrearAsync(solicitud, _clave)
+            : EsRadicada
+                ? await Originacion.EditarRadicadaAsync(Id!.Value, solicitud, _original!.RowVersion, _motivoDeEdicion!.Trim(), _clave)
+                : await Originacion.ActualizarAsync(Id!.Value, solicitud, _original!.RowVersion, _clave);
         if (!r.IsSuccess || r.Value is null) { _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
-        await Notification.SuccessAsync(EsCorreccion ? "Corrección guardada: revise los documentos y vuelva a radicar." : "Borrador guardado: adjunte los documentos y radique.");
+        await Notification.SuccessAsync(!EsCorreccion ? "Borrador guardado: adjunte los documentos y radique."
+            : EsRadicada ? "Cambios guardados: se volvieron a correr las validaciones y el enrutamiento."
+            : "Corrección guardada: revise los documentos y vuelva a radicar.");
         Navegacion.NavigateTo($"/cartera/solicitudes/{r.Value.PublicId}");
     }
 }
