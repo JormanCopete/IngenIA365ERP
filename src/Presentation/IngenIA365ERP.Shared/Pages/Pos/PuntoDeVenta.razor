@@ -110,6 +110,7 @@
         }
         else if (_sesion is not null)
         {
+            <AvisoSesionDeOtroDia Dia="@_sesion.OperatingDate" UrlParaCerrar="@($"/pos/sesiones/{_sesion.CashSessionPublicId}/cierre")" />
             @if (_avisoCaja is not null)
             {
                 <p class="aviso aviso-info">@_avisoCaja</p>

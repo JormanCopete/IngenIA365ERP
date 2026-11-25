@@ -60,9 +60,11 @@
     }
     else
     {
-        @if ((_rechazoContable is { Count: > 0 } && !_mostrarPagos) || _doc?.Issues is { Count: > 0 } || _sesion is null || _origenes.Count > 0)
+        @if ((_rechazoContable is { Count: > 0 } && !_mostrarPagos) || _doc?.Issues is { Count: > 0 } || _sesion is null || _origenes.Count > 0
+             || (_sesion is { } vieja && DiaDeCaja.EsDeUnDiaAnterior(vieja.OperatingDate, DiaDeCaja.Hoy())))
         {
             <div class="ventana-aviso">
+                <AvisoSesionDeOtroDia Dia="@_sesion?.OperatingDate" UrlParaCerrar="@($"/pos/sesiones/{_sesion?.CashSessionPublicId}/cierre")" />
                 @if (_rechazoContable is { Count: > 0 } rechazo && !_mostrarPagos)
                 {
                     <div class="aviso aviso-alerta" role="alert"><b>Contabilidad no puede contabilizar esta factura:</b><ul>@foreach (var h in rechazo) { <li>@DialogoDeCobro.TextoDelHallazgo(h)</li> }</ul></div>

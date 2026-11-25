@@ -1,0 +1,29 @@
+@*
+    Aviso de sesión de caja de un día anterior (pedido del dueño del 2026-11-24): la caja de Recaudo, el punto de venta, la factura y la
+    nota de oficina, los egresos y los movimientos de caja trabajan sobre la sesión abierta del cajero; si esa sesión es de ayer (o
+    antes), lo que se registre queda con el día de esa sesión. El aviso no bloquea: dice de qué día es la sesión y lleva a cerrarla para
+    abrir la de hoy. «Hoy» es la fecha de Colombia (DiaDeCaja), no la del equipo.
+*@
+@if (Dia is { } dia && DiaDeCaja.EsDeUnDiaAnterior(dia, _hoy))
+{
+    <div class="aviso aviso-alerta" role="alert">
+        <p><b>La sesión de caja abierta es del @dia.ToString("dd/MM/yyyy"), no de hoy (@_hoy.ToString("dd/MM/yyyy")).</b>
+            Lo que registre quedará con el día de esa sesión. Ciérrela (arqueo) y abra la sesión del día de hoy antes de seguir.</p>
+        @if (!string.IsNullOrEmpty(UrlParaCerrar))
+        {
+            <a class="e-btn e-primary" href="@UrlParaCerrar">Cerrar la sesión anterior</a>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>El día de la sesión abierta (BusinessDate en Recaudo, OperatingDate en Ventas); nulo si no hay sesión.</summary>
+    [Parameter] public DateOnly? Dia { get; set; }
+
+    /// <summary>Adónde lleva el botón para cerrar la sesión (sus sesiones o su arqueo).</summary>
+    [Parameter] public string? UrlParaCerrar { get; set; }
+
+    private DateOnly _hoy = DiaDeCaja.Hoy();
+
+    protected override void OnParametersSet() => _hoy = DiaDeCaja.Hoy();
+}
