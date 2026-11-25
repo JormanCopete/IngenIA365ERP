@@ -42,7 +42,7 @@
                             <td>@($"{b.TermFrom?.ToString() ?? "…"} – {b.TermTo?.ToString() ?? "…"}")</td>
                             <td>@TextosDeCartera.TipoDeDeudor(b.DebtorKind)</td>
                             <td>@(b.ForEmployees switch { true => "Sí", false => "No", _ => "Indiferente" })</td>
-                            <td class="numero">@(V.RateKind == 1 ? $"{Pct(b.EffectiveAnnual)} EA" : $"{Pct(b.Margin)}")</td>
+                            <td class="numero">@(V.RateKind != 1 ? $"{Pct(b.Margin)}" : b.MonthlyRate is { } bmv ? TasaMensualVencida.Texto(b.EffectiveAnnual, bmv) : $"{Pct(b.EffectiveAnnual)} EA")</td>
                         </tr>
                     }
                 </tbody>
@@ -82,8 +82,9 @@
 
     private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
 
+    // 2026-11-24 (feature 025, HU2; FR-012): «Fija 1,8 % MV = 23,8721 % E.A.» si se pactó en MV.
     private string Tasa => V.RateKind == 1
-        ? $"Fija {Pct(V.EffectiveAnnual)} EA"
+        ? V.MonthlyRate is { } mv ? $"Fija {TasaMensualVencida.Texto(V.EffectiveAnnual, mv)}" : $"Fija {Pct(V.EffectiveAnnual)} EA"
         : $"{V.IndexCode} {V.IndexKey} + {Pct(V.Margin)}{(V.RateFloor is { } p ? $", piso {Pct(p)}" : "")}{(V.RateCeiling is { } t ? $", techo {Pct(t)}" : "")}";
 
     private static string Pct(decimal? f) => f is { } x ? LineasDeCreditoClient.Porcentaje(x) : "—";

@@ -370,7 +370,9 @@ internal sealed class ActivacionConCarteraDePrueba : IDisposable
         D.Registro(),
         conRevalidacion ? new RevalidacionDeCuposMigrados(Db, new CargaVigenteDeCartera(Db), O.Revalidacion(), D.Alertas, G.Actor, G.Reloj) : null,
         D.Alertas,
-        G.Auditoria);
+        G.Auditoria,
+        // 2026-11-24 (feature 025, fase 4): el período completo; sólo actúa con la opción de la carga (la de esta cooperativa la trae apagada).
+        new PeriodoCompletoDeLaCarga(Db, D.Cargador(), D.Partes(), D.Registro(), D.FechaContable(), G.Reloj));
 
     public ActivateLendingCommand Orden(Guid punto, DateOnly? fecha = null, Guid? cobros = null) =>
         new(Carga.PublicId, fecha ?? Activacion, cobros, punto, AcknowledgeWarnings: true, "Arranque de Cartera con la cartera migrada",

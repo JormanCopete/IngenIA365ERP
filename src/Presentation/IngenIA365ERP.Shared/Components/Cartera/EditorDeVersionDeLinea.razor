@@ -78,10 +78,28 @@
             </label>
             @if (V.Rates.Current.Kind == 1)
             {
-                <label class="campo">Tasa corriente (% EA) *
-                    <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(V.Rates.Current.EffectiveAnnual)"
-                           @onchange="@(e => V.Rates.Current.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                @* 2026-11-24 (feature 025, HU2; FR-010): la tasa en E.A. o en mensual vencida; al lado, su equivalente. *@
+                <label class="campo">Tasa en *
+                    <select class="e-input" value="@V.Rates.Current.Basis" @onchange="@(e => CambiarBaseDeTasa(LeerEntero(e.Value) ?? TasaMensualVencida.BaseEfectivaAnual))">
+                        @foreach (var b in TasaMensualVencida.Bases) { <option value="@b.Valor">@b.Texto</option> }
+                    </select>
                 </label>
+                @if (V.Rates.Current.Basis == TasaMensualVencida.BaseMensual)
+                {
+                    <label class="campo">Tasa corriente (% MV) *
+                        <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(V.Rates.Current.MonthlyRate)"
+                               @onchange="@(e => V.Rates.Current.MonthlyRate = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                        <span class="texto-tenue">@(V.Rates.Current.MonthlyRate is { } mv ? $"= {TasaMensualVencida.Porcentaje(TasaMensualVencida.EfectivaDeMensual(mv))} E.A." : "")</span>
+                    </label>
+                }
+                else
+                {
+                    <label class="campo">Tasa corriente (% EA) *
+                        <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(V.Rates.Current.EffectiveAnnual)"
+                               @onchange="@(e => V.Rates.Current.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                        <span class="texto-tenue">@(V.Rates.Current.EffectiveAnnual is { } ea ? $"= {TasaMensualVencida.Porcentaje(TasaMensualVencida.MensualDeEfectiva(ea))} MV" : "")</span>
+                    </label>
+                }
             }
             else if (V.Rates.Variable is { } variable)
             {
@@ -111,6 +129,10 @@
                 <select class="e-input" @bind="V.RateEquivalence">@foreach (var c in TextosDeCartera.Equivalencias) { <option value="@c.Valor">@c.Texto</option> }</select>
             </label>
         </div>
+        @if (TasaMensualVencida.Problemas(V) is { Count: > 0 } problemasDeTasa)
+        {
+            <p class="aviso aviso-error">@string.Join(" ", problemasDeTasa)</p>
+        }
 
         <h5>Bandas por monto, plazo y segmento</h5>
         <p class="texto-tenue">Cada banda pasa su propio control de usura. Vacío = sin límite. Dos bandas de las mismas dimensiones no se cruzan.</p>
@@ -119,7 +141,7 @@
                 <thead>
                     <tr>
                         <th>Monto desde</th><th>Monto hasta</th><th>Plazo desde (meses)</th><th>Plazo hasta</th><th>Deudor</th><th>Empleados</th>
-                        <th>@(V.Rates.Current.Kind == 1 ? "Tasa (% EA)" : "Margen (puntos)")</th><th></th>
+                        <th>@(V.Rates.Current.Kind != 1 ? "Margen (puntos)" : EnMensual ? "Tasa (% MV)" : "Tasa (% EA)")</th><th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -144,7 +166,12 @@
                                 </select>
                             </td>
                             <td>
-                                @if (V.Rates.Current.Kind == 1)
+                                @if (V.Rates.Current.Kind == 1 && EnMensual)
+                                {
+                                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(banda.MonthlyRate)"
+                                           @onchange="@(e => banda.MonthlyRate = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                                }
+                                else if (V.Rates.Current.Kind == 1)
                                 {
                                     <input class="e-input numero" type="number" step="0.0001" value="@Pct(banda.EffectiveAnnual)"
                                            @onchange="@(e => banda.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
@@ -569,8 +596,37 @@
     private void CambiarClaseDeTasa(int clase)
     {
         V.Rates.Current.Kind = clase;
-        if (clase == 2) { V.Rates.Variable ??= new TasaVariableRequest(); V.Rates.Current.EffectiveAnnual = null; }
+        if (clase == 2)
+        {
+            V.Rates.Variable ??= new TasaVariableRequest();
+            V.Rates.Current.EffectiveAnnual = null;
+            // 2026-11-24 (feature 025, HU2): la variable se pacta en E.A.
+            CambiarBaseDeTasa(TasaMensualVencida.BaseEfectivaAnual);
+        }
         else V.Rates.Variable = null;
+    }
+
+    private bool EnMensual => V.Rates.Current.Basis == TasaMensualVencida.BaseMensual;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-008): al pasar a mensual vencida la versión queda en 30/360 lineal (lo único que la admite) y se borran las
+    /// E.A. digitadas; al volver a E.A. se borran las MV.
+    /// </summary>
+    private void CambiarBaseDeTasa(int baseDeTasa)
+    {
+        V.Rates.Current.Basis = baseDeTasa;
+        if (baseDeTasa == TasaMensualVencida.BaseMensual)
+        {
+            V.Rates.Current.EffectiveAnnual = null;
+            V.DayCount = 1;
+            V.RateEquivalence = 2;
+            foreach (var b in V.Rates.Bands) b.EffectiveAnnual = null;
+        }
+        else
+        {
+            V.Rates.Current.MonthlyRate = null;
+            foreach (var b in V.Rates.Bands) b.MonthlyRate = null;
+        }
     }
 
     private void CambiarConcepto(string? valor) =>

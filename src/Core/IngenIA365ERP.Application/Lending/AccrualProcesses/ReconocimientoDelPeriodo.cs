@@ -18,7 +18,9 @@ using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 using IngenIA365ERP.Domain.Lending.Replay;
+using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.AccrualProcesses;
@@ -35,6 +37,10 @@ namespace IngenIA365ERP.Application.Lending.AccrualProcesses;
 /// <item><b>Fuera, con su motivo</b>: castigado, en UVR, con la causación suspendida, con abonos posteriores (reproceso), con el ciclo sin empezar
 /// (empieza después de hoy), con el rubro ya reconocido, y los hechos con el mes contable cerrado o inexistente, la contabilidad sin iniciar o el mes
 /// ya cerrado por Cartera. Contabilidad sin respuesta bloquea.</item>
+/// <item>2026-11-24 (feature 025, fase 5, HU5): con <c>Causacion.Periodo = PeriodoCalendario</c> en la línea, toma las cuotas que <b>vencen</b> en el rango
+/// (no las cuyo período se cruza con él), se reconocen desde el primer día del tramo del calendario que contiene su vencimiento y, si ese día es posterior a
+/// hoy, quedan fuera con <c>PeriodNotStarted</c>. Los filtros de FR-018 son exactos: la forma de pago del vínculo vigente (nómina = nómina propia y
+/// libranza; caja = las demás), las cuotas con o sin prima y el ciclo de descuento por el día del vencimiento.</item>
 /// <item><b>El hecho</b> es lo reconocido de un día y una sucursal (un <c>CuotaReconocida</c>); no hay mensaje en el borrador.</item>
 /// <item><b>En firme</b>: con los créditos bloqueados y su causación todavía antes del día del reconocimiento, una corrida <c>PeriodRecognition</c> (ya
 /// terminada) escribe las filas <c>PeriodRecognition</c> del libro y las partes de sus hechos, que esperan con el alcance de la causación manual; la
@@ -74,6 +80,15 @@ public sealed class ReconocimientoDelPeriodo(
         if (p.LineaId is { } linea) consulta = consulta.Where(l => l.CreditLineId == linea);
         if (p.PagaduriaId is { } pagaduria)
             consulta = consulta.Where(l => db.LoanPayrollLinks.Any(v => v.LoanId == l.Id && !v.IsDeleted && v.ValidTo == null && v.PaymasterPersonId == pagaduria));
+        // 2026-11-24 (feature 025, fase 5, FR-018): la forma de pago del vínculo vigente; caja es todo lo que no es nómina (también sin vínculo).
+        if (p.FormaDePago is { } forma)
+        {
+            RepaymentChannel[] deNomina = [RepaymentChannel.OwnPayroll, RepaymentChannel.PaymasterDeduction];
+            var porNomina = db.LoanPayrollLinks.Where(v => !v.IsDeleted && v.ValidTo == null && deNomina.Contains(v.RepaymentChannel)).Select(v => v.LoanId);
+            consulta = forma == AccrualPaymentForm.Payroll
+                ? consulta.Where(l => porNomina.Contains(l.Id))
+                : consulta.Where(l => !porNomina.Contains(l.Id));
+        }
         var candidatos = (await consulta.Select(l => new Candidato(l.Id, l.BranchId, l.CreditLineId, l.Status)).ToListAsync(ct))
             .Where(c => contexto.Alcance.IncluyeOficina(c.Oficina) && contexto.Alcance.IncluyeLinea(c.Linea))
             .ToList();
@@ -96,7 +111,7 @@ public sealed class ReconocimientoDelPeriodo(
             foreach (var c in trozo)
             {
                 if (!cargados.TryGetValue(c.Id, out var cargado) || !cargado.Listo || !marcas.TryGetValue(c.Id, out var marca)) continue;
-                lineas.AddRange(DelCredito(contexto, c, cargado.Entrada!, marca, rubros, leida.Modo, hoy));
+                lineas.AddRange(DelCredito(contexto, c, cargado.Entrada!, marca, rubros, leida.Modo, hoy, leida.PorPeriodoCalendario(c.Linea)));
             }
         }
         if (lineas.Count == 0)
@@ -147,9 +162,12 @@ public sealed class ReconocimientoDelPeriodo(
 
     private sealed record Candidato(int Id, int Oficina, int Linea, LoanStatus Estado);
 
-    /// <summary>Las líneas de un crédito: por cada cuota cuyo período se cruza con el rango y falta por causar, cada rubro pedido, incluido o con su motivo.</summary>
+    /// <summary>
+    /// Las líneas de un crédito: por cada cuota cuyo período se cruza con el rango (por período calendario, que vence en el rango) y falta por causar, cada
+    /// rubro pedido, incluido o con su motivo. 2026-11-24 (feature 025, fase 5): sólo las cuotas de los filtros de FR-018.
+    /// </summary>
     private static IEnumerable<LineaDelCalculo> DelCredito(ContextoDelCalculo contexto, Candidato c, EntradaDeReconstruccion entrada, DateOnly marca,
-        IReadOnlyList<LoanConcept> rubros, ModoDeReconocimiento modo, DateOnly hoy)
+        IReadOnlyList<LoanConcept> rubros, ModoDeReconocimiento modo, DateOnly hoy, bool periodoCalendario = false)
     {
         var p = contexto.Parametros;
         var estado = MotorDeCartera.Reconstruir(entrada, marca);
@@ -160,9 +178,14 @@ public sealed class ReconocimientoDelPeriodo(
             : estado.Suspendida ? AccrualExclusionReason.AccrualSuspended
             : null;
         var siguiente = marca.AddDays(1);
-        foreach (var q in estado.Plan.Cuotas.Where(q => q.Desde.AddDays(1) <= p.Hasta && q.Vencimiento >= p.Desde))
+        var periodicidad = estado.Plan.Entrada.Periodicidad;
+        var cuotas = periodoCalendario
+            ? estado.Plan.Cuotas.Where(q => q.Vencimiento >= p.Desde && q.Vencimiento <= p.Hasta)
+            : estado.Plan.Cuotas.Where(q => q.Desde.AddDays(1) <= p.Hasta && q.Vencimiento >= p.Desde);
+        foreach (var q in cuotas.Where(q => EnLosFiltros(p, q)))
         {
-            var inicio = q.Desde.AddDays(1);
+            // 2026-11-24 (feature 025, fase 5): por período calendario, el período empieza el primer día del tramo que contiene el vencimiento.
+            var inicio = periodoCalendario ? PuestaAlDiaDeCredito.DiaDeReconocimiento(q, periodicidad) : q.Desde.AddDays(1);
             var desde = inicio > siguiente ? inicio : siguiente;
             if (desde > q.Vencimiento) continue;
             var ya = entrada.Reconocimientos.Where(r => r.Cuota == q.Numero).ToList();
@@ -170,7 +193,9 @@ public sealed class ReconocimientoDelPeriodo(
                 yield return Linea(contexto, c, r.Concepto, r.Monto, AccrualProcessItemStatus.Excluded, AccrualExclusionReason.AlreadyRecognized, q.Numero, r.Fecha);
             var pendientes = rubros.Where(r => ya.All(x => ConceptosReconocidos.RubroDe(x.Concepto) != r)).ToList();
             if (pendientes.Count == 0) continue;
-            var motivo = delCredito ?? (inicio > hoy ? AccrualExclusionReason.CycleNotStarted : null);
+            var motivo = delCredito ?? (inicio > hoy
+                ? periodoCalendario ? AccrualExclusionReason.PeriodNotStarted : AccrualExclusionReason.CycleNotStarted
+                : null);
             if (motivo is { } fuera)
             {
                 foreach (var r in pendientes)
@@ -181,6 +206,14 @@ public sealed class ReconocimientoDelPeriodo(
                 yield return Linea(contexto, c, ConceptosReconocidos.De(rubro, modo), monto, AccrualProcessItemStatus.Included, null, q.Numero, desde);
         }
     }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, FR-018): ¿la cuota cumple las cuotas pedidas (con prima o sin ella) y el ciclo de descuento (por el día de su
+    /// vencimiento)? Sin filtros, todas. (nuevo)
+    /// </summary>
+    internal static bool EnLosFiltros(ParametrosDelProceso p, CuotaDelPlan q) =>
+        (p.Cuotas is not { } cuotas || (cuotas == AccrualInstallmentScope.OnlyExtras) == (q.Extraordinaria != 0m))
+        && (p.CicloDeDescuento is not { } ciclo || PeriodoDeCausacion.EnCicloDeDescuento(q.Vencimiento, ciclo));
 
     private static LineaDelCalculo Linea(ContextoDelCalculo contexto, Candidato c, LoanConcept concepto, decimal monto, AccrualProcessItemStatus estado,
         AccrualExclusionReason? motivo, int cuota, DateOnly desde) =>

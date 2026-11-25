@@ -60,6 +60,9 @@ public static class DefinicionesDeMigracion
         public const string MontoDesembolsado = "montoDesembolsado";
         public const string TipoDeTasa = "tipoDeTasa";
         public const string TasaCorrienteEA = "tasaCorrienteEA";
+
+        /// <summary>2026-11-24 (feature 025, HU2; FR-011): la corriente pactada en mensual vencida, excluyente con <see cref="TasaCorrienteEA"/>. (nuevo)</summary>
+        public const string TasaCorrienteMV = "tasaCorrienteMV";
         public const string Indice = "indice";
         public const string ClaveDelIndice = "claveDelIndice";
         public const string Margen = "margen";
@@ -224,6 +227,8 @@ public static class DefinicionesDeMigracion
         new(Columnas.MontoDesembolsado, TipoDeValor.Monto, Obligatoria: true, Reglas: "mayor que cero", Ejemplo: "5000000,00"),
         new(Columnas.TipoDeTasa, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Fixed (fija) o Variable", Ejemplo: "Fixed"),
         new(Columnas.TasaCorrienteEA, TipoDeValor.Porcentaje, Reglas: "con Fixed: la pactada, efectiva anual en puntos; sobre la usura del corte es aviso, no error", Ejemplo: "22,5"),
+        // 2026-11-24 (feature 025, HU2; FR-011): la tasa en mensual vencida, en lugar de la E.A.
+        new(Columnas.TasaCorrienteMV, TipoDeValor.Porcentaje, Reglas: "con Fixed, en lugar de tasaCorrienteEA (no las dos): la pactada en mensual vencida en puntos, hasta 4 decimales (1,8 = 1,8 % MV); exige 30/360 y equivalencia Linear", Ejemplo: ""),
         new(Columnas.Indice, TipoDeValor.Codigo, Largo: 20, Reglas: "con Variable", Ejemplo: ""),
         new(Columnas.ClaveDelIndice, TipoDeValor.Texto, Largo: 20, Reglas: "con Variable", Ejemplo: ""),
         new(Columnas.Margen, TipoDeValor.Porcentaje, Reglas: "con Variable; en puntos", Ejemplo: ""),

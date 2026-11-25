@@ -72,6 +72,9 @@ public sealed record SimulacionDto(
 
     /// <summary>K6b: ¿la línea es de vivienda? La solicitud pregunta entonces si el inmueble es VIS.</summary>
     public bool IsHousing { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la mensual vencida pactada (fracción); nula en E.A. La E.A. de arriba es entonces la derivada. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
 }
 
 /// <summary>Una cuota del plan en UVR.</summary>

@@ -1,4 +1,9 @@
+using IngenIA365ERP.Application.Lending.Activation;
+using IngenIA365ERP.Domain.Entities.Lending.Loans;
+using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 
 namespace IngenIA365ERP.Application.Lending.Migration;
 
@@ -30,7 +35,8 @@ public sealed record DescuadreDeConcepto(string Concepto, decimal Declarado, dec
 /// Los cuadres de la migración (feature 013, US8, T0738; plantillas.md §5.3.2–§5.3.4, §5.3.9, §5.3.13; FR-139), sin IO: los usa
 /// <c>ImportMigrationPartCommand</c> dentro de un archivo (fechas crecientes, interés fuera de la cuota en curso, la ecuación de la venta) y
 /// <c>ApplyMigrationLoadCommand</c> entre partes (el plan contra el saldo de capital, los conceptos de <c>balances</c> contra las cuotas, la mora
-/// declarada y el episodio vigente). Una cuota está <b>vencida e impaga</b> al corte si vence hasta el corte y todavía debe algo; la cuota
+/// declarada y el episodio vigente) y, 2026-11-24 (feature 025, fase 4), el interés que suma la opción del período completo
+/// (<see cref="InteresDelPeriodoCompleto"/>, fuera del cuadre). Una cuota está <b>vencida e impaga</b> al corte si vence hasta el corte y todavía debe algo; la cuota
 /// <b>en curso</b> es la primera que vence después del corte. (nuevo)
 /// </summary>
 public static class CuadresDeMigracion
@@ -98,6 +104,34 @@ public static class CuadresDeMigracion
         for (var i = 1; i < ordenadas.Count; i++)
             if (ordenadas[i].Vencimiento <= ordenadas[i - 1].Vencimiento) malas.Add(ordenadas[i]);
         return malas;
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que la opción «el período en curso al corte se causa completo» suma a un crédito de la carga, sin
+    /// IO: el plan migrado de sus condiciones con el inicio del período de la primera cuota posterior al corte
+    /// (<see cref="NacimientoDeCreditosMigrados.CuotasDelPlan"/>) y <see cref="AjusteDelCorteDeCarga.PeriodoCompleto"/> con el interés corriente que esa
+    /// cuota trajo en la carga, que cuenta como causado. Es ingreso del día de la activación: <b>no</b> entra al cuadre contra el balance al corte. Nula si
+    /// el crédito no tiene cuota posterior al corte o su plan no cuadra con el capital (eso lo informa el cuadre).
+    /// </summary>
+    public static PropuestaDeAjusteDelCorte? InteresDelPeriodoCompleto(LoanTermsVersion condiciones, DateOnly corte, decimal capital,
+        IReadOnlyList<MigrationInstallmentRow> cuotas, DateOnly desembolso)
+    {
+        ArgumentNullException.ThrowIfNull(condiciones);
+        ArgumentNullException.ThrowIfNull(cuotas);
+        if (cuotas.Count == 0) return null;
+        try
+        {
+            var plan = NacimientoDeCreditosMigrados.PlanMigrado(condiciones, corte, capital,
+                NacimientoDeCreditosMigrados.CuotasDelPlan(cuotas, periodoCompleto: true, corte, condiciones.Periodicity, desembolso));
+            var q = plan.Cuotas.FirstOrDefault(x => x.Vencimiento > corte);
+            if (q is null) return null;
+            var cargado = cuotas.Where(c => c.InstallmentNumber == q.Numero).Sum(c => c.CurrentInterest);
+            return AjusteDelCorteDeCarga.PeriodoCompleto(plan, corte, cargado);
+        }
+        catch (ReglaDeCarteraException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Las cuotas con interés corriente que no están vencidas ni son la cuota en curso (la primera que vence después del corte).</summary>

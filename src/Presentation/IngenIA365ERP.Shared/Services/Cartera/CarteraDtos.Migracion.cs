@@ -32,9 +32,23 @@ public sealed record CargaDeMigracionDto(
     int LoanCount,
     DiferenciasDeLaCargaDto Differences,
     DateTime? ActivatedAt,
-    IReadOnlyList<LoPrevalecidoDto>? ManualPrevails);
+    IReadOnlyList<LoPrevalecidoDto>? ManualPrevails,
+    bool CauseFullInProgressPeriod = false);
 
-public sealed record CrearCargaRequest(DateOnly CutoffDate, string? Notes);
+/// <summary>2026-11-24 (feature 025, fase 4, HU4): el alta con la opción «el período en curso al corte se causa completo» (por defecto sí, D5).</summary>
+public sealed record CrearCargaRequest(DateOnly CutoffDate, string? Notes, bool CauseFullInProgressPeriod = true);
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que la opción del período completo suma a un crédito de la carga: la primera cuota posterior al corte,
+/// el inicio de su período, los días que el corte le dejó por fuera, el interés del período completo, lo que el motor causa desde el corte, lo que trajo
+/// en la carga y el interés que suma (la diferencia).
+/// </summary>
+public sealed record InteresDelPeriodoCompletoDeCreditoDto(string LoanNumber, int Installment, DateOnly PeriodStart, DateOnly DueDate, int MissingDays,
+    decimal FullPeriodInterest, decimal FromCutoff, decimal Loaded, decimal Added);
+
+/// <summary>2026-11-24 (feature 025, fase 4, HU4; FR-015): la vista previa de la opción: si está encendida, el total, los créditos que suman y el detalle.</summary>
+public sealed record InteresDelPeriodoCompletoDto(bool CauseFullInProgressPeriod, DateOnly CutoffDate, decimal Total, int Loans,
+    IReadOnlyList<InteresDelPeriodoCompletoDeCreditoDto> Items);
 
 public sealed record ResumenDelCuadreDto(int CheckVersion, bool IsBalanced, int Differences);
 
@@ -178,4 +192,8 @@ public sealed record CarteraActivadaDto(
     int RevalidatedLimits,
     int NonDeductionsMarked,
     int ProvisionalCollectionsStored,
-    IReadOnlyList<MensajeEmitidoDto> Messages);
+    IReadOnlyList<MensajeEmitidoDto> Messages,
+    PeriodoCompletoActivadoDto? FullPeriodInterest = null);
+
+/// <summary>2026-11-24 (feature 025, fase 4, HU4): lo que sumó la opción del período completo al activar (ingreso del día de la activación).</summary>
+public sealed record PeriodoCompletoActivadoDto(int Loans, decimal Total, int Marked, int NotRebuilt);

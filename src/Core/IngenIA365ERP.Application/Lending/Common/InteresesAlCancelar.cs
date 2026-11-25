@@ -94,8 +94,17 @@ public sealed class InteresesAlCancelar(ReglasDeParametrosDeCartera parametros, 
     {
         ArgumentNullException.ThrowIfNull(estado);
         var cuotaCompleta = !estado.EnUvr && (await ModoAsync(credito, estado.RulesVersion, estado.Fecha, ct)).CuotaCompleta;
-        return AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta);
+        // 2026-11-24 (feature 025, fase 5, D3): por período calendario, sin lo causado de un tramo sin empezar (lo mismo que cobra la cancelación).
+        var calendario = !estado.EnUvr && await PeriodoCalendarioAsync(estado.Fecha, credito.CreditLineId, ct);
+        return AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta, calendario);
     }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): ¿la línea causa por período calendario a <paramref name="fecha"/> (<c>Causacion.Periodo</c>, con caída al
+    /// general)? (nuevo)
+    /// </summary>
+    public Task<bool> PeriodoCalendarioAsync(DateOnly fecha, int lineaId, CancellationToken ct) =>
+        PeriodoDeLaCuota.CalendarioAsync(parametros, fecha, lineaId, ct);
 
     /// <summary>El tope legal del prepago del crédito con el SMMLV y <c>PREPAGO_TOPE_SMMLV</c> a la fecha del desembolso; nulo si falta algo.</summary>
     private async Task<ResultadoDeTopeDePrepago?> TopeAsync(Loan credito, CancellationToken ct)

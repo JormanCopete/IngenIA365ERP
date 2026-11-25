@@ -177,6 +177,9 @@ public sealed class ImportMigrationPartCommandHandler(
         private readonly HashSet<string> _numerosDelArchivo = new(StringComparer.Ordinal);
         private readonly List<(FilaDeImportacion Fila, string Columna, string Numero)> _referencias = [];
         private readonly List<(FilaDeImportacion Fila, string Linea, decimal Tasa)> _tasas = [];
+
+        /// <summary>2026-11-24 (feature 025, HU2): las filas con la tasa en MV (el aviso de usura va a esa columna). (nuevo)</summary>
+        private readonly HashSet<int> _filasEnMensual = [];
         private readonly Dictionary<string, List<CuotaMigrada>> _cuotas = new(StringComparer.Ordinal);
         private readonly HashSet<string> _conPrincipal = new(StringComparer.Ordinal);
         private readonly Dictionary<string, FilaDeImportacion> _primeraFilaDeSaldos = new(StringComparer.Ordinal);
@@ -448,7 +451,13 @@ public sealed class ImportMigrationPartCommandHandler(
             var monto = NoNegativo(fila, C.MontoDesembolsado, fila.Monto(C.MontoDesembolsado), positivo: true);
             var tipoDeTasa = Enumeracion<RateKind>(fila, C.TipoDeTasa);
             var tasa = fila.Porcentaje(C.TasaCorrienteEA);
-            if (tipoDeTasa == RateKind.Fixed) fila.Requerido(C.TasaCorrienteEA);
+            // 2026-11-24 (feature 025, HU2; FR-011): la tasa en MV, excluyente con la E.A.
+            var tasaMensual = fila.Porcentaje(C.TasaCorrienteMV);
+            if (tasa is not null && tasaMensual is not null)
+                fila.Error(C.TasaCorrienteMV, ImportErrors.CellFormat, "Traiga la tasa corriente en E.A. o en MV, no las dos.");
+            else if (tipoDeTasa == RateKind.Fixed && tasaMensual is null) fila.Requerido(C.TasaCorrienteEA);
+            if (tasaMensual is not null && tipoDeTasa == RateKind.Variable)
+                fila.Error(C.TasaCorrienteMV, ImportErrors.CellFormat, "La tasa variable se pacta en efectiva anual: la columna MV sólo va con Fixed.");
             var indice = fila.Codigo(C.Indice, 20);
             var claveDelIndice = fila.Texto(C.ClaveDelIndice, 20);
             var margen = fila.Porcentaje(C.Margen);
@@ -470,6 +479,10 @@ public sealed class ImportMigrationPartCommandHandler(
                 ["30/360"] = DayCountConvention.Thirty360, ["real/365"] = DayCountConvention.Actual365, ["real/360"] = DayCountConvention.Actual360,
             });
             var equivalencia = Enumeracion<RateEquivalence>(fila, C.Equivalencia);
+            if (tasaMensual is not null && (convencion ?? linea?.Version.DayCount) != DayCountConvention.Thirty360
+                || tasaMensual is not null && (equivalencia ?? linea?.Version.RateEquivalence) != RateEquivalence.Linear)
+                fila.Error(C.TasaCorrienteMV, Domain.Lending.Rates.EquivalenciaDeTasas.CodigoMensualExige30360,
+                    "Una tasa en mensual vencida exige la convención 30/360 y la equivalencia Linear (en la fila o en la línea).");
             var unidad = fila.Monto(C.RedondeoUnidad);
             var modo = Enumeracion<RoundingMode>(fila, C.RedondeoModo);
             var momento = Enumeracion<RoundingMoment>(fila, C.RedondeoMomento);
@@ -500,10 +513,16 @@ public sealed class ImportMigrationPartCommandHandler(
             if (!LlaveNueva(ctx, fila, Llave(numero), C.Numero)) return null;
             _numerosDelArchivo.Add(numero);
             if (tipoDeTasa == RateKind.Fixed && tasa is { } t && linea is { } l) _tasas.Add((fila, l.Version.CreditLineId.ToString(CultureInfo.InvariantCulture), t));
+            // 2026-11-24 (feature 025, HU2; FR-009): la MV se compara con la usura por su E.A. derivada sin redondear.
+            if (tipoDeTasa == RateKind.Fixed && tasaMensual is { } mv && linea is { } lm)
+            {
+                _tasas.Add((fila, lm.Version.CreditLineId.ToString(CultureInfo.InvariantCulture), Domain.Lending.Rates.EquivalenciaDeTasas.EfectivaDeMensual(mv)));
+                _filasEnMensual.Add(fila.Numero);
+            }
 
             var condiciones = JsonSerializer.Serialize(new Dictionary<string, object?>
             {
-                ["rateKind"] = tipoDeTasa?.ToString(), ["annualRate"] = tasa, ["index"] = indice, ["indexKey"] = claveDelIndice, ["margin"] = margen,
+                ["rateKind"] = tipoDeTasa?.ToString(), ["annualRate"] = tasa, ["monthlyRate"] = tasaMensual, ["index"] = indice, ["indexKey"] = claveDelIndice, ["margin"] = margen,
                 ["floorRate"] = piso, ["ceilingRate"] = techo, ["resetMonths"] = reajuste, ["defaultRateKind"] = tipoDeMora?.ToString(),
                 ["defaultRate"] = tasaDeMora, ["defaultFactor"] = factor, ["dayCount"] = convencion?.ToString(), ["equivalence"] = equivalencia?.ToString(),
                 ["roundingUnit"] = unidad, ["roundingMode"] = modo?.ToString(), ["roundingMoment"] = momento?.ToString(),
@@ -983,7 +1002,7 @@ public sealed class ImportMigrationPartCommandHandler(
                     var usura = await reglas.UsuraAsync(combinacion.Value, Corte, ct);
                     if (usura.IsFailure) continue;
                     foreach (var (fila, _, tasa) in grupo.Where(t => t.Tasa > usura.Value.Tasa))
-                        fila.Aviso(C.TasaCorrienteEA, Domain.Lending.Rates.ControlDeUsura.CodigoExcedida,
+                        fila.Aviso(_filasEnMensual.Contains(fila.Numero) ? C.TasaCorrienteMV : C.TasaCorrienteEA, Domain.Lending.Rates.ControlDeUsura.CodigoExcedida,
                             $"La tasa pactada ({tasa:P4}) supera la usura vigente al corte ({usura.Value.Tasa:P4}): el crédito se migra y el motor topa la tasa del día.");
                 }
 

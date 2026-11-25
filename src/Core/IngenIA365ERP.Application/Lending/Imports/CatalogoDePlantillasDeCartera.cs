@@ -135,6 +135,9 @@ public static class CatalogoDePlantillasDeCartera
         public const string SoporteDelConcepto = "soporteDelConceptoTributario";
         public const string TipoDeTasa = "tipoDeTasa";
         public const string TasaCorriente = "tasaCorrienteEA";
+
+        /// <summary>2026-11-24 (feature 025, HU2; FR-011): la corriente en mensual vencida, excluyente con <see cref="TasaCorriente"/>. (nuevo)</summary>
+        public const string TasaCorrienteMV = "tasaCorrienteMV";
         public const string Indice = "indice";
         public const string ClaveDelIndice = "claveDelIndice";
         public const string Margen = "margen";
@@ -227,6 +230,8 @@ public static class CatalogoDePlantillasDeCartera
             new(ColumnasDeLineas.SoporteDelConcepto, TipoDeValor.Texto, Largo: 200, Reglas: "el identificador del adjunto con el concepto de la contadora (súbalo primero en la línea)", Ejemplo: ""),
             new(ColumnasDeLineas.TipoDeTasa, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Fixed (fija) o Variable", Ejemplo: "Fixed"),
             new(ColumnasDeLineas.TasaCorriente, TipoDeValor.Porcentaje, Reglas: "con Fixed; efectiva anual en puntos, hasta 4 decimales (22,5 = 22,5 % EA)", Ejemplo: "22,5"),
+            // 2026-11-24 (feature 025, HU2; FR-011): la tasa en mensual vencida, en lugar de la E.A.
+            new(ColumnasDeLineas.TasaCorrienteMV, TipoDeValor.Porcentaje, Reglas: "con Fixed, en lugar de tasaCorrienteEA (no las dos): mensual vencida en puntos, hasta 4 decimales (1,8 = 1,8 % MV); exige 30/360 y equivalencia lineal, y las bandas también en MV", Ejemplo: ""),
             new(ColumnasDeLineas.Indice, TipoDeValor.Codigo, Largo: 20, Reglas: "con Variable: IBR, IPC u otro índice nacional", Ejemplo: ""),
             new(ColumnasDeLineas.ClaveDelIndice, TipoDeValor.Texto, Largo: 20, Reglas: "con Variable: plazo o serie del índice, tal como la registra la plataforma", Ejemplo: ""),
             new(ColumnasDeLineas.Margen, TipoDeValor.Porcentaje, Reglas: "con Variable; en puntos, se suma en la expresión del índice", Ejemplo: ""),
@@ -276,6 +281,7 @@ public static class CatalogoDePlantillasDeCartera
             new(ColumnasDeLineas.ParaEmpleados, TipoDeValor.SiNoIndiferente, Reglas: "vacío = indiferente", Ejemplo: ""),
             new(ColumnasDeLineas.AntiguedadMinima, TipoDeValor.Entero, Ejemplo: ""),
             new(ColumnasDeLineas.TasaCorriente, TipoDeValor.Porcentaje, Reglas: "en línea Fixed", Ejemplo: "24"),
+            new(ColumnasDeLineas.TasaCorrienteMV, TipoDeValor.Porcentaje, Reglas: "en línea Fixed pactada en MV, en lugar de tasaCorrienteEA", Ejemplo: ""),
             new(ColumnasDeLineas.Margen, TipoDeValor.Porcentaje, Reglas: "en línea Variable", Ejemplo: ""),
         ], Obligatoria: false),
         new HojaDePlantilla(HojasDeLineas.Documentos,

@@ -26,6 +26,12 @@ public sealed record CondicionesDeCredito(
 {
     public decimal? MoraFijaEA { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la corriente pactada en mensual vencida (<c>LoanTermsVersion.MonthlyRate</c>); nula = en E.A. Con valor manda
+    /// ella y <see cref="CondicionesDeCredito.TasaEfectivaAnual"/> es la E.A. derivada (informativa). (nuevo)
+    /// </summary>
+    public decimal? TasaMensual { get; init; }
+
     /// <summary>La mora relativa: factor × la corriente pactada o reajustada, antes de topar.</summary>
     public decimal? FactorDeMora { get; init; }
 
@@ -198,6 +204,13 @@ public sealed record EntradaDeReconstruccion(
     /// causó (<c>RecognitionRelease</c>). El cálculo de la causación no cambia. Vacía: la reconstrucción es la de siempre.
     /// </summary>
     public IReadOnlyList<ReconocimientoDeCuota> Reconocimientos { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1): los ajustes del corte de un crédito cargado (las filas <c>CutoverInterestAdjustment</c> del libro, con su R).
+    /// La reconstrucción suma cada uno al interés corriente de su cuota el día de su fecha, fuera de la causación; sin ellos, la conciliación de la noche
+    /// lo revertiría. Vacía: la reconstrucción es la de siempre. (nuevo)
+    /// </summary>
+    public IReadOnlyList<AjusteDelCorte> AjustesDelCorte { get; init; } = [];
 
     /// <summary>
     /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la

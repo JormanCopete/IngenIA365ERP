@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
 namespace IngenIA365ERP.Domain.Lending.Replay;
@@ -32,6 +33,9 @@ public sealed record ContenidoDeNovedad(NoveltyMechanism Mecanismo, int Cuotas)
     public int? NoveltyId { get; init; }
 
     public decimal? TasaEfectivaAnual { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la tasa nueva en mensual vencida (con ella, <see cref="TasaEfectivaAnual"/> es su E.A. derivada). (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 
     public RepaymentPeriodicity? Periodicidad { get; init; }
 
@@ -164,12 +168,16 @@ public sealed class InterpreteDeNovedad : IInterpreteDeOperacion
         var saldo = plan.Cuotas.Sum(contexto.CapitalPendiente);
         var vencidas = plan.Cuotas.Where(c => c.Vencimiento <= v).ToList();
         var primera = vencidas.Count == 0 ? plan.Cuotas[0].Numero : vencidas[^1].Numero + 1;
-        var tasa = n.TasaEfectivaAnual ?? contexto.TasaCorrienteEA;
+        // 2026-11-24 (feature 025, HU2): la tasa viaja con su base (una novedad puede pactar la tasa nueva en MV).
+        var tasa = n.TasaMensual is { } mvNueva ? TasaPactada.Mensual(mvNueva)
+            : n.TasaEfectivaAnual is { } eaNueva ? TasaPactada.Efectiva(eaNueva)
+            : contexto.TasaCorriente;
         var nuevo = GeneradorDePlan.RegenerarPorNovedad(new EntradaDeNovedadDePlan(n.Mecanismo, v,
-            plan.Entrada with { TasaEfectivaAnual = contexto.TasaCorrienteEA }, saldo, n.Cuotas)
+            plan.Entrada with { TasaEfectivaAnual = contexto.TasaCorrienteEA, TasaMensual = contexto.TasaCorrienteMensual }, saldo, n.Cuotas)
         {
             InteresCapitalizado = capitalizado,
             TasaEfectivaAnual = n.TasaEfectivaAnual,
+            TasaMensual = n.TasaMensual,
             Periodicidad = n.Periodicidad,
             DiaDePago = n.DiaDePago,
             PrimerVencimiento = n.PrimerVencimiento,
@@ -185,7 +193,7 @@ public sealed class InterpreteDeNovedad : IInterpreteDeOperacion
             var ajuste = contexto.SaldoFueraDeCausacion(LoanConcept.Principal, c.Numero);
             if (ajuste != objetivo) contexto.SumarSaldo(LoanConcept.Principal, c.Numero, objetivo - ajuste);
         }
-        if (tasa != contexto.TasaCorrienteEA) contexto.CambiarTasa(tasa);
+        if (tasa != contexto.TasaCorriente) contexto.CambiarTasa(tasa);
         contexto.CambiarPlan(completo);
         if (n.ReestructuracionesDespues is { } conteo) contexto.CambiarReestructuraciones(conteo);
     }
@@ -222,6 +230,8 @@ public sealed class InterpreteDeNovedad : IInterpreteDeOperacion
             throw new ReglaDeCarteraException(ProblemaDeCartera.Con(GeneradorDePlan.CodigoNovedadInvalida,
                 "Lo que recibe el crédito enlazado son importes mayores que cero.", "operation", operacion.Id));
 
+        // 2026-11-24 (feature 025, HU2): la base de la tasa es la de las condiciones selladas del enlazado.
+        if (contexto.TasaCorrienteMensual is { } mv) pactado = pactado with { TasaMensual = mv };
         contexto.CambiarPlan(GeneradorDePlan.Generar(pactado));
         if (capital != 0m)
             contexto.AgregarFila(new MovimientoDeLibro(v, LoanTransactionKind.TransferFromLinkedLoan, LoanConcept.Principal, null, capital)

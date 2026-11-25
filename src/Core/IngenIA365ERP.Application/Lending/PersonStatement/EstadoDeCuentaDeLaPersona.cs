@@ -70,6 +70,9 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     /// cero sin reconocimientos): con lo causado, la cuota completa que se ofrece para pagar. (nuevo)
     /// </summary>
     public decimal? ReconocidoPorCausar { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la tasa mensual vencida pactada, en puntos (1,8 = 1,8 % MV); nula si se pactó en E.A. (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 }
 
 /// <summary>
@@ -260,7 +263,7 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
         var condiciones = await db.LoanTermsVersions.AsNoTracking()
             .Where(t => db.Loans.Any(l => l.Id == t.LoanId && l.PublicId == c.PublicId))
             .OrderByDescending(t => t.VersionNumber)
-            .Select(t => new { t.AnnualRate, t.Periodicity, t.Installments, t.TermMonths, t.AmortizationSystem, t.FirstDueDate })
+            .Select(t => new { t.AnnualRate, t.RateBasis, t.MonthlyRate, t.Periodicity, t.Installments, t.TermMonths, t.AmortizationSystem, t.FirstDueDate })
             .FirstOrDefaultAsync(ct);
         var primera = await db.LoanTermsVersions.AsNoTracking()
             .Where(t => db.Loans.Any(l => l.Id == t.LoanId && l.PublicId == c.PublicId) && t.VersionNumber == 1)
@@ -282,7 +285,8 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
         var cuotas = estado?.Installments ?? [];
         var proxima = cuotas.Where(q => q.Status is "Upcoming" or "PastDue").OrderBy(q => q.DueDate).FirstOrDefault(q => q.Status == "Upcoming")
                       ?? cuotas.Where(q => q.Status == "PastDue").OrderBy(q => q.DueDate).FirstOrDefault();
-        var regular = plan?.Installments.Where(q => !q.IsExtraordinary && !q.IsGraceInstallment).Select(q => (decimal?)q.Total).FirstOrDefault();
+        // 2026-11-24 (feature 025, HU6): la cuota regular, no la primera: en un crédito cargado la primera es la recortada por el corte.
+        var regular = plan is null ? null : CuotaRegular(plan.Installments, fecha);
 
         return (new ProductoDelEstadoDeCuentaDto(
             "Credito", c.PublicId, c.Number, $"{c.Line.Code} · {c.Line.Name}", "Crédito", rol, EstadoDeCredito(c.Status), c.Office.Name, apertura,
@@ -306,10 +310,30 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             Administracion = Saldo("Administration"),
             // 2026-11-16 (feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada.
             ReconocidoPorCausar = estado?.RecognizedPending,
+            // 2026-11-24 (feature 025, HU2): la MV pactada, en puntos como la tasa.
+            TasaMensual = condiciones is { RateBasis: RateBasis.MonthlyNominal, MonthlyRate: { } mv } ? decimal.Round(mv * 100m, 6) : null,
         }, estado?.Balances);
     }
 
     public const string NaturalezaAportes = "Aportes";
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU6, FR-019): la cuota regular del plan —el total más frecuente entre las cuotas que no son extraordinarias ni de
+    /// gracia—; con empate, la de la siguiente por vencer a <paramref name="hoy"/> (o la última si ya vencieron todas). Nula sin cuotas regulares. (nuevo)
+    /// </summary>
+    public static decimal? CuotaRegular(IReadOnlyList<ScheduleInstallmentDto> cuotas, DateOnly hoy)
+    {
+        ArgumentNullException.ThrowIfNull(cuotas);
+        var regulares = cuotas.Where(q => !q.IsExtraordinary && !q.IsGraceInstallment).OrderBy(q => q.DueDate).ToList();
+        if (regulares.Count == 0) return null;
+        var grupos = regulares.GroupBy(q => q.Total).Select(g => (Total: g.Key, Veces: g.Count())).ToList();
+        var maximo = grupos.Max(g => g.Veces);
+        var empatados = grupos.Where(g => g.Veces == maximo).Select(g => g.Total).ToHashSet();
+        if (empatados.Count == 1) return empatados.First();
+        var siguiente = regulares.FirstOrDefault(q => q.DueDate >= hoy && empatados.Contains(q.Total))
+                        ?? regulares.Last(q => empatados.Contains(q.Total));
+        return siguiente.Total;
+    }
 
     public static string Naturaleza(LineNature naturaleza, DepositClass? clase) => naturaleza switch
     {

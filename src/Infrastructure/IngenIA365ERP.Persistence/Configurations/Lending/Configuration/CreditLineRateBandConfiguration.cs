@@ -19,6 +19,7 @@ public class CreditLineRateBandConfiguration : IEntityTypeConfiguration<CreditLi
         builder.Property(e => e.MaxAmount).Monto();
         builder.Property(e => e.DebtorKind).HasConversion<int?>();
         builder.Property(e => e.AnnualRate).TasaAnual();
+        builder.Property(e => e.MonthlyRate).TasaMensual();
         builder.Property(e => e.Margin).TasaAnual();
 
         builder.HasOne<CreditLineVersion>().WithMany().HasForeignKey(e => e.CreditLineVersionId).OnDelete(DeleteBehavior.Restrict);

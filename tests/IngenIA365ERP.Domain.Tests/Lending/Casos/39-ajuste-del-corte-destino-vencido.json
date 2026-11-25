@@ -1,0 +1,46 @@
+// Feature 025, fase 3 (HU1, D1; casos límite «créditos en mora»): el crédito del caso 39 firmado el 15-12, cuando la cuota 5 (09-11) y la 6
+// (09-12) ya vencieron sin pagarse. El interés que faltó en la 5 no va a ella (la dejaría vencida con mora) sino a la primera sin vencer a la
+// fecha de firma, la 7 (09-01-2027). El valor del ajuste es el mismo: 126.000,00. Calculado con calcular.py (decimal de 40 dígitos).
+{
+  "nombre": "Ajuste del corte: la cuota siguiente ya venció",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 10000000, "plazoCuotas": 10, "periodicidad": "Monthly", "tasaEA": 0.238700,
+    "fechaDesembolso": "2026-06-09", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2026-01-01", "ea": 0.265000, "registradoEn": "2025-12-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000393" } ],
+    "tolerancias": [ { "desde": "2026-01-01", "valor": 1000 } ],
+    "umbralesDeSuspension": [ { "desde": "2026-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    {
+      "id": "M1", "tipo": "OpeningBalance", "fechaValor": "2026-10-31", "registradoEn": "2026-11-01T10:00:00Z",
+      "saldos": [ { "concepto": "Principal", "valor": 10000000 } ],
+      "cuotas": [
+        { "numero": 5, "vencimiento": "2026-11-09", "capital": 1000000 },
+        { "numero": 6, "vencimiento": "2026-12-09", "capital": 1000000 },
+        { "numero": 7, "vencimiento": "2027-01-09", "capital": 1000000 },
+        { "numero": 8, "vencimiento": "2027-02-09", "capital": 1000000 },
+        { "numero": 9, "vencimiento": "2027-03-09", "capital": 1000000 },
+        { "numero": 10, "vencimiento": "2027-04-09", "capital": 1000000 },
+        { "numero": 11, "vencimiento": "2027-05-09", "capital": 1000000 },
+        { "numero": 12, "vencimiento": "2027-06-09", "capital": 1000000 },
+        { "numero": 13, "vencimiento": "2027-07-09", "capital": 1000000 },
+        { "numero": 14, "vencimiento": "2027-08-09", "capital": 1000000 }
+      ]
+    }
+  ],
+  "propuestasDelCorte": [
+    {
+      "corte": "2026-10-31",
+      "hoy": "2026-12-15",
+      "informacionHasta": "2026-12-15T19:00:00Z",
+      "esperado": { "mvPropuesta": 0.0180, "cuotaDelCorte": 5, "inicioDelPeriodo": "2026-10-09", "vencimiento": "2026-11-09", "diasFaltantes": 21, "capitalAlCorte": 10000000, "interesDelPeriodo": 180000, "yaCausado": 54000, "cargado": 0, "ajuste": 126000, "cuotaDestino": 7 }
+    }
+  ]
+}

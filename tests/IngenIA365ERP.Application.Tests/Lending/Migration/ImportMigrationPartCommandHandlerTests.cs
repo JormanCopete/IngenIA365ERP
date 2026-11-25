@@ -191,4 +191,53 @@ public sealed class ImportMigrationPartCommandHandlerTests : IAsyncLifetime
         errores.Should().Contain(e => e.Row == 2 && e.Column == C.Motivo);
         errores.Should().Contain(e => e.Row == 3 && e.Column == C.Aseguradora && e.Code == ImportErrors.CellRequired, "el motivo admite el número del enum (Deceased 7)");
     }
+
+    // ------------------------------------------------------------------------- 2026-11-24 (feature 025, HU2; FR-011): la tasa en MV --
+
+    private static Dictionary<string, string?> CreditoEnMv(string numero, string mv = "1,8", string convencion = "30/360", string equivalencia = "Linear")
+    {
+        var fila = MigracionDePrueba.Credito(numero, tasa: null);
+        fila[C.TasaCorrienteMV] = mv;
+        fila[C.ConvencionDeDias] = convencion;
+        fila[C.Equivalencia] = equivalencia;
+        return fila;
+    }
+
+    [Fact]
+    public async Task Un_credito_con_tasaCorrienteMV_guarda_la_MV_en_sus_condiciones()
+    {
+        _m.Archivo(P.Loans, CreditoEnMv("CR-1"));
+        var r = await _m.ImportarAsync(P.Loans);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Warnings.Should().NotContain(w => w.Code == "Lending.Usury.Exceeded", "23,87 % E.A. está bajo la usura del corte");
+        var fila = await _m.Db.MigrationLoanRows.AsNoTracking().SingleAsync();
+        fila.TermsJson.Should().Contain("\"monthlyRate\":0.018").And.NotContain("annualRate");
+    }
+
+    [Fact]
+    public async Task La_tasa_en_EA_y_en_MV_a_la_vez_es_error_y_la_MV_exige_30_360_lineal()
+    {
+        var doble = CreditoEnMv("CR-1");
+        doble[C.TasaCorrienteEA] = "22,5";
+        _m.Archivo(P.Loans, doble, CreditoEnMv("CR-2", convencion: "real/365"), CreditoEnMv("CR-3", equivalencia: "Compound"));
+        var r = await _m.ImportarAsync(P.Loans);
+
+        MigracionDePrueba.Errores(r).Select(e => (e.Row, e.Column, e.Code)).Should().BeEquivalentTo(new[]
+        {
+            (2, C.TasaCorrienteMV, ImportErrors.CellFormat),
+            (3, C.TasaCorrienteMV, "Lending.Rate.MonthlyRequiresThirty360"),
+            (4, C.TasaCorrienteMV, "Lending.Rate.MonthlyRequiresThirty360"),
+        });
+    }
+
+    [Fact]
+    public async Task La_MV_sobre_la_usura_del_corte_avisa_por_su_EA_derivada_en_su_columna()
+    {
+        _m.Archivo(P.Loans, CreditoEnMv("CR-1", mv: "2,5"));
+        var r = await _m.ImportarAsync(P.Loans);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Warnings.Should().ContainSingle(w => w.Row == 2 && w.Column == C.TasaCorrienteMV && w.Code == "Lending.Usury.Exceeded");
+    }
 }

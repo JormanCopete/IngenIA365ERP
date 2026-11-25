@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
@@ -73,13 +74,17 @@ public static class AplicadorDePagos
 
         var v = solicitud.FechaValor;
         var cubetas = Cubetas(estado, prelacion);
-        var exigibles = cubetas.Where(c => Exigible(estado.Plan, c.Orden, v)).ToList();
+        // 2026-11-24 (feature 025, fase 5, D3): por período calendario, lo causado de la cuota del tramo en curso (todo menos su capital) cuenta como exigible
+        // para todo pago que no cancela: el abono lo cubre primero y después lo que diga su modalidad.
+        var delTramo = solicitud.PeriodoCalendario ? CuotasDelTramoEnCurso(estado.Plan, v) : new HashSet<int>();
+        var exigibles = cubetas.Where(c => Exigible(estado.Plan, c.Orden, v)
+                                           || (c.Concepto != LoanConcept.Principal && c.Orden is { } n && delTramo.Contains(n))).ToList();
         var salida = new DistribucionDePago { Modalidad = solicitud.Modalidad, Valor = solicitud.Valor, FechaValor = v, Eleccion = solicitud.Eleccion, Cuota = solicitud.Cuota };
 
         switch (solicitud.Modalidad)
         {
             case PaymentModality.FullPayoff:
-                return Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
+                return Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta, solicitud.PeriodoCalendario);
 
             case PaymentModality.PastDue:
             {
@@ -90,10 +95,16 @@ public static class AplicadorDePagos
             case PaymentModality.CycleInstallment:
             {
                 var (lineas, resto) = Repartir(exigibles, solicitud.Valor);
-                var delCiclo = estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento >= v);
+                // 2026-11-24 (feature 025, fase 5): por período calendario, la cuota del período es la que vence en el tramo en curso; si ya venció (está en lo
+                // exigible o pagada) no hay otra: pagar la siguiente es un anticipo (o la cuota específica).
+                var delCiclo = solicitud.PeriodoCalendario
+                    ? estado.Plan.Cuotas.FirstOrDefault(c => delTramo.Contains(c.Numero))
+                    : estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento >= v);
                 if (delCiclo is null || delCiclo.Vencimiento == v || resto == 0m)
                     return Cerrar(estado, cubetas, salida with { Lineas = lineas, Excedente = resto });
-                var falta = Math.Max(0m, ValorDeCuota(estado, delCiclo) - Anticipo(estado, delCiclo.Numero) - Anticipo(estado, null));
+                // Lo que el pago ya cubrió de la cuota del tramo como exigible (su causado, por período calendario) no se vuelve a anticipar.
+                var falta = Math.Max(0m, ValorDeCuota(estado, delCiclo) - Anticipo(estado, delCiclo.Numero) - Anticipo(estado, null)
+                                         - lineas.Where(l => l.Cuota == delCiclo.Numero).Sum(l => l.Monto));
                 var anticipo = Math.Min(resto, falta);
                 return Cerrar(estado, cubetas, salida with
                 {
@@ -108,7 +119,8 @@ public static class AplicadorDePagos
             {
                 var (lineas, resto) = Repartir(exigibles, solicitud.Valor);
                 var porVencer = estado.Plan.Cuotas.Where(c => c.Vencimiento > v).Sum(c => ValorDeCuota(estado, c));
-                var cabe = Math.Max(0m, porVencer - estado.Anticipo);
+                // 2026-11-24 (feature 025, fase 5): menos lo que el pago ya cubrió como exigible de las cuotas por vencer (por período calendario).
+                var cabe = Math.Max(0m, porVencer - estado.Anticipo - lineas.Where(l => l.Cuota is { } n && delTramo.Contains(n)).Sum(l => l.Monto));
                 var anticipo = Math.Min(resto, cabe);
                 return Cerrar(estado, cubetas, salida with
                 {
@@ -124,7 +136,7 @@ public static class AplicadorDePagos
                 var porVencer = estado.Plan.Cuotas.Where(c => c.Vencimiento > v).Sum(c => estado.Saldo(LoanConcept.Principal, c.Numero));
                 if (resto >= porVencer)
                 {
-                    var cancelacion = Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
+                    var cancelacion = Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta, solicitud.PeriodoCalendario);
                     return cancelacion with { Avisos = [.. cancelacion.Avisos, AvisoTratadoComoCancelacion] };
                 }
                 if (solicitud.Eleccion is not { } eleccion)
@@ -240,11 +252,55 @@ public static class AplicadorDePagos
     /// nunca negativo. Es lo que la cancelación cobra: lo usan el listado y el detalle de la caja, la liquidación, la recogida y el cruce del retiro.
     /// <see cref="EstadoDelCredito.ValorParaCancelar"/> no cambia (entra en la huella y en las posiciones). (nuevo)
     /// </summary>
-    public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta)
+    /// <remarks>
+    /// 2026-11-24 (feature 025, fase 5, D3): con <paramref name="periodoCalendario"/>, sin el interés causado de las cuotas cuyo tramo no ha empezado
+    /// (<see cref="InteresSinTramo"/>) y con la cuota completa sólo de un tramo ya empezado: lo mismo que cobra la cancelación.
+    /// </remarks>
+    public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(estado);
-        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso().Sum(l => l.Monto) : 0m;
-        return Math.Max(0m, estado.ValorParaCancelar + extra);
+        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario).Sum(l => l.Monto) : 0m;
+        var noCobrado = periodoCalendario && !estado.EnUvr ? InteresSinTramo(estado, estado.Fecha).Sum(l => l.Monto) : 0m;
+        return Math.Max(0m, estado.ValorParaCancelar + extra - noCobrado);
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5; FR-016): las cuotas del <b>tramo en curso</b> a <paramref name="fecha"/> por período calendario: las que vencen
+    /// después de esa fecha dentro del tramo del calendario que la contiene (<see cref="PeriodoDeCausacion.TramoQueContiene"/>, con la periodicidad del plan).
+    /// Es la «cuota del período» que la caja ofrece y cuyo causado un abono cubre primero. Vacía sin plan. (nuevo)
+    /// </summary>
+    public static IReadOnlySet<int> CuotasDelTramoEnCurso(PlanDePagos? plan, DateOnly fecha) =>
+        plan is null
+            ? new HashSet<int>()
+            : plan.Cuotas.Where(c => c.Vencimiento > fecha && PeriodoDeCausacion.TramoEmpezado(c.Vencimiento, plan.Entrada.Periodicidad, fecha))
+                .Select(c => c.Numero).ToHashSet();
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, D3): el interés corriente causado de las cuotas cuyo tramo del calendario no ha empezado a <paramref name="fecha"/>
+    /// (vencen después y su tramo empieza después): lo que una cancelación por período calendario no cobra, por cuota del libro. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<LineaDeDistribucion> InteresSinTramo(EstadoDelCredito estado, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        if (estado.Plan is not { } plan) return [];
+        var sinEmpezar = plan.Cuotas.Where(c => c.Vencimiento > fecha && !PeriodoDeCausacion.TramoEmpezado(c.Vencimiento, plan.Entrada.Periodicidad, fecha))
+            .Select(c => c.Numero).ToHashSet();
+        return estado.Saldos.Where(s => s.Concepto == LoanConcept.CurrentInterest && s.Valor > 0m && s.Cuota is { } n && sinEmpezar.Contains(n))
+            .OrderBy(s => s.Cuota)
+            .Select(s => new LineaDeDistribucion(s.Cuota, s.Concepto, s.Valor))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5): de lo que la cuota completa cobraría, sólo lo de una cuota cuyo tramo ya empezó (por período calendario): la cuota
+    /// completa es la del tramo causado; la de un tramo sin empezar nunca se cobra. Sin período calendario, todo. (nuevo)
+    /// </summary>
+    private static IReadOnlyList<LineaDeDistribucion> DeTramoEmpezado(EstadoDelCredito estado, IReadOnlyList<LineaDeDistribucion> lineas, bool periodoCalendario)
+    {
+        if (!periodoCalendario || estado.Plan is not { } plan || lineas.Count == 0) return lineas;
+        return lineas.Where(l => l.Cuota is { } n && plan.Cuotas.FirstOrDefault(c => c.Numero == n) is { } q
+                                 && PeriodoDeCausacion.TramoEmpezado(q.Vencimiento, plan.Entrada.Periodicidad, estado.Fecha))
+            .ToList();
     }
 
     /// <summary>
@@ -255,11 +311,30 @@ public static class AplicadorDePagos
     /// en <see cref="DistribucionDePago.InteresPorCausar"/> aunque los fondos no lo alcancen: lo que falte de él queda debiéndose en esa cuota. Si los
     /// fondos no cubren lo causado, la cancelación es la de siempre (parcial) y no se cobra.
     /// </summary>
+    /// <remarks>
+    /// 2026-11-24 (feature 025, fase 5, D3, FR-017): con <paramref name="periodoCalendario"/>, el interés causado de las cuotas cuyo tramo no ha empezado no
+    /// se cobra: sale de lo que se cubre y la cancelación lo devuelve (<see cref="DistribucionDePago.InteresNoCobrado"/>); la cuota completa, sólo la del
+    /// tramo ya empezado. Si así los fondos no cancelan, es la cancelación de siempre (parcial): lo de un tramo sin empezar sigue debiéndose.
+    /// </remarks>
     private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
-        bool cuotaCompleta)
+        bool cuotaCompleta, bool periodoCalendario)
+    {
+        if (periodoCalendario && !estado.EnUvr && InteresSinTramo(estado, salida.FechaValor) is { Count: > 0 } noCobrado)
+        {
+            var sinEmpezar = noCobrado.Select(l => l.Cuota).ToHashSet();
+            var cobrables = cubetas.Where(c => !(c.Concepto == LoanConcept.CurrentInterest && sinEmpezar.Contains(c.Libro))).ToList();
+            var calendario = ConLaCuotaCompleta(estado, cobrables, salida, avisos, cuotaCompleta, periodoCalendario);
+            if (calendario.Cancela) return calendario with { InteresNoCobrado = noCobrado };
+        }
+        return ConLaCuotaCompleta(estado, cubetas, salida, avisos, cuotaCompleta, periodoCalendario);
+    }
+
+    /// <summary>La cancelación con o sin la cuota completa (2026-11-16); por período calendario (2026-11-24), la cuota completa sólo de un tramo empezado.</summary>
+    private static DistribucionDePago ConLaCuotaCompleta(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
+        bool cuotaCompleta, bool periodoCalendario)
     {
         var corrida = Cancelacion(estado, cubetas, salida, avisos);
-        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso() : [];
+        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario) : [];
         if (extra.Count == 0) return corrida;
         var regulares = cubetas.Sum(c => c.Monto);
         var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos);
@@ -356,7 +431,10 @@ public static class AplicadorDePagos
     {
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(cuota);
-        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero);
+        // 2026-11-24 (feature 025, fase 3): más el interés que la cuota lleva fuera del plan —el que trajo en la carga y el ajuste del corte—: el plan de un
+        // crédito cargado sólo lleva el interés desde el corte, y sin esto la caja y la cuota específica subestimaban la primera cuota.
+        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero)
+               + estado.InteresFueraDelPlan.GetValueOrDefault(cuota.Numero);
     }
 
     /// <summary>

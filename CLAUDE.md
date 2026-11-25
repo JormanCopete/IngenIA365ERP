@@ -899,6 +899,23 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   Recetas: `docs/manual/contabilidad-contrato-de-contabilizacion.md` §9 y `docs/manual/cartera-integracion-contable.md`
   (para la contadora, con lo pendiente de validar); las de fases anteriores, `docs/manual/cartera-*.md`.
 
+- **Causación por período y tasa mensual (feature 025, rama `025-causacion-por-periodo`, fases 1–5, 2026-11-24; sobre la 024)**: Cartera
+  trabaja como las herramientas de origen sin cambiar el cálculo día a día, y **de fábrica nada cambia**. (1) La «Cuota» del estado de cuenta
+  es la **cuota regular** del plan (la más frecuente entre las no extra ni de gracia), no la primera. (2) La tasa se pacta en **mensual vencida**
+  (`RateBasis`/`MonthlyRate`, migración `TasaMensual`): diaria MV/30, lineal y sólo en 30/360; la usura compara la E.A. derivada y la mora sigue
+  en E.A. (3) La clase `CutoverRecalculation` del proceso recalcula desde el corte los créditos cargados: pasa a la MV redonda si está a menos de
+  0,005 puntos y carga sin mora, en la primera cuota sin vencer, el interés que la carga dejó por fuera (`CutoverInterestAdjustment`, hecho
+  `InteresDelCorte`/`IDC`, marca `LND_LoanControls.CutoverAdjustedAt`, migración `AjusteDelCorte`); una vez por crédito. (4) La carga
+  `CauseFullInProgressPeriod` (sí por defecto, migración `CargaConPeriodoCompleto`) causa completo al activar el período en curso. (5)
+  **`Causacion.Periodo`** (`CicloDeLaCuota` / `PeriodoCalendario`, general y por línea): el período de una cuota es el tramo del calendario que
+  contiene su vencimiento (`PeriodoDeCausacion.TramoQueContiene`); se reconoce el primer día del tramo, el proceso por rango toma las que
+  **vencen** en él (`PeriodNotStarted`), la caja ofrece la del tramo en curso (pagada, la siguiente es anticipo), un abono cubre primero lo causado
+  del tramo y la cancelación nunca cobra lo de un tramo sin empezar (`InteresNoCobrado` → `RecognitionRelease`); cada pago lo sella
+  (`AccrualPeriod`). `Pagos.InteresesAlPagarAntesDelVencimiento` se lee «¿Devuelve los días no corridos al cancelar?» (Sí `Corrido` / No
+  `CuotaCompleta`). El reconocimiento admite los filtros de la herramienta anterior —forma de pago, cuotas con o sin extras, ciclo de descuento—
+  (migración `FiltrosDelProcesoDeCausacion`; las otras clases los rechazan). Casos dorados 40–49; receta `docs/manual/cartera-causacion-y-liquidacion.md`
+  §9.7–§9.9. Pendiente de la contadora validar los casos y la matriz del `IDC`.
+
 - **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
   merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la
   013**, en reemplazo de las captaciones heredadas, retiradas con `RetiroDeCaptacionesHeredadas` (destructiva con guarda;

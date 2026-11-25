@@ -31,6 +31,12 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
     // ---------------------------------------------------------------------------------------- tasa corriente --
     public RateKind RateKind { get; init; } = RateKind.Fixed;
     public decimal? AnnualRate { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la base de la corriente; con MV, <see cref="MonthlyRate"/> manda y la E.A. se deriva. (nuevo)</summary>
+    public RateBasis RateBasis { get; init; } = RateBasis.EffectiveAnnual;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada como fracción, a ocho decimales. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
     public string? IndexCode { get; init; }
     public string? IndexKey { get; init; }
     public decimal? Margin { get; init; }
@@ -116,7 +122,23 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
 
     /// <summary>¿La versión cobra interés? Variable siempre; fija si la tasa base o alguna banda es mayor que cero (D20, T44).</summary>
     public bool CobraInteres =>
-        RateKind == RateKind.Variable || AnnualRate > 0m || RateBands.Any(b => b.AnnualRate > 0m);
+        RateKind == RateKind.Variable || AnnualRate > 0m || MonthlyRate > 0m || RateBands.Any(b => b.AnnualRate > 0m || b.MonthlyRate > 0m);
+
+    /// <summary>¿Se pactó en mensual vencida?</summary>
+    public bool EsMensual => RateBasis == RateBasis.MonthlyNominal;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-007): la versión con la E.A. derivada de cada MV (la de la versión y la de cada banda), redondeada a los seis
+    /// decimales de <c>AnnualRate</c>; en E.A., ella misma. La validan, la registran y le sacan la huella así, para que lo guardado y lo
+    /// recibido den la misma huella. (nuevo)
+    /// </summary>
+    public BorradorDeVersionDeLinea Normalizada() => !EsMensual ? this : this with
+    {
+        AnnualRate = MonthlyRate is { } mv && mv >= 0m ? Rates.EquivalenciaDeTasas.EfectivaInformativaDeMensual(mv) : AnnualRate,
+        RateBands = RateBands
+            .Select(b => b.MonthlyRate is { } bmv && bmv >= 0m ? b with { AnnualRate = Rates.EquivalenciaDeTasas.EfectivaInformativaDeMensual(bmv) } : b)
+            .ToList(),
+    };
 
     /// <summary>La versión completa a partir de una ya guardada y sus hijas (para versionar desde la vigente o verificar la huella).</summary>
     public static BorradorDeVersionDeLinea De(CreditLineVersion v, IEnumerable<CreditLineRateBand> bandas,
@@ -132,6 +154,8 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
             InterestTaxSupportAttachmentPublicId = v.InterestTaxSupportAttachmentPublicId,
             RateKind = v.RateKind,
             AnnualRate = v.AnnualRate,
+            RateBasis = v.RateBasis,
+            MonthlyRate = v.MonthlyRate,
             IndexCode = v.IndexCode,
             IndexKey = v.IndexKey,
             Margin = v.Margin,
@@ -203,13 +227,16 @@ public sealed record BorradorDeBanda(int Order)
     public bool? ForEmployees { get; init; }
     public int? MinSeniorityMonths { get; init; }
     public decimal? AnnualRate { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la MV de la banda cuando la versión se pacta en MV. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
     public decimal? Margin { get; init; }
 
     public static BorradorDeBanda De(CreditLineRateBand b) => new(b.Order)
     {
         MinAmount = b.MinAmount, MaxAmount = b.MaxAmount, MinTermMonths = b.MinTermMonths, MaxTermMonths = b.MaxTermMonths,
         DebtorKind = b.DebtorKind, ForEmployees = b.ForEmployees, MinSeniorityMonths = b.MinSeniorityMonths,
-        AnnualRate = b.AnnualRate, Margin = b.Margin,
+        AnnualRate = b.AnnualRate, MonthlyRate = b.MonthlyRate, Margin = b.Margin,
     };
 
     /// <summary>¿Se cruza con otra banda de las mismas dimensiones (tipo de deudor, empleados, antigüedad) en monto y en plazo?</summary>

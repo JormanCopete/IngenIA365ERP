@@ -30,6 +30,12 @@ public sealed record ContenidoDePago(PaymentModality Modalidad, decimal Valor)
     /// línea, la de siempre. (nuevo)
     /// </summary>
     public OrdenDeRubros? Rubros { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): el pago se aplicó con <c>Causacion.Periodo = PeriodoCalendario</c>, sellado en su decisión
+    /// (<see cref="SolicitudDeDistribucion.PeriodoCalendario"/>). Falso —un pago anterior que no lo trae— es el ciclo de la cuota. (nuevo)
+    /// </summary>
+    public bool PeriodoCalendario { get; init; }
 }
 
 /// <summary>

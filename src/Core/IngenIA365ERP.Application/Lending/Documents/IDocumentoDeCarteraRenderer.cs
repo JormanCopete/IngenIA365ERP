@@ -72,6 +72,9 @@ public sealed record CuerpoDePlanDePagos(
     IReadOnlyList<CuotaDelPlanImpresa> Filas) : CuerpoDeDocumentoDeCartera
 {
     public decimal TotalCuotas => Filas.Sum(f => f.Cuota);
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la mensual vencida pactada, si se pactó así; el documento la muestra junto a la E.A. (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 }
 
 /// <summary>Un crédito que certifica el paz y salvo, con el papel de la persona y su saldo al corte. (nuevo)</summary>

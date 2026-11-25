@@ -10,8 +10,18 @@ namespace IngenIA365ERP.Application.Lending.Configuration;
 // CreditLineVersionInput del contrato; dentro, los de las columnas de data-model §1.3–§1.7 (las tasas como fracción, los montos en
 // pesos, los plazos en meses: la columna es MinTermMonths/MaxTermMonths). Los enums viajan por nombre o número. (nuevo)
 
-/// <summary>La tasa corriente: clase y, si es fija, su efectiva anual (fracción, hasta seis decimales).</summary>
-public sealed record CurrentRateInput(RateKind Kind = RateKind.Fixed, decimal? EffectiveAnnual = null);
+/// <summary>
+/// La tasa corriente: clase y, si es fija, su efectiva anual (fracción, hasta seis decimales). 2026-11-24 (feature 025, HU2; FR-007): o su
+/// mensual vencida (<see cref="Basis"/> = <c>MonthlyNominal</c>, <see cref="MonthlyRate"/> fracción hasta ocho decimales; la E.A. se deriva).
+/// </summary>
+public sealed record CurrentRateInput(RateKind Kind = RateKind.Fixed, decimal? EffectiveAnnual = null)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): en qué se pactó: E.A. (de fábrica) o mensual vencida. (nuevo)</summary>
+    public RateBasis Basis { get; init; } = RateBasis.EffectiveAnnual;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida como fracción (0,018 = 1,8 % MV), con base MV. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 /// <summary>La tasa variable (D10): índice nacional y su clave, margen en la expresión del índice, piso, techo y reajuste.</summary>
 public sealed record VariableRateInput(string IndexCode, string IndexKey, decimal Margin, decimal? Floor = null, decimal? Ceiling = null,
@@ -30,7 +40,11 @@ public sealed record RateBandInput(
     bool? ForEmployees = null,
     int? MinSeniorityMonths = null,
     decimal? EffectiveAnnual = null,
-    decimal? Margin = null);
+    decimal? Margin = null)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): la MV de la banda cuando la versión se pacta en MV. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 public sealed record CreditLineRatesInput
 {
@@ -181,7 +195,10 @@ public sealed record CreditLineVersionInput
             InterestTaxTreatment = InterestTaxConcept is null ? null : InterestTaxConcept.Taxed ? InterestTaxTreatment.Taxed : InterestTaxTreatment.NotTaxed,
             InterestTaxSupportAttachmentPublicId = InterestTaxConcept?.SupportAttachmentPublicId,
             RateKind = tasas.Current.Kind,
-            AnnualRate = tasas.Current.Kind == RateKind.Fixed ? tasas.Current.EffectiveAnnual : null,
+            AnnualRate = tasas.Current.Kind == RateKind.Fixed && tasas.Current.Basis != RateBasis.MonthlyNominal ? tasas.Current.EffectiveAnnual : null,
+            // 2026-11-24 (feature 025, HU2): la base y la MV; el dominio deriva la E.A.
+            RateBasis = tasas.Current.Basis,
+            MonthlyRate = tasas.Current.Kind == RateKind.Fixed && tasas.Current.Basis == RateBasis.MonthlyNominal ? tasas.Current.MonthlyRate : null,
             IndexCode = variable?.IndexCode,
             IndexKey = variable?.IndexKey,
             Margin = variable?.Margin,
@@ -239,7 +256,8 @@ public sealed record CreditLineVersionInput
             {
                 MinAmount = x.AmountFrom, MaxAmount = x.AmountTo, MinTermMonths = x.TermFrom, MaxTermMonths = x.TermTo, DebtorKind = x.DebtorKind,
                 ForEmployees = x.ForEmployees, MinSeniorityMonths = x.MinSeniorityMonths,
-                AnnualRate = tasas.Current.Kind == RateKind.Fixed ? x.EffectiveAnnual : null,
+                AnnualRate = tasas.Current.Kind == RateKind.Fixed && tasas.Current.Basis != RateBasis.MonthlyNominal ? x.EffectiveAnnual : null,
+                MonthlyRate = tasas.Current.Kind == RateKind.Fixed && tasas.Current.Basis == RateBasis.MonthlyNominal ? x.MonthlyRate : null,
                 Margin = tasas.Current.Kind == RateKind.Variable ? x.Margin : null,
             }).ToList(),
             DocumentRequirements = (Documents ?? []).Select((d, i) => new BorradorDeDocumento(d.Code, d.Name, d.Mandatory, i + 1)
@@ -266,7 +284,11 @@ public sealed record CreditLineVersionInput
 // ------------------------------------------------------------------------------------------------------------- salidas --
 
 public sealed record RateBandDto(int Order, decimal? AmountFrom, decimal? AmountTo, int? TermFrom, int? TermTo, DebtorKind? DebtorKind,
-    bool? ForEmployees, int? MinSeniorityMonths, decimal? EffectiveAnnual, decimal? Margin);
+    bool? ForEmployees, int? MinSeniorityMonths, decimal? EffectiveAnnual, decimal? Margin)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): la MV de la banda (con la versión en MV; <see cref="EffectiveAnnual"/> es su E.A. derivada). (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 public sealed record DocumentRequirementDto(string Code, string Name, bool Mandatory, CreditPartyRole? AppliesTo, decimal? AmountFrom,
     decimal? AmountTo, DebtorKind? DebtorKind, RepaymentChannel? PaymentForm, int? MaxAgeDays, int Order);
@@ -373,7 +395,7 @@ public sealed record CreditLineVersionDto(
             v.RequiresEmployment, v.ContributionsMultiple, v.MaxIndebtedness, v.MinContributionsBalance, v.RequiresBureauQuery,
             v.ScoringModel is not null, v.MinimumScore, v.ContentSha256,
             l.Bandas.Select(b => new RateBandDto(b.Order, b.MinAmount, b.MaxAmount, b.MinTermMonths, b.MaxTermMonths, b.DebtorKind, b.ForEmployees,
-                b.MinSeniorityMonths, b.AnnualRate, b.Margin)).ToList(),
+                b.MinSeniorityMonths, b.AnnualRate, b.Margin) { MonthlyRate = b.MonthlyRate }).ToList(),
             l.Documentos.Select(d => new DocumentRequirementDto(d.Code, d.Name, d.IsMandatory, d.AppliesTo, d.MinAmount, d.MaxAmount, d.DebtorKind,
                 d.RepaymentChannel, d.MaxAgeDays, d.Order)).ToList(),
             l.Seguros.Select(s =>
@@ -386,6 +408,8 @@ public sealed record CreditLineVersionDto(
                 ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList())
         {
             AsksFirstDueDate = v.AsksFirstDueDate,
+            RateBasis = v.RateBasis,
+            MonthlyRate = v.MonthlyRate,
             DenominationUnit = v.DenominationUnit,
             DiscountOptions = [.. v.LeerOpcionesDeDescuento().Select(o => new DiscountOptionDto(o.Code, o.Name, o.Fraction, o.FundCode))],
         };
@@ -393,6 +417,12 @@ public sealed record CreditLineVersionDto(
 
     /// <summary>K6b (T1055): la unidad del capital de la versión (<c>Pesos</c> o <c>Uvr</c>).</summary>
     public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la base de la corriente; con MV, <see cref="EffectiveAnnual"/> es la E.A. derivada. (nuevo)</summary>
+    public RateBasis RateBasis { get; init; } = RateBasis.EffectiveAnnual;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada (fracción), con base MV. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
 
     /// <summary>2026-11-17: la originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
@@ -436,7 +466,11 @@ public sealed record CreditLineDto(
 
 /// <summary>La versión vigente resumida para la lista (api.md §3.1); <c>usuryHeadroom</c> es la menor holgura de su plan tipo hoy.</summary>
 public sealed record CreditLineCurrentVersionDto(Guid PublicId, DateOnly ValidFrom, RateKind RateKind, decimal? CurrentRate, string? IndexCode,
-    decimal? Margin, decimal? UsuryHeadroom);
+    decimal? Margin, decimal? UsuryHeadroom)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada; nula en E.A. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 /// <summary>Una línea en la lista (api.md §3.1), por código; sólo las del alcance.</summary>
 public sealed record CreditLineListItemDto(

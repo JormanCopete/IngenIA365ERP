@@ -834,6 +834,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ContabilizacionDeLoCausado>();
         // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo (los rubros en «Manual»).
         services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ReconocimientoDelPeriodo>();
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte (tasa MV desde el corte e interés del período completo).
+        services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.RecalculoDelCorte>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.AccrualProcesses.FuenteDeAprobacionDeCausacion>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
         // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
@@ -854,6 +856,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Activation.RecalculoDelCuadreDeActivacion>();
         services.AddScoped<Lending.Activation.ValidacionDeCobrosProvisionales>();
         services.AddScoped<Lending.Activation.NacimientoDeCreditosMigrados>();
+        // 2026-11-24 (feature 025, fase 4): el período en curso al corte se causa completo al activar.
+        services.AddScoped<Lending.Activation.PeriodoCompletoDeLaCarga>();
         services.AddScoped<Lending.Activation.NacimientoDeLoDelDeudorMigrado>();
         // Feature 013, US4 (bloque 8B): la carga de la reconstrucción, las series regulatorias, las partes de hechos, la puesta al día y el ciclo
         // diario. IMotorDeCreditoEnDesembolso (el punto de extensión de la fase 7) ya es el motor real.

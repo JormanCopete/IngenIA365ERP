@@ -30,6 +30,12 @@ public static class ErroresDeProcesosDeCausacion
     public const string CodigoReprocesoFijo = "Lending.AccrualProcess.ReprocessScopeFixed";
     public const string CodigoFiltroInexistente = "Lending.AccrualProcess.FilterNotFound";
 
+    /// <summary>2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte no se reprocesa: lo puesto en firme queda y cada crédito se ajusta una vez. (nuevo)</summary>
+    public const string CodigoSinReproceso = "Lending.AccrualProcess.CutoverNotReprocessable";
+
+    /// <summary>2026-11-24 (feature 025, fase 3): un crédito recalculado desde el corte no se recalcula otra vez. (nuevo)</summary>
+    public const string CodigoYaAjustado = "Lending.Cutover.AlreadyAdjusted";
+
     /// <summary>2026-11-16 (feature 024, fase 4): la mora y los otros rubros no se reconocen al inicio del ciclo. (nuevo)</summary>
     public const string CodigoConceptoNoReconocible = "Lending.AccrualProcess.ConceptNotRecognizable";
 
@@ -55,6 +61,14 @@ public static class ErroresDeProcesosDeCausacion
 
     public static Error FiltroInexistente(string que) => new ErrorConDatos(CodigoFiltroInexistente,
         $"No se encontró {que} del filtro.", new { filter = que });
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): la forma de pago, las cuotas y el ciclo de descuento sólo los admite el reconocimiento. (nuevo)</summary>
+    public const string CodigoFiltrosSoloDelReconocimiento = "Lending.AccrualProcess.FiltersOnlyForRecognition";
+
+    /// <inheritdoc cref="CodigoFiltrosSoloDelReconocimiento"/>
+    public static Error FiltrosSoloDelReconocimiento() => new(CodigoFiltrosSoloDelReconocimiento,
+        "La forma de pago, las cuotas y el ciclo de descuento sólo se eligen al reconocer la cuota del período: lo causado de un día va en un solo hecho con "
+        + "todos sus créditos y no se parte.");
 
     public static Error ContenidoCambiado(string? actual) => new ErrorConDatos(CodigoContenidoCambiado,
         "El borrador cambió desde que lo revisó: vuelva a mirarlo antes de pedir que lo pongan en firme.", new { contentSha256 = actual });
@@ -86,6 +100,12 @@ public static class ErroresDeProcesosDeCausacion
     public static Error ConceptoNoReconocible(string concepto) => new ErrorConDatos(CodigoConceptoNoReconocible,
         $"«{concepto}» no se reconoce al inicio del ciclo: sólo el interés corriente, el seguro y la administración de la cuota (la mora corre desde el "
         + "vencimiento y se causa día a día).", new { concept = concepto });
+
+    public static Error SinReproceso() => new(CodigoSinReproceso,
+        "El recálculo de la carga desde el corte no se reprocesa: lo puesto en firme no se toca y un crédito ajustado no vuelve a entrar. Arme un proceso nuevo para los que falten.");
+
+    public static Error YaAjustado(string credito) => new ErrorConDatos(CodigoYaAjustado,
+        $"El crédito {credito} ya se recalculó desde el corte: recalcule el borrador.", new { loan = credito });
 
     public static Error ReprocesoFijo() => new(CodigoReprocesoFijo,
         "Un reproceso cubre lo mismo que el proceso que reprocesa: no se le cambian la periodicidad, el rango, los conceptos ni los filtros.");

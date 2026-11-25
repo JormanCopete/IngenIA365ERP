@@ -106,6 +106,47 @@
                     }
                 </IndicadorDeCarga>
 
+                @* 2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que suma la opción del período completo, por crédito y en total. *@
+                <IndicadorDeCarga Cargando="@_cargaPeriodo.Activa" Texto="Calculando el interés del período en curso…">
+                    <h4>Período en curso al corte</h4>
+                    <p class="texto-apoyo">
+                        @(a.CauseFullInProgressPeriod
+                            ? "Esta carga causa completo el período en curso al corte: al activar, lo que va del vencimiento anterior (o del desembolso) al corte entra como ingreso del día de la activación. No se cuadra contra el balance al corte."
+                            : "Esta carga no causa completo el período en curso: el interés nace desde el corte. Así quedaría lo que sumaría la opción; para usarla, cree la carga de nuevo con la opción marcada.")
+                    </p>
+                    @if (_periodo is { } pc)
+                    {
+                        <p class="texto-apoyo">
+                            @(a.CauseFullInProgressPeriod ? "Suma" : "Sumaría") @pc.Total.ToString("N2") de interés en @pc.Loans.ToString("N0") créditos.
+                            Es una estimación: al activar se calcula sobre la reconstrucción de cada crédito y los que tengan la causación suspendida no suman.
+                        </p>
+                        @if (pc.Items.Count > 0)
+                        {
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Crédito</th><th class="numero">Cuota</th><th>Inicio del período</th><th>Vence</th><th class="numero">Días antes del corte</th><th class="numero">Período completo</th><th class="numero">Desde el corte</th><th class="numero">Cargado</th><th class="numero">Suma</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var x in pc.Items)
+                                        {
+                                            <tr>
+                                                <td>@x.LoanNumber</td>
+                                                <td class="numero">@x.Installment</td>
+                                                <td>@x.PeriodStart.ToString("dd/MM/yyyy")</td>
+                                                <td>@x.DueDate.ToString("dd/MM/yyyy")</td>
+                                                <td class="numero">@x.MissingDays</td>
+                                                <td class="numero">@x.FullPeriodInterest.ToString("N2")</td>
+                                                <td class="numero">@x.FromCutoff.ToString("N2")</td>
+                                                <td class="numero">@x.Loaded.ToString("N2")</td>
+                                                <td class="numero">@x.Added.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </IndicadorDeCarga>
+
                 @if (a.Status == 1)
                 {
                     <div class="form-grid">
@@ -262,6 +303,14 @@
                 <p class="texto-apoyo">El corte es el último día que la cartera anterior manejó; Cartera se activa el día siguiente. Un borrador anterior queda reemplazado.</p>
                 <label class="campo">Fecha de corte * <input type="date" class="e-input" value="@_corte.ToString("yyyy-MM-dd")" @onchange="@(e => _corte = LeerFecha(e.Value) ?? _corte)" /></label>
                 <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="400" /></label>
+                @* 2026-11-24 (feature 025, fase 4, HU4; FR-014, D5): la opción del período completo, por defecto sí. *@
+                <label class="campo-check"><input type="checkbox" @bind="_periodoCompleto" /> El período en curso al corte se causa completo</label>
+                <p class="texto-apoyo">
+                    Con la opción, la primera cuota que vence después del corte lleva el interés de todo su período, como en la herramienta anterior: lo que va
+                    del vencimiento anterior (o del desembolso, si es la primera cuota) al corte se causa el día de la activación, como ingreso de ese día, y
+                    el interés que la cuota ya trae en la carga cuenta como causado. No entra al cuadre contra el balance al corte. Sin la opción, el interés
+                    nace desde el corte.
+                </p>
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CrearAsync">Crear</SfButton>
@@ -333,7 +382,10 @@
     private List<ErrorEntrePartesDto> _erroresEntrePartes = [];
     private int _pestana, _claseDeVenta, _claseDeMarca;
     private string _parte = TextosDeMigracion.Partes[0].Clave;
-    private bool _reemplazar, _mostrarNueva, _mostrarAplicar, _mostrarMarca;
+    private bool _reemplazar, _mostrarNueva, _mostrarAplicar, _mostrarMarca, _periodoCompleto = true;
+    // 2026-11-24 (feature 025, fase 4, HU4; FR-015): la vista previa de lo que suma la opción del período completo.
+    private readonly EstadoDeCarga _cargaPeriodo = new();
+    private InteresDelPeriodoCompletoDto? _periodo;
     private string? _error, _motivo, _notas, _punto;
     private DateOnly _corte = DateOnly.FromDateTime(DateTime.Today).AddDays(-1);
     private VentaDeMigracionDto? _venta;
@@ -355,6 +407,7 @@
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la carga."); return; }
         _actual = r.Value;
         _cuadre = null;
+        _periodo = null;
         _ventas = [];
         _diferencias = [];
         _elegidas.Clear();
@@ -371,9 +424,19 @@
     {
         _pestana = pestana;
         if (_actual is null) return;
-        if (pestana == 1) await CargarCuadreAsync();
+        if (pestana == 0) await CargarPeriodoCompletoAsync();
+        else if (pestana == 1) await CargarCuadreAsync();
         else if (pestana == 2) await CargarVentasAsync();
         else if (pestana == 3) await CargarDiferenciasAsync();
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que suma la opción del período completo, por crédito y en total.</summary>
+    private async Task CargarPeriodoCompletoAsync()
+    {
+        if (_actual is not { } a) return;
+        using var carga = _cargaPeriodo.Iniciar();
+        var r = await Cartera.InteresDelPeriodoCompletoAsync(a.PublicId);
+        _periodo = r.IsSuccess ? r.Value : null;
     }
 
     private async Task CargarCuadreAsync()
@@ -421,6 +484,7 @@
     private void AbrirNueva()
     {
         _error = _notas = null;
+        _periodoCompleto = true;
         _corte = DateOnly.FromDateTime(DateTime.Today).AddDays(-1);
         _clave = new ClaveDeOperacion();
         _mostrarNueva = true;
@@ -430,7 +494,7 @@
     {
         using var carga = _guardado.Iniciar();
         _error = null;
-        var r = await Cartera.CrearCargaAsync(new CrearCargaRequest(_corte, string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);
+        var r = await Cartera.CrearCargaAsync(new CrearCargaRequest(_corte, string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(), _periodoCompleto), _clave);
         if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo crear la carga."; return; }
         _mostrarNueva = false;
         await Notification.SuccessAsync("Carga creada en borrador.");

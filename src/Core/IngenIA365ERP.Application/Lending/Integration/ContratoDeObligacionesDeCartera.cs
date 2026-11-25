@@ -131,13 +131,17 @@ public sealed class ContratoDeObligacionesDeCartera(
             // 2026-11-16 (pedido del dueño): para cancelar, lo que cobra un FullPayoff —con la cuota completa si la empresa la cobra y el crédito está fuera
             // del tope legal del prepago—.
             var paraCancelar = await aplicacion.ValorParaCancelarAsync(credito, estado, ct);
+            // 2026-11-24 (feature 025, fase 5, HU5): por período calendario, lo exigible del período incluye lo causado de la cuota del tramo en curso y la
+            // cuota del ciclo es la que vence en ese tramo (pagada, la siguiente es anticipo).
+            var calendario = await aplicacion.PeriodoCalendarioAsync(credito, estado, fecha, ct);
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
-                ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado), ComprobantesDePago.CuotaDelCiclo(estado),
+                ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
+                ComprobantesDePago.CuotaDelCiclo(estado, calendario),
                 ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo, estado.SaldoAFavor,
                 admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed)
             {
                 // 2026-11-16 (feature 024, fase 4): la cuota del ciclo reconocida al inicio de su ciclo.
-                RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado),
+                RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado, calendario),
             });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
@@ -208,13 +212,18 @@ public sealed class ContratoDeObligacionesDeCartera(
             avisos.Add($"Para cancelar se cobra el interés completo de la cuota en curso: {paraCancelar - Math.Max(0m, estado.ValorParaCancelar):N2} que todavía no se ha causado.");
 
         var proxima = estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
+        // 2026-11-24 (feature 025, fase 5, HU5): por período calendario, la cuota del período es la que vence en el tramo en curso.
+        var calendario = await aplicacion.PeriodoCalendarioAsync(credito, estado, fecha, ct);
+        var delPeriodo = ComprobantesDePago.CuotaDelPeriodo(estado, calendario);
+        if (calendario && delPeriodo is null && proxima is not null)
+            avisos.Add($"La cuota del período ya venció: pagar la cuota {proxima.Numero} (vence el {proxima.Vencimiento:dd/MM/yyyy}) es un anticipo.");
         // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se cobra completa, sin el aviso del anticipo.
-        var reconocido = ComprobantesDePago.ReconocidoDelCiclo(estado);
-        if (reconocido > 0m && proxima is not null)
-            avisos.Add($"La cuota {proxima.Numero} está reconocida desde el inicio de su ciclo: se paga completa ({reconocido:N2} todavía por causar). Pagada antes "
-                + $"del {proxima.Vencimiento:dd/MM/yyyy}, cubre la cuota el día que vence; la mora corre sólo desde el vencimiento.");
+        var reconocido = ComprobantesDePago.ReconocidoDelCiclo(estado, calendario);
+        if (reconocido > 0m && delPeriodo is not null)
+            avisos.Add($"La cuota {delPeriodo.Numero} está reconocida desde el inicio de su {(calendario ? "período" : "ciclo")}: se paga completa ({reconocido:N2} "
+                + $"todavía por causar). Pagada antes del {delPeriodo.Vencimiento:dd/MM/yyyy}, cubre la cuota el día que vence; la mora corre sólo desde el vencimiento.");
         var detalle = new DetalleDeObligacionDto(credito.PublicId, credito.Number, linea ?? string.Empty, EstadoEnEspanol(credito.Status), estado.AlturaDeMora.Dias,
-            ComprobantesDePago.Exigible(estado), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
+            ComprobantesDePago.Exigible(estado, periodoCalendario: calendario), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
             estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
             proxima?.Vencimiento,
             ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado), Admitidas(credito, cargado, estado),

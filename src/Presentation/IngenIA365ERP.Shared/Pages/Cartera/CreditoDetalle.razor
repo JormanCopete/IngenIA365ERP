@@ -103,7 +103,7 @@
                     <p><strong>Origen:</strong> @TextosDeCreditos.Origen(c.Origin)@(c.InvoiceReference is { } factura ? $" · factura de origen {factura}" : "")</p>
                     @if (c.Terms is { } t)
                     {
-                        <p><strong>Tasa:</strong> @TextosDeCreditos.ClaseDeTasa(t.RateKind) @TextosDeCreditos.Porcentaje(t.EffectiveAnnual) EA
+                        <p><strong>Tasa:</strong> @TextosDeCreditos.ClaseDeTasa(t.RateKind) @(t.MonthlyRate is { } mv ? TasaMensualVencida.Texto(t.EffectiveAnnual, mv) : $"{TextosDeCreditos.Porcentaje(t.EffectiveAnnual)} EA")
                             @if (t.IndexCode is { } indice) { <span>(@indice + @TextosDeCreditos.Porcentaje(t.Margin))</span> }
                             · <strong>Reglas de cálculo:</strong> @t.RulesVersion · <strong>Versión de condiciones:</strong> @t.Version
                             · <strong>Unidad:</strong> @TextosDeCreditos.UnidadDeCapital(t.DenominationUnit)</p>

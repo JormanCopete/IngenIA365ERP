@@ -11,6 +11,7 @@ using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Configuration;
+using IngenIA365ERP.Domain.Lending.Rates;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -166,6 +167,29 @@ public sealed class CreditLineVersionInputValidator : AbstractValidator<CreditLi
         RuleFor(x => x.PaymentForms).NotEmpty().WithMessage("Elegí al menos una forma de pago.");
         RuleFor(x => x.Amounts.Min).PrecisionScale(18, 2, true).WithMessage("Los montos admiten hasta 2 decimales.").When(x => x.Amounts is not null);
         RuleFor(x => x.Amounts.Max).PrecisionScale(18, 2, true).WithMessage("Los montos admiten hasta 2 decimales.").When(x => x.Amounts is not null);
+        // 2026-11-24 (feature 025, HU2; FR-007, FR-008, Principio VIII): la tasa en mensual vencida: con su MV (fracción de hasta ocho decimales),
+        // sólo fija y en 30/360 lineal; en E.A., sin MV. La mora sigue en E.A. (D4).
+        When(x => x.Rates?.Current is not null, () =>
+        {
+            RuleFor(x => x.Rates.Current.Basis).IsInEnum().WithMessage("La tasa es efectiva anual o mensual vencida.");
+            When(x => x.Rates.Current.Basis == RateBasis.MonthlyNominal, () =>
+            {
+                RuleFor(x => x.Rates.Current.Kind).Equal(RateKind.Fixed).WithMessage("La tasa variable se pacta en efectiva anual.");
+                RuleFor(x => x.Rates.Current.MonthlyRate).NotNull().WithMessage("Indicá la tasa mensual vencida.")
+                    .GreaterThanOrEqualTo(0m).WithMessage("La tasa no puede ser negativa.")
+                    .PrecisionScale(9, 8, true).WithMessage("La tasa mensual admite hasta cuatro decimales en porcentaje.");
+                RuleFor(x => x.Rates.Current.EffectiveAnnual).Null().WithMessage("Con la tasa en mensual vencida no se digita la E.A.: se calcula.");
+                RuleFor(x => x.DayCount).Equal(DayCountConvention.Thirty360).WithErrorCode(EquivalenciaDeTasas.CodigoMensualExige30360)
+                    .WithMessage("Una tasa en mensual vencida exige la convención 30/360.");
+                RuleFor(x => x.RateEquivalence).Equal(RateEquivalence.Linear).WithErrorCode(EquivalenciaDeTasas.CodigoMensualExige30360)
+                    .WithMessage("Una tasa en mensual vencida exige la equivalencia lineal.");
+                RuleForEach(x => x.Rates.Bands).ChildRules(b => b.RuleFor(y => y.MonthlyRate).NotNull()
+                    .WithMessage("Con la tasa en mensual vencida cada banda lleva su tasa mensual.")
+                    .PrecisionScale(9, 8, true).WithMessage("La tasa mensual admite hasta cuatro decimales en porcentaje."));
+            });
+            When(x => x.Rates.Current.Basis == RateBasis.EffectiveAnnual, () =>
+                RuleFor(x => x.Rates.Current.MonthlyRate).Null().WithMessage("La tasa mensual sólo va con la base «mensual vencida»."));
+        });
         RuleForEach(x => x.Documents).ChildRules(d =>
         {
             d.RuleFor(y => y.Code).NotEmpty().MaximumLength(CodigoDeCatalogo.LargoCorto).Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);

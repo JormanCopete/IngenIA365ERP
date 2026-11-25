@@ -14,7 +14,12 @@ public sealed record ProcesoDeCausacionRequest(
     Guid? BranchPublicId = null,
     Guid? PaymasterPersonPublicId = null,
     // 2026-11-16 (feature 024, fase 4): la clase (1 contabilizar lo causado, 2 reconocer la cuota del período); sólo al armar.
-    int Kind = 1);
+    int Kind = 1,
+    // 2026-11-24 (feature 025, fase 5, FR-018): sólo al reconocer. Forma de pago (1 nómina, 2 caja), cuotas (1 sin extras, 2 sólo extras) y ciclo de
+    // descuento (1-2 quincenas, 11-13 décadas, 21-25 semanas del mes); nulo, todos.
+    int? PaymentForm = null,
+    int? InstallmentScope = null,
+    int? DiscountCycle = null);
 
 /// <summary><c>{ changes? }</c> del recálculo.</summary>
 public sealed record RecalculoDeCausacionRequest(ProcesoDeCausacionRequest? Changes);
@@ -24,7 +29,15 @@ public sealed record FirmaDeCausacionRequest(string Reason, string ExpectedConte
 
 public sealed record RefDeFiltroDeCausacionDto(Guid PublicId, string? Code, string Name);
 
-public sealed record FiltrosDeCausacionDto(RefDeFiltroDeCausacionDto? CreditLine, RefDeFiltroDeCausacionDto? Branch, RefDeFiltroDeCausacionDto? Paymaster);
+public sealed record FiltrosDeCausacionDto(RefDeFiltroDeCausacionDto? CreditLine, RefDeFiltroDeCausacionDto? Branch, RefDeFiltroDeCausacionDto? Paymaster)
+{
+    // 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento, como número; nulos, todos.
+    public int? PaymentForm { get; init; }
+
+    public int? InstallmentScope { get; init; }
+
+    public int? DiscountCycle { get; init; }
+}
 
 public sealed record RefDeProcesoDeCausacionDto(Guid PublicId, string Number);
 
@@ -59,7 +72,29 @@ public sealed record LineaDeCausacionDto(
     int? Reason,
     // 2026-11-16 (feature 024, fase 4): en el reconocimiento, la cuota y el día desde el que se reconoce.
     int? InstallmentNumber = null,
-    DateOnly? RecognitionDate = null);
+    DateOnly? RecognitionDate = null,
+    // 2026-11-24 (feature 025, fase 3): en el recálculo de la carga desde el corte, el detalle del crédito.
+    DetalleDelCorteDto? Cutover = null);
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 3): el detalle de un crédito en el recálculo de la carga desde el corte (las tasas como fracción). (nuevo)
+/// </summary>
+public sealed record DetalleDelCorteDto(
+    DateOnly CutoffDate,
+    decimal PrincipalAtCutoff,
+    decimal AnnualRate,
+    decimal? MonthlyRate,
+    decimal? ProposedMonthlyRate,
+    int? CutoffInstallment,
+    DateOnly? PeriodStart,
+    int MissingDays,
+    decimal FullPeriodInterest,
+    decimal AlreadyAccrued,
+    decimal LoadedInterest,
+    decimal Adjustment,
+    int? TargetInstallment,
+    decimal AccrualAdjustment,
+    decimal Reallocated);
 
 public sealed record AprobacionDeCausacionDto(
     Guid RequestPublicId,

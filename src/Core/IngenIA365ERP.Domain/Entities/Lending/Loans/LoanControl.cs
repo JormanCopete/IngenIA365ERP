@@ -27,4 +27,10 @@ public class LoanControl : AuditableEntity
 
     /// <summary>Última posición diaria escrita (§6.1).</summary>
     public DateOnly? LastPositionDate { get; set; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3; migración <c>AjusteDelCorte</c>): cuándo se recalculó el crédito cargado desde el corte (el proceso de causación
+    /// <c>CutoverRecalculation</c> puesto en firme); nula si no. Un crédito marcado no vuelve a entrar al recálculo. (nuevo)
+    /// </summary>
+    public DateTime? CutoverAdjustedAt { get; set; }
 }

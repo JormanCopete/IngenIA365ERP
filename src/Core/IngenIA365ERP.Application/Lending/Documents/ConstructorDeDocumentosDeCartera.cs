@@ -195,7 +195,10 @@ public sealed class ConstructorDeDocumentosDeCartera(
             .ToListAsync(ct);
         var linea = await NombreDeLineaAsync(credito.CreditLineId, ct);
         var efectiva = condiciones.AnnualRate;
-        var nominal = efectiva is { } ea ? EquivalenciaDeTasas.NominalAnual(ea, condiciones.Periodicity) : (decimal?)null;
+        // 2026-11-24 (feature 025, HU2; FR-012): con la tasa en MV la nominal anual es 12 × MV, exacta.
+        var mensual = Engine.CargadorDeReconstruccion.TasaMensualSellada(condiciones);
+        var nominal = mensual is { } mv ? mv * EquivalenciaDeTasas.MesesDelAnio
+            : efectiva is { } ea ? EquivalenciaDeTasas.NominalAnual(ea, condiciones.Periodicity) : (decimal?)null;
         var (ultimaOperacion, ultimaTransaccion) = await UltimasAsync(credito.Id, p.Emision, ct);
 
         var datos = Datos(p.Hoy);
@@ -204,6 +207,7 @@ public sealed class ConstructorDeDocumentosDeCartera(
         datos["effectiveFrom"] = version.EffectiveValueDate;
         datos["installments"] = cuotas.Count;
         datos["effectiveAnnualRate"] = efectiva;
+        if (mensual is not null) datos["monthlyRate"] = mensual;
         var leyendasDelPlan = new List<string>();
         if (await ReferenciaDePagoAsync(credito, ct) is { } referenciaDelPlan)
         {
@@ -213,7 +217,7 @@ public sealed class ConstructorDeDocumentosDeCartera(
         return Result.Success(new DocumentoArmado(
             [new LineaDeDocumentoDeCartera(credito.Id, ultimaOperacion, ultimaTransaccion, null, null)],
             new CuerpoDePlanDePagos(credito.Number, linea, version.VersionNumber, version.EffectiveValueDate, version.PrincipalBase, efectiva, nominal,
-                condiciones.Periodicity.ToString(), cuotas.Count, cuotas),
+                condiciones.Periodicity.ToString(), cuotas.Count, cuotas) { TasaMensual = mensual },
             p.Hoy, null, null, null, null, version.RulesVersion, datos, leyendasDelPlan));
     }
 

@@ -39,7 +39,15 @@ public static class ConceptosDeCausacion
 
     /// <summary>2026-11-16 (feature 024, fase 4): el nombre de un tipo de hecho del proceso (la cuota reconocida no es de un solo concepto). (nuevo)</summary>
     public static string NombreDelTipo(string tipoDeHecho) =>
-        DelTipo(tipoDeHecho)?.Nombre ?? (tipoDeHecho == CuotaReconocidaV1.Type ? "Cuota reconocida del período" : tipoDeHecho);
+        DelTipo(tipoDeHecho)?.Nombre ?? tipoDeHecho switch
+        {
+            CuotaReconocidaV1.Type => "Cuota reconocida del período",
+            // 2026-11-24 (feature 025, fase 3): los hechos del recálculo de la carga desde el corte.
+            InteresDelCorteV1.Type => "Interés del período al corte",
+            AjusteDeCausacionPorFechaValorV1.Type => "Ajuste de causación desde el corte",
+            PagoRedistribuidoPorValorNacionalV1.Type => "Pagos redistribuidos desde el corte",
+            _ => tipoDeHecho,
+        };
 
     /// <summary>La bandera de una lista de conceptos.</summary>
     public static AccrualProcessConcepts Juntar(IEnumerable<AccrualProcessConcepts> conceptos) =>

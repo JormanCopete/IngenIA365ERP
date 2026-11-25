@@ -24,6 +24,14 @@ public sealed record SolicitudDeDistribucion(PaymentModality Modalidad, decimal 
     /// «CuotaCompleta», ya resuelto contra el tope legal del prepago y la vivienda por quien pide). Falso: el corrido, lo de siempre. (nuevo)
     /// </summary>
     public bool CuotaCompleta { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5; D3, FR-017): la línea del crédito causa por <b>período calendario</b> (<c>Causacion.Periodo =
+    /// PeriodoCalendario</c>, leído a la fecha valor y sellado en la decisión del pago). Un abono cubre primero lo causado de la cuota del tramo en curso
+    /// (como exigible); una cancelación no cobra lo causado de una cuota cuyo tramo no ha empezado (<see cref="DistribucionDePago.InteresNoCobrado"/>).
+    /// Falso —un pago que no lo trae— es el ciclo de la cuota, lo de siempre. (nuevo)
+    /// </summary>
+    public bool PeriodoCalendario { get; init; }
 }
 
 /// <summary>Lo que un pago cubre de un concepto en una cuota (sin cuota: el capital de un abono extraordinario, que regenera el plan).</summary>
@@ -83,6 +91,14 @@ public sealed record DistribucionDePago
     /// corrido o si los fondos no alcanzan lo demás. (nuevo)
     /// </summary>
     public IReadOnlyList<LineaDeDistribucion> InteresPorCausar { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5; D3, FR-017): con <see cref="SolicitudDeDistribucion.PeriodoCalendario"/>, el interés corriente causado día a
+    /// día de las cuotas cuyo tramo del calendario no ha empezado a la fecha valor de una cancelación: no se cobra. La reconstrucción lo <b>devuelve</b> en
+    /// la fecha valor (filas <see cref="LoanTransactionKind.RecognitionRelease"/> negativas en la corriente de esa cuota, el mecanismo de devolución de la
+    /// 024) y el crédito queda en cero. Vacío en todo lo demás. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresNoCobrado { get; init; } = [];
 
     /// <summary>2026-11-16: el total de <see cref="InteresPorCausar"/>. (nuevo)</summary>
     public decimal InteresDeLaCuotaEnCurso => InteresPorCausar.Sum(l => l.Monto);
