@@ -111,6 +111,17 @@ precio por cantidad con sus tramos o precio de paquete), vigencia y motivo.
   impuestos; el documento dice cuál se aplicó.
 - Ya usada en un documento confirmado, sólo cambian el nombre, el fin de la vigencia y si está activa.
 
+### Buscar documentos de venta
+
+**Ventas → Documentos de venta** lista facturas, documentos equivalentes POS, comprobantes y notas. A la vista: número,
+cliente (documento o nombre, las palabras en cualquier orden y sin importar tildes), fechas, clase y estado. En «Más
+filtros»: tipo de documento, punto de venta y caja, vendedor, medio de pago, usuario que lo hizo, estado ante la DIAN,
+valor desde y hasta, pendientes de entrega y crédito por validar. El botón dice cuántos de esos están puestos y «Quitar
+filtros» los borra todos. La lista dice quién hizo cada documento y, si es electrónico, su estado ante la DIAN.
+
+Los filtros quedan en la dirección de la página: al abrir un documento y volver («Volver a las ventas» o «atrás» del
+navegador) la lista sale con los mismos filtros, y un enlace copiado abre la misma búsqueda.
+
 ### Venta de oficina (factura)
 
 1. **Ventas → Nueva factura** (o «Nueva factura» desde Documentos de venta).
@@ -283,6 +294,10 @@ adquirente y datáfono. «Reabrir» pide motivo y el siguiente cierre es otra ve
 **Ventas → Informes de ventas**: elija el informe, el rango y el punto, y «Consultar». Están: ventas por sesión de caja,
 por caja y por medio de pago, la sesión de caja, el cierre del día, pagos con tarjeta, movimientos de caja, diferencias
 de arqueo, bonos redimidos, aprobaciones de descuento e indicios de deterioro. «Excel», «PDF» o «Word» para exportar.
+Con un punto elegido se puede elegir también su caja. El **detalle de ventas por medio de pago** filtra además por
+cliente (documento o nombre), vendedor, clase de documento (varias), tipo de documento y usuario que hizo la venta, y
+dice el vendedor de cada venta. «Consultar» deja los filtros en la dirección: al abrir una venta desde el informe y
+volver con «atrás», el informe sale como estaba.
 Las cifras de margen, rotación y ventas del día también están en el **tablero de inventario**.
 
 ## Reglas importantes

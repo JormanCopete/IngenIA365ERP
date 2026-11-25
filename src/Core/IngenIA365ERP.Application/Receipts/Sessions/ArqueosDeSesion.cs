@@ -18,7 +18,8 @@ namespace IngenIA365ERP.Application.Receipts.Sessions;
 /// </summary>
 public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo emision, ParametrosDeCaja parametros, IDateTimeService reloj)
 {
-    public sealed record ArqueoRegistrado(CashCount Arqueo, IReadOnlyList<CashCountLine> Lineas, ResultadoDeArqueo Resultado);
+    /// <param name="Estricto">Si rigió el arqueo estricto (<c>Caja.ArqueoEstricto</c>); sin él, el cierre resuelve las diferencias sin otra persona.</param>
+    public sealed record ArqueoRegistrado(CashCount Arqueo, IReadOnlyList<CashCountLine> Lineas, ResultadoDeArqueo Resultado, bool Estricto = true);
 
     /// <summary>Arquea e inserta; con una diferencia sin motivo, el error y nada se escribe.</summary>
     public async Task<Result<ArqueoRegistrado>> RegistrarAsync(CashSession sesion, CashCountKind clase, IReadOnlyList<ConteoDeMedioDto> contado, int contadoPor,
@@ -26,6 +27,9 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
     {
         var sellados = ValoresSelladosDeLaSesion.De(sesion);
         var esperado = await SesionesDeCaja.EsperadoAsync(db, sesion, ct);
+        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) no hay arqueo ciego, el motivo se pide sólo fuera de la tolerancia y el faltante
+        // va al gasto (decisión del dueño).
+        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
 
         // 2026-11-23: con Caja.FormaDeConteoDelEfectivo = Denominaciones el efectivo no se registra con un solo valor.
         if (contado.Any(c => c.Total is > 0m && (c.Denominations is null || c.Denominations.Count == 0)
@@ -60,7 +64,8 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
                 c.Reason));
         }
 
-        var resultado = ArqueoDeCaja.Arquear(esperado, conteos, sellados.ShortageTreatment);
+        var resultado = ArqueoDeCaja.Arquear(esperado, conteos, estricto ? sellados.ShortageTreatment : CountTreatment.Expense,
+            motivoSoloFueraDeTolerancia: !estricto);
         if (resultado.SinMotivo.Count > 0) return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.SinMotivo(resultado.SinMotivo));
 
         var arqueo = new CashCount
@@ -70,7 +75,7 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
             CountedAt = ahora,
             CountedByUserId = contadoPor,
             WitnessUserId = testigo,
-            IsBlind = sellados.BlindCount,
+            IsBlind = sellados.BlindCount && estricto,
             MinutesAttachmentPublicId = acta,
             VerificationCode = CloseCollectionPointDayCommandHandler.CodigoDeVerificacion(),
         };
@@ -106,7 +111,7 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
             foreach (var r in d.Referencias)
                 db.CashCountReferences.Add(new CashCountReference { CashCountLineId = linea.Id, Reference = r.Reference.Trim(), Amount = r.Amount, Confirmed = r.Confirmed });
         }
-        return Result.Success(new ArqueoRegistrado(arqueo, lineas, resultado));
+        return Result.Success(new ArqueoRegistrado(arqueo, lineas, resultado, estricto));
     }
 
     /// <summary>

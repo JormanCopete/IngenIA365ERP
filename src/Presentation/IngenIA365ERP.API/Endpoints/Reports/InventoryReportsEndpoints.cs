@@ -150,10 +150,12 @@ public class InventoryReportsEndpoints : ICarterModule
         group.MapVistaDeInventario(SalesByRegisterReportQueryHandler.Vista, (f, q) => new SalesByRegisterReportQuery(f, Texto(q, "groupBy")));
         group.MapVistaDeInventario(SalesByPaymentMeansReportQueryHandler.Vista,
             (f, q) => new SalesByPaymentMeansReportQuery(f, Ids(q, "paymentMeans"), Enumerados<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"), Texto(q, "groupBy")));
-        // Pedido del dueño del 2026-11-23: el detalle por venta y medio, con varios medios o clases a la vez.
+        // Pedido del dueño del 2026-11-23: el detalle por venta y medio, con varios medios o clases a la vez. 2026-11-24: también por cliente,
+        // vendedor, clase de documento (varias, por nombre o número) y usuario que hizo la venta.
         group.MapVistaDeInventario(SalesPaymentsDetailReportQueryHandler.Vista,
             (f, q) => new SalesPaymentsDetailReportQuery(f, Ids(q, "paymentMeans"), Enumerados<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"),
-                string.Equals(Texto(q, "allMeans"), "true", StringComparison.OrdinalIgnoreCase)));
+                string.Equals(Texto(q, "allMeans"), "true", StringComparison.OrdinalIgnoreCase), Texto(q, "customer"), Id(q, "salesperson"),
+                Enumerados<DocumentClass>(q, "documentClass"), Texto(q, "createdBy")));
         group.MapVistaDeInventario(CashSessionReportQueryHandler.Vista, (f, _) => new CashSessionReportQuery(f));
         group.MapVistaDeInventario(DayCloseReportQueryHandler.Vista,
             (f, q) => new DayCloseReportQuery(f, DateOnly.TryParse(q["operatingDate"].ToString(), System.Globalization.CultureInfo.InvariantCulture, out var dia) ? dia : null,

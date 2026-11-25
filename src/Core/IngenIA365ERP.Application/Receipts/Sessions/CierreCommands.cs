@@ -73,7 +73,8 @@ public sealed class RegisterClosingCountCommandHandler(
         var olvidada = sesion.Status == CashSessionState.ForgottenOpen;
         if (olvidada)
         {
-            if (!await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, reloj.HoyLocal, ct))
+            if (!await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, reloj.HoyLocal, ct)
+                && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct))
                 return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
             if (!await segregacion.MismaPersonaAsync(usuario, sesion.CashierUserId, ct))
                 return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
@@ -100,12 +101,25 @@ public sealed class RegisterClosingCountCommandHandler(
 /// <summary>Lo común de cerrar una sesión con su arqueo. (nuevo)</summary>
 internal static class CierreDeSesion
 {
+    /// <summary>El motivo con que queda aprobada la diferencia que resuelve el arqueo sencillo al cerrar.</summary>
+    public const string MotivoDelArqueoSencillo = "Resuelta al cerrar: arqueo sencillo (Caja.ArqueoEstricto apagado).";
+
     public static async Task<CashCountDto> CerrarAsync(IApplicationDbContext db, ArqueosDeSesion arqueos, IAlertas alertas, CashSession sesion,
         ArqueosDeSesion.ArqueoRegistrado registrado, int cerro, IDateTimeService reloj, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
         foreach (var linea in registrado.Lineas.Where(l => l.Difference != 0m && l.WithinTolerance))
             await arqueos.AplicarDiferenciaAsync(linea, sesion, cerro, hoy, ct);
+        // 2026-11-24 (pedido del dueño): con el arqueo sencillo la diferencia sobre la tolerancia queda resuelta al cerrar, con su motivo y el faltante al
+        // gasto, sin que otra persona la apruebe. Queda aprobada por quien cerró y lo dice el motivo de la aprobación.
+        if (!registrado.Estricto)
+            foreach (var linea in registrado.Lineas.Where(l => l.PorAprobar))
+            {
+                linea.ApprovedByUserId = cerro;
+                linea.ApprovedAt = reloj.UtcNow;
+                linea.ApprovalReason = MotivoDelArqueoSencillo;
+                await arqueos.AplicarDiferenciaAsync(linea, sesion, cerro, hoy, ct);
+            }
         var pendiente = registrado.Lineas.Any(l => l.PorAprobar);
         sesion.Status = pendiente ? CashSessionState.ClosedWithDifferencePending : CashSessionState.Closed;
         sesion.ClosedAt = reloj.UtcNow;
@@ -251,7 +265,7 @@ public sealed class ApproveCountDifferenceCommandHandler(
 /// <c>POST /api/receipts/sessions/{id}/close-forgotten</c> (<c>Receipts.Session.CloseForgotten</c>): el supervisor cierra la sesión olvidada con un arqueo
 /// diferido y un testigo, otra persona que él y que el cajero (FR-034). Una diferencia sobre la tolerancia la aprueba un tercero. (nuevo)
 /// </summary>
-public sealed record CloseForgottenSessionCommand(Guid SessionPublicId, Guid WitnessUserPublicId, IReadOnlyList<ConteoDeMedioDto> Means)
+public sealed record CloseForgottenSessionCommand(Guid SessionPublicId, Guid? WitnessUserPublicId, IReadOnlyList<ConteoDeMedioDto> Means)
     : IRequest<Result<CashCountDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
@@ -262,7 +276,6 @@ public sealed class CloseForgottenSessionCommandValidator : AbstractValidator<Cl
     public CloseForgottenSessionCommandValidator()
     {
         RuleFor(x => x.SessionPublicId).NotEmpty();
-        RuleFor(x => x.WitnessUserPublicId).NotEmpty().WithMessage("Indique el testigo del arqueo.");
         RuleFor(x => x.Means).NotNull();
     }
 }
@@ -275,7 +288,8 @@ public sealed class CloseForgottenSessionCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     SegregacionDeRecaudo segregacion,
     ArqueosDeSesion arqueos,
-    IAlertas alertas) : IRequestHandler<CloseForgottenSessionCommand, Result<CashCountDto>>
+    IAlertas alertas,
+    ParametrosDeCaja parametros) : IRequestHandler<CloseForgottenSessionCommand, Result<CashCountDto>>
 {
     public async Task<Result<CashCountDto>> Handle(CloseForgottenSessionCommand request, CancellationToken ct)
     {
@@ -284,9 +298,16 @@ public sealed class CloseForgottenSessionCommandHandler(
         var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: true, ct);
         if (sesion is null) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
         if (sesion.Status != CashSessionState.ForgottenOpen) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEsOlvidada());
-        var testigo = await db.Users.AsNoTracking().Where(u => u.PublicId == request.WitnessUserPublicId).Select(u => (int?)u.Id).FirstOrDefaultAsync(ct);
-        if (testigo is not { } idTestigo || await segregacion.AlgunaEsLaMismaAsync(idTestigo, [supervisor, sesion.CashierUserId], ct)
-            || await segregacion.MismaPersonaAsync(supervisor, sesion.CashierUserId, ct))
+        // 2026-11-24: con el arqueo sencillo (Caja.ArqueoEstricto apagado) el testigo es opcional; si viene, sigue siendo otra persona.
+        var estricto = await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
+        int? idTestigo = null;
+        if (request.WitnessUserPublicId is { } pedido && pedido != Guid.Empty)
+        {
+            idTestigo = await db.Users.AsNoTracking().Where(u => u.PublicId == pedido).Select(u => (int?)u.Id).FirstOrDefaultAsync(ct);
+            if (idTestigo is not { } t || await segregacion.AlgunaEsLaMismaAsync(t, [supervisor, sesion.CashierUserId], ct))
+                return Result.Failure<CashCountDto>(ErroresDeRecaudo.TestigoRequerido());
+        }
+        if (estricto && (idTestigo is null || await segregacion.MismaPersonaAsync(supervisor, sesion.CashierUserId, ct)))
             return Result.Failure<CashCountDto>(ErroresDeRecaudo.TestigoRequerido());
 
         await cerrojo.TomarSetupAsync(ct: ct);
@@ -329,7 +350,6 @@ public sealed class RegisterSessionAdjustmentCommandValidator : AbstractValidato
         RuleFor(x => x.PaymentMeansPublicId).NotEmpty();
         RuleFor(x => x.Amount).NotEqual(0m).WithMessage("El ajuste tiene un valor distinto de cero.");
         RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
-        RuleFor(x => x.SupportAttachmentPublicId).NotEmpty().WithMessage("Adjunte el soporte del ajuste.");
     }
 }
 
@@ -341,7 +361,8 @@ public sealed class RegisterSessionAdjustmentCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     NumeradorDeRecaudo numerador,
     AprobacionPresenteEnCaja aprobacion,
-    EmisionDeRecaudo emision) : IRequestHandler<RegisterSessionAdjustmentCommand, Result<CashSessionAdjustmentDto>>
+    EmisionDeRecaudo emision,
+    ParametrosDeCaja parametros) : IRequestHandler<RegisterSessionAdjustmentCommand, Result<CashSessionAdjustmentDto>>
 {
     public async Task<Result<CashSessionAdjustmentDto>> Handle(RegisterSessionAdjustmentCommand request, CancellationToken ct)
     {
@@ -351,6 +372,9 @@ public sealed class RegisterSessionAdjustmentCommandHandler(
         var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: false, ct);
         if (sesion is null) return Result.Failure<CashSessionAdjustmentDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
         if (sesion.Status != CashSessionState.Closed) return Result.Failure<CashSessionAdjustmentDto>(ErroresDeRecaudo.SesionNoCerrada());
+        // 2026-11-24: el soporte lo exige sólo el arqueo estricto (Caja.ArqueoEstricto).
+        if (request.SupportAttachmentPublicId is null && await ArqueoEstricto.EsAsync(parametros, hoy, ct))
+            return Result.Failure<CashSessionAdjustmentDto>(ErroresDeRecaudo.SoporteRequerido());
         var medio = ValoresSelladosDeLaSesion.De(sesion).Means.FirstOrDefault(m => m.PublicId == request.PaymentMeansPublicId);
         if (medio is null) return Result.Failure<CashSessionAdjustmentDto>(ErroresDeRecaudo.NoEncontrado("El medio de la sesión"));
 
@@ -402,7 +426,7 @@ public sealed class RegisterSessionAdjustmentCommandHandler(
 /// opcional. Queda como hecho y no cierra la sesión ni mueve dinero: una diferencia se explica en el acta (FR-033). La bóveda se arquea con un movimiento de
 /// conteo (<c>RegisterVaultMovementCommand</c>). (nuevo)
 /// </summary>
-public sealed record RegisterSurpriseCountCommand(Guid SessionPublicId, Guid MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioDto> Means,
+public sealed record RegisterSurpriseCountCommand(Guid SessionPublicId, Guid? MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioDto> Means,
     Guid? WitnessUserPublicId = null) : IRequest<Result<CashCountDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
@@ -413,7 +437,6 @@ public sealed class RegisterSurpriseCountCommandValidator : AbstractValidator<Re
     public RegisterSurpriseCountCommandValidator()
     {
         RuleFor(x => x.SessionPublicId).NotEmpty();
-        RuleFor(x => x.MinutesAttachmentPublicId).NotEmpty().WithMessage("Adjunte el acta del arqueo sorpresivo.");
         RuleFor(x => x.Means).NotNull();
     }
 }
@@ -424,7 +447,8 @@ public sealed class RegisterSurpriseCountCommandHandler(
     IActorActual actorActual,
     IDateTimeService reloj,
     ICerrojoDeRecaudo cerrojo,
-    ArqueosDeSesion arqueos) : IRequestHandler<RegisterSurpriseCountCommand, Result<CashCountDto>>
+    ArqueosDeSesion arqueos,
+    ParametrosDeCaja parametros) : IRequestHandler<RegisterSurpriseCountCommand, Result<CashCountDto>>
 {
     public async Task<Result<CashCountDto>> Handle(RegisterSurpriseCountCommand request, CancellationToken ct)
     {
@@ -433,6 +457,9 @@ public sealed class RegisterSurpriseCountCommandHandler(
         var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: false, ct);
         if (sesion is null) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
         if (sesion.Status is not (CashSessionState.Open or CashSessionState.ForgottenOpen)) return Result.Failure<CashCountDto>(ErroresDeRecaudo.SesionNoAbierta());
+        // 2026-11-24: el acta la exige sólo el arqueo estricto (Caja.ArqueoEstricto).
+        var acta = request.MinutesAttachmentPublicId is { } a && a != Guid.Empty ? a : (Guid?)null;
+        if (acta is null && await ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct)) return Result.Failure<CashCountDto>(ErroresDeRecaudo.ActaRequerida());
         int? testigo = null;
         if (request.WitnessUserPublicId is { } t)
         {
@@ -444,7 +471,7 @@ public sealed class RegisterSurpriseCountCommandHandler(
         await cerrojo.BloquearAsync(NivelDeRecaudo.DiaDelPunto, TablasDeRecaudo.DiasDelPunto, [sesion.CollectionPointDayId], exclusivo: false, ct);
         await cerrojo.BloquearAsync(NivelDeRecaudo.Sesion, TablasDeRecaudo.Sesiones, [sesion.Id], ct: ct);
 
-        var registrado = await arqueos.RegistrarAsync(sesion, CashCountKind.Surprise, request.Means, usuario, testigo, request.MinutesAttachmentPublicId,
+        var registrado = await arqueos.RegistrarAsync(sesion, CashCountKind.Surprise, request.Means, usuario, testigo, acta,
             reloj.UtcNow, ct);
         if (registrado.IsFailure) return Result.Failure<CashCountDto>(registrado.Error);
         await db.SaveChangesAsync(ct);

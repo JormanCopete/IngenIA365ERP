@@ -1,0 +1,91 @@
+@* 2026-11-24 (pedido del dueño): abrir la caja, igual en Comercial y en Recaudo, en tres pasos a la vista: dónde (el punto, sólo si hay más de uno),
+   la caja (viene elegida si hay una libre) y la base. Las cajas abiertas por otra persona se ven pero no se eligen. (nuevo) *@
+<section class="info-card caja-apertura" aria-label="Abrir la caja">
+    <h4>Abrir la caja</h4>
+    <div class="form-grid">
+        @if (Puntos is { Count: > 1 })
+        {
+            <label class="campo">@EtiquetaDelPunto *
+                <select class="e-input" value="@(Punto?.ToString() ?? "")" @onchange="@(e => ElegirPuntoAsync(e.Value))">
+                    <option value="">Elija…</option>
+                    @foreach (var p in Puntos) { <option value="@p.Id">@p.Rotulo</option> }
+                </select>
+            </label>
+        }
+        <label class="campo">Caja *
+            <select class="e-input" value="@(_caja?.ToString() ?? "")" @onchange="@(e => _caja = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                <option value="">@(Cajas.Count == 0 ? "No hay cajas para elegir" : "Elija…")</option>
+                @foreach (var c in Cajas)
+                {
+                    <option value="@c.Id" disabled="@(c.OcupadaPor is not null)">@c.Rotulo@(c.OcupadaPor is { } quien ? $" (abierta por {quien})" : "")</option>
+                }
+            </select>
+            <span class="hint">@AyudaDeLaCaja</span>
+        </label>
+    </div>
+    <ConteoDelEfectivo Forma="@Forma" @bind-PorBilletes="_porBilletes" @bind-ValorGlobal="_valor" Etiqueta="Base" Ayuda="@AyudaDeLaBase">
+        <Billetes>
+            <BilletesYMonedas Denominaciones="@Denominaciones" Cantidades="@_billetes" />
+        </Billetes>
+    </ConteoDelEfectivo>
+    <IndicadorDeCarga Cargando="@Ocupado" Texto="Abriendo…" Compacto="true">
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" Disabled="@(_caja is null || Ocupado)" OnClick="@AbrirAsync">Abrir la caja</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</section>
+
+@code {
+    /// <summary>Los puntos (de venta o de recaudo); el selector aparece sólo si hay más de uno.</summary>
+    [Parameter] public IReadOnlyList<OpcionDeCaja>? Puntos { get; set; }
+
+    [Parameter] public Guid? Punto { get; set; }
+
+    [Parameter] public EventCallback<Guid?> PuntoChanged { get; set; }
+
+    [Parameter] public string EtiquetaDelPunto { get; set; } = "Punto";
+
+    [Parameter, EditorRequired] public IReadOnlyList<OpcionDeCaja> Cajas { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<DenominacionDeConteo> Denominaciones { get; set; } = [];
+
+    [Parameter] public string Forma { get; set; } = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.AElegir;
+
+    [Parameter] public string AyudaDeLaCaja { get; set; } = "La caja donde va a trabajar hoy.";
+
+    [Parameter] public string AyudaDeLaBase { get; set; } = "El efectivo que recibe para dar vueltas. Sin efectivo, deje 0.";
+
+    [Parameter] public bool Ocupado { get; set; }
+
+    [Parameter] public EventCallback<BaseDeApertura> Abrir { get; set; }
+
+    private Guid? _caja;
+    private decimal? _valor;
+    private bool _porBilletes;
+    private readonly Dictionary<Guid, int> _billetes = [];
+    private IReadOnlyList<OpcionDeCaja>? _cajasVistas;
+
+    protected override void OnParametersSet()
+    {
+        // Con cajas nuevas (otro punto), la primera libre queda elegida.
+        if (ReferenceEquals(_cajasVistas, Cajas)) return;
+        _cajasVistas = Cajas;
+        if (_caja is not { } elegida || Cajas.All(c => c.Id != elegida || c.OcupadaPor is not null))
+            _caja = Cajas.FirstOrDefault(c => c.OcupadaPor is null)?.Id;
+    }
+
+    private async Task ElegirPuntoAsync(object? valor)
+    {
+        Punto = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+        _caja = null;
+        await PuntoChanged.InvokeAsync(Punto);
+    }
+
+    private Task AbrirAsync()
+    {
+        if (_caja is not { } caja) return Task.CompletedTask;
+        var porBilletes = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.PorBilletes(Forma, _porBilletes);
+        return Abrir.InvokeAsync(new BaseDeApertura(caja, porBilletes ? null : _valor ?? 0m,
+            porBilletes ? new Dictionary<Guid, int>(_billetes) : null));
+    }
+}

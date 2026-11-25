@@ -1,0 +1,39 @@
+@* 2026-11-24 (pedido del dueño): el conteo billete por billete de la caja, igual en Comercial y en Recaudo: cuántos hay de cada valor y el total, que
+   se suma solo. Escribe en el diccionario que recibe. (nuevo) *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead><tr><th>Valor</th><th class="numero">Cantidad</th><th class="numero">Subtotal</th></tr></thead>
+        <tbody>
+            @foreach (var d in Denominaciones.OrderByDescending(x => x.Valor))
+            {
+                var id = d.Id;
+                var cantidad = Cantidades.GetValueOrDefault(id);
+                <tr>
+                    <td>@(d.EsMoneda ? "Moneda" : "Billete") de @d.Valor.ToString("N0")</td>
+                    <td class="numero"><input class="e-input numero" type="number" min="0" step="1" value="@cantidad"
+                                              aria-label="@($"Cantidad de {d.Valor:N0}")" @onchange="@(e => FijarAsync(id, e.Value))" /></td>
+                    <td class="numero">@((cantidad * d.Valor).ToString("N0"))</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><th>Total</th><th></th><th class="numero">@Total.ToString("N0")</th></tr></tfoot>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DenominacionDeConteo> Denominaciones { get; set; } = [];
+
+    [Parameter, EditorRequired] public Dictionary<Guid, int> Cantidades { get; set; } = [];
+
+    [Parameter] public EventCallback<decimal> TotalChanged { get; set; }
+
+    public decimal Total => Denominaciones.Sum(d => Cantidades.GetValueOrDefault(d.Id) * d.Valor);
+
+    private async Task FijarAsync(Guid id, object? valor)
+    {
+        var cantidad = int.TryParse(valor?.ToString(), out var n) && n > 0 ? n : 0;
+        if (cantidad == 0) Cantidades.Remove(id);
+        else Cantidades[id] = cantidad;
+        await TotalChanged.InvokeAsync(Total);
+    }
+}

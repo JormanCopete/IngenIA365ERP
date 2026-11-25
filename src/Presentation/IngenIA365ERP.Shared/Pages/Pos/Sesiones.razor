@@ -9,232 +9,145 @@
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
-<PageTitle>Sesiones de caja - IngenIA365ERP</PageTitle>
+<PageTitle>Mi caja - IngenIA365ERP</PageTitle>
 
-@* Feature 012, I3 (T641, T645; FR-058, FR-099; contracts/api.md §21.1): las sesiones de caja. Arriba, la sesión abierta del usuario con
-   sus accesos —ir al POS sólo si el punto vende en el POS (un punto sin POS cobra en oficina), ver, cerrar—; si no tiene, abrir una:
-   punto, caja libre y la base contada por denominaciones (obligatoria si la base es del día). Una caja tiene a lo sumo una sesión
-   abierta y un cajero una sola (lo decide el servidor: Inventory.CashSession.RegisterBusy / .CashierBusy). Abajo, las sesiones del
-   alcance, con filtros. *@
+@* 2026-11-24 (pedido del dueño): «Mi caja» del punto de venta, igual a la de Recaudo. Sólo lo del cajero: abrir su caja (punto, caja libre y base), y
+   con la caja abierta ir a vender, registrar un movimiento de caja y arquear y cerrar (/pos/sesiones/{id}/cierre, el arqueo en dos pasos). La lista de
+   las cajas con sus filtros está aparte, en «Cajas del día» (/pos/cajas). Una caja tiene a lo sumo una sesión abierta y un cajero una sola (lo decide el
+   servidor). Antes (feature 012, I3, T641) la lista de sesiones iba debajo de la apertura. *@
 <PermissionGate Required="Inventory.CashSessions.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Sesiones de caja</h3>
+        <h3>Mi caja</h3>
         <div class="toolbar">
-            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarTodoAsync">Actualizar</SfButton>
-            <a class="e-btn e-flat" href="/pos/movimientos-de-caja">Movimientos de caja</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <a class="e-btn e-flat" href="/pos/cajas">Cajas del día</a>
             <a class="e-btn e-flat" href="/pos/cierre-del-dia">Cierre del día</a>
         </div>
     </div>
 
-    <IndicadorDeCarga Cargando="@_cargaMia.Activa" Texto="Buscando su sesión…">
-        @if (_mia is { } m)
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Buscando su caja…">
+        @if (_mia is not { } m)
         {
-            <div class="info-card">
-                <h4>Su sesión abierta</h4>
-                <p>@m.PointOfSale.Name · caja @m.CashRegister.Code · desde @m.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · base @m.OpeningBase.ToString("N0") · @m.SalesCount venta(s) por @m.SalesTotal.ToString("N0")</p>
-                <div class="toolbar">
+            @if (!_carga.Activa)
+            {
+                <PermissionGate Required="Inventory.CashSessions.Open" MostrarAviso="true">
+                    <AperturaDeCaja Puntos="@_puntos" Punto="@_punto" PuntoChanged="@ElegirPuntoAsync" EtiquetaDelPunto="Punto de venta" Cajas="@_cajas"
+                                    Denominaciones="@_denominaciones" Forma="@_politica.FormaDelEfectivo" Ocupado="@_guardado.Activa"
+                                    AyudaDeLaCaja="La caja donde va a cobrar hoy; las abiertas por otra persona no se pueden elegir."
+                                    AyudaDeLaBase="El efectivo que recibe para dar vueltas; no es venta. Sin efectivo, deje 0."
+                                    Abrir="@AbrirAsync" />
+                </PermissionGate>
+            }
+        }
+        else
+        {
+            <MiCajaAbierta Caja="@($"{m.PointOfSale.Name} · caja {m.CashRegister.Code}")" Dia="@m.OperatingDate" AbiertaEl="@m.OpenedAt" Base="@m.OpeningBase"
+                           Movido="@($"{m.SalesCount} venta(s) por {m.SalesTotal:N0}")" EtiquetaDeLoMovido="Vendido" Esperados="@_esperados" Ciego="@_ciego"
+                           UrlParaCerrar="@UrlDelCierre(m)">
+                <Avisos>
+                    @if (m.LinkedSessionPublicId is not null)
+                    {
+                        <p class="aviso aviso-info">Caja única: esta caja se abrió con su caja de Recaudo y se cierra con el arqueo de Recaudo.</p>
+                    }
+                    @if (!m.PointOfSale.PosEnabled)
+                    {
+                        <p class="texto-tenue">Este punto cobra en oficina.</p>
+                    }
+                </Avisos>
+                <Acciones>
                     @if (m.PointOfSale.PosEnabled)
                     {
                         <PermissionGate Required="Inventory.Pos.Sell">
-                            <a class="e-btn e-primary" href="/pos">Ir al POS</a>
+                            <a class="e-btn e-primary" href="/pos">Ir a vender</a>
                         </PermissionGate>
                     }
                     else
                     {
-                        <span class="texto-tenue">Este punto cobra en oficina.</span>
                         <a class="e-btn e-primary" href="/ventas/documentos">Ventas de oficina</a>
                     }
-                    <a class="e-btn e-outline" href="@($"/pos/sesiones/{m.CashSessionPublicId}")">Ver la sesión</a>
                     <PermissionGate Required="Inventory.CashSessions.Close">
                         @if (m.LinkedSessionPublicId is null)
                         {
-                            <a class="e-btn e-outline" href="@($"/pos/sesiones/{m.CashSessionPublicId}/cierre")">Cerrar la caja</a>
+                            <a class="e-btn e-outline" href="@UrlDelCierre(m)">Arquear y cerrar</a>
                         }
                         else
                         {
-                            @* 2026-11-23, caja única: se cierra con el arqueo de Recaudo. *@
                             <a class="e-btn e-outline" href="/recaudo/sesiones">Cerrar en Recaudo (caja única)</a>
                         }
                     </PermissionGate>
-                </div>
-            </div>
+                    <PermissionGate Required="Inventory.CashMovements.Create">
+                        <a class="e-btn e-outline" href="@($"/pos/movimientos-de-caja?sesion={m.CashSessionPublicId}")">Movimiento de caja</a>
+                    </PermissionGate>
+                    <a class="e-btn e-flat" href="@($"/pos/sesiones/{m.CashSessionPublicId}")">Ver el detalle</a>
+                </Acciones>
+            </MiCajaAbierta>
         }
-        else if (!_cargaMia.Activa)
-        {
-            <PermissionGate Required="Inventory.CashSessions.Open">
-                <div class="info-card">
-                    <h4>Abrir la caja</h4>
-                    <div class="form-grid">
-                        <label class="campo">Punto de venta *
-                            <select class="e-input" value="@(_punto?.ToString() ?? "")" @onchange="@(e => ElegirPuntoAsync(e.Value))">
-                                <option value="">Elija…</option>
-                                @foreach (var p in _puntos) { <option value="@p.PointOfSalePublicId">@p.Code · @p.Name</option> }
-                            </select>
-                        </label>
-                        <label class="campo">Caja *
-                            <select class="e-input" value="@(_caja?.ToString() ?? "")" @onchange="@(e => _caja = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
-                                <option value="">Elija…</option>
-                                @foreach (var c in _cajas.Where(x => x.IsActive)) { <option value="@c.CashRegisterPublicId" disabled="@(c.OpenSession is not null)">@c.Code · @c.Name@(c.OpenSession is { } s ? $" (abierta por {s.CashierName})" : "")</option> }
-                            </select>
-                            <span class="hint">La caja donde va a cobrar hoy; las abiertas por otra persona no se pueden elegir.</span>
-                        </label>
-                    </div>
-                    @* 2026-11-23: la base con un solo valor o billete por billete, según Caja.FormaDeConteoDelEfectivo. *@
-                    <ConteoDelEfectivo Forma="@_forma" @bind-PorBilletes="_basePorBilletes" @bind-ValorGlobal="_base" Etiqueta="Base"
-                                       Ayuda="El efectivo que recibe para dar vueltas; no es venta. Sin efectivo, deje 0.">
-                        <Billetes>
-                            <ConteoPorDenominaciones Denominaciones="@_denominaciones" Cantidades="@_conteo" />
-                        </Billetes>
-                    </ConteoDelEfectivo>
-                    <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Abriendo…" Compacto="true">
-                        <div class="toolbar">
-                            <SfButton CssClass="e-primary" Disabled="@(_caja is null || _guardado.Activa)" OnClick="@AbrirAsync">Abrir la caja</SfButton>
-                        </div>
-                    </IndicadorDeCarga>
-                </div>
-            </PermissionGate>
-        }
-    </IndicadorDeCarga>
-
-    <div class="toolbar">
-        <label class="campo">Estado
-            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
-                <option value="">Todos</option>
-                @foreach (var (v, t) in TextosDeVentas.EstadosDeSesion) { <option value="@v">@t</option> }
-            </select>
-        </label>
-        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = Fecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = Fecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo-check"><input type="checkbox" @bind="_soloMias" @bind:after="BuscarAsync" /> Sólo las mías</label>
-    </div>
-
-    <IndicadorDeCarga Cargando="@_carga.Activa">
-        @if (!_carga.Activa && _sesiones.Count == 0)
-        {
-            <p class="texto-tenue">No hay sesiones con estos filtros.</p>
-        }
-        <div class="tabla-desplazable">
-            <table class="data-grid">
-                <thead><tr><th>Punto</th><th>Caja</th><th>Cajero</th><th>Fecha operativa</th><th>Abierta</th><th>Cerrada</th><th class="numero">Ventas</th><th class="numero">Total</th><th>Estado</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var s in _sesiones)
-                    {
-                        <tr>
-                            <td>@s.PointOfSale.Code</td><td>@s.CashRegister.Code</td><td>@s.Cashier.Name</td><td>@s.OperatingDate.ToString("dd/MM/yyyy")</td>
-                            <td>@s.OpenedAt.ToLocalTime().ToString("dd/MM HH:mm")</td><td>@s.ClosedAt?.ToLocalTime().ToString("dd/MM HH:mm")</td>
-                            <td class="numero">@s.SalesCount</td><td class="numero">@s.SalesTotal.ToString("N0")</td><td>@TextosDeVentas.EstadoDeSesion(s.Status)</td>
-                            <td>
-                                <a href="@($"/pos/sesiones/{s.CashSessionPublicId}")">Ver</a>
-                                @if (s.Status == TextosDeVentas.SesionAbierta && s.PointOfSale.PosEnabled && s.CashSessionPublicId == _mia?.CashSessionPublicId)
-                                {
-                                    <text> · </text><a href="/pos">Ir al POS</a>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <div class="toolbar">
-            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
-            <span class="texto-tenue">Página @_pagina · @_total sesión(es)</span>
-            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
-        </div>
     </IndicadorDeCarga>
 </div>
 </PermissionGate>
 
 @code {
-    private const int TamanoDePagina = 20;
-    private readonly EstadoDeCarga _carga = new(), _cargaMia = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveAbrir = new();
     private SesionDeCajaDto? _mia;
-    private List<SesionDeCajaDto> _sesiones = [];
-    private List<PuntoDeVentaDto> _puntos = [];
-    private List<CajaDto> _cajas = [];
-    private List<DenominacionDto> _denominaciones = [];
-    private readonly Dictionary<Guid, int> _conteo = [];
-    private Guid? _punto, _caja;
-    private decimal? _base;
-    private string _forma = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.AElegir;
-    private bool _basePorBilletes;
-    private int? _estado;
-    private DateOnly? _desde, _hasta;
-    private bool _soloMias;
-    private int _pagina = 1;
-    private long _total;
+    private IReadOnlyList<(string Medio, decimal Esperado)>? _esperados;
+    private bool _ciego;
+    private PoliticaDeCaja _politica = PoliticaDeCaja.PorDefecto;
+    private IReadOnlyList<OpcionDeCaja> _puntos = [], _cajas = [];
+    private IReadOnlyList<DenominacionDeConteo> _denominaciones = [];
+    private Guid? _punto;
 
-    protected override Task OnInitializedAsync() => CargarTodoAsync();
+    private static string UrlDelCierre(SesionDeCajaDto s) => $"/pos/sesiones/{s.CashSessionPublicId}/cierre";
 
-    private async Task CargarTodoAsync()
-    {
-        using (_cargaMia.Iniciar())
-        {
-            var mia = await Ventas.MiSesionAbiertaAsync();
-            _mia = mia.IsSuccess ? mia.Value : null;
-            if (!mia.IsSuccess) await Notification.ErrorAsync(mia.ErrorMessage ?? "No se pudo consultar su sesión.");
-            if (_mia is null)
-            {
-                var puntos = await Ventas.ListarPuntosAsync(activos: true);
-                _puntos = puntos.IsSuccess ? [.. puntos.Value ?? []] : [];
-                var denominaciones = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
-                _denominaciones = denominaciones.IsSuccess ? [.. denominaciones.Value ?? []] : [];
-                _forma = await SesionesDeRecaudo.FormaDeConteoAsync();
-                if (_puntos.Count == 1) await ElegirPuntoAsync(_puntos[0].PointOfSalePublicId);
-            }
-        }
-        await CargarAsync();
-    }
-
-    private async Task ElegirPuntoAsync(object? valor)
-    {
-        _punto = Guid.TryParse(valor?.ToString(), out var g) ? g : null;
-        _caja = null;
-        _cajas = [];
-        if (_punto is not { } punto) return;
-        using var carga = _cargaMia.Iniciar();
-        var r = await Ventas.ListarCajasAsync(punto);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
-        _cajas = [.. r.Value ?? []];
-        _caja = _cajas.FirstOrDefault(c => c.IsActive && c.OpenSession is null)?.CashRegisterPublicId;
-    }
-
-    private async Task AbrirAsync()
-    {
-        if (_caja is not { } caja) return;
-        using var guardado = _guardado.Iniciar();
-        var porBilletes = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.PorBilletes(_forma, _basePorBilletes);
-        var conteo = porBilletes && _conteo.Count > 0 ? _conteo.Select(p => new ConteoDeDenominacionRequest(p.Key, p.Value)).ToList() : null;
-        var r = await Ventas.AbrirSesionAsync(new AbrirSesionRequest(caja, porBilletes ? null : _base, conteo), _claveAbrir);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja."); return; }
-        foreach (var aviso in r.Value.Warnings) await Notification.InfoAsync(aviso.Message);
-        await Notification.SuccessAsync("Caja abierta.");
-        if (r.Value.Session.PointOfSale.PosEnabled) Nav.NavigateTo("/pos");
-        else await CargarTodoAsync();
-    }
-
-    private Task BuscarAsync()
-    {
-        _pagina = 1;
-        return CargarAsync();
-    }
-
-    private async Task PaginaAsync(int paso)
-    {
-        _pagina = Math.Max(1, _pagina + paso);
-        await CargarAsync();
-    }
+    protected override Task OnInitializedAsync() => CargarAsync();
 
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarSesionesAsync(mias: _soloMias ? true : null, estado: _estado, desde: _desde, hasta: _hasta, pagina: _pagina, tamano: TamanoDePagina);
-        if (!r.IsSuccess) { _sesiones = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las sesiones."); return; }
-        _sesiones = [.. r.Value!.Items];
-        _total = r.Value.TotalCount;
+        _politica = await SesionesDeRecaudo.PoliticaAsync();
+        var mia = await Ventas.MiSesionAbiertaAsync();
+        _mia = mia.IsSuccess ? mia.Value : null;
+        if (!mia.IsSuccess) await Notification.ErrorAsync(mia.ErrorMessage ?? "No se pudo consultar su caja.");
+        _esperados = null;
+        _ciego = false;
+        if (_mia is { } m)
+        {
+            var e = await Ventas.EsperadoAsync(m.CashSessionPublicId);
+            _ciego = e is { IsSuccess: true, Value.Blind: true };
+            if (e is { IsSuccess: true, Value: { Blind: false } esperado })
+                _esperados = esperado.Lines.Where(l => l.Expected is not null && l.PaymentMeans.CountMethod != 4)
+                    .Select(l => (l.PaymentMeans.Name, l.Expected!.Value)).ToList();
+            return;
+        }
+        var puntos = await Ventas.ListarPuntosAsync(activos: true);
+        _puntos = puntos.IsSuccess ? (puntos.Value ?? []).Select(p => new OpcionDeCaja(p.PointOfSalePublicId, $"{p.Code} · {p.Name}")).ToList() : [];
+        var denominaciones = await Medios.DenominacionesAsync(DiaDeCaja.Hoy());
+        _denominaciones = denominaciones.IsSuccess
+            ? (denominaciones.Value ?? []).Where(d => d.IsActive).Select(d => new DenominacionDeConteo(d.CashDenominationPublicId, d.Value, d.Kind != 1)).ToList()
+            : [];
+        if (_puntos.Count == 1) await ElegirPuntoAsync(_puntos[0].Id);
     }
 
-    private static DateOnly? Fecha(object? valor) =>
-        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+    private async Task ElegirPuntoAsync(Guid? punto)
+    {
+        _punto = punto;
+        _cajas = [];
+        if (punto is not { } p) return;
+        var r = await Ventas.ListarCajasAsync(p);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
+        _cajas = (r.Value ?? []).Where(c => c.IsActive).Select(c => new OpcionDeCaja(c.CashRegisterPublicId, $"{c.Code} · {c.Name}", c.OpenSession?.CashierName)).ToList();
+    }
+
+    private async Task AbrirAsync(BaseDeApertura pedido)
+    {
+        using var guardado = _guardado.Iniciar();
+        var conteo = pedido.Billetes is { Count: > 0 } billetes ? billetes.Select(p => new ConteoDeDenominacionRequest(p.Key, p.Value)).ToList() : null;
+        var r = await Ventas.AbrirSesionAsync(new AbrirSesionRequest(pedido.Caja, pedido.Billetes is null ? pedido.Valor : null, conteo), _claveAbrir);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja."); return; }
+        foreach (var aviso in r.Value.Warnings) await Notification.InfoAsync(aviso.Message);
+        await Notification.SuccessAsync("Caja abierta.");
+        if (r.Value.Session.PointOfSale.PosEnabled) Nav.NavigateTo("/pos");
+        else await CargarAsync();
+    }
 }

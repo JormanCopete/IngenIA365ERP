@@ -199,6 +199,14 @@
     private List<VigenciaDeParametroDto> _vigencias = [];
     private bool _mostrarNueva, _riesgo, _documentos;
     private string _buscar = string.Empty;
+
+    /// <summary>2026-11-24: llegar con <c>?buscar=</c> (por ejemplo desde el aviso del firmante de documentos) abre la lista ya filtrada.</summary>
+    [SupplyParameterFromQuery(Name = "buscar")] public string? Buscar { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(Buscar) && string.IsNullOrEmpty(_buscar)) _buscar = Buscar.Trim();
+    }
     private string? _valor, _motivo, _fuente, _error;
 
     /// <summary>Una opción de una lista de nombres está en el valor que se va a registrar.</summary>

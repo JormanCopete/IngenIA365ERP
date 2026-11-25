@@ -198,3 +198,22 @@ El desglose sale de la simulación que se confirmó; un recibo anterior a este c
   impresión con el recibo, sin descargar el PDF; los botones Tirilla (Ctrl+P) y Carta (Ctrl+Shift+P) también imprimen en vez de
   descargar. Si el navegador no deja imprimir desde la pantalla, el recibo se descarga como antes.
   La tirilla sale a su tamaño real, 80 mm de ancho, también si la impresora tiene hoja carta: no se ajusta a la hoja.
+
+## 12. La caja desde el 2026-11-24 (pedido del dueño)
+
+- **Ayuda de cada modalidad.** Al pasar el cursor por «Modalidad» (o por cada opción de la lista) y con **F1** sobre la lista, la caja dice
+  cómo funciona la modalidad y cuándo usarla:
+  - **Cancelación total**: paga todo lo que debe el crédito a hoy y lo deja cancelado; usa primero el anticipo.
+  - **Lo vencido**: sólo las cuotas vencidas con su mora.
+  - **Cuota del ciclo**: lo vencido y la cuota del período; si no ha vencido, queda como anticipo de esa cuota.
+  - **Anticipo**: lo vencido y el resto guardado para pagar las cuotas al vencer; no reduce intereses.
+  - **Abono extraordinario a capital**: lo vencido y el resto baja el capital, reduciendo el plazo o la cuota (lo elige el deudor); sí
+    reduce intereses.
+  - **Cuota específica**: sólo la cuota indicada.
+  - **Valor libre**: lo vencido por la prelación y el resto como anticipo.
+- **Avisos en español.** Bajo el producto, la simulación ya no muestra códigos como `Lending.Payment.AdvanceDoesNotReduceInterest` o
+  `Lending.Payment.TreatedAsPayoff`, sino lo que significan y qué hacer (por ejemplo: «El anticipo queda guardado y paga cada cuota cuando
+  vence: no reduce intereses. Si el asociado quiere pagar menos intereses, use «Abono extraordinario a capital».»). Los textos son los
+  mismos de la simulación de pago del crédito en Cartera.
+- **Recibos por pagador.** En Recibos (`/recaudo/recibos`), el campo **«Pagador (documento o nombre)»** busca la persona y lista sus
+  recibos. Las fechas siguen filtrando; bórrelas para ver todos los recibos de esa persona.

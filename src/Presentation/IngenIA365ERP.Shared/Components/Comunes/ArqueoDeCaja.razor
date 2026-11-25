@@ -1,0 +1,215 @@
+@* 2026-11-24 (pedido del dueño): el arqueo de la caja, igual en Comercial y en Recaudo, en dos pasos.
+   1. Cuente: un renglón por medio con un solo valor —el efectivo, con un valor o billete por billete según Caja.FormaDeConteoDelEfectivo—, y al lado lo
+      esperado y la diferencia mientras se cuenta (salvo arqueo ciego). El lote del datáfono y el cotejo pago por pago aparecen sólo con el arqueo estricto.
+   2. Revise y cierre: el resumen por medio; el motivo se pide donde hace falta —con el arqueo sencillo, sólo si la diferencia pasa la tolerancia— y lo
+      que cada pantalla agregue (testigo, acta, retiro de cierre). Lo mismo sirve para cerrar la caja de otra persona. (nuevo) *@
+<div class="caja-arqueo">
+    <ol class="caja-pasos" aria-label="Pasos del arqueo">
+        <li class="@(_paso == 1 ? "activo" : null)">1. Cuente</li>
+        <li class="@(_paso == 2 ? "activo" : null)">2. Revise y cierre</li>
+    </ol>
+
+    @if (_paso == 1)
+    {
+        @if (Ciego)
+        {
+            <p class="aviso aviso-info">Arqueo ciego: cuente sin ver lo esperado; la diferencia se ve al cerrar.</p>
+        }
+        @foreach (var medio in Medios)
+        {
+            var m = medio;
+            <section class="info-card caja-medio" aria-label="@m.Nombre">
+                <h5>@m.Nombre <span class="texto-tenue">(@m.Codigo)</span></h5>
+                @switch (m.Forma)
+                {
+                    case FormaDeContar.Efectivo:
+                        <ConteoDelEfectivo Forma="@FormaDelEfectivo" PorBilletes="@m.PorBilletes" PorBilletesChanged="@(v => CambiarFormaDelEfectivo(m, v))"
+                                           ValorGlobal="@m.Contado" ValorGlobalChanged="@(v => m.Contado = v ?? 0m)" Etiqueta="Efectivo contado"
+                                           Ayuda="Todo el efectivo que hay en la caja, incluida la base.">
+                            <Billetes>
+                                <BilletesYMonedas Denominaciones="@Denominaciones" Cantidades="@m.Billetes" TotalChanged="@(t => m.Contado = t)" />
+                            </Billetes>
+                        </ConteoDelEfectivo>
+                        break;
+                    case FormaDeContar.Lotes:
+                        <p class="hint">Un renglón por cada cierre de lote del datáfono: el número del lote y su valor.</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Datáfono</th><th>Lote</th><th class="numero">Valor</th><th class="numero">Pagos</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var lote in m.Lotes)
+                                    {
+                                        var l = lote;
+                                        <tr>
+                                            <td>
+                                                <select class="e-input" value="@(l.Datafono?.ToString() ?? "")" aria-label="Datáfono"
+                                                        @onchange="@(e => l.Datafono = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                                    <option value="">Elija…</option>
+                                                    @foreach (var d in m.Datafonos) { <option value="@d.Id">@d.Rotulo@(d.Esperado is { } esp && !Ciego ? $" · esperado {esp:N0}" : "")</option> }
+                                                </select>
+                                            </td>
+                                            <td><input class="e-input" maxlength="20" value="@l.Numero" aria-label="Número del lote" @onchange="@(e => l.Numero = e.Value?.ToString() ?? "")" /></td>
+                                            <td class="numero"><CampoDeValor Valor="@l.Valor" ValorChanged="@(v => { l.Valor = v ?? 0m; m.Contado = m.Lotes.Sum(x => x.Valor); })" /></td>
+                                            <td class="numero"><input class="e-input numero" type="number" min="0" step="1" value="@l.Cantidad" aria-label="Pagos del lote"
+                                                                      @onchange="@(e => l.Cantidad = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" /></td>
+                                            <td><SfButton CssClass="e-flat" OnClick="@(() => { m.Lotes.Remove(l); m.Contado = m.Lotes.Sum(x => x.Valor); })">Quitar</SfButton></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => m.Lotes.Add(new LoteDigitado { Datafono = m.Datafonos.Count == 1 ? m.Datafonos[0].Id : null }))">Agregar lote</SfButton>
+                        break;
+                    case FormaDeContar.Referencias:
+                        <p class="hint">Marque cada pago cuyo soporte tiene en la mano.</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Lo tiene</th><th>Documento</th><th>Referencia</th><th class="numero">Valor</th></tr></thead>
+                                <tbody>
+                                    @foreach (var r in m.Referencias)
+                                    {
+                                        var id = r.Id;
+                                        <tr>
+                                            <td><input type="checkbox" checked="@m.Cotejados.Contains(id)" aria-label="@($"Cotejado {r.Referencia}")"
+                                                       @onchange="@(e => Cotejar(m, id, e.Value is true))" /></td>
+                                            <td>@r.Documento</td><td>@r.Referencia</td><td class="numero">@r.Valor.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        break;
+                    default:
+                        <label class="campo">Total contado
+                            <CampoDeValor Valor="@m.Contado" ValorChanged="@(v => m.Contado = v ?? 0m)" Placeholder="0" />
+                            <span class="hint">La suma de los comprobantes de este medio.</span>
+                        </label>
+                        break;
+                }
+                @if (m.Esperado is { } esperado)
+                {
+                    <p class="@(m.FueraDeTolerancia ? "aviso aviso-alerta" : "texto-tenue")">
+                        Esperado @esperado.ToString("N0") · contado @m.Contado.ToString("N0") · diferencia @m.Diferencia!.Value.ToString("N0")
+                        @if (!string.IsNullOrEmpty(m.DetalleDelEsperado)) { <span class="hint"> (@m.DetalleDelEsperado)</span> }
+                    </p>
+                }
+            </section>
+        }
+        @if (Medios.Count == 0)
+        {
+            <p class="texto-tenue">Esta caja no tiene medios que contar.</p>
+        }
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" OnClick="@(() => _paso = 2)">Siguiente: revisar</SfButton>
+            @Cancelar
+        </div>
+    }
+    else
+    {
+        <section class="info-card" aria-label="Resumen del arqueo">
+            <h4>Revise lo contado</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Medio</th>@if (!Ciego) { <th class="numero">Esperado</th> }<th class="numero">Contado</th>@if (!Ciego) { <th class="numero">Diferencia</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var m in Medios)
+                        {
+                            <tr class="@(m.FueraDeTolerancia ? "fila-alerta" : null)">
+                                <td>@m.Nombre</td>
+                                @if (!Ciego) { <td class="numero">@(m.Esperado?.ToString("N0") ?? "—")</td> }
+                                <td class="numero">@m.Contado.ToString("N0")</td>
+                                @if (!Ciego) { <td class="numero">@(m.Diferencia?.ToString("N0") ?? "—")</td> }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr><th>Total</th>@if (!Ciego) { <th class="numero">@Medios.Sum(m => m.Esperado ?? 0m).ToString("N0")</th> }
+                            <th class="numero">@Medios.Sum(m => m.Contado).ToString("N0")</th>
+                            @if (!Ciego) { <th class="numero">@Medios.Sum(m => m.Diferencia ?? 0m).ToString("N0")</th> }</tr>
+                    </tfoot>
+                </table>
+            </div>
+            @foreach (var medio in Medios.Where(x => Ciego || x.PideMotivo(Estricto) || !string.IsNullOrEmpty(x.Motivo)))
+            {
+                var m = medio;
+                var obligatorio = m.PideMotivo(Estricto);
+                <label class="campo campo-ancho">Motivo de la diferencia en @m.Nombre@(obligatorio ? " *" : "")
+                    <input class="e-input" maxlength="300" value="@m.Motivo" @oninput="@(e => m.Motivo = e.Value?.ToString())" />
+                    <span class="hint">@(obligatorio ? "Qué pasó: por ejemplo, un billete falso o un vuelto mal dado." : "Si cree que hay diferencia, diga qué pasó; si no, déjelo vacío.")</span>
+                </label>
+            }
+            @if (!Ciego && Medios.All(m => (m.Diferencia ?? 0m) == 0m))
+            {
+                <p class="texto-tenue">La caja cuadra.</p>
+            }
+            else if (!Ciego && !Estricto && Medios.Any(m => m.Diferencia is { } d && d < 0m))
+            {
+                <p class="hint">El faltante se registra al gasto con su motivo.</p>
+            }
+            @Extra
+        </section>
+        <IndicadorDeCarga Cargando="@Ocupado" Texto="Cerrando…" Compacto="true">
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" Disabled="@Ocupado" OnClick="@(() => _paso = 1)">Volver a contar</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(Ocupado || FaltaMotivo || !PuedeConfirmar)" OnClick="@Confirmar">@TextoConfirmar</SfButton>
+            </div>
+        </IndicadorDeCarga>
+        @if (FaltaMotivo)
+        {
+            <p class="hint">Escriba el motivo de cada diferencia marcada con * para continuar.</p>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<MedioAContar> Medios { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<DenominacionDeConteo> Denominaciones { get; set; } = [];
+
+    [Parameter] public string FormaDelEfectivo { get; set; } = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.AElegir;
+
+    /// <summary>Si rige el arqueo estricto (<c>Caja.ArqueoEstricto</c>): el motivo en toda diferencia.</summary>
+    [Parameter] public bool Estricto { get; set; }
+
+    /// <summary>Arqueo ciego: no se ve lo esperado.</summary>
+    [Parameter] public bool Ciego { get; set; }
+
+    /// <summary>Lo que la pantalla agrega al paso 2 (testigo, acta, retiro de cierre).</summary>
+    [Parameter] public RenderFragment? Extra { get; set; }
+
+    /// <summary>Un botón o enlace para salir sin arquear.</summary>
+    [Parameter] public RenderFragment? Cancelar { get; set; }
+
+    [Parameter] public string TextoConfirmar { get; set; } = "Cerrar la caja";
+
+    /// <summary>Lo que la pantalla exige además (por ejemplo, el testigo con el arqueo estricto).</summary>
+    [Parameter] public bool PuedeConfirmar { get; set; } = true;
+
+    [Parameter] public bool Ocupado { get; set; }
+
+    [Parameter] public EventCallback Confirmar { get; set; }
+
+    private int _paso = 1;
+
+    private bool FaltaMotivo => Medios.Any(m => m.PideMotivo(Estricto) && string.IsNullOrWhiteSpace(m.Motivo));
+
+    /// <summary>Vuelve al paso 1 (por ejemplo, si el servidor rechazó el cierre).</summary>
+    public void VolverAContar()
+    {
+        _paso = 1;
+        StateHasChanged();
+    }
+
+    private void CambiarFormaDelEfectivo(MedioAContar m, bool porBilletes)
+    {
+        m.PorBilletes = porBilletes;
+        if (porBilletes) m.Contado = Denominaciones.Sum(d => m.Billetes.GetValueOrDefault(d.Id) * d.Valor);
+    }
+
+    private static void Cotejar(MedioAContar m, Guid pago, bool marcado)
+    {
+        if (marcado) m.Cotejados.Add(pago);
+        else m.Cotejados.Remove(pago);
+        m.Contado = m.Referencias.Where(r => m.Cotejados.Contains(r.Id)).Sum(r => r.Valor);
+    }
+}

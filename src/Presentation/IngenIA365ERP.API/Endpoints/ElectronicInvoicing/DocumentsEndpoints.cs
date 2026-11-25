@@ -39,10 +39,10 @@ public class DocumentsEndpoints : ICarterModule
         // ------------------------------------------------------------------------------------------ consultas (§24.4) --
         group.MapGet("/", async (
                 ElectronicDocumentStatus? status, ElectronicDocumentKind? kind, DateOnly? from, DateOnly? to, string? prefix, string? number,
-                string? sourceModule, bool? contingency, bool? overdue, int? page, int? pageSize, bool? retrying, bool? dead, ISender sender,
-                CancellationToken ct) =>
+                string? sourceModule, bool? contingency, bool? overdue, int? page, int? pageSize, bool? retrying, bool? dead, string? customer,
+                decimal? minTotal, decimal? maxTotal, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListElectronicDocumentsQuery(status, kind, from, to, prefix, number, sourceModule, contingency, overdue,
-                    page ?? 1, pageSize ?? 20, retrying, dead), ct))
+                    page ?? 1, pageSize ?? 20, retrying, dead, customer, minTotal, maxTotal), ct))
             .WithName("ElectronicInvoicing_Documents_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);

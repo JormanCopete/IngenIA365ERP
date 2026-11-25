@@ -261,6 +261,14 @@ public sealed class FiltroDeDocumentosElectronicos
 
     /// <summary>Feature 023: sólo los muertos (documento o seguimiento).</summary>
     public bool? Dead { get; set; }
+
+    /// <summary>2026-11-24: la contraparte por identificación o nombre, tal como salió en el documento.</summary>
+    public string? Customer { get; set; }
+
+    /// <summary>2026-11-24: el total desde y hasta.</summary>
+    public decimal? MinTotal { get; set; }
+
+    public decimal? MaxTotal { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

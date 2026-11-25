@@ -83,11 +83,14 @@ public sealed record ConteoRequest(IReadOnlyList<ConteoDeMedioRequest> Means);
 
 public sealed record AprobarDiferenciaRequest(string Reason, int? Treatment);
 
-public sealed record CerrarOlvidadaRequest(Guid WitnessUserPublicId, IReadOnlyList<ConteoDeMedioRequest> Means);
+public sealed record CerrarOlvidadaRequest(Guid? WitnessUserPublicId, IReadOnlyList<ConteoDeMedioRequest> Means);
+
+/// <summary>2026-11-24: <c>GET /api/receipts/sessions/count-policy</c>. (nuevo)</summary>
+public sealed record PoliticaDeArqueoDto(string CashCountMode, bool Strict);
 
 public sealed record AjusteRequest(int Kind, Guid PaymentMeansPublicId, decimal Amount, string Reason, Guid? SupportAttachmentPublicId);
 
-public sealed record SorpresivoRequest(Guid SessionPublicId, Guid MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioRequest> Means, Guid? WitnessUserPublicId);
+public sealed record SorpresivoRequest(Guid SessionPublicId, Guid? MinutesAttachmentPublicId, IReadOnlyList<ConteoDeMedioRequest> Means, Guid? WitnessUserPublicId);
 
 public sealed record AjusteDeSesionDto(Guid PublicId, string Number, int Kind, Guid PaymentMeansPublicId, decimal Amount, string Reason, DateTime AdjustedAt);
 
@@ -132,6 +135,22 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
         var r = await Get<string>($"{Base}/sessions/cash-count-mode", ct);
         return r.IsSuccess && !string.IsNullOrEmpty(r.Value) ? r.Value : FormasDeConteo.AElegir;
     }
+
+    /// <summary>
+    /// 2026-11-24: la forma de contar el efectivo y si el arqueo es estricto (<c>Caja.ArqueoEstricto</c>); la piden las dos cajas. Ante un error, la
+    /// forma a elección y el arqueo sencillo (el de fábrica): el servidor vuelve a exigir lo que corresponda al guardar.
+    /// </summary>
+    public async Task<IngenIA365ERP.Shared.Components.Comunes.PoliticaDeCaja> PoliticaAsync(CancellationToken ct = default)
+    {
+        var r = await Get<PoliticaDeArqueoDto>($"{Base}/sessions/count-policy", ct);
+        return r.IsSuccess && r.Value is { } p
+            ? new(string.IsNullOrEmpty(p.CashCountMode) ? FormasDeConteo.AElegir : p.CashCountMode, p.Strict)
+            : IngenIA365ERP.Shared.Components.Comunes.PoliticaDeCaja.PorDefecto;
+    }
+
+    /// <summary>Una sesión por su id (<c>Receipts.Session.View</c>).</summary>
+    public Task<ResultadoDeInventario<SesionDeCajaDto>> SesionAsync(Guid sesion, CancellationToken ct = default) =>
+        Get<SesionDeCajaDto>($"{Base}/sessions/{sesion}", ct);
 
     /// <summary>2026-11-23, caja única: la caja del punto de venta de la sesión.</summary>
     public Task<ResultadoDeInventario<CajaUnicaDto>> CajaUnicaAsync(Guid sesion, CancellationToken ct = default) =>

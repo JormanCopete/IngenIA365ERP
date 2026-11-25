@@ -80,6 +80,14 @@ public class CashCommandsTests
 
     private CloseCashSessionCommandHandler Cerrar() => new(Db, K.Actor, V.Compras.C.Reloj, Sesiones(), Arqueos(), V.Toque, V.Confirmacion(), _auditoria);
 
+    /// <summary>2026-11-24: el cierre con el lector de parámetros real, donde Caja.ArqueoEstricto viene apagado (el arqueo sencillo).</summary>
+    private CloseCashSessionCommandHandler CerrarSencillo()
+    {
+        var sesiones = new SesionesDeCaja(Db, K.Actor, K.Alcance, K.Permisos, new IngenIA365ERP.Application.Receipts.Common.ParametrosDeCaja(K.Lector()), V.Compras.C.Reloj);
+        return new(Db, K.Actor, V.Compras.C.Reloj, sesiones, new ArqueoDeLaSesion(Db, V.Compras.C.Reloj, sesiones, V.Confirmacion()), V.Toque, V.Confirmacion(),
+            _auditoria);
+    }
+
     private RecountCashSessionCommandHandler Recontar() => new(Db, K.Actor, V.Compras.C.Reloj, Sesiones(), Arqueos(), V.Confirmacion(), _auditoria);
 
     private SaveInventoryDraftCommandHandler Guardar() => new(Db, K.Maestros(), K.Alcance, K.Actor, V.Compras.C.Reloj, V.Efectos(), K.Vista(),
@@ -508,5 +516,31 @@ public class CashCommandsTests
         t.K.Tipo("CJ").IsActive = false;
         await t.Db.SaveChangesAsync();
         (await handler.Handle(new GetDefaultCashMovementTypeQuery(), default)).Value.Should().BeNull("sin tipo activo, el guardado responde el error del tipo");
+    }
+
+    // ------------------------------------------------------------------------------------------------ arqueo sencillo --
+
+    [Fact]
+    public async Task Con_el_arqueo_sencillo_dentro_de_la_tolerancia_no_pide_motivo_y_el_faltante_va_al_gasto()
+    {
+        var t = await CrearAsync();
+        var total = await t.VentaEnEfectivoAsync();
+
+        var r = await t.CerrarSencillo().Handle(new CloseCashSessionCommand(t.V.Sesion.PublicId, [Efectivo(t.V, total - 500m)]), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        r.Value.Lines.Single(l => l.PaymentMeansCode == "EFECTIVO").Treatment.Should().Be(CashDifferenceTreatment.ShortageToExpense,
+            "con el arqueo sencillo el faltante va al gasto");
+    }
+
+    [Fact]
+    public async Task Con_el_arqueo_sencillo_fuera_de_la_tolerancia_sigue_pidiendo_motivo()
+    {
+        var t = await CrearAsync();
+        var total = await t.VentaEnEfectivoAsync();
+
+        var r = await t.CerrarSencillo().Handle(new CloseCashSessionCommand(t.V.Sesion.PublicId, [Efectivo(t.V, total - 5_000m)]), default);
+
+        r.Error.Code.Should().Be(ErroresDeCaja.ReasonRequiredCode);
     }
 }

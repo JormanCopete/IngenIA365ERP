@@ -532,13 +532,22 @@
     protected override async Task OnParametersSetAsync()
     {
         using var carga = _carga.Iniciar();
-        var categorias = await Inventario.ListarCategoriasAsync();
-        var marcas = await Inventario.ListarMarcasAsync();
-        var unidades = await Inventario.ListarUnidadesAsync();
-        var grupos = await Inventario.ListarGruposContablesAsync();
-        var conceptos = await Impuestos.ListarConceptosAsync(activos: true);
-        var impuestos = await Impuestos.ListarImpuestosAsync(activos: true);
-        var ajustes = await Inventario.AjustesDeUnidadesAsync();
+        // Los siete catálogos de la ficha no dependen entre sí: salen a la vez (2026-11-24).
+        var tCategorias = Inventario.ListarCategoriasAsync();
+        var tMarcas = Inventario.ListarMarcasAsync();
+        var tUnidades = Inventario.ListarUnidadesAsync();
+        var tGrupos = Inventario.ListarGruposContablesAsync();
+        var tConceptos = Impuestos.ListarConceptosAsync(activos: true);
+        var tImpuestos = Impuestos.ListarImpuestosAsync(activos: true);
+        var tAjustes = Inventario.AjustesDeUnidadesAsync();
+        await Task.WhenAll(tCategorias, tMarcas, tUnidades, tGrupos, tConceptos, tImpuestos, tAjustes);
+        var categorias = await tCategorias;
+        var marcas = await tMarcas;
+        var unidades = await tUnidades;
+        var grupos = await tGrupos;
+        var conceptos = await tConceptos;
+        var impuestos = await tImpuestos;
+        var ajustes = await tAjustes;
         _permiteVarias = ajustes.Value?.MultipleUnitsAllowed == true;
         _categorias = [.. categorias.Value ?? []];
         _marcas = [.. marcas.Value ?? []];

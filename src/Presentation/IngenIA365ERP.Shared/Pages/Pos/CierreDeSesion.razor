@@ -10,211 +10,168 @@
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 
-<PageTitle>Cierre de caja - IngenIA365ERP</PageTitle>
+<PageTitle>Arqueo de caja - IngenIA365ERP</PageTitle>
 
-@* Feature 012, I3 (T641; FR-099, FR-100, US5-4, US5-10, US5-11; contracts/api.md §21.2): el cierre de la sesión con arqueo por medio de
-   pago. Cada medio se cuenta como dice su forma de arqueo: el efectivo por denominaciones, las tarjetas por el lote de cada datáfono (con
-   el cotejo que el medio pida), los que se cotejan por referencias marcando una a una, y los que no se arquean no se piden. Con arqueo
-   ciego no se muestra lo esperado. Una diferencia fuera de la tolerancia pide el motivo; el servidor decide su tratamiento (sobrante,
-   faltante al cajero o al gasto) y el documento de diferencia. El retiro de cierre lleva el efectivo a la caja fuerte, a otra caja o a
-   consignar. Cerrada, el arqueo se puede recontar y se descarga en PDF (CashCountReport). *@
+@* 2026-11-24 (pedido del dueño): el cierre de la caja del punto de venta con el arqueo común en dos pasos (ArqueoDeCaja), el mismo de Recaudo. Con el
+   arqueo sencillo (Caja.ArqueoEstricto apagado) cada medio se cuenta con un total, el motivo se pide sólo fuera de la tolerancia y el faltante va al
+   gasto; con el estricto, las tarjetas por lote de datáfono y las referencias marcando una a una, como desde la feature 012 (I3, T641). El retiro de
+   cierre lleva el efectivo a la caja fuerte o a consignar. Cerrada, el arqueo se puede recontar y se descarga en PDF (CashCountReport). Sirve también
+   para cerrar la caja de otra persona (con Inventory.CashSessions.ViewAll). *@
 <PermissionGate Required="Inventory.CashSessions.Close" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Cierre de la caja</h3>
+        <h3>Arquear y cerrar la caja</h3>
         <div class="toolbar">
-            <a class="e-btn e-outline" href="@($"/pos/sesiones/{Id}")">Volver a la sesión</a>
-            @if (_resultado is not null)
-            {
-                <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@DescargarArqueoAsync">Informe del arqueo</SfButton>
-            }
+            <a class="e-btn e-flat" href="/pos/sesiones">Mi caja</a>
+            <a class="e-btn e-flat" href="/pos/cajas">Cajas del día</a>
         </div>
     </div>
 
-    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Cerrando…" : "Calculando lo esperado…")">
-        @if (_esperado is { } esperado)
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando lo que debería haber…">
+        @if (_sesion is { } s)
         {
-            @if (esperado.Blind)
+            <p class="texto-apoyo">Caja @s.CashRegister.Code de @s.PointOfSale.Name · @s.Cashier.Name · día @s.OperatingDate.ToString("dd/MM/yyyy") · @s.SalesCount venta(s)
+                por @s.SalesTotal.ToString("N0")</p>
+            @if (_resultado is { } res)
             {
-                <p class="aviso aviso-info">Arqueo ciego: cuente sin ver lo esperado; la diferencia se ve al cerrar.</p>
+                <ResultadoDelArqueo Lineas="@Lineas(res)">
+                    <ChildContent>
+                        @if (res.DifferenceDocument is { } dif)
+                        {
+                            <p>Documento de diferencia: @(dif.Number ?? "(en aprobación)") · @TextosDeInventario.Estado(dif.Status)</p>
+                        }
+                        @if (res.ClosingWithdrawalDocument is { } ret)
+                        {
+                            <p>Retiro de cierre: @(ret.Number ?? "(en aprobación)") · @TextosDeInventario.Estado(ret.Status)</p>
+                        }
+                    </ChildContent>
+                    <Acciones>
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@DescargarArqueoAsync">Informe del arqueo</SfButton>
+                        @if (res.DifferenceDocument is { Number: null })
+                        {
+                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@RecontarAsync">Recontar con lo digitado</SfButton>
+                        }
+                        <a class="e-btn e-primary" href="/pos/sesiones">Listo</a>
+                    </Acciones>
+                </ResultadoDelArqueo>
             }
-            @foreach (var linea in esperado.Lines.Where(l => l.PaymentMeans.CountMethod != 4))
+            else if (s.Status != TextosDeVentas.SesionAbierta)
             {
-                var l = linea;
-                var conteo = _conteos[l.PaymentMeans.PublicId];
-                <div class="info-card">
-                    <h4>@l.PaymentMeans.Code · @l.PaymentMeans.Name <span class="texto-tenue">(@TextosDeVentas.FormaDeArqueo(l.PaymentMeans.CountMethod))</span></h4>
-                    @if (!esperado.Blind)
-                    {
-                        <p class="texto-tenue">Base @N(l.OpeningBase) · ventas @N(l.Sales) · reintegros @N(l.Refunds) · entradas @N(l.MovementsIn) · salidas @N(l.MovementsOut) · reclasificado @N(l.ReclassificationsIn)/@N(l.ReclassificationsOut) → <b>esperado @N(l.Expected)</b> · tolerancia @l.Tolerance.ToString("N0") · @l.PaymentsCount pago(s)</p>
-                    }
-                    @* 2026-11-23: cada medio muestra sólo su forma de contarlo, con una línea de ayuda; el motivo aparece cuando hay diferencia. *@
-                    @switch (l.PaymentMeans.CountMethod)
-                    {
-                        case TextosDeVentas.ArqueoPorDenominaciones:
-                            <ConteoDelEfectivo Forma="@_forma" @bind-PorBilletes="conteo.PorBilletes" ValorGlobal="@conteo.Total" ValorGlobalChanged="@(v => conteo.Total = v ?? 0m)"
-                                               Ayuda="Todo el efectivo que hay en la caja, incluida la base.">
-                                <Billetes>
-                                    <ConteoPorDenominaciones Denominaciones="@_denominaciones" Cantidades="@conteo.Denominaciones" TotalChanged="@(t => conteo.Total = t)" />
-                                </Billetes>
-                            </ConteoDelEfectivo>
-                            break;
-                        case TextosDeVentas.ArqueoPorLote:
-                            <p class="hint">Un renglón por cada cierre de lote del datáfono: el número del lote y su valor.</p>
-                            <LotesDeDatafono Datafonos="@(l.Terminals ?? [])" Lotes="@conteo.Lotes" Cambio="@(() => conteo.Total = conteo.Lotes.Sum(x => x.Total))" />
-                            break;
-                        case TextosDeVentas.ArqueoPorReferencias:
-                            <p class="hint">Marque cada pago cuyo soporte (transferencia, consignación o cheque) tiene en la mano.</p>
-                            <table class="data-grid">
-                                <thead><tr><th>Cotejado</th><th>Documento</th><th>Referencia</th><th class="numero">Valor</th></tr></thead>
-                                <tbody>
-                                    @foreach (var r in l.References ?? [])
-                                    {
-                                        var id = r.DocumentPaymentPublicId;
-                                        <tr><td><input type="checkbox" checked="@conteo.Cotejados.Contains(id)" @onchange="@(e => Cotejar(conteo, id, e.Value, r.Amount))" /></td>
-                                            <td>@r.DocumentNumber</td><td>@r.Reference</td><td class="numero">@r.Amount.ToString("N0")</td></tr>
-                                    }
-                                </tbody>
-                            </table>
-                            break;
-                    }
-                    <div class="form-grid">
-                        @if (l.PaymentMeans.CountMethod != TextosDeVentas.ArqueoPorDenominaciones)
-                        {
-                            <label class="campo">Total contado <CampoDeValor Valor="@conteo.Total" ValorChanged="@(v => conteo.Total = v ?? 0m)" /></label>
-                        }
-                        @if (!esperado.Blind && l.Expected is { } e && conteo.Total != e)
-                        {
-                            <span class="@(Math.Abs(conteo.Total - e) > l.Tolerance ? "aviso aviso-alerta" : "texto-tenue")">Esperado @e.ToString("N0") · diferencia @((conteo.Total - e).ToString("N0"))</span>
-                        }
-                        @if (esperado.Blind || (l.Expected is { } e2 && conteo.Total != e2) || !string.IsNullOrEmpty(conteo.Motivo))
-                        {
-                            <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" @bind="conteo.Motivo" maxlength="300" />
-                                <span class="hint">Qué pasó: por ejemplo, un billete falso o un vuelto mal dado.@(esperado.Blind ? " Si no cree que haya diferencia, déjelo vacío." : "")</span>
-                            </label>
-                        }
-                    </div>
-                </div>
+                <p class="aviso aviso-info">Esta caja ya está cerrada. <a href="@($"/pos/sesiones/{Id}")">Ver su arqueo</a>.</p>
             }
-
-            @if (_resultado is null)
+            else if (s.LinkedSessionPublicId is not null)
             {
-                <div class="info-card">
-                    <div class="form-grid">
-                        <label class="campo">Retiro de cierre
-                            <select class="e-input" value="@(_destino?.ToString() ?? "")" @onchange="@(e => _destino = int.TryParse(e.Value?.ToString(), out var d) ? d : null)">
-                                <option value="">Sin retiro (el efectivo queda en la caja)</option>
-                                @foreach (var (v, t) in TextosDeVentas.DestinosDeMovimiento) { <option value="@v">A @t.ToLowerInvariant()</option> }
+                <p class="aviso aviso-info">Caja única: esta caja se cierra con el arqueo de Recaudo. <a href="/recaudo/sesiones">Ir a Mi caja de Recaudo</a>.</p>
+            }
+            else
+            {
+                <ArqueoDeCaja Medios="@_medios" Denominaciones="@_denominaciones" FormaDelEfectivo="@_politica.FormaDelEfectivo" Estricto="@_politica.Estricto"
+                              Ciego="@_ciego" Ocupado="@_guardado.Activa" Confirmar="@CerrarAsync">
+                    <Extra>
+                        <label class="campo">Al cerrar, el efectivo
+                            <select class="e-input" value="@(_destino ?? "")" @onchange="@(e => _destino = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString())">
+                                <option value="">Queda en la caja</option>
+                                <option value="Safe">Va a la caja fuerte</option>
+                                <option value="Deposit">Va a consignar</option>
                             </select>
+                            <span class="hint">Con fondo fijo, sale lo contado menos el fondo.</span>
                         </label>
-                    </div>
-                    <div class="toolbar">
-                        <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CerrarAsync">Cerrar la caja</SfButton>
-                    </div>
-                </div>
+                    </Extra>
+                    <Cancelar>
+                        <a class="e-btn e-flat" href="/pos/sesiones">Cancelar</a>
+                    </Cancelar>
+                </ArqueoDeCaja>
             }
         }
-
-        @if (_resultado is { } res)
+        else if (!_carga.Activa)
         {
-            <div class="info-card">
-                <h4>Resultado del arqueo</h4>
-                <table class="data-grid">
-                    <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th>Tratamiento</th></tr></thead>
-                    <tbody>
-                        @foreach (var l in res.Lines)
-                        {
-                            <tr><td>@l.PaymentMeansCode</td><td class="numero">@l.Expected.ToString("N0")</td><td class="numero">@l.Counted.ToString("N0")</td>
-                                <td class="numero">@l.Difference.ToString("N0")</td><td>@(l.WithinTolerance ? "Dentro de la tolerancia" : TextosDeVentas.TratamientoDeDiferencia(l.Treatment))</td></tr>
-                        }
-                    </tbody>
-                </table>
-                @if (res.DifferenceDocument is { } dif) { <p>Documento de diferencia: @(dif.Number ?? "(en aprobación)") · @TextosDeInventario.Estado(dif.Status)</p> }
-                @if (res.ClosingWithdrawalDocument is { } ret) { <p>Retiro de cierre: @(ret.Number ?? "(en aprobación)") · @TextosDeInventario.Estado(ret.Status)</p> }
-                @if (res.Batch is { } lote) { <p>Lote contable @lote.Number (@lote.Trigger).</p> }
-                <div class="toolbar">
-                    <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@RecontarAsync">Recontar con lo digitado</SfButton>
-                    <a class="e-btn e-flat" href="/pos/cierre-del-dia">Cierre del día</a>
-                </div>
-            </div>
+            <p class="aviso aviso-alerta">@(_error ?? "No se encontró la caja.")</p>
         }
     </IndicadorDeCarga>
 </div>
 </PermissionGate>
 
 @code {
-    private sealed class ConteoDeMedio
-    {
-        public decimal Total { get; set; }
-        public bool PorBilletes { get; set; }
-        public string? Motivo { get; set; }
-        public Dictionary<Guid, int> Denominaciones { get; } = [];
-        public List<LotesDeDatafono.LoteForm> Lotes { get; } = [];
-        public HashSet<Guid> Cotejados { get; } = [];
-    }
-
     [Parameter] public Guid Id { get; set; }
 
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveCierre = new(), _claveRecuento = new();
-    private EsperadoDeSesionDto? _esperado;
-    private List<DenominacionDto> _denominaciones = [];
-    private readonly Dictionary<Guid, ConteoDeMedio> _conteos = [];
+    private SesionDeCajaDto? _sesion;
+    private string? _error;
+    private bool _ciego;
+    private PoliticaDeCaja _politica = PoliticaDeCaja.PorDefecto;
+    private List<MedioAContar> _medios = [];
+    private IReadOnlyList<DenominacionDeConteo> _denominaciones = [];
     private ResultadoDeCierreDto? _resultado;
-    private int? _destino;
-    private string _forma = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.AElegir;
+    private string? _destino;
 
     protected override async Task OnParametersSetAsync()
     {
         using var carga = _carga.Iniciar();
-        var denominaciones = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
-        _denominaciones = denominaciones.IsSuccess ? [.. denominaciones.Value ?? []] : [];
-        _forma = await SesionesDeRecaudo.FormaDeConteoAsync();
+        _resultado = null;
+        var detalle = await Ventas.ObtenerSesionAsync(Id);
+        _sesion = detalle.IsSuccess ? detalle.Value?.Session : null;
+        _error = detalle.IsSuccess ? null : detalle.ErrorMessage;
+        if (_sesion is not { Status: TextosDeVentas.SesionAbierta }) return;
+
+        _politica = await SesionesDeRecaudo.PoliticaAsync();
+        var denominaciones = await Medios.DenominacionesAsync(DiaDeCaja.Hoy());
+        _denominaciones = denominaciones.IsSuccess
+            ? (denominaciones.Value ?? []).Where(d => d.IsActive).Select(d => new DenominacionDeConteo(d.CashDenominationPublicId, d.Value, d.Kind != 1)).ToList()
+            : [];
         var r = await Ventas.EsperadoAsync(Id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular lo esperado."); return; }
-        _esperado = r.Value;
-        _conteos.Clear();
-        foreach (var l in r.Value.Lines)
+        _ciego = r.Value.Blind;
+        _medios = r.Value.Lines.Where(l => l.PaymentMeans.CountMethod != 4).Select(l =>
         {
-            var conteo = new ConteoDeMedio();
-            foreach (var t in l.Terminals ?? []) conteo.Lotes.Add(new LotesDeDatafono.LoteForm { CardTerminalPublicId = t.CardTerminalPublicId, Count = t.PaymentsCount });
-            _conteos[l.PaymentMeans.PublicId] = conteo;
-        }
-    }
-
-    private static void Cotejar(ConteoDeMedio conteo, Guid pago, object? valor, decimal monto)
-    {
-        if (valor is true) { if (conteo.Cotejados.Add(pago)) conteo.Total += monto; }
-        else if (conteo.Cotejados.Remove(pago)) conteo.Total -= monto;
-    }
-
-    private IReadOnlyList<ConteoPorMedioRequest> Conteos()
-    {
-        if (_esperado is null) return [];
-        return _esperado.Lines.Where(l => l.PaymentMeans.CountMethod != 4).Select(l =>
-        {
-            var c = _conteos[l.PaymentMeans.PublicId];
             var metodo = l.PaymentMeans.CountMethod;
-            return new ConteoPorMedioRequest(
-                l.PaymentMeans.PublicId,
-                CountedTotal: c.Total,
-                Denominations: metodo == TextosDeVentas.ArqueoPorDenominaciones && c.Denominaciones.Count > 0
-                        && IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.PorBilletes(_forma, c.PorBilletes)
-                    ? c.Denominaciones.Select(p => new ConteoDeDenominacionRequest(p.Key, p.Value)).ToList() : null,
-                TerminalBatches: metodo == TextosDeVentas.ArqueoPorLote
-                    ? c.Lotes.Where(x => !string.IsNullOrWhiteSpace(x.BatchNumber)).Select(x => new LoteDeDatafonoRequest(x.CardTerminalPublicId, x.BatchNumber.Trim(), x.Total, x.Count)).ToList()
-                    : null,
-                ReferenceChecks: metodo == TextosDeVentas.ArqueoPorReferencias
-                    ? (l.References ?? []).Select(r => new CotejoDeReferenciaRequest(r.DocumentPaymentPublicId, c.Cotejados.Contains(r.DocumentPaymentPublicId))).ToList()
-                    : null,
-                Reason: string.IsNullOrWhiteSpace(c.Motivo) ? null : c.Motivo.Trim());
+            var medio = new MedioAContar
+            {
+                Id = l.PaymentMeans.PublicId,
+                Codigo = l.PaymentMeans.Code,
+                Nombre = l.PaymentMeans.Name,
+                Forma = metodo == TextosDeVentas.ArqueoPorDenominaciones ? FormaDeContar.Efectivo
+                    : !_politica.Estricto ? FormaDeContar.Total
+                    : metodo == TextosDeVentas.ArqueoPorLote ? FormaDeContar.Lotes
+                    : metodo == TextosDeVentas.ArqueoPorReferencias ? FormaDeContar.Referencias : FormaDeContar.Total,
+                Esperado = r.Value.Blind ? null : l.Expected,
+                Tolerancia = l.Tolerance,
+                DetalleDelEsperado = l.Expected is null ? null
+                    : $"base {l.OpeningBase:N0} · ventas {l.Sales:N0} · reintegros {l.Refunds:N0} · entradas {l.MovementsIn:N0} · salidas {l.MovementsOut:N0}",
+                Datafonos = (l.Terminals ?? []).Select(t => new DatafonoDeConteo(t.CardTerminalPublicId, t.AcquirerCode is { } a ? $"{t.Code} · {a}" : t.Code,
+                    t.Expected, t.PaymentsCount)).ToList(),
+                Referencias = (l.References ?? []).Select(x => new ReferenciaDeConteo(x.DocumentPaymentPublicId, x.DocumentNumber ?? "", x.Reference ?? "", x.Amount)).ToList(),
+            };
+            // Con el arqueo estricto por lote, un renglón por datáfono listo para digitar.
+            if (medio.Forma == FormaDeContar.Lotes)
+                foreach (var t in medio.Datafonos) medio.Lotes.Add(new LoteDigitado { Datafono = t.Id, Cantidad = t.Pagos });
+            return medio;
         }).ToList();
     }
+
+    private IReadOnlyList<ConteoPorMedioRequest> Conteos() => _medios.Select(m =>
+    {
+        var motivo = string.IsNullOrWhiteSpace(m.Motivo) ? null : m.Motivo.Trim();
+        return m.Forma switch
+        {
+            FormaDeContar.Efectivo => new ConteoPorMedioRequest(m.Id, CountedTotal: m.Contado,
+                Denominations: IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.PorBilletes(_politica.FormaDelEfectivo, m.PorBilletes) && m.Billetes.Count > 0
+                    ? m.Billetes.Select(b => new ConteoDeDenominacionRequest(b.Key, b.Value)).ToList() : null,
+                Reason: motivo),
+            FormaDeContar.Lotes => new ConteoPorMedioRequest(m.Id, CountedTotal: m.Contado,
+                TerminalBatches: m.Lotes.Where(l => l.Datafono is not null && !string.IsNullOrWhiteSpace(l.Numero))
+                    .Select(l => new LoteDeDatafonoRequest(l.Datafono!.Value, l.Numero.Trim(), l.Valor, l.Cantidad)).ToList() is { Count: > 0 } lotes ? lotes : null,
+                Reason: motivo),
+            FormaDeContar.Referencias => new ConteoPorMedioRequest(m.Id, CountedTotal: m.Contado,
+                ReferenceChecks: m.Referencias.Select(r => new CotejoDeReferenciaRequest(r.Id, m.Cotejados.Contains(r.Id))).ToList(), Reason: motivo),
+            _ => new ConteoPorMedioRequest(m.Id, CountedTotal: m.Contado, Reason: motivo),
+        };
+    }).ToList();
 
     private async Task CerrarAsync()
     {
         using var guardado = _guardado.Iniciar();
-        var retiro = _destino is { } d ? new RetiroDeCierreRequest(TextosDeVentas.NombreDeDestino(d)) : null;
+        var retiro = _destino is { } d ? new RetiroDeCierreRequest(d) : null;
         var r = await Ventas.CerrarSesionAsync(Id, new CerrarSesionRequest(Conteos(), retiro), _claveCierre);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar la caja."); return; }
         _resultado = r.Value;
@@ -230,6 +187,10 @@
         await Notification.SuccessAsync("Arqueo recontado.");
     }
 
+    private IReadOnlyList<LineaDelResultado> Lineas(ResultadoDeCierreDto r) => r.Lines.Select(l => new LineaDelResultado(
+        _medios.FirstOrDefault(m => m.Codigo == l.PaymentMeansCode)?.Nombre ?? l.PaymentMeansCode, l.Expected, l.Counted, l.Difference,
+        l.Difference == 0m ? "Cuadra" : TextosDeVentas.TratamientoDeDiferencia(l.Treatment))).ToList();
+
     private async Task DescargarArqueoAsync()
     {
         using var carga = _carga.Iniciar();
@@ -237,6 +198,4 @@
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el informe del arqueo."); return; }
         await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
-
-    private static string N(decimal? v) => v?.ToString("N0") ?? "—";
 }

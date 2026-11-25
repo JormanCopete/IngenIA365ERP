@@ -112,8 +112,10 @@ configurar con el documento equivalente.
 
 ### 3. La bandeja de documentos electrónicos
 
-**Ventas → Documentos electrónicos**: filtros por estado, tipo, contingencia y «los que llevan demasiado sin validar».
-Los estados son: pendiente de transmitir, enviado sin respuesta, validado, validado con notificaciones, rechazado, en
+**Ventas → Documentos electrónicos**: a la vista, número, cliente (identificación o nombre, como salió en el documento;
+las palabras en cualquier orden), fechas, estado y tipo. En «Más filtros»: prefijo, valor desde y hasta, en contingencia,
+«los que llevan demasiado sin validar», en reintento y muertos; el botón dice cuántos de ellos están puestos. «Quitar
+filtros» los borra todos. Los estados son: pendiente de transmitir, enviado sin respuesta, validado, validado con notificaciones, rechazado, en
 contingencia del facturador (03), en contingencia de la DIAN (04) y anulado sin reemplazo.
 
 El detalle muestra las versiones del documento (con sus archivos), cada transmisión con los mensajes traducidos al

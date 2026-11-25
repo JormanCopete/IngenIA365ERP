@@ -145,7 +145,12 @@ public static class ArqueoDeCaja
         _ => conteo?.Total ?? 0m,
     };
 
-    public static ResultadoDeArqueo Arquear(IReadOnlyList<EsperadoDeMedio> esperado, IReadOnlyList<ConteoDeMedio> conteos, CountTreatment tratamientoDelFaltante)
+    /// <param name="motivoSoloFueraDeTolerancia">
+    /// 2026-11-24, arqueo sencillo (<c>Caja.ArqueoEstricto</c> apagado): el motivo se exige sólo cuando la diferencia pasa la tolerancia. Sin él, en
+    /// toda diferencia.
+    /// </param>
+    public static ResultadoDeArqueo Arquear(IReadOnlyList<EsperadoDeMedio> esperado, IReadOnlyList<ConteoDeMedio> conteos, CountTreatment tratamientoDelFaltante,
+        bool motivoSoloFueraDeTolerancia = false)
     {
         ArgumentNullException.ThrowIfNull(esperado);
         ArgumentNullException.ThrowIfNull(conteos);
@@ -170,7 +175,7 @@ public static class ArqueoDeCaja
                 dentro, tratamiento, motivo));
             if (diferencia == 0m) continue;
             if (!dentro) aAprobar += Math.Abs(diferencia);
-            if (motivo is null) sinMotivo.Add(e.Medio.Code);
+            if (motivo is null && (!motivoSoloFueraDeTolerancia || !dentro)) sinMotivo.Add(e.Medio.Code);
         }
         return new ResultadoDeArqueo(lineas, lineas.Sum(l => l.Expected), lineas.Sum(l => l.Counted), lineas.Sum(l => l.Difference), aAprobar, sinMotivo);
     }

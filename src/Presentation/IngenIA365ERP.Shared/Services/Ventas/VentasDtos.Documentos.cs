@@ -262,6 +262,17 @@ public sealed class FiltroDeVentas
 
     /// <summary>2026-11-18: quien hizo el documento, por su usuario («contiene»).</summary>
     public string? CreatedBy { get; set; }
+
+    /// <summary>2026-11-24: los documentos con algún pago de este medio (PublicId).</summary>
+    public Guid? PaymentMeans { get; set; }
+
+    /// <summary>2026-11-24: el total del documento desde y hasta.</summary>
+    public decimal? MinTotal { get; set; }
+
+    public decimal? MaxTotal { get; set; }
+
+    /// <summary>El estado ante la DIAN por su nombre («Pending», «Validated», «Rejected»…).</summary>
+    public string? ElectronicStatus { get; set; }
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,

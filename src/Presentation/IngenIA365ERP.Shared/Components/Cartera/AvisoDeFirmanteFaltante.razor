@@ -1,0 +1,13 @@
+@* 2026-11-24 (pedido del dueño): al emitir un extracto o un certificado sin el firmante configurado, el error decía qué faltaba pero no dónde se
+   arregla. Bajo el error, quien puede ver los parámetros de Cartera tiene el enlace ya filtrado a las dos claves del firmante. *@
+<PermissionGate Required="Lending.Parameters.View">
+    <p class="texto-apoyo">
+        Quien firma los documentos se registra en <a href="/cartera/parametros?buscar=Documentos.Firmante">Cartera › Parámetros</a>:
+        «Documentos.Firmante.Nombre» y «Documentos.Firmante.Cargo», con vigencia desde hoy o antes. Registrarlos exige el permiso de parámetros de Cartera.
+    </p>
+</PermissionGate>
+
+@code {
+    /// <summary>El código con que responde el servidor cuando falta el firmante.</summary>
+    public const string CodigoSinFirmante = "Lending.Document.SignerMissing";
+}

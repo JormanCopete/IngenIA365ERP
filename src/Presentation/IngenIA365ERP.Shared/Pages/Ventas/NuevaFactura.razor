@@ -383,11 +383,24 @@
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
-        _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
+        // Las nueve lecturas que no dependen de otra salen a la vez (2026-11-24): en fila, abrir la factura sumaba
+        // nueve idas y vueltas a la API antes de poder digitar.
+        var tModo = BusquedaDeProductos.ModoAsync();
+        var tConReferencia = Ventas.ProductosConReferenciaAsync();
+        var tTipos = Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+        var tBodegas = Inventario.ListarBodegasAsync();
+        var tVendedores = Inventario.VendedoresAsync(null, conRetirados: false, 1, 200);
+        var tSesion = Ventas.MiSesionAbiertaAsync();
+        var tMedios = Medios.ListarAsync(activos: true);
+        var tDatafonos = Medios.DatafonosAsync(activos: true);
+        var tBilletes = Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
+        await Task.WhenAll(tModo, tConReferencia, tTipos, tBodegas, tVendedores, tSesion, tMedios, tDatafonos, tBilletes);
+
+        _modoDeBusqueda = await tModo;
         _comandos = ArmarComandos();
-        var conReferencia = await Ventas.ProductosConReferenciaAsync();
+        var conReferencia = await tConReferencia;
         _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
-        var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+        var tipos = await tTipos;
         var remisiones = (Remisiones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
         _desdeRemisiones = remisiones.Count > 0;
@@ -397,14 +410,14 @@
         _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && clases.Contains(t.Class))] : [];
         _origenes = _desdeRemisiones ? remisiones.Select(r => new DocumentoReferidoDeInventarioDto(r, null)).ToList()
             : Pedido is { } pedido ? [new DocumentoReferidoDeInventarioDto(pedido, null)] : [];
-        var bodegas = await Inventario.ListarBodegasAsync();
+        var bodegas = await tBodegas;
         _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
-        var vendedores = await Inventario.VendedoresAsync(null, conRetirados: false, 1, 200);
+        var vendedores = await tVendedores;
         _vendedores = vendedores.IsSuccess ? [.. vendedores.Value!.Items.Where(v => v.IsActive)] : [];
-        var sesion = await Ventas.MiSesionAbiertaAsync();
+        var sesion = await tSesion;
         _sesion = sesion.IsSuccess ? sesion.Value : null;
-        var medios = await Medios.ListarAsync(activos: true);
-        var datafonos = await Medios.DatafonosAsync(activos: true);
+        var medios = await tMedios;
+        var datafonos = await tDatafonos;
         // Q16: las cuentas propias habilitadas para el punto de la sesión de caja del usuario.
         IReadOnlyList<CuentaPropiaDeLaSesionDto> cuentas = [];
         if (_sesion is { } abierta)
@@ -416,7 +429,7 @@
             .Select(m => AdaptadoresDeCobro.DesdeVenta(m, cuentas)).ToList();
         if (_medios.Any(m => m.EsCheque))
             _bancos = (await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name")).Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
-        var billetes = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
+        var billetes = await tBilletes;
         if (billetes.IsSuccess && billetes.Value is not null)
             _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
         _tipo = _tipos.FirstOrDefault(t => t.Class != TextosDeVentas.ClaseFacturaDesdeRemisiones || _desdeRemisiones)?.PublicId ?? _tipos.FirstOrDefault()?.PublicId;

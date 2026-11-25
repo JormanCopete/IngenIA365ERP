@@ -11,9 +11,11 @@
 <div class="page-header">
     <h3>Asociados</h3>
     <div>
-        <SfTextBox Placeholder="Buscar por documento, nombre o apellido..." @bind-Value="_search"
-                   Width="320px"
-                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        @* 2026-11-24 (pedido del dueño): busca mientras se escribe —desde la tercera letra, o con Enter con una o dos— en el servidor, sin distinguir
+           mayúsculas y por palabras, como Personas. Antes la caja buscaba sólo al salir de ella. *@
+        <input class="e-input campo-busqueda-personas" placeholder="Buscar por documento, nombre o empresa… (3 letras o Enter)"
+               value="@_search" @oninput="@(e => AlEscribir(Campo.Global, e.Value?.ToString()))"
+               data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Buscar asociados" />
         <PermissionGate Required="Core.Associates.Create">
             <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarImportacion = !_mostrarImportacion)">Importar desde archivo</SfButton>
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenSelectPersonDialog">Nuevo asociado</SfButton>
@@ -37,18 +39,35 @@
     </div>
 }
 
+<p class="texto-tenue">@(_total > _items.Count ? $"Se muestran {_items.Count} de {_total} asociados: afine la búsqueda." : $"{_items.Count} asociado(s).")</p>
 <IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="AssociateRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
+    <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.FilterBar" />
     <GridColumns>
-        <GridColumn Field="@nameof(AssociateRow.IdentificationNumber)" HeaderText="Documento" Width="130" />
-        <GridColumn Field="@nameof(AssociateRow.FullName)" HeaderText="Nombre completo" Width="260" />
+        <GridColumn Field="@nameof(AssociateRow.IdentificationNumber)" HeaderText="Documento" Width="130">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.TaxId)" @oninput="@(e => AlEscribir(Campo.TaxId, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por documento" />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(AssociateRow.FullName)" HeaderText="Nombre completo" Width="260">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.Name)" @oninput="@(e => AlEscribir(Campo.Name, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por nombre" />
+            </FilterTemplate>
+        </GridColumn>
         <GridColumn Field="@nameof(AssociateRow.JoinDate)" HeaderText="Fecha ingreso" Width="130"
                     Format="dd/MM/yyyy" Type="ColumnType.Date" />
         <GridColumn Field="@nameof(AssociateRow.ContributionRate)" HeaderText="% Aporte" Width="100"
                     Format="N2" TextAlign="TextAlign.Right" />
-        <GridColumn Field="@nameof(AssociateRow.ExternalEmployerName)" HeaderText="Empresa empleadora" Width="200" />
+        <GridColumn Field="@nameof(AssociateRow.ExternalEmployerName)" HeaderText="Empresa empleadora" Width="200">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.Employer)" @oninput="@(e => AlEscribir(Campo.Employer, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por empresa empleadora" />
+            </FilterTemplate>
+        </GridColumn>
         <GridColumn Field="@nameof(AssociateRow.ExternalSalary)" HeaderText="Salario" Width="140"
                     Format="N2" TextAlign="TextAlign.Right" />
         <GridColumn HeaderText="Estado" Width="110" TextAlign="TextAlign.Center">
@@ -324,6 +343,20 @@
     private List<AssociateRow> _items = new();
     private string _search = "";
     private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    /// <summary>2026-11-24: la búsqueda global y una caja por columna; todas van al servidor, sin distinguir mayúsculas.</summary>
+    private enum Campo { Global, TaxId, Name, Employer }
+
+    private readonly Dictionary<Campo, string> _filtros = new();
+
+    /// <summary>Desde cuántas letras busca sola; con menos, con Enter.</summary>
+    private const int MinimoDeLetras = 3;
+
+    /// <summary>El total de asociados que cumplen los filtros (la lista trae hasta 500).</summary>
+    private int _total;
+
+    /// <summary>La búsqueda en curso: una respuesta de una búsqueda anterior que llega tarde no pisa la última.</summary>
+    private int _busqueda;
     private bool _puedeCrearPersona;
     private Guid? _personaAbiertaPorRuta;
 
@@ -408,19 +441,29 @@
         return vacio;
     }
 
+    private string Filtro(Campo campo) => _filtros.TryGetValue(campo, out var v) ? v : "";
+
     private async Task LoadData()
     {
+        var esta = ++_busqueda;
         using var carga = _carga.Iniciar();
         try
         {
             var url = "/api/core/associates?PageNumber=1&PageSize=500";
             if (!string.IsNullOrWhiteSpace(_search))
-                url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
-            _items = await Http.GetListAsync<AssociateRow>(url);
+                url += $"&SearchTerm={Uri.EscapeDataString(_search.Trim())}";
+            foreach (var (campo, valor) in _filtros.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
+                url += $"&{campo}={Uri.EscapeDataString(valor.Trim())}";
+            var pagina = await Http.GetFromJsonAsync<PaginaDeAsociados>(url);
+            if (esta != _busqueda) return;
+            _items = pagina?.Items ?? new List<AssociateRow>();
+            _total = pagina?.TotalCount ?? _items.Count;
         }
         catch (Exception ex)
         {
+            if (esta != _busqueda) return;
             _items = new List<AssociateRow>();
+            _total = 0;
             await Notification.ErrorAsync($"No se pudieron cargar los asociados: {ex.Message}");
         }
         finally
@@ -430,18 +473,37 @@
         }
     }
 
-    private async Task OnSearchChanged()
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): escribir en la búsqueda o en un filtro de columna busca solo, tras una pausa corta, desde la tercera letra o al
+    /// borrarlo todo; con una o dos letras espera el Enter.
+    /// </summary>
+    private async Task AlEscribir(Campo campo, string? valor)
     {
+        valor ??= "";
+        if (campo == Campo.Global) _search = valor; else _filtros[campo] = valor;
         _searchDebounce?.Cancel();
+        var largo = valor.Trim().Length;
+        if (largo is > 0 and < MinimoDeLetras) return;
         _searchDebounce = new System.Threading.CancellationTokenSource();
         var token = _searchDebounce.Token;
         try
         {
-            await Task.Delay(350, token);
+            await Task.Delay(250, token);
             if (!token.IsCancellationRequested) await LoadData();
         }
-        catch (TaskCanceledException) { }
+        catch (TaskCanceledException) { /* el debounce se canceló: hay una búsqueda más nueva */ }
     }
+
+    /// <summary>Enter busca ya, con lo que haya escrito (también una o dos letras).</summary>
+    private async Task AlTeclear(KeyboardEventArgs e)
+    {
+        if (e.Key is not ("Enter" or "NumpadEnter")) return;
+        _searchDebounce?.Cancel();
+        await LoadData();
+    }
+
+    /// <summary>La página que devuelve <c>GET /api/core/associates</c>.</summary>
+    private sealed record PaginaDeAsociados(List<AssociateRow> Items, int TotalCount);
 
     // ---------- Elegir o crear la persona ----------
 

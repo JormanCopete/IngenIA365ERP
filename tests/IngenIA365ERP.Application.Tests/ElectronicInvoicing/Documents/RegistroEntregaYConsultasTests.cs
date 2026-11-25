@@ -150,6 +150,30 @@ public class RegistroEntregaYConsultasTests
     }
 
     [Fact]
+    public async Task La_bandeja_filtra_por_cliente_y_por_valor()
+    {
+        var deAna = await _s.FacturaAsync(990000125);
+        var deRedeban = await _s.FacturaAsync(990000126);
+        deAna.CounterpartyTaxId = "31999888";
+        deAna.CounterpartyName = "ANA PÉREZ";
+        deAna.TotalAmount = 15900m;
+        deRedeban.CounterpartyTaxId = "860034313";
+        deRedeban.CounterpartyName = "REDEBAN S.A.";
+        deRedeban.TotalAmount = 2000m;
+        await _s.E.Db.SaveChangesAsync();
+        var handler = new ListElectronicDocumentsQueryHandler(_s.E.Db, _s.E.Lector(), _s.E.Reloj, []);
+
+        async Task<List<Guid>> Ids(ListElectronicDocumentsQuery q) =>
+            [.. (await handler.Handle(q, default)).Value.Items.Select(i => i.ElectronicDocumentPublicId)];
+
+        (await Ids(new ListElectronicDocumentsQuery(Customer: "pérez ana"))).Should().Equal(deAna.PublicId);
+        (await Ids(new ListElectronicDocumentsQuery(Customer: "8600343"))).Should().Equal(deRedeban.PublicId);
+        (await Ids(new ListElectronicDocumentsQuery(MinTotal: 10000m))).Should().Equal(deAna.PublicId);
+        (await Ids(new ListElectronicDocumentsQuery(MaxTotal: 2000m))).Should().Equal(deRedeban.PublicId);
+        new ListElectronicDocumentsQueryValidator().Validate(new ListElectronicDocumentsQuery(MinTotal: 5m, MaxTotal: 1m)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task El_detalle_trae_versiones_y_transmisiones()
     {
         var d = await _s.FacturaAsync();

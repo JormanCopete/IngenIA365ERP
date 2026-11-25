@@ -18,7 +18,10 @@
    transmisiones con los mensajes traducidos y las correcciones. Acciones según el estado: «Reintentar ahora», «Consultar a la DIAN», el
    caso a (corregir la copia fiscal sin cambio económico), el caso b («Preparar reemplazo» y reemplazar con el mismo número) y el caso c
    (anular sin reemplazo) —b y c sólo con el rechazo confirmado por una consulta— y «Transmitir por el canal vigente». Lo decide siempre
-   el servidor; la pantalla sólo evita ofrecer lo que no procede (AccionesDelDocumentoElectronico). *@
+   el servidor; la pantalla sólo evita ofrecer lo que no procede (AccionesDelDocumentoElectronico).
+   2026-11-24 (pedido del dueño): los filtros en un panel (PanelDeFiltros): a la vista número, cliente (identificación o nombre, tal como
+   salió en el documento), fechas, estado y tipo; en «Más filtros» prefijo, valor desde y hasta, contingencia, demorados, en reintento y
+   muertos. *@
 <PermissionGate Required="ElectronicInvoicing.Documents.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -31,27 +34,37 @@
         </div>
     </div>
 
-    <div class="toolbar">
-        <label class="campo">Estado
-            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
-                <option value="">Todos</option>
-                @foreach (var (v, t) in Estados) { <option value="@v">@t</option> }
-            </select>
-        </label>
-        <label class="campo">Tipo
-            <select class="e-input" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => { _tipo = int.TryParse(e.Value?.ToString(), out var k) ? k : null; return BuscarAsync(); })">
-                <option value="">Todos</option>
-                @foreach (var (v, t) in TiposDeDocumento.Where(p => p.Key <= 7)) { <option value="@v">@t</option> }
-            </select>
-        </label>
-        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
-        <label class="campo">Número <input class="e-input" @bind="_numero" @bind:after="BuscarAsync" maxlength="20" /></label>
-        <label class="campo-check"><input type="checkbox" @bind="_contingencia" @bind:after="BuscarAsync" /> En contingencia</label>
-        <label class="campo-check"><input type="checkbox" @bind="_vencidos" @bind:after="BuscarAsync" /> Demorados sin validar</label>
-        <label class="campo-check"><input type="checkbox" @bind="_reintentando" @bind:after="BuscarAsync" /> En reintento</label>
-        <label class="campo-check"><input type="checkbox" @bind="_muertos" @bind:after="BuscarAsync" /> Muertos</label>
-    </div>
+    <PanelDeFiltros HayFiltros="@HayFiltros" ActivosOcultos="@ActivosOcultos" Limpiar="@LimpiarAsync">
+        <Principales>
+            <label class="campo">Número <input class="e-input" @bind="_numero" @bind:after="BuscarAsync" maxlength="20" data-ayuda="El número o una parte, con o sin el prefijo." /></label>
+            <label class="campo">Cliente
+                <input class="e-input" @bind="_cliente" @bind:after="BuscarAsync" maxlength="80" placeholder="Identificación o nombre" />
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (v, t) in Estados) { <option value="@v">@t</option> }
+                </select>
+            </label>
+            <label class="campo">Tipo
+                <select class="e-input" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => { _tipo = int.TryParse(e.Value?.ToString(), out var k) ? k : null; return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (v, t) in TiposDeDocumento.Where(p => p.Key <= 7)) { <option value="@v">@t</option> }
+                </select>
+            </label>
+        </Principales>
+        <MasFiltros>
+            <label class="campo">Prefijo <input class="e-input" @bind="_prefijo" @bind:after="BuscarAsync" maxlength="10" placeholder="Todos" /></label>
+            <label class="campo">Valor desde <input class="e-input" type="number" min="0" step="any" @bind="_valorDesde" @bind:after="BuscarAsync" /></label>
+            <label class="campo">Valor hasta <input class="e-input" type="number" min="0" step="any" @bind="_valorHasta" @bind:after="BuscarAsync" /></label>
+            <label class="campo-check"><input type="checkbox" @bind="_contingencia" @bind:after="BuscarAsync" /> En contingencia</label>
+            <label class="campo-check" title="Pendientes o enviados que llevan más del tiempo de alerta sin validar."><input type="checkbox" @bind="_vencidos" @bind:after="BuscarAsync" /> Demorados sin validar</label>
+            <label class="campo-check"><input type="checkbox" @bind="_reintentando" @bind:after="BuscarAsync" /> En reintento</label>
+            <label class="campo-check"><input type="checkbox" @bind="_muertos" @bind:after="BuscarAsync" /> Muertos</label>
+        </MasFiltros>
+    </PanelDeFiltros>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (!_carga.Activa && _filas.Count == 0)
@@ -309,7 +322,8 @@
     private FormularioCasoA _casoA = new();
     private int? _estado, _tipo;
     private DateOnly? _desde, _hasta;
-    private string? _numero, _motivo;
+    private string? _numero, _motivo, _cliente, _prefijo;
+    private decimal? _valorDesde, _valorHasta;
     private bool _reintentando, _muertos;
     private bool _contingencia, _vencidos, _mostrarCasoA, _mostrarCasoB, _mostrarMotivo;
     private Accion _accionConMotivo;
@@ -321,6 +335,23 @@
         _contingencia = SoloContingencia == true;
         await CargarAsync();
         if (DocumentoInicial is { } id) await AbrirAsync(id);
+    }
+
+    /// <summary>Cuántos de los filtros de «Más filtros» están puestos.</summary>
+    private int ActivosOcultos =>
+        (string.IsNullOrWhiteSpace(_prefijo) ? 0 : 1) + (_valorDesde is null ? 0 : 1) + (_valorHasta is null ? 0 : 1)
+        + (_contingencia ? 1 : 0) + (_vencidos ? 1 : 0) + (_reintentando ? 1 : 0) + (_muertos ? 1 : 0);
+
+    private bool HayFiltros =>
+        ActivosOcultos > 0 || !string.IsNullOrWhiteSpace(_numero) || !string.IsNullOrWhiteSpace(_cliente) || _desde is not null || _hasta is not null
+        || _estado is not null || _tipo is not null;
+
+    private Task LimpiarAsync()
+    {
+        _numero = null; _cliente = null; _desde = null; _hasta = null; _estado = null; _tipo = null;
+        _prefijo = null; _valorDesde = null; _valorHasta = null;
+        _contingencia = false; _vencidos = false; _reintentando = false; _muertos = false;
+        return BuscarAsync();
     }
 
     private Task BuscarAsync()
@@ -337,12 +368,20 @@
 
     private async Task CargarAsync()
     {
+        if (_valorDesde is { } minimo && _valorHasta is { } maximo && minimo > maximo)
+        {
+            await Notification.WarningAsync("El valor desde no puede ser mayor que el valor hasta.");
+            return;
+        }
         using var carga = _carga.Iniciar();
         var r = await Facturacion.DocumentosAsync(new FiltroDeDocumentosElectronicos
         {
             Status = Nombre(NombresDeEstado, _estado), Kind = Nombre(NombresDeTipoDeDocumento, _tipo), From = _desde, To = _hasta,
             Number = string.IsNullOrWhiteSpace(_numero) ? null : _numero.Trim(), Contingency = _contingencia ? true : null, Overdue = _vencidos ? true : null,
             Retrying = _reintentando ? true : null, Dead = _muertos ? true : null,
+            Customer = string.IsNullOrWhiteSpace(_cliente) ? null : _cliente.Trim(),
+            Prefix = string.IsNullOrWhiteSpace(_prefijo) ? null : _prefijo.Trim().ToUpperInvariant(),
+            MinTotal = _valorDesde, MaxTotal = _valorHasta,
             Page = _pagina, PageSize = TamanoDePagina,
         });
         if (!r.IsSuccess || r.Value is null) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la bandeja."); return; }
