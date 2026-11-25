@@ -68305,7 +68305,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<short>("Origin")
                         .HasColumnType("smallint");
 
-                    b.Property<int>("OwnerPersonId")
+                    b.Property<int?>("OwnerPersonId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("PaidAt")
@@ -68345,8 +68345,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<int>("VehicleId")
+                    b.Property<int?>("VehicleId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("VehicleReference")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
@@ -85071,8 +85075,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "OwnerPerson")
                         .WithMany()
                         .HasForeignKey("OwnerPersonId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Transport.TransportService", "Service")
                         .WithMany()
@@ -85083,8 +85086,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Transport.Vehicle", "Vehicle")
                         .WithMany()
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("BillingRun");
 

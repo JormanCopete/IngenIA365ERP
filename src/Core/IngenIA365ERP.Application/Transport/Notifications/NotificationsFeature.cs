@@ -199,7 +199,7 @@ internal static class Consultas
             Envio = e,
             Conector = c.Name,
             Cargo = g,
-            Placa = g != null ? g.Vehicle!.Plate : null,
+            Placa = g != null ? (g.Vehicle != null ? g.Vehicle.Plate : "Externo, lateral " + g.VehicleReference) : null,
             Interno = g != null ? g.Vehicle!.InternalNumber : null,
             Vehiculo = g != null ? (Guid?)g.Vehicle!.PublicId : null,
             ServicioId = g != null ? (Guid?)g.Service!.PublicId : null,
