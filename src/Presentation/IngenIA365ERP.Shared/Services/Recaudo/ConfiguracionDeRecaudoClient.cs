@@ -204,17 +204,24 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
 
     // ------------------------------------------------------------------------------------------- parámetros (2026-11-25) --
 
-    /// <summary>Las claves de Recaudo (<c>RCD</c>) con su valor vigente (<c>Receipts.Setup.View</c>).</summary>
-    public Task<ResultadoDeInventario<IReadOnlyList<ParametroDto>>> ParametrosAsync(CancellationToken ct = default) =>
-        Get<IReadOnlyList<ParametroDto>>($"{Base}/parameters", ct);
+    /// <summary>Los módulos de parámetros de este cliente: Recaudo (<c>RCD</c>) y Tesorería (<c>TES</c>), cada uno con su ruta y su permiso.</summary>
+    public const string ModuloRecaudo = "RCD";
+    public const string ModuloTesoreria = "TES";
 
-    public Task<ResultadoDeInventario<IReadOnlyList<VigenciaDeParametroDto>>> HistorialDeParametroAsync(string clave, CancellationToken ct = default) =>
-        Get<IReadOnlyList<VigenciaDeParametroDto>>($"{Base}/parameters/{Uri.EscapeDataString(clave)}/history", ct);
+    private static string RutaDeParametros(string modulo) => modulo == ModuloTesoreria ? "/api/treasury/parameters" : $"{Base}/parameters";
 
-    /// <summary>Una vigencia nueva de una clave de Recaudo (<c>Receipts.Setup.Manage</c>): el valor, desde cuándo y el motivo.</summary>
-    public Task<ResultadoDeInventario<VigenciaCreadaDto>> NuevaVigenciaAsync(string clave, NuevaVigenciaDeRecaudoRequest r, ClaveDeOperacion operacion,
+    /// <summary>Las claves del módulo con su valor vigente (<c>Receipts.Setup.View</c> o <c>Treasury.Parameters.View</c>).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<ParametroDto>>> ParametrosAsync(string modulo = ModuloRecaudo, CancellationToken ct = default) =>
+        Get<IReadOnlyList<ParametroDto>>(RutaDeParametros(modulo), ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<VigenciaDeParametroDto>>> HistorialDeParametroAsync(string clave, string modulo = ModuloRecaudo,
         CancellationToken ct = default) =>
-        Enviar<VigenciaCreadaDto>(HttpMethod.Post, $"{Base}/parameters/{Uri.EscapeDataString(clave)}/versions", r, operacion, ct);
+        Get<IReadOnlyList<VigenciaDeParametroDto>>($"{RutaDeParametros(modulo)}/{Uri.EscapeDataString(clave)}/history", ct);
+
+    /// <summary>Una vigencia nueva de una clave del módulo (<c>Receipts.Setup.Manage</c> o <c>Treasury.Parameters.Manage</c>): el valor, desde cuándo y el motivo.</summary>
+    public Task<ResultadoDeInventario<VigenciaCreadaDto>> NuevaVigenciaAsync(string clave, NuevaVigenciaDeRecaudoRequest r, ClaveDeOperacion operacion,
+        string modulo = ModuloRecaudo, CancellationToken ct = default) =>
+        Enviar<VigenciaCreadaDto>(HttpMethod.Post, $"{RutaDeParametros(modulo)}/{Uri.EscapeDataString(clave)}/versions", r, operacion, ct);
 
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 

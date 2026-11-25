@@ -1,0 +1,12 @@
+@page "/tesoreria/parametros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+<PageTitle>Parámetros de Tesorería - IngenIA365ERP</PageTitle>
+
+@* 2026-11-25 (pedido del dueño): los parámetros de Tesorería (TES) —giros, cheques, cuentas destino, remesas, conciliación, GMF, notas bancarias, liquidez,
+   adquirentes y el paso a contabilidad—, que no tenían pantalla y regían siempre con su defecto. Ver pide Treasury.Parameters.View y cambiar
+   Treasury.Parameters.Manage. La pantalla es la común de los módulos con ruta propia (ParametrosDelModulo), la misma de Recaudo. *@
+<PermissionGate Required="Treasury.Parameters.View" MostrarAviso="true">
+    <ParametrosDelModulo Modulo="@ConfiguracionDeRecaudoClient.ModuloTesoreria" Titulo="Parámetros de Tesorería" PermisoAdministrar="Treasury.Parameters.Manage" />
+</PermissionGate>

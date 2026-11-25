@@ -876,6 +876,10 @@
             <PermissionGate Required="Treasury.Reports.View">
                 <NavLink href="/tesoreria/informes" class="nav-subitem">Informes</NavLink>
             </PermissionGate>
+            @* 2026-11-25: los parámetros de Tesorería (TES), que no tenían pantalla. *@
+            <PermissionGate Required="Treasury.Parameters.View">
+                <NavLink href="/tesoreria/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 021, US1 (T054): el canal digital de los asociados. El grupo sólo aparece a quien tiene algún permiso del canal. *@

@@ -715,7 +715,9 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   para un solo arqueo. Coordinador sin transacción propia, `CajaUnica`, con claves derivadas. Migración aditiva `CajaUnica`. Receta:
   `docs/manual/caja-unica.md`.
   - **Revisión del 2026-11-25** (pedido del dueño: «simple y seguro»):
-    - Los parámetros `RCD` se cambian en Recaudo → Configuración → Parámetros (`/api/receipts/parameters`, `Receipts.Setup.*`). Antes no tenían pantalla.
+    - Los parámetros `RCD` se cambian en Recaudo → Configuración → Parámetros (`/api/receipts/parameters`, `Receipts.Setup.*`) y los `TES` en
+      Tesorería → Parámetros (`/api/treasury/parameters`, permisos nuevos `Treasury.Parameters.View/Manage`). Antes no tenían pantalla; las dos usan
+      `ParametrosDelModulo`. Receta: `docs/manual/parametros-de-recaudo-y-tesoreria.md`.
     - `Caja.SesionUnica` no se enciende sin una caja unida ni sin la cuenta puente (`RequisitosDeLaCajaUnica`).
     - El arqueo se comprueba antes de cerrar el punto de venta (`CheckClosingCountQuery`, sin escribir ni auditar).
     - Entra lo **contado** por ese cierre, y no se pide dos veces.
