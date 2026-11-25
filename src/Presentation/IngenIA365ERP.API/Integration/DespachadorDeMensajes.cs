@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Alerts.RaiseAlert;
@@ -133,7 +134,35 @@ public sealed class DespachadorDeMensajes(
         }
     }
 
+    /// <summary>
+    /// Una sola pasada a la vez por cooperativa <b>dentro de este proceso</b> (2026-11-25). El arrendamiento en base separa réplicas, pero
+    /// es reentrante para su dueño (la réplica): el ciclo, despertado por <see cref="ISenalDeMensajes"/>, y el aviso de la cola
+    /// (<see cref="ManejadorDeAvisoDeIntegracion"/>) corrían a la vez en la misma réplica, tomaban la misma entrega pendiente y el conector
+    /// del radio llamó dos veces al proveedor por cada venta. La pasada que encuentra otra en curso se retira: la que corre, o el sondeo
+    /// siguiente, entrega lo que falte.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _enCurso = new();
+
     private async Task CorrerEnAsync(TenantDirectoryEntry cooperativa, CancellationToken ct)
+    {
+        var turno = _enCurso.GetOrAdd(cooperativa.PublicId, _ => new SemaphoreSlim(1, 1));
+        if (!await turno.WaitAsync(0, ct))
+        {
+            logger.LogDebug("[Despacho.PasadaEnCurso] {Cooperativa}: ya hay una pasada en curso en esta réplica.", cooperativa.Name);
+            return;
+        }
+
+        try
+        {
+            await CorrerConElTurnoAsync(cooperativa, ct);
+        }
+        finally
+        {
+            turno.Release();
+        }
+    }
+
+    private async Task CorrerConElTurnoAsync(TenantDirectoryEntry cooperativa, CancellationToken ct)
     {
         var configuracion = opciones.Value.Dispatcher;
         var ttl = TimeSpan.FromSeconds(configuracion.LeaseTtlSeconds);
