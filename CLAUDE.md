@@ -743,6 +743,13 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   - Encendido, rigen los controles de siempre.
   - Receta: `docs/manual/mi-caja-y-arqueo.md`.
 
+- **Editar la solicitud radicada sin devolverla (2026-11-25, pedido del dueño)**: `PUT /api/lending/applications/{id}/submitted` (permiso
+  `Lending.Applications.EditSubmitted`, motivo obligatorio) en `Submitted`/`PendingDecision`, si `Originacion.EditarRadicadaSinDevolver` (sí de
+  fábrica, por cooperativa o línea) lo deja y en los grupos de `Originacion.GruposEditablesAlDevolver`. Vuelve a correr validaciones y
+  enrutamiento, deja la fila en `LND_CreditApplicationEdits` (lo muestra el detalle), la intervención `EditarRadicada` (segregable con `Decidir`)
+  y el evento `Lending.Application.EditedAfterSubmission`; `EditsAfterSubmission` entra a la huella, así que quien decide con la versión vieja
+  recibe `Lending.Decision.ContentChanged`. Migración aditiva `EdicionDeSolicitudRadicada`. Receta: `docs/manual/cartera-originacion.md`.
+
 - **Documentos para firma (2026-11-18, pedido del dueño)**: la solicitud aprobada genera en un PDF el pagaré con espacios en blanco, su carta de
   instrucciones y la libranza cuando el crédito se paga por nómina, desde **plantillas por cooperativa** (`LND_SignatureDocumentTemplates`, por canal
   de pago y línea) con campos del sistema (`CamposDelSistema`) y **campos propios** (`LND_SignatureDocumentFields`: fijos o digitados al generar).

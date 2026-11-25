@@ -32,6 +32,15 @@
                     </SfButton>
                 </PermissionGate>
             }
+            @if (_s is { Radicada: true } && _s.EditableGroups.Any(g => g is not ("Documentos" or "Garantias")))
+            {
+                @* 2026-11-25 (pedido del dueño): la radicada se edita sin devolverla, con motivo, si Originacion.EditarRadicadaSinDevolver lo deja. *@
+                <PermissionGate Required="Lending.Applications.EditSubmitted">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{Id}/corregir"))">
+                        Editar radicada
+                    </SfButton>
+                </PermissionGate>
+            }
             @if (_s is { Status: 1 or 4 })
             {
                 <PermissionGate Required="Lending.Applications.Submit">
@@ -91,6 +100,32 @@
                             }
                         </tbody>
                     </table>
+                </div>
+            }
+            @if (s.SubmittedEdits.Count > 0)
+            {
+                @* 2026-11-25 (pedido del dueño): cada edición de la radicada sin devolverla —quién, cuándo, por qué y qué cambió—, para quien decide. *@
+                <div class="info-card">
+                    <h4>Ediciones después de radicar (@s.SubmittedEdits.Count)</h4>
+                    @foreach (var edicion in s.SubmittedEdits)
+                    {
+                        <p>
+                            <strong>@edicion.EditedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong> · @edicion.EditedBy · motivo: @edicion.Reason
+                            @if (edicion.LevelBefore != edicion.LevelAfter)
+                            {
+                                <span class="texto-tenue"> · nivel: @(edicion.LevelBefore ?? "—") → @(edicion.LevelAfter ?? "—")</span>
+                            }
+                        </p>
+                        <table class="data-grid">
+                            <thead><tr><th>Grupo</th><th>Dato</th><th>Antes</th><th>Ahora</th></tr></thead>
+                            <tbody>
+                                @foreach (var cambio in edicion.Changes)
+                                {
+                                    <tr><td>@cambio.Group</td><td>@cambio.Field</td><td>@(cambio.Before ?? "—")</td><td>@(cambio.After ?? "—")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
                 </div>
             }
             <div class="kpi-grid">
@@ -325,6 +360,8 @@
                 lista.Add("Pulse «Radicar»: se corren las validaciones y la solicitud pasa a decisión.");
                 break;
             case 3:
+                if (s.EditableGroups.Any(g => g is not ("Documentos" or "Garantias")))
+                    lista.Add("Si hay que cambiar algo, quien tenga el permiso lo corrige con «Editar radicada», sin devolverla y con motivo: se vuelven a correr las validaciones y el enrutamiento.");
                 lista.Add(_ruta is { } r
                     ? r.CanDecide
                         ? $"Revise validaciones, puntaje y garantías, y pulse «Decidir…» (nivel {r.EffectiveLevelName})."

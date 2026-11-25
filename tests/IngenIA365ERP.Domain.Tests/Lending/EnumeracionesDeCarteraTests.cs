@@ -402,7 +402,7 @@ public class EnumeracionesDeCarteraTests
 
         AccionesDeSegregacion.Todas.Should().Equal(
             "Radicar", "Analizar", "Decidir", "Votar", "Desembolsar", "AnularOrdenDeGiro", "ArmarLoteDeCastigo", "AplicarCastigo",
-            "CargarMigracion", "AceptarDiferencias", "Aplicar");
+            "CargarMigracion", "AceptarDiferencias", "Aplicar", "EditarRadicada");
         AccionesDeSegregacion.Todas.Should().OnlyContain(a => a.Length <= 30, "Action es nvarchar(30)");
     }
 

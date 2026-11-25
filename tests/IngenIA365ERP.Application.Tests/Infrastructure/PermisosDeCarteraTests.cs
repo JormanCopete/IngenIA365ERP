@@ -30,7 +30,7 @@ public class PermisosDeCarteraTests
         "RelatedParties.Read", "RelatedParties.Manage", "RiskPolicy.Manage", "RiskPolicy.Validate", "Scopes.Manage", "Scope.AllOffices",
         "Scope.AllLines", "Templates.View", "MessageTemplates.View", "MessageTemplates.Manage",
         "Simulations.Run", "Applications.Read", "Applications.Create", "Applications.Submit", "Applications.Analyze", "Applications.Cancel",
-        "PrepaymentPreferences.Manage", "Decisions.Analyst", "Decisions.Coordinator", "Decisions.Management", "Decisions.Exceptions",
+        "Applications.EditSubmitted", "PrepaymentPreferences.Manage", "Decisions.Analyst", "Decisions.Coordinator", "Decisions.Management", "Decisions.Exceptions",
         "CreditBureau.Query", "CreditBureau.ReadReports", "Sessions.Read", "Sessions.Manage", "Sessions.RecordVotes", "Sessions.Vote",
         "Sessions.Close", "Guarantees.Read", "Guarantees.Manage", "Guarantees.Release", "PromissoryNotes.Manage", "CreditLimits.Read",
         "CreditLimits.Assign", "Blocks.Manage", "NumberReservations.Read",
@@ -76,8 +76,8 @@ public class PermisosDeCarteraTests
     {
         // Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163).
         // Feature 024, fase 3: los cuatro del proceso de causación (163 → 167). 2026-11-18: las plantillas para firma (168). 2026-11-24: el cambio
-        // de plazo (169).
-        Cartera.Should().HaveCount(169).And.OnlyHaveUniqueItems();
+        // de plazo (169). 2026-11-25: editar la solicitud radicada sin devolverla (170).
+        Cartera.Should().HaveCount(170).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -116,7 +116,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(169 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(170 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

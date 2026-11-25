@@ -67,6 +67,7 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Applications",        "Submit",              "Enviar solicitudes a análisis"),
         ("Lending.Applications",        "Analyze",             "Analizar solicitudes y volver a correr sus validaciones"),
         ("Lending.Applications",        "Cancel",              "Anular solicitudes o registrar el desistimiento"),
+        ("Lending.Applications",        "EditSubmitted",       "Editar solicitudes radicadas sin devolverlas, con motivo"),
         ("Lending.PrepaymentPreferences", "Manage",            "Cambiar la preferencia del deudor para abonos a capital"),
         ("Lending.Decisions",           "Analyst",             "Decidir en el nivel de analista de la matriz de atribuciones"),
         ("Lending.Decisions",           "Coordinator",         "Decidir en el nivel de coordinación de la matriz de atribuciones"),

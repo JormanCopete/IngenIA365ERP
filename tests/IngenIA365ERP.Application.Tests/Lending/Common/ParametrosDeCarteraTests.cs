@@ -79,6 +79,8 @@ public class ParametrosDeCarteraTests
         // 2026-11-23 (pedido del dueño): qué se corrige en una solicitud devuelta; de fábrica, todo (desde el 2026-11-24).
         { "Autorizaciones.ExigenEvidencia", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.GruposEditablesAlDevolver", "Condiciones,Linea,Oficina,Destino,FormaDePago,Seguros,Capacidad,Codeudores,Recogidas,ExcepcionDePolitica,PreferenciaDeAbono,Documentos,Garantias", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-25 (pedido del dueño): la solicitud radicada se edita sin devolverla, con motivo; de fábrica, sí.
+        { "Originacion.EditarRadicadaSinDevolver", "true", [N, L], EntregaDeCartera.K1 },
         // 2026-11-24 (pedido del dueño): el cambio de plazo de un crédito sin pagos ni causación; de fábrica, sí, y lo hace también quien lo registró.
         { "Creditos.CambioDePlazo", "true", [N, L], EntregaDeCartera.K1 },
         { "Segregacion.CambioDePlazoPorOtraPersona", "false", [N], EntregaDeCartera.K1 },

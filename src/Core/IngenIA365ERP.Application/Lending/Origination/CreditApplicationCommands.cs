@@ -15,8 +15,10 @@ using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Origination;
+using IngenIA365ERP.Domain.Lending.Segregation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -346,7 +348,16 @@ public sealed class CreateCreditApplicationCommandHandler(
 /// <summary>
 /// Edita una solicitud en <c>Draft</c> o <c>Returned</c> (api.md §4.2, <c>PUT /{id}</c>, con clave): las mismas reglas que crearla; fuera de esos
 /// estados, <c>Lending.Application.NotEditable</c> con el estado; con una versión leída vieja, <c>Concurrency.StaleRowVersion</c>. Los codeudores
-/// que salen se dan de baja (baja lógica) y el solicitante no cambia: para otro solicitante, otra solicitud. (nuevo)
+/// que salen se dan de baja (baja lógica) y el solicitante no cambia: para otro solicitante, otra solicitud.
+/// <para>
+/// 2026-11-25 (pedido del dueño): también edita una solicitud <b>radicada</b> (<c>Submitted</c> o <c>PendingDecision</c>) sin devolverla, sólo por
+/// <c>PUT /{id}/submitted</c> (<see cref="EdicionRadicada"/>, permiso <c>Lending.Applications.EditSubmitted</c>), si
+/// <c>Originacion.EditarRadicadaSinDevolver</c> de su línea lo deja, con <see cref="EditReason"/>, en los grupos de
+/// <c>Originacion.GruposEditablesAlDevolver</c> y sin chocar con la segregación (<c>EditarRadicada</c>). Vuelve a correr las validaciones y el
+/// enrutamiento, deja la fila en <c>LND_CreditApplicationEdits</c>, la intervención y el evento <c>Lending.Application.EditedAfterSubmission</c>, y
+/// cambia la huella del enrutamiento: quien decide (o el acta) con la versión anterior a la vista recibe <c>Lending.Decision.ContentChanged</c>.
+/// </para>
+/// (nuevo)
 /// </summary>
 public sealed record UpdateCreditApplicationCommand(Guid ApplicationPublicId, CreditApplicationInput Input, byte[]? RowVersion = null)
     : IRequest<Result<CreditApplicationDto>>, IOperacionIdempotente, IConOficina
@@ -354,6 +365,16 @@ public sealed record UpdateCreditApplicationCommand(Guid ApplicationPublicId, Cr
     public Guid OperationKey { get; init; }
 
     public Guid? BranchPublicId => Input?.OfficePublicId;
+
+    /// <summary>2026-11-25: por qué se edita la solicitud radicada (obligatorio en ese caso; queda en su historial).</summary>
+    public string? EditReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-25: lo pone sólo <c>PUT /{id}/submitted</c>, que exige <c>Lending.Applications.EditSubmitted</c>; el cuerpo no lo trae. Sin él, una
+    /// radicada responde <c>Lending.Application.UseSubmittedEditRoute</c>.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool EdicionRadicada { get; init; }
 }
 
 public sealed class UpdateCreditApplicationCommandValidator : AbstractValidator<UpdateCreditApplicationCommand>
@@ -362,6 +383,7 @@ public sealed class UpdateCreditApplicationCommandValidator : AbstractValidator<
     {
         RuleFor(x => x.ApplicationPublicId).NotEmpty();
         RuleFor(x => x.Input).NotNull().SetValidator(new CreditApplicationInputValidator());
+        RuleFor(x => x.EditReason).MaximumLength(CreditApplicationEdit.LargoDelMotivo);
     }
 }
 
@@ -372,29 +394,55 @@ public sealed class UpdateCreditApplicationCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IDateTimeService reloj,
-    GruposEditablesDeSolicitud editables) : IRequestHandler<UpdateCreditApplicationCommand, Result<CreditApplicationDto>>
+    GruposEditablesDeSolicitud editables,
+    EvaluacionDeSolicitud evaluacion,
+    EnrutamientoDeSolicitud enrutamiento,
+    RegistroDeIntervenciones intervenciones,
+    ICerrojoDeCartera cerrojo,
+    Housing.LectorDeVivienda? vivienda = null) : IRequestHandler<UpdateCreditApplicationCommand, Result<CreditApplicationDto>>
 {
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
     public async Task<Result<CreditApplicationDto>> Handle(UpdateCreditApplicationCommand request, CancellationToken ct)
     {
-        if (!await ArmadoDeSolicitud.CarteraActivadaAsync(db, ct)) return Result.Failure<CreditApplicationDto>(ErroresDeMensajesAlDeudor.CarteraSinActivar());
+        if (!await ArmadoDeSolicitud.CarteraActivadaAsync(db, ct)) return Falla(ErroresDeMensajesAlDeudor.CarteraSinActivar());
         var leida = await SolicitudEnAlcance.LeerAsync(db, alcance, auditoria, request.ApplicationPublicId, seguir: true, ct);
-        if (leida.IsFailure) return Result.Failure<CreditApplicationDto>(leida.Error);
+        if (leida.IsFailure) return Falla(leida.Error);
         var s = leida.Value;
-        if (s.ExigirEditable() is not null) return Result.Failure<CreditApplicationDto>(ErroresDeOriginacion.NoEditable(s.Status.ToString()));
-        if (SolicitudEnAlcance.Concurrencia(s, request.RowVersion) is { } vieja) return Result.Failure<CreditApplicationDto>(vieja);
+        var hoy = reloj.HoyLocal;
+
+        // 2026-11-25 (pedido del dueño): la radicada se edita sin devolverla, por su ruta, si el parámetro de su línea lo deja y con motivo.
+        var radicada = s.Radicada;
+        IntervencionVerificada? verificada = null;
+        if (radicada)
+        {
+            if (!request.EdicionRadicada) return Falla(ErroresDeOriginacion.EdicionRadicadaPorSuRuta(s.Status.ToString()));
+            if (!await editables.EditaRadicadaAsync(s.CreditLineId, hoy, ct)) return Falla(ErroresDeOriginacion.RadicadaNoEditable(s.Status.ToString()));
+            if (string.IsNullOrWhiteSpace(request.EditReason)) return Falla(ErroresDeOriginacion.MotivoDeEdicionRequerido());
+            var intervencion = await intervenciones.VerificarAsync(
+                new ExpedienteDeCartera(SubmitCreditApplicationCommandHandler.Expediente, s.PublicId), AccionesDeSegregacion.EditarRadicada, hoy, ct);
+            if (intervencion.IsFailure) return Falla(intervencion.Error);
+            verificada = intervencion.Value;
+        }
+        else if (request.EdicionRadicada)
+            return Falla(ErroresDeOriginacion.EstadoInvalido(s.Status.ToString(), CreditApplicationStatus.PendingDecision.ToString()));
+        else if (s.ExigirEditable() is not null) return Falla(ErroresDeOriginacion.NoEditable(s.Status.ToString()));
+        if (SolicitudEnAlcance.Concurrencia(s, request.RowVersion) is { } vieja) return Falla(vieja);
 
         var e = request.Input;
         var solicitanteActual = await db.People.AsNoTracking().Where(p => p.Id == s.ApplicantPersonId).Select(p => p.PublicId).FirstAsync(ct);
         if (solicitanteActual != e.ApplicantPersonPublicId)
-            return Result.Failure<CreditApplicationDto>(ErroresLineas("applicantPersonPublicId",
-                "El solicitante no cambia: para otra persona, cree otra solicitud."));
+            return Falla(ErroresLineas("applicantPersonPublicId", "El solicitante no cambia: para otra persona, cree otra solicitud."));
 
-        var armada = await armado.ArmarAsync(e, reloj.HoyLocal, ct);
-        if (armada.IsFailure) return Result.Failure<CreditApplicationDto>(armada.Error);
+        var armada = await armado.ArmarAsync(e, hoy, ct);
+        if (armada.IsFailure) return Falla(armada.Error);
         var a = armada.Value;
-        // 2026-11-23 (pedido del dueño): devuelta para corregir, sólo cambia lo que el parámetro de su línea deja (Originacion.GruposEditablesAlDevolver).
-        var antes = s.Status == CreditApplicationStatus.Returned ? await FotoDeSolicitud.TomarAsync(db, s, ct) : null;
-        var permitidos = antes is null ? GrupoEditableAlDevolver.Todos : await editables.LeerAsync(s.CreditLineId, reloj.HoyLocal, ct);
+        // 2026-11-23 (pedido del dueño): devuelta para corregir —o, desde el 2026-11-25, radicada—, sólo cambia lo que el parámetro de su línea deja
+        // (Originacion.GruposEditablesAlDevolver).
+        var antes = s.Status is CreditApplicationStatus.Returned || radicada ? await FotoDeSolicitud.TomarAsync(db, s, ct) : null;
+        var permitidos = antes is null ? GrupoEditableAlDevolver.Todos : await editables.LeerAsync(s.CreditLineId, hoy, ct);
+        var estadoAntes = s.Status;
+        var nivelAntes = s.RequiredLevelId;
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -418,18 +466,88 @@ public sealed class UpdateCreditApplicationCommandHandler(
                 parte.Role = entrada.Role;
                 parte.Declarar(entrada.MonthlyIncome, entrada.MonthlyExpenses, entrada.ExternalInstallments);
             }
+            var despues = antes is null ? null : FotoDeSolicitud.De(s, partes.Concat(agregadas));
             if (antes is not null)
             {
-                var fuera = antes.GruposDistintos(FotoDeSolicitud.De(s, partes.Concat(agregadas))) & ~permitidos;
+                var fuera = antes.GruposDistintos(despues!) & ~permitidos;
                 if (fuera != GrupoEditableAlDevolver.Ninguno)
-                    return Result.Failure<CreditApplicationDto>(ErroresDeOriginacion.NoCorregible(GruposEditablesAlDevolver.Separar(fuera)));
+                    return Falla(ErroresDeOriginacion.NoCorregible(GruposEditablesAlDevolver.Separar(fuera), radicada));
             }
             var autorizadas = await ArmadoDeSolicitud.AutorizacionesAsync(autorizaciones, e, reloj.UtcNow, ct);
-            if (autorizadas.IsFailure) return Result.Failure<CreditApplicationDto>(autorizadas.Error);
-            await db.SaveChangesAsync(ct);
-            return Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s, reloj.HoyLocal, ct));
+            if (autorizadas.IsFailure) return Falla(autorizadas.Error);
+            if (!radicada)
+            {
+                await db.SaveChangesAsync(ct);
+                return Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s, hoy, ct));
+            }
+            return await EditarRadicadaAsync(s, a, antes!, despues!, agregadas, estadoAntes, nivelAntes, verificada!, request.EditReason!, ct);
         }, ct);
     }
+
+    /// <summary>
+    /// 2026-11-25: el resto de la edición de una radicada, dentro de la transacción: la autorización de los codeudores nuevos (como al radicar), el
+    /// guardado, las validaciones y el enrutamiento de nuevo (lo que niega la radicación también niega la edición), la fila del historial, la
+    /// intervención y el evento de auditoría. Sin nada distinto no escribe nada.
+    /// </summary>
+    private async Task<Result<CreditApplicationDto>> EditarRadicadaAsync(CreditApplication s, SolicitudArmada a, FotoDeSolicitud antes,
+        FotoDeSolicitud despues, IReadOnlyList<CreditApplicationParty> agregadas, CreditApplicationStatus estadoAntes, int? nivelAntes,
+        IntervencionVerificada verificada, string motivo, CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var cambios = await ConsultasDeSolicitudes.CambiosAsync(db, antes, despues, ct);
+        if (cambios.Count == 0)
+        {
+            db.DescartarCambios();
+            return Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s, hoy, ct));
+        }
+
+        // Como al radicar: cada codeudor nuevo trae su autorización para el estudio del crédito antes de consultar sus datos.
+        foreach (var parte in agregadas)
+        {
+            var persona = a.Codeudores.First(c => c.Persona.Id == parte.PersonId).Persona;
+            var autorizacion = await autorizaciones.VigenteAsync(persona.PublicId, DataAuthorizationPurpose.CreditProcessing, null, ct);
+            if (autorizacion is not { Autoriza: true })
+                return Falla(ErroresDeOriginacion.SinAutorizacion(persona.PublicId, ReferenciasDeGobierno.Nombre(persona), DataAuthorizationPurpose.CreditProcessing));
+        }
+
+        var deudores = await db.CreditApplicationParties.AsNoTracking().Where(p => p.ApplicationId == s.Id && !p.IsDeleted).Select(p => p.PersonId)
+            .ToListAsync(ct);
+        await cerrojo.TomarSetupAsync(exclusivo: false, ct);
+        await cerrojo.BloquearDeudoresAsync(deudores.Concat(agregadas.Select(p => p.PersonId)).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+
+        s.EditsAfterSubmission++;
+        await db.SaveChangesAsync(ct);
+
+        var cargada = await evaluacion.CargarAsync(s, ct);
+        if (cargada.IsFailure) return Falla(cargada.Error);
+        var c = cargada.Value;
+        if (!c.Simulacion.Usura.Pasa)
+            return Falla(ErroresDeLineasDeCredito.UsuraExcedida("amount", c.Simulacion.Fecha, c.Simulacion.Usura, c.Simulacion.Combinacion.ModalityCode));
+        if (vivienda is not null
+            && await Housing.ValidacionDeVivienda.SolicitudAsync(db, vivienda, s, c.Simulacion, c.Simulacion.Entrada.Monto, hoy, ct) is { IsFailure: true } ley546)
+            return Falla(ley546.Error);
+        var evaluada = await evaluacion.EvaluarAsync(c, CheckStage.BeforeDecision, null, SubmitCreditApplicationCommandHandler.DetenerAlRadicar, ct);
+        if (evaluada.IsFailure) return Falla(evaluada.Error);
+        enrutamiento.Aplicar(s, evaluada.Value.Enrutamiento);
+
+        db.CreditApplicationEdits.Add(CreditApplicationEdit.Registrar(s.Id, estadoAntes, verificada.UsuarioId, reloj.UtcNow, motivo,
+            System.Text.Json.JsonSerializer.Serialize(cambios, Json), nivelAntes, s.RequiredLevelId));
+        intervenciones.Registrar(verificada, SubmitCreditApplicationCommandHandler.Expediente, s.PublicId);
+        await db.SaveChangesAsync(ct);
+        await auditoria.EmitirSolicitudRadicadaEditadaAsync(s.PublicId, new
+        {
+            number = s.Number,
+            status = estadoAntes.ToString(),
+            reason = motivo.Trim(),
+            changes = cambios,
+            levelBefore = nivelAntes,
+            levelAfter = s.RequiredLevelId,
+            routingSha256 = s.RoutingSha256,
+        }, ct);
+        return Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s, hoy, ct));
+    }
+
+    private static Result<CreditApplicationDto> Falla(Error e) => Result.Failure<CreditApplicationDto>(e);
 
     private static Error ErroresLineas(string campo, string mensaje) => ErroresDeLineasDeCredito.Invalido(campo, mensaje);
 }

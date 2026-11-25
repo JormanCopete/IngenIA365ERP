@@ -508,6 +508,7 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationParty> CreditApplicationParties { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit> CreditLimits { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditScore> CreditScores { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationEdit> CreditApplicationEdits { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorBlock> DebtorBlocks { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorControl> DebtorControls { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.LoanNumberReservation> LoanNumberReservations { get; }

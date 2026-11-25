@@ -157,5 +157,7 @@ public sealed class EnrutamientoDeSolicitud(
             .Logico("warnings", d.ConAlertas)
             .Logico("policyException", s.PolicyExceptionRequested)
             .Lista("nonExceptionable", e.NoExceptuables, (h, m) => h.Enumeracion("reason", (MotivoNoExceptuable?)m))
+            // 2026-11-25: cada edición de la radicada cambia la huella (lo editado puede no estar arriba); sin ediciones, la de siempre.
+            .Si(s.EditsAfterSubmission > 0, h => h.Entero("editsAfterSubmission", s.EditsAfterSubmission))
             .Calcular();
 }

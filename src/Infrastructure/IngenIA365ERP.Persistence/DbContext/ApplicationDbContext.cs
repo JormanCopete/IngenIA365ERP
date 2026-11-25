@@ -568,6 +568,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationParty> CreditApplicationParties => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationParty>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit> CreditLimits => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditScore> CreditScores => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditScore>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationEdit> CreditApplicationEdits => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplicationEdit>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorBlock> DebtorBlocks => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorBlock>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorControl> DebtorControls => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.DebtorControl>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.LoanNumberReservation> LoanNumberReservations => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.LoanNumberReservation>();

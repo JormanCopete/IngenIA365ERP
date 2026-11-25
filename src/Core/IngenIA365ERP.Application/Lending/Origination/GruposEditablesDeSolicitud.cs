@@ -24,11 +24,27 @@ public sealed class GruposEditablesDeSolicitud(ReglasDeParametrosDeCartera param
         return (leido.IsSuccess ? GruposEditablesAlDevolver.Leer(leido.Value.Texto) : null) ?? GruposEditablesAlDevolver.PorDefecto;
     }
 
-    /// <summary>Lo que se puede editar de esta solicitud ahora: todo en borrador; en devuelta, lo del parámetro; en otro estado, nada.</summary>
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): ¿la línea (o la cooperativa) deja editar una solicitud radicada sin devolverla? Parámetro
+    /// <c>Originacion.EditarRadicadaSinDevolver</c>; ilegible, lo de fábrica: sí.
+    /// </summary>
+    public async Task<bool> EditaRadicadaAsync(int lineaId, DateOnly hoy, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.OriginacionEditarRadicadaSinDevolver, hoy,
+            ambito: ParameterScopeKind.CreditLine, ambitoId: lineaId, ct: ct);
+        return !leido.IsSuccess || !bool.TryParse(leido.Value.Texto, out var si) || si;
+    }
+
+    /// <summary>
+    /// Lo que se puede editar de esta solicitud ahora: todo en borrador; en devuelta, lo del parámetro; radicada y sin decidir, lo del mismo
+    /// parámetro si <c>Originacion.EditarRadicadaSinDevolver</c> lo deja (desde el 2026-11-25); en otro estado, nada.
+    /// </summary>
     public async Task<GrupoEditableAlDevolver> DeAsync(CreditApplication s, DateOnly hoy, CancellationToken ct) => s.Status switch
     {
         CreditApplicationStatus.Draft => GrupoEditableAlDevolver.Todos,
         CreditApplicationStatus.Returned => await LeerAsync(s.CreditLineId, hoy, ct),
+        CreditApplicationStatus.Submitted or CreditApplicationStatus.PendingDecision when await EditaRadicadaAsync(s.CreditLineId, hoy, ct)
+            => await LeerAsync(s.CreditLineId, hoy, ct),
         _ => GrupoEditableAlDevolver.Ninguno,
     };
 

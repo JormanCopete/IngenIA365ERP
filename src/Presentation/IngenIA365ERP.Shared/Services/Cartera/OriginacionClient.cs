@@ -90,6 +90,19 @@ public sealed class OriginacionClient(HttpClient http, CentralAuthClient auth)
         return Enviar<SolicitudDto>(HttpMethod.Put, $"{RutaDeSolicitudes}/{id}", cuerpo, clave, ct);
     }
 
+    /// <summary>
+    /// 2026-11-25: edita una solicitud ya radicada sin devolverla (<c>PUT /{id}/submitted</c>, permiso <c>Lending.Applications.EditSubmitted</c>), con
+    /// el motivo del cambio. Vuelve a correr las validaciones y el enrutamiento.
+    /// </summary>
+    public Task<ResultadoDeInventario<SolicitudDto>> EditarRadicadaAsync(Guid id, SolicitudRequest request, byte[]? version, string motivo,
+        ClaveDeOperacion clave, CancellationToken ct = default)
+    {
+        var cuerpo = JsonSerializer.SerializeToNode(request, Web)!.AsObject();
+        if (version is not null) cuerpo["rowVersion"] = Convert.ToBase64String(version);
+        cuerpo["editReason"] = motivo;
+        return Enviar<SolicitudDto>(HttpMethod.Put, $"{RutaDeSolicitudes}/{id}/submitted", cuerpo, clave, ct);
+    }
+
     /// <summary>Asocia un documento ya subido (dueño <see cref="DuenoDeDocumentos"/>) a un requisito de la línea.</summary>
     public Task<ResultadoDeInventario<DocumentoDeSolicitudDto>> AdjuntarDocumentoAsync(Guid id, DocumentoDeSolicitudRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
