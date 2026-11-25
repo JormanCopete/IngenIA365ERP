@@ -278,6 +278,8 @@ public static partial class ConstructorDeLineasDeCartera
         AdministracionCausadaV1 x => x.Lines,
         // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo.
         CuotaReconocidaV1 x => x.Lines,
+        // 2026-11-24 (feature 025, fase 3): el interés del período al corte.
+        InteresDelCorteV1 x => x.Lines,
         AjusteDeCausacionPorFechaValorV1 x => x.Lines,
         CorreccionMonetariaUvrCausadaV1 x => x.Lines,
         PagoRedistribuidoPorValorNacionalV1 x => x.Lines,
@@ -380,6 +382,8 @@ public static partial class ConstructorDeLineasDeCartera
                 case AdministracionCausadaV1 x: Causaciones(x.Lines); break;
                 // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo (Causacion lo decide por el concepto reconocido).
                 case CuotaReconocidaV1 x: Causaciones(x.Lines); break;
+                // 2026-11-24 (feature 025, fase 3): el interés del período al corte, como la causación de la corriente.
+                case InteresDelCorteV1 x: Causaciones(x.Lines); break;
                 case AjusteDeCausacionPorFechaValorV1 x: Causaciones(x.Lines); break;
                 // K6b (T1056): la corrección monetaria de los créditos en UVR.
                 case CorreccionMonetariaUvrCausadaV1 x:

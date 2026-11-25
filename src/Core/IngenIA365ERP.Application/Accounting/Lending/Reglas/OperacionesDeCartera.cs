@@ -241,6 +241,10 @@ public static class OperacionesDeCartera
             [.. ConceptosDeLaCuota, R.Ingreso, R.IngresoPorRecuperacion, R.SuspensoEnOrden, R.CastigadaEnOrden],
             [R.Anticipo, R.SaldoAFavor, R.ContraOrdenContingente, R.ContraOrdenControl], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K6b,
             Ninguno, PorPartes: true),
+        // 2026-11-24 (feature 025, fase 3, HU1; D1): el interés del período al corte de los créditos cargados, con los roles de la causación de interés
+        // corriente (la cuenta por cobrar contra el ingreso; el suspenso contra su orden). En línea; lo emite el proceso de causación CutoverRecalculation,
+        // que lo pone en su lote en la misma transacción. Comprobante CA.
+        new(InteresDelCorteV1.Type, "IDC", false, Causados, ContrasDeLaCausacion, EnLinea, null, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
 
         // Feature 014 (T048; contracts/contabilidad.md §3 de la 014, con los roles en español de research C10): los 33 hechos de captaciones y
         // aportes, al final (37 → 70). El lado es el del importe positivo; un negativo lo invierte. Los de saldo, puente y pasivo se resuelven con

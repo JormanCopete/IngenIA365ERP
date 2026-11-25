@@ -19,6 +19,8 @@ public class CatalogoDePlantillasDeMigracionTests
         ["loans"] =
         [
             "numero", "deudor", "oficina", "linea", "asesor", "factura", "fechaDeDesembolso", "montoDesembolsado", "tipoDeTasa", "tasaCorrienteEA",
+            // 2026-11-24 (feature 025, HU2; FR-011): la tasa en mensual vencida, excluyente con la E.A.
+            "tasaCorrienteMV",
             "indice", "claveDelIndice", "margen", "tasaPiso", "tasaTecho", "mesesDeReajuste", "tipoDeTasaDeMora", "tasaDeMoraEA", "factorDeMora",
             "convencionDeDias", "equivalencia", "redondeoUnidad", "redondeoModo", "redondeoMomento", "sistemaDeAmortizacion", "prelacion", "periodicidad",
             "plazo", "preferenciaDeAbono", "formaDePago", "pagaduria", "idEmpleadoEnPagaduria", "fechaDeLibranza", "etapaDeCobranza", "enJuridico",
@@ -98,6 +100,7 @@ public class CatalogoDePlantillasDeMigracionTests
         Tipo("loans", "linea").Should().Be(nameof(TipoDeValor.Codigo));
         Tipo("loans", "montoDesembolsado").Should().Be(nameof(TipoDeValor.Monto));
         Tipo("loans", "tasaCorrienteEA").Should().Be(nameof(TipoDeValor.Porcentaje), "las tasas van en puntos");
+        Tipo("loans", "tasaCorrienteMV").Should().Be(nameof(TipoDeValor.Porcentaje), "la MV también va en puntos");
         Tipo("loans", "tipoDeTasa").Should().Be(nameof(TipoDeValor.Enumeracion));
         Tipo("loans", "plazo").Should().Be(nameof(TipoDeValor.Entero));
         Tipo("loans", "enJuridico").Should().Be(nameof(TipoDeValor.SiNo));

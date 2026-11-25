@@ -48,6 +48,9 @@ public sealed record LoanTermsDto(
 {
     /// <summary>K6b (bloque 2; FR-024): la unidad del capital sellada (<c>Pesos</c> o <c>Uvr</c>).</summary>
     public string DenominationUnit { get; init; } = nameof(Domain.Enums.Lending.DenominationUnit.Pesos);
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la mensual vencida pactada (fracción); nula en E.A. La E.A. de arriba es entonces la derivada. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
 }
 
 /// <summary>Montos aprobado, desembolsado y tramos. (nuevo)</summary>

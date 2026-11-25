@@ -59,6 +59,15 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
     /// <summary>EA pactada como fracción (o la de la banda que casó).</summary>
     public decimal? AnnualRate { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-007): en qué se pactó la corriente: E.A. (de fábrica) o mensual vencida. Con MV, <see cref="MonthlyRate"/>
+    /// es la pactada y <see cref="AnnualRate"/> la E.A. derivada a seis decimales, sólo informativa. (nuevo)
+    /// </summary>
+    public RateBasis RateBasis { get; init; } = RateBasis.EffectiveAnnual;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada como fracción (0,018 = 1,8 % MV), a ocho decimales; nula en E.A. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+
     public string? IndexCode { get; init; }
 
     public string? IndexKey { get; init; }

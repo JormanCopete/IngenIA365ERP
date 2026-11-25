@@ -277,6 +277,7 @@
     {
         null => "—",
         { RateKind: 2 } => $"{v.IndexCode} + {LineasDeCreditoClient.Puntos(v.Margin ?? 0m)}",
+        { MonthlyRate: { } mv } => TasaMensualVencida.Texto(v.CurrentRate, mv),
         _ => v.CurrentRate is { } t ? $"{LineasDeCreditoClient.Porcentaje(t)} EA" : "—",
     };
 
@@ -299,7 +300,9 @@
     private async Task CrearAsync()
     {
         using var carga = _guardado.Iniciar();
-        _errores = [];
+        // 2026-11-24 (feature 025, HU2; Principio VIII): la tasa en MV se valida antes de mandarla.
+        _errores = [.. TasaMensualVencida.Problemas(_primera)];
+        if (_errores.Count > 0) return;
         var r = await Cliente.CrearAsync(new CrearLineaRequest(_codigo!.Trim().ToUpperInvariant(), _nombre!.Trim(),
             string.IsNullOrWhiteSpace(_destino) ? null : _destino.Trim(), _primera), _clave);
         if (!r.IsSuccess || r.Value is null)

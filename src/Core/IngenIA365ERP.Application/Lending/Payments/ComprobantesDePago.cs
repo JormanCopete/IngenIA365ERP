@@ -36,13 +36,21 @@ public static class ComprobantesDePago
 
     public static EstadoDeObligacion Estado(LoanStatus s) => (EstadoDeObligacion)(int)s;
 
-    /// <summary>Lo exigible a la fecha del estado: todo lo cobrable de las cuotas que vencen hasta ese día (y lo que no es de una cuota).</summary>
-    public static decimal Exigible(EstadoDelCredito e, bool incluyeElDia = true)
+    /// <summary>
+    /// Lo exigible a la fecha del estado: todo lo cobrable de las cuotas que vencen hasta ese día (y lo que no es de una cuota). 2026-11-24 (feature 025,
+    /// fase 5, D3): con <paramref name="periodoCalendario"/>, también lo causado (todo menos el capital) de la cuota del tramo en curso, que un abono cubre
+    /// primero (<see cref="AplicadorDePagos.CuotasDelTramoEnCurso"/>).
+    /// </summary>
+    public static decimal Exigible(EstadoDelCredito e, bool incluyeElDia = true, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(e);
         if (e.Plan is null) return 0m;
         var vencidas = e.Plan.Cuotas.Where(c => incluyeElDia ? c.Vencimiento <= e.Fecha : c.Vencimiento < e.Fecha).Select(c => c.Numero).ToHashSet();
-        return e.Saldos.Where(s => Cobrables.Contains(s.Concepto) && s.Valor > 0m && (s.Cuota is null ? s.Concepto != LoanConcept.Principal : vencidas.Contains(s.Cuota.Value)))
+        var delTramo = periodoCalendario ? AplicadorDePagos.CuotasDelTramoEnCurso(e.Plan, e.Fecha) : new HashSet<int>();
+        return e.Saldos.Where(s => Cobrables.Contains(s.Concepto) && s.Valor > 0m
+                                   && (s.Cuota is null
+                                       ? s.Concepto != LoanConcept.Principal
+                                       : vencidas.Contains(s.Cuota.Value) || (s.Concepto != LoanConcept.Principal && delTramo.Contains(s.Cuota.Value))))
             .Sum(s => s.Valor);
     }
 
@@ -54,19 +62,40 @@ public static class ComprobantesDePago
     /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo (la próxima que vence):
     /// lo que la caja suma a lo causado para mostrarla como la cuota del período, completa. Cero si no está reconocida. (nuevo)
     /// </summary>
-    public static decimal ReconocidoDelCiclo(EstadoDelCredito e)
+    public static decimal ReconocidoDelCiclo(EstadoDelCredito e, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(e);
-        return e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha) is { } proxima ? e.ReconocidoPendiente(proxima.Numero) : 0m;
+        return CuotaDelPeriodo(e, periodoCalendario) is { } proxima ? e.ReconocidoPendiente(proxima.Numero) : 0m;
     }
 
-    public static decimal CuotaDelCiclo(EstadoDelCredito e)
+    /// <remarks>
+    /// 2026-11-24 (feature 025, fase 5, HU5): con <paramref name="periodoCalendario"/>, la cuota del período es la que vence en el tramo del calendario en curso
+    /// (<see cref="CuotaDelPeriodo"/>), menos lo que de ella ya va en lo exigible (su causado); si ya venció o no la hay, la cuota del ciclo es lo exigible y
+    /// pagar la siguiente es un anticipo.
+    /// </remarks>
+    public static decimal CuotaDelCiclo(EstadoDelCredito e, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(e);
-        var exigible = Exigible(e);
-        var proxima = e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha);
+        var exigible = Exigible(e, periodoCalendario: periodoCalendario);
+        var proxima = CuotaDelPeriodo(e, periodoCalendario);
         if (proxima is null) return exigible;
-        return exigible + AplicadorDePagos.ValorDeCuota(e, proxima);
+        var yaExigible = periodoCalendario
+            ? e.Saldos.Where(s => s.Cuota == proxima.Numero && s.Concepto != LoanConcept.Principal && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor)
+            : 0m;
+        return exigible + Math.Max(0m, AplicadorDePagos.ValorDeCuota(e, proxima) - yaExigible);
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): la cuota del período por vencer a la fecha del estado: la próxima que vence (el ciclo de la cuota) o, por período
+    /// calendario, la que vence en el tramo en curso (nula si ya venció o el tramo no tiene cuota). (nuevo)
+    /// </summary>
+    public static CuotaDelPlan? CuotaDelPeriodo(EstadoDelCredito e, bool periodoCalendario = false)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        if (e.Plan is null) return null;
+        if (!periodoCalendario) return e.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha);
+        var delTramo = AplicadorDePagos.CuotasDelTramoEnCurso(e.Plan, e.Fecha);
+        return e.Plan.Cuotas.FirstOrDefault(c => delTramo.Contains(c.Numero));
     }
 
     /// <summary>

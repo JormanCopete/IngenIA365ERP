@@ -16,6 +16,8 @@ using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using IngenIA365ERP.Domain.Entities.Lending.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
+using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,12 +65,18 @@ public sealed class ConteoDeActivacion
     /// <summary>Lo registrado a mano antes de activar que prevaleció sobre la carga (no nació de ella), por concepto.</summary>
     public Dictionary<string, int> Prevalecio { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>2026-11-24 (feature 025, fase 4, HU4): lo que sumó la opción del período completo; nulo sin la opción.</summary>
+    public ResultadoDelPeriodoCompleto? PeriodoCompleto { get; set; }
+
     public object ParaJson() => new
     {
         loans = Creditos, writtenOff = Castigados, openingTransactions = SaldosIniciales, coDebtors = Codeudores, collaterals = Garantias,
         promissoryNotes = Pagares, payrollLinks = VinculosDeFormaDePago, prepaymentPreferences = Preferencias, creditLimits = Cupos, blocks = Bloqueos,
         insuranceClaims = ReclamacionesAlSeguro, insolvencyProceedings = Insolvencias, authorizations = Autorizaciones, priorNotices = AvisosPrevios,
         claims = Reclamos, relatedParties = Vinculados, zeroObligations = ObligacionesEnCero, principalTotal = Capital, manualPrevails = Prevalecio,
+        fullPeriod = PeriodoCompleto is { } p
+            ? new { loans = p.Creditos, interest = p.Interes, marked = p.Marcados, notRebuilt = p.SinReconstruir }
+            : null,
     };
 }
 
@@ -208,7 +216,8 @@ public sealed class NacimientoDeCreditosMigrados(
             var susSaldos = saldos[fila.SourceLoanNumber].GroupBy(s => s.Concept).ToDictionary(g => g.Key, g => g.Sum(s => s.Amount));
             var condiciones = Condiciones(credito, fila.TermsJson, version, reestructuras.GetValueOrDefault(fila.SourceLoanNumber), corte, susCuotas);
             var transacciones = Transacciones(susSaldos, susCuotas);
-            var operacion = Nacer(credito, operaciones[i++], condiciones, susCuotas.Select(c => new CuotaMigrada(c.InstallmentNumber, c.DueDate, c.Principal)).ToList(),
+            var operacion = Nacer(credito, operaciones[i++], condiciones,
+                CuotasDelPlan(susCuotas, carga.CauseFullInProgressPeriod, corte, condiciones.Periodicity, fila.DisbursementDate),
                 transacciones, carga, actor, ahora, habiles, fila.RowNumber, fila.TermsJson);
             nacidos.Add((credito, operacion, fila));
             conteo.SaldosIniciales += transacciones.Count;
@@ -338,6 +347,34 @@ public sealed class NacimientoDeCreditosMigrados(
         }
     }
 
+    /// <summary>
+    /// Las cuotas del plan migrado de una fila: número, vencimiento y capital como vinieron. 2026-11-24 (feature 025, fase 4, HU4; FR-014): con la opción
+    /// «el período en curso al corte se causa completo», la primera posterior al corte lleva el inicio de su período (<c>Desde</c>: el vencimiento anterior
+    /// o el desembolso si es la cuota 1, <see cref="AjusteDelCorteDeCarga.ConPeriodoCompleto"/>), así el plan muestra el período completo; el motor sigue
+    /// causando desde el corte y lo anterior entra como ajuste del corte al activar (<see cref="PeriodoCompletoDeLaCarga"/>).
+    /// </summary>
+    public static IReadOnlyList<CuotaMigrada> CuotasDelPlan(IReadOnlyList<MigrationInstallmentRow> cuotas, bool periodoCompleto, DateOnly corte,
+        RepaymentPeriodicity periodicidad, DateOnly desembolso)
+    {
+        ArgumentNullException.ThrowIfNull(cuotas);
+        var plan = cuotas.OrderBy(c => c.InstallmentNumber).Select(c => new CuotaMigrada(c.InstallmentNumber, c.DueDate, c.Principal)).ToList();
+        return periodoCompleto ? AjusteDelCorteDeCarga.ConPeriodoCompleto(plan, corte, periodicidad, desembolso) : plan;
+    }
+
+    /// <summary>
+    /// El plan migrado de unas condiciones selladas (D5): el de <see cref="GeneradorDePlan.DesdeMigracion"/> con su periodicidad, sistema, tasa, convención,
+    /// equivalencia y redondeo. Lo usan el nacimiento y, 2026-11-24 (feature 025, fase 4), la vista previa del período completo.
+    /// </summary>
+    public static PlanDePagos PlanMigrado(LoanTermsVersion sellada, DateOnly corte, decimal capital, IReadOnlyList<CuotaMigrada> cuotas)
+    {
+        ArgumentNullException.ThrowIfNull(sellada);
+        return GeneradorDePlan.DesdeMigracion(new EntradaDePlanMigrado(corte, capital, cuotas, sellada.Periodicity, sellada.AmortizationSystem,
+            sellada.AnnualRate ?? 0m, sellada.DayCount, sellada.RateEquivalence, Engine.CargadorDeReconstruccion.Redondeo(sellada))
+        {
+            TasaMensual = sellada.RateBasis == RateBasis.MonthlyNominal ? sellada.MonthlyRate : null,
+        });
+    }
+
     // --------------------------------------------------------------------------------------------------------- armado --
 
     private LoanOperation Nacer(Loan credito, string numeroDeOperacion, LoanTermsVersion condiciones, IReadOnlyList<CuotaMigrada> cuotasDelPlan,
@@ -389,8 +426,8 @@ public sealed class NacimientoDeCreditosMigrados(
         registro.RegistrarVersionDeCondiciones(sellada);
 
         // El plan migrado (D5): el capital de cada cuota como vino; el interés de las cuotas que vencen después del corte, el que causará el motor.
-        var plan = GeneradorDePlan.DesdeMigracion(new EntradaDePlanMigrado(corte, capital, cuotasDelPlan, sellada.Periodicity, sellada.AmortizationSystem,
-            sellada.AnnualRate ?? 0m, sellada.DayCount, sellada.RateEquivalence, Engine.CargadorDeReconstruccion.Redondeo(sellada)));
+        // 2026-11-24 (feature 025, fase 4): con la mensual pactada (HU2), como lo regenera la reconstrucción.
+        var plan = PlanMigrado(sellada, corte, capital, cuotasDelPlan);
         var version = new RepaymentScheduleVersion
         {
             Loan = credito,
@@ -432,7 +469,7 @@ public sealed class NacimientoDeCreditosMigrados(
     /// Las condiciones pactadas del crédito (sin crédito ni operación todavía): las columnas de la plantilla (<c>TermsJson</c>) y, donde no vienen,
     /// las de la versión de la línea vigente al corte. Una tasa variable se reajusta en el primer ciclo (<c>NextResetDate</c> = corte + 1).
     /// </summary>
-    private static LoanTermsVersion Condiciones(Loan credito, string terminos, VersionDeLineaLeida linea, MigrationRestructuringRow? reestructura,
+    internal static LoanTermsVersion Condiciones(Loan credito, string terminos, VersionDeLineaLeida linea, MigrationRestructuringRow? reestructura,
         DateOnly corte, IReadOnlyList<MigrationInstallmentRow> cuotas)
     {
         var v = linea.Version;
@@ -450,6 +487,12 @@ public sealed class NacimientoDeCreditosMigrados(
             // 2026-11-16 (feature 024, fase 2): con su clase (seguro o administración).
             kind = s.Kind.ToString(),
         });
+        // 2026-11-24 (feature 025, HU2): la tasa de la fila con su base (MV o E.A.); sin tasa en la fila, la de la línea con la suya. La variable, E.A.
+        var mensualDeLaFila = Decimal(t, "monthlyRate");
+        var anualDeLaFila = Decimal(t, "annualRate");
+        var mensual = claseDeTasa != RateKind.Fixed ? null
+            : mensualDeLaFila ?? (anualDeLaFila is null && v.RateBasis == RateBasis.MonthlyNominal ? v.MonthlyRate : null);
+        var anual = mensual is { } mv ? EquivalenciaDeTasas.EfectivaInformativaDeMensual(mv) : anualDeLaFila ?? v.AnnualRate;
         return new LoanTermsVersion
         {
             Loan = credito,
@@ -464,7 +507,9 @@ public sealed class NacimientoDeCreditosMigrados(
             ForEmployees = v.ForEmployees,
             InterestTaxTreatment = v.InterestTaxTreatment,
             RateKind = claseDeTasa,
-            AnnualRate = Decimal(t, "annualRate") ?? v.AnnualRate,
+            AnnualRate = anual,
+            RateBasis = mensual is null ? RateBasis.EffectiveAnnual : RateBasis.MonthlyNominal,
+            MonthlyRate = mensual,
             IndexCode = Texto(t, "index") ?? v.IndexCode,
             IndexKey = Texto(t, "indexKey") ?? v.IndexKey,
             Margin = Decimal(t, "margin") ?? v.Margin,
@@ -505,7 +550,8 @@ public sealed class NacimientoDeCreditosMigrados(
     {
         Loan = c.Loan, VersionNumber = c.VersionNumber, Operation = operacion, EffectiveValueDate = c.EffectiveValueDate, RegisteredAt = operacion.RegisteredAt,
         Cause = c.Cause, RulesVersion = c.RulesVersion, CreditLineVersionId = c.CreditLineVersionId, ModalityCode = c.ModalityCode, SubsegmentCode = c.SubsegmentCode,
-        ForEmployees = c.ForEmployees, InterestTaxTreatment = c.InterestTaxTreatment, RateKind = c.RateKind, AnnualRate = c.AnnualRate, IndexCode = c.IndexCode,
+        ForEmployees = c.ForEmployees, InterestTaxTreatment = c.InterestTaxTreatment, RateKind = c.RateKind, AnnualRate = c.AnnualRate,
+        RateBasis = c.RateBasis, MonthlyRate = c.MonthlyRate, IndexCode = c.IndexCode,
         IndexKey = c.IndexKey, Margin = c.Margin, RateFloor = c.RateFloor, RateCeiling = c.RateCeiling, ResetPeriodicity = c.ResetPeriodicity,
         NextResetDate = c.NextResetDate, DefaultRateKind = c.DefaultRateKind, DefaultRate = c.DefaultRate, DefaultRateFactor = c.DefaultRateFactor,
         DefaultOnInterestAllowed = c.DefaultOnInterestAllowed, DayCount = c.DayCount, RateEquivalence = c.RateEquivalence, AmortizationSystem = c.AmortizationSystem,

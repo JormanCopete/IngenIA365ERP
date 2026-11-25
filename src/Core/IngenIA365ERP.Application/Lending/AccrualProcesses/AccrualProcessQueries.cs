@@ -146,7 +146,7 @@ public sealed class ListAccrualProcessLinesQueryHandler(IApplicationDbContext db
 
         var filas = lineas.Select(l => new AccrualProcessLineDto(datos[l.LoanId].PublicId, datos[l.LoanId].Number, nombres.GetValueOrDefault(l.BranchId),
             codigos.GetValueOrDefault(l.CreditLineId), l.FactType, l.Concept, l.Amount, l.PreviousAmount, l.Status, l.ExclusionReason, l.InstallmentNumber,
-            l.RecognitionDate)).ToList();
+            l.RecognitionDate, AccrualCutoverDetailDto.De(l.Detail))).ToList();
         return Result.Success(new PagedResult<AccrualProcessLineDto>(filas, pagina.SafePage, pagina.SafePageSize, total));
     }
 }
@@ -212,13 +212,18 @@ public sealed class GetAccrualProcessOptionsQueryHandler(
         var lineasDelAlcance = lineas.Where(l => alcance.IncluyeLinea(l.Id)).Select(l => l.Id).ToList();
         var deReconocimiento = politica is null ? Accrual.PoliticaDeReconocimiento.Diaria : await politica.LeerAsync(hoy, lineasDelAlcance, ct);
         var alInicio = deReconocimiento.LineasAlInicioDelCiclo.Count > 0;
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte, si hay créditos cargados vivos sin recalcular.
+        var cargados = await db.Loans.AsNoTracking().AnyAsync(l => !l.IsDeleted && l.Origin == LoanOrigin.Migration && l.Status == LoanStatus.Active
+            && db.RepaymentScheduleVersions.Any(v => v.LoanId == l.Id && v.IsMigratedPlan)
+            && db.LoanControls.Any(c => c.LoanId == l.Id && c.CutoverAdjustedAt == null), ct);
+        List<AccrualProcessKind> clases = alInicio ? [AccrualProcessKind.Posting, AccrualProcessKind.PeriodRecognition] : [AccrualProcessKind.Posting];
+        if (cargados) clases.Add(AccrualProcessKind.CutoverRecalculation);
         return Result.Success(new AccrualProcessOptionsDto(conceptos,
             [AccrualProcessPeriodicity.Monthly, AccrualProcessPeriodicity.Biweekly, AccrualProcessPeriodicity.TenDay, AccrualProcessPeriodicity.Weekly,
                 AccrualProcessPeriodicity.Daily], hoy,
             ramas.Where(b => alcance.IncluyeOficina(b.Id)).Select(b => new RefDeFiltroDto(b.PublicId, null, b.Name)).ToList(),
             lineas.Where(l => alcance.IncluyeLinea(l.Id)).Select(l => new RefDeFiltroDto(l.PublicId, l.Code, l.Name)).ToList(),
             pagadurias.Values.OrderBy(p => p.FullName, StringComparer.CurrentCulture).Select(p => new RefDeFiltroDto(p.PersonPublicId, null, p.FullName)).ToList(),
-            alcance.TodasLasOficinas, alcance.TodasLasLineas, alInicio, deReconocimiento.Modo.ToString(),
-            alInicio ? [AccrualProcessKind.Posting, AccrualProcessKind.PeriodRecognition] : [AccrualProcessKind.Posting]));
+            alcance.TodasLasOficinas, alcance.TodasLasLineas, alInicio, deReconocimiento.Modo.ToString(), clases));
     }
 }

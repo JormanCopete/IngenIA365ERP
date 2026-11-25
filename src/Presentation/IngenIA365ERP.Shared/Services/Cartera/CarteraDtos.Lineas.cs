@@ -13,6 +13,12 @@ public sealed class TasaCorrienteRequest
 {
     public int Kind { get; set; } = 1;
     public decimal? EffectiveAnnual { get; set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): 1 E.A. (de fábrica) o 2 mensual vencida. (nuevo)</summary>
+    public int Basis { get; set; } = 1;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida como fracción, con <see cref="Basis"/> = 2. (nuevo)</summary>
+    public decimal? MonthlyRate { get; set; }
 }
 
 /// <summary>La tasa variable (D10): índice nacional y su clave, margen en la expresión del índice, piso, techo y reajuste.</summary>
@@ -45,6 +51,9 @@ public sealed class BandaDeTasaRequest
     public bool? ForEmployees { get; set; }
     public int? MinSeniorityMonths { get; set; }
     public decimal? EffectiveAnnual { get; set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la MV de la banda con la versión en MV. (nuevo)</summary>
+    public decimal? MonthlyRate { get; set; }
     public decimal? Margin { get; set; }
 }
 
@@ -230,7 +239,12 @@ public sealed class VersionDeLineaRequest
         CommercialDefaultFor = v.CommercialDefaultFor,
         Rates = new TasasDeLineaRequest
         {
-            Current = new TasaCorrienteRequest { Kind = v.RateKind, EffectiveAnnual = v.EffectiveAnnual },
+            // 2026-11-24 (feature 025, HU2): con MV se parte de la mensual; la E.A. la calcula el sistema.
+            Current = new TasaCorrienteRequest
+            {
+                Kind = v.RateKind, Basis = v.RateBasis, MonthlyRate = v.MonthlyRate,
+                EffectiveAnnual = v.RateBasis == TasaMensualVencida.BaseMensual ? null : v.EffectiveAnnual,
+            },
             Variable = v.RateKind == 2
                 ? new TasaVariableRequest
                 {
@@ -242,7 +256,8 @@ public sealed class VersionDeLineaRequest
             Bands = [.. v.RateBands.Select(b => new BandaDeTasaRequest
             {
                 AmountFrom = b.AmountFrom, AmountTo = b.AmountTo, TermFrom = b.TermFrom, TermTo = b.TermTo, DebtorKind = b.DebtorKind,
-                ForEmployees = b.ForEmployees, MinSeniorityMonths = b.MinSeniorityMonths, EffectiveAnnual = b.EffectiveAnnual, Margin = b.Margin,
+                ForEmployees = b.ForEmployees, MinSeniorityMonths = b.MinSeniorityMonths, Margin = b.Margin,
+                EffectiveAnnual = v.RateBasis == TasaMensualVencida.BaseMensual ? null : b.EffectiveAnnual, MonthlyRate = b.MonthlyRate,
             })],
         },
         Amounts = new RangoDeMontosRequest { Min = v.MinAmount, Max = v.MaxAmount },
@@ -332,7 +347,11 @@ public sealed record EquivalenciasDeComercioRequest(IReadOnlyList<EquivalenciaDe
 // ------------------------------------------------------------------------------------------------------- salida --
 
 public sealed record BandaDeTasaDto(int Order, decimal? AmountFrom, decimal? AmountTo, int? TermFrom, int? TermTo, int? DebtorKind,
-    bool? ForEmployees, int? MinSeniorityMonths, decimal? EffectiveAnnual, decimal? Margin);
+    bool? ForEmployees, int? MinSeniorityMonths, decimal? EffectiveAnnual, decimal? Margin)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): la MV de la banda (con la versión en MV). (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 public sealed record DocumentoExigidoDto(string Code, string Name, bool Mandatory, int? AppliesTo, decimal? AmountFrom, decimal? AmountTo,
     int? DebtorKind, int? PaymentForm, int? MaxAgeDays, int Order);
@@ -425,6 +444,12 @@ public sealed record VersionDeLineaDto(
     /// <summary>K6b: la unidad del capital, 1 pesos o 2 UVR.</summary>
     public int DenominationUnit { get; init; } = 1;
 
+    /// <summary>2026-11-24 (feature 025, HU2): 1 E.A. o 2 mensual vencida; con MV, <c>EffectiveAnnual</c> es la E.A. derivada. (nuevo)</summary>
+    public int RateBasis { get; init; } = 1;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada (fracción). (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+
     /// <summary>La originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
 
@@ -481,7 +506,11 @@ public sealed record ViviendaDeLineaDto(DateOnly Date, TopeDeViviendaDto? RateCa
 
 /// <summary>La versión vigente resumida para la lista; <c>UsuryHeadroom</c> es la menor holgura de su plan tipo hoy.</summary>
 public sealed record VersionVigenteResumidaDto(Guid PublicId, DateOnly ValidFrom, int RateKind, decimal? CurrentRate, string? IndexCode,
-    decimal? Margin, decimal? UsuryHeadroom);
+    decimal? Margin, decimal? UsuryHeadroom)
+{
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada; nula en E.A. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+}
 
 /// <summary>Una línea en la lista (sólo las del alcance de quien pregunta).</summary>
 public sealed record LineaDeCreditoResumenDto(

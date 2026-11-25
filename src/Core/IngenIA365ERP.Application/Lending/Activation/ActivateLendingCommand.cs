@@ -41,7 +41,14 @@ public sealed record LendingActivationDto(
     int NonDeductionsMarked,
     int ProvisionalCollectionsStored,
     IReadOnlyList<MensajeEmitidoDto> Messages,
-    IReadOnlyList<AvisoDeActivacionDto>? Warnings = null);
+    IReadOnlyList<AvisoDeActivacionDto>? Warnings = null,
+    FullPeriodInterestDto? FullPeriodInterest = null);
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 4, HU4; FR-015): lo que sumó la opción «el período en curso al corte se causa completo»: los créditos con interés, el
+/// total (ingreso del día de la activación, fuera del cuadre al corte), los marcados y los que no se pudieron reconstruir. (nuevo)
+/// </summary>
+public sealed record FullPeriodInterestDto(int Loans, decimal Total, int Marked, int NotRebuilt);
 
 /// <summary>Un mensaje que nació con la activación. (nuevo)</summary>
 public sealed record MensajeEmitidoDto(string Type, Guid MessagePublicId);
@@ -119,7 +126,8 @@ public sealed class ActivateLendingCommandHandler(
     RegistroDeCartera? registro = null,
     RevalidacionDeCuposMigrados? revalidacion = null,
     IAlertas? alertas = null,
-    LendingAuditEmitter? auditoria = null) : IRequestHandler<ActivateLendingCommand, Result<LendingActivationDto>>
+    LendingAuditEmitter? auditoria = null,
+    PeriodoCompletoDeLaCarga? periodoCompleto = null) : IRequestHandler<ActivateLendingCommand, Result<LendingActivationDto>>
 {
     /// <summary>El código del destino de Cartera que siembra <c>PlataformaParaCartera</c> inhabilitado (C35).</summary>
     public const string CodigoDelDestinoDeCartera = "CAR";
@@ -208,6 +216,18 @@ public sealed class ActivateLendingCommandHandler(
             var mensaje = await emision.ActivacionAsync(activacionPublicId, request.ActivationDate, carga, cierreBase: basePublicId, capitalTotal: conteo.Capital, ct);
             if (mensaje.IsFailure) return Result.Failure<LendingActivationDto>(mensaje.Error);
 
+            // 7b. 2026-11-24 (feature 025, fase 4, HU4): con la opción de la carga, el período en curso al corte se causa completo: lo anterior al corte
+            // entra como ajuste del corte el día de la activación (ingreso de ese día, después de CarteraActivada y fuera del cuadre al corte) y los créditos
+            // quedan marcados. Va antes de la fila de la activación, que sella los conteos.
+            var completo = ResultadoDelPeriodoCompleto.Vacio;
+            if (periodoCompleto is not null && carga.CauseFullInProgressPeriod)
+            {
+                var causado = await periodoCompleto.CausarAsync(carga, request.ActivationDate, actor, ct);
+                if (causado.IsFailure) return Result.Failure<LendingActivationDto>(causado.Error);
+                completo = causado.Value;
+                conteo.PeriodoCompleto = completo;
+            }
+
             var activacion = new LendingActivation
             {
                 PublicId = activacionPublicId,
@@ -259,6 +279,7 @@ public sealed class ActivateLendingCommandHandler(
                 if (creado.IsFailure) return Result.Failure<LendingActivationDto>(creado.Error);
             }
 
+
             // 9. Los no aplicados «Cartera sin activar» y los cobros provisionales pendientes de aplicar.
             await RegistrarNoAplicadasAsync(activacion, noAplicadas, ct);
             for (var i = 0; i < cobros.Count; i++)
@@ -284,7 +305,8 @@ public sealed class ActivateLendingCommandHandler(
 
             return Result.Success(new LendingActivationDto(activacion.PublicId, activacion.ActivationDate, conteo.Creditos + conteo.Castigados,
                 conteo.SaldosIniciales, basePublicId, conteo.Cupos, revalidados, noAplicadas.Count, cobros.Count,
-                [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)], evaluacion.Avisos));
+                [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)], evaluacion.Avisos,
+                carga.CauseFullInProgressPeriod ? new FullPeriodInterestDto(completo.Creditos, completo.Interes, completo.Marcados, completo.SinReconstruir) : null));
         }, ct);
     }
 

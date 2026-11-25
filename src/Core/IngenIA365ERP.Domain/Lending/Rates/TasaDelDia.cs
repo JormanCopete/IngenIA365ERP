@@ -30,6 +30,17 @@ public sealed record EntradaDeTasaDelDia(
     /// y rige la mora sellada. Con valor reemplaza la sellada (fija o relativa) y se topa igual en la usura. Es parte de la llave de la memoria de tasas.
     /// </summary>
     public decimal? MoraGeneralEA { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la corriente pactada en mensual vencida (nula = se pactó en E.A.). Con valor manda ella: la diaria es
+    /// MV / 30 y <see cref="CorrienteEA"/> no se mira (la E.A. es la derivada, <see cref="EquivalenciaDeTasas.EfectivaDeMensual"/>). Es parte de
+    /// la llave de la memoria de tasas. (nuevo)
+    /// </summary>
+    public decimal? CorrienteMensual { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente con su base.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TasaPactada Corriente => TasaPactada.De(CorrienteEA, CorrienteMensual);
 }
 
 /// <summary>
@@ -109,47 +120,62 @@ public static class TasaDelDia
         ArgumentNullException.ThrowIfNull(e);
         var explicacion = new ExplicacionDeCartera();
 
+        // 2026-11-24 (feature 025, HU2): con la corriente en MV, su E.A. es la derivada sin redondear (la que se compara con la usura).
+        var corriente = e.Corriente;
+        var corrienteEA = corriente.EfectivaAnual;
+
         // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora de la empresa, si rige ese día, reemplaza la sellada.
         var moraEA = e.MoraGeneralEA ?? e.ClaseDeMora switch
         {
             DefaultRateKind.Fixed => e.MoraFijaEA
                 ?? throw new ArgumentException("La mora fija necesita su tasa.", nameof(e)),
             DefaultRateKind.RelativeToCurrent => EquivalenciaDeTasas.Redondear((e.FactorDeMora
-                ?? throw new ArgumentException("La mora relativa necesita su factor.", nameof(e))) * e.CorrienteEA),
+                ?? throw new ArgumentException("La mora relativa necesita su factor.", nameof(e))) * corrienteEA),
             _ => throw new ArgumentOutOfRangeException(nameof(e), e.ClaseDeMora, "Clase de mora desconocida."),
         };
         if (e.MoraGeneralEA is { } general)
             explicacion.Linea($"Rige la tasa general de mora de la empresa ({ExplicacionDeCartera.Numero(general)} EA) en vez de la del crédito.");
 
-        var diariaCorriente = EquivalenciaDeTasas.TasaDiaria(e.CorrienteEA, e.Convencion, e.Equivalencia, e.Periodicidad);
+        var diariaCorriente = EquivalenciaDeTasas.TasaDiaria(corriente, e.Convencion, e.Equivalencia, e.Periodicidad);
         var diariaMora = EquivalenciaDeTasas.TasaDiaria(moraEA, e.Convencion, e.Equivalencia, e.Periodicidad);
 
         if (e.UsuraEA is not { } usura)
         {
             explicacion.Linea("Sin usura conocida para el día: la tasa no se topa (la causación real se bloquea; la proyección informa ValidaHasta).");
-            return new(e.CorrienteEA, diariaCorriente, false, moraEA, diariaMora, false, null, null, explicacion);
+            return new(corrienteEA, diariaCorriente, false, moraEA, diariaMora, false, null, null, explicacion);
         }
 
         var usuraCorriente = usura - e.SobretasaDeCargos;
         if (usuraCorriente < 0m) usuraCorriente = 0m;
-        var topeCorriente = TopeDiario(usuraCorriente, e.Convencion, e.Equivalencia, e.Periodicidad);
+        // 2026-11-24 (feature 025, HU2; FR-009): una MV se compara por su E.A. derivada con la usura y, si la pasa, se topa con la mensual
+        // equivalente de la usura (menos la sobretasa de cargos) llevada a diaria: (1 + U)^(1/12) − 1, entre 30.
+        var topeCorriente = corriente.EsMensual
+            ? TopeDiario(usuraCorriente, e.Convencion, e.Equivalencia, RepaymentPeriodicity.Monthly)
+            : TopeDiario(usuraCorriente, e.Convencion, e.Equivalencia, e.Periodicidad);
         var topeMora = TopeDiario(usura, e.Convencion, e.Equivalencia, e.Periodicidad);
 
-        var corrienteTopada = diariaCorriente > topeCorriente;
+        var corrienteTopada = corriente.EsMensual
+            ? corrienteEA > TopePactable(usuraCorriente, e.Convencion)
+            : diariaCorriente > topeCorriente;
         var moraTopada = diariaMora > topeMora;
 
         explicacion.Linea($"Usura del día {ExplicacionDeCartera.Numero(usura)} EA; sobretasa de cargos {ExplicacionDeCartera.Numero(e.SobretasaDeCargos)}: "
             + $"tope diario de la corriente {ExplicacionDeCartera.Numero(topeCorriente)}, de la mora {ExplicacionDeCartera.Numero(topeMora)}.");
         explicacion.Linea(corrienteTopada
-            ? $"La corriente pactada ({ExplicacionDeCartera.Numero(e.CorrienteEA)} EA, diaria {ExplicacionDeCartera.Numero(diariaCorriente)}) supera el tope: se causa con el tope."
-            : $"La corriente pactada ({ExplicacionDeCartera.Numero(e.CorrienteEA)} EA, diaria {ExplicacionDeCartera.Numero(diariaCorriente)}) no supera el tope.");
+            ? $"La corriente pactada ({TextoDeLaCorriente(corriente)}, diaria {ExplicacionDeCartera.Numero(diariaCorriente)}) supera el tope: se causa con el tope."
+            : $"La corriente pactada ({TextoDeLaCorriente(corriente)}, diaria {ExplicacionDeCartera.Numero(diariaCorriente)}) no supera el tope.");
         explicacion.Linea(moraTopada
             ? $"La mora ({ExplicacionDeCartera.Numero(moraEA)} EA, diaria {ExplicacionDeCartera.Numero(diariaMora)}) supera la usura: se causa con el tope."
             : $"La mora ({ExplicacionDeCartera.Numero(moraEA)} EA, diaria {ExplicacionDeCartera.Numero(diariaMora)}) no supera la usura.");
 
         return new(
-            e.CorrienteEA, corrienteTopada ? topeCorriente : diariaCorriente, corrienteTopada,
+            corrienteEA, corrienteTopada ? topeCorriente : diariaCorriente, corrienteTopada,
             moraEA, moraTopada ? topeMora : diariaMora, moraTopada,
             topeCorriente, topeMora, explicacion);
     }
+
+    /// <summary>2026-11-24 (feature 025, HU2): «0,2387… EA» o «0,018 MV = 0,2387… EA» para la explicación.</summary>
+    private static string TextoDeLaCorriente(TasaPactada t) => t.EsMensual
+        ? $"{ExplicacionDeCartera.Numero(t.Valor)} MV = {ExplicacionDeCartera.Numero(t.EfectivaAnual)} EA"
+        : $"{ExplicacionDeCartera.Numero(t.Valor)} EA";
 }

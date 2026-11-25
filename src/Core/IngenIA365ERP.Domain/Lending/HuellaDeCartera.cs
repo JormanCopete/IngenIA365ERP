@@ -130,6 +130,12 @@ public sealed class HuellaDeCartera
                 .Lista("interesPorCausar", Ordenadas(d.InteresPorCausar),
                     (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
                 .Canonico();
+        // 2026-11-24 (feature 025, fase 5): lo que una cancelación por período calendario no cobra, sólo si lo hay (las huellas de siempre no cambian).
+        if (d.InteresNoCobrado.Count > 0)
+            canonico += "|" + new HuellaDeCartera()
+                .Lista("interesNoCobrado", Ordenadas(d.InteresNoCobrado),
+                    (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
+                .Canonico();
         return DeTexto($"{rulesVersion}|{canonico}");
     }
 

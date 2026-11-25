@@ -55,6 +55,12 @@ internal sealed class CausacionDePrueba : IDisposable
         return c;
     }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): el ciclo y sus piezas sobre un escenario ya armado (p. ej. la activación con cartera previa), sin desembolsar.
+    /// Quien lo pide sigue siendo dueño del escenario: no se descarta aquí.
+    /// </summary>
+    public static CausacionDePrueba Sobre(DesembolsoDePrueba d) => new(d);
+
     public DesembolsoDePrueba D { get; }
     public TestApplicationDbContext Db => D.Db;
     public Loan Credito { get; private set; } = null!;

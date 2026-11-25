@@ -25,6 +25,15 @@ public static class PrecisionDeCartera
     /// <inheritdoc cref="TasaAnual(PropertyBuilder{decimal})"/>
     public static PropertyBuilder<decimal?> TasaAnual(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(9, 6);
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): (9,8): una tasa <b>mensual vencida</b> pactada como fracción (0,01800000 = 1,8 % MV). Ocho decimales para que
+    /// una MV con cuatro decimales de porcentaje quepa exacta; con más se rechaza (<c>Lending.Rate.TooPrecise</c>). (nuevo)
+    /// </summary>
+    public static PropertyBuilder<decimal> TasaMensual(this PropertyBuilder<decimal> propiedad) => propiedad.HasPrecision(9, 8);
+
+    /// <inheritdoc cref="TasaMensual(PropertyBuilder{decimal})"/>
+    public static PropertyBuilder<decimal?> TasaMensual(this PropertyBuilder<decimal?> propiedad) => propiedad.HasPrecision(9, 8);
+
     /// <summary>(28,18): tasas derivadas selladas o explicadas: diaria, del período, sobretasa de cargos (<c>ChargesSpread</c>).</summary>
     public static PropertyBuilder<decimal> TasaEquivalente(this PropertyBuilder<decimal> propiedad) => propiedad.HasPrecision(28, 18);
 

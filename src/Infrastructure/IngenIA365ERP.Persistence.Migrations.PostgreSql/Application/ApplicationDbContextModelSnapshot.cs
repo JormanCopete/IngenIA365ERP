@@ -29604,6 +29604,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("MinTermMonths")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 
@@ -29829,6 +29833,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<int>("NoteRecalculation")
                         .HasColumnType("integer");
 
@@ -29845,6 +29853,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)
@@ -40219,6 +40232,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTime?>("CutoverAdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -40507,6 +40523,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<DateOnly?>("NextResetDate")
                         .HasColumnType("date");
 
@@ -40527,6 +40547,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)
@@ -41834,6 +41859,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<bool>("CauseFullInProgressPeriod")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("ChargedOffCount")
                         .HasColumnType("integer");
 
@@ -43127,6 +43155,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("DiscountCycle")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("ExcludedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -43142,6 +43173,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<int>("IncludedFactCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InstallmentScope")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
@@ -43165,6 +43199,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("character varying(20)");
 
                     b.Property<int?>("PaymasterPersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PaymentForm")
                         .HasColumnType("integer");
 
                     b.Property<int>("Periodicity")
@@ -43406,6 +43443,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<int?>("ExclusionReason")
                         .HasColumnType("integer");

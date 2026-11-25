@@ -153,6 +153,32 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         });
     }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1; D1): la fila del <b>interés del período al corte</b> de un crédito cargado (<c>CutoverInterestAdjustment</c>):
+    /// <c>+</c> en el interés corriente de la cuota destino, el día de la firma, de la corrida del proceso <c>CutoverRecalculation</c>, con la fecha contable
+    /// y el mensaje de su hecho <c>InteresDelCorte</c>. La agrega: este registro es su único escritor.
+    /// </summary>
+    public LoanTransaction RegistrarAjusteDelCorte(int loanId, int cuota, decimal monto, DateOnly fecha, int processRunId, DateOnly fechaContable,
+        DateTime registradoEn, Guid? mensaje)
+    {
+        if (monto <= 0m) throw new ArgumentOutOfRangeException(nameof(monto), monto, "El interés del período al corte es mayor que cero.");
+        var fila = new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = processRunId,
+            Kind = LoanTransactionKind.CutoverInterestAdjustment,
+            Concept = LoanConcept.CurrentInterest,
+            InstallmentNumber = cuota,
+            Amount = monto,
+            ValueDate = fecha,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        };
+        RegistrarTransacciones([fila]);
+        return fila;
+    }
+
     /// <summary>Agrega una versión de condiciones del crédito (hecho; la arma el motor o el comando que cambia condiciones).</summary>
     public void RegistrarVersionDeCondiciones(LoanTermsVersion version)
     {
@@ -457,7 +483,16 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     /// plan del motor con sus cuotas, la versión de condiciones vigente, la operación y la fecha exigible de cada cuota por el art. 829. La agrega.
     /// </summary>
     public RepaymentScheduleVersion RegistrarPlanRegenerado(int loanId, int numero, LoanTermsVersion condiciones, LoanOperation operacion,
-        Domain.Lending.Schedules.PlanDePagos plan, IReadOnlyList<DateOnly> festivos)
+        Domain.Lending.Schedules.PlanDePagos plan, IReadOnlyList<DateOnly> festivos) =>
+        RegistrarPlanRegenerado(loanId, numero, condiciones, operacion, plan, festivos, null, null);
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): como el anterior, con la vigencia y el registro propios (el recálculo de la carga desde el corte cuelga su plan de la
+    /// operación de la carga, pero rige desde el corte y se supo al firmar) y, por cuota, el interés que se le suma fuera del plan (el ajuste del corte).
+    /// </summary>
+    public RepaymentScheduleVersion RegistrarPlanRegenerado(int loanId, int numero, LoanTermsVersion condiciones, LoanOperation operacion,
+        Domain.Lending.Schedules.PlanDePagos plan, IReadOnlyList<DateOnly> festivos, DateTime? registradoEn,
+        IReadOnlyDictionary<int, decimal>? interesAdicional, DateOnly? vigencia = null)
     {
         ArgumentNullException.ThrowIfNull(condiciones);
         ArgumentNullException.ThrowIfNull(operacion);
@@ -470,8 +505,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             TermsVersion = condiciones.Id == 0 ? condiciones : null,
             Operation = operacion,
             OperationId = operacion.Id,
-            EffectiveValueDate = operacion.ValueDate,
-            RegisteredAt = operacion.RegisteredAt,
+            EffectiveValueDate = vigencia ?? operacion.ValueDate,
+            RegisteredAt = registradoEn is { } r ? Utc(r) : operacion.RegisteredAt,
             PrincipalBase = plan.TotalCapital,
             FirstRegeneratedInstallment = plan.PrimeraCuotaRegenerada,
             InstallmentCount = plan.Cuotas.Count,
@@ -488,12 +523,12 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             ExigibleDate = Domain.Lending.Schedules.FechasDeVencimiento.FechaExigible(c.Vencimiento, articulo829),
             OpeningPrincipal = c.SaldoInicial,
             Principal = c.Capital,
-            Interest = c.Interes,
+            Interest = c.Interes + (interesAdicional?.GetValueOrDefault(c.Numero) ?? 0m),
             GraceInterest = c.InteresDeGracia,
             Insurance = c.Seguro,
             Administration = c.Administracion,
             OtherCharges = 0m,
-            Total = c.Total,
+            Total = c.Total + (interesAdicional?.GetValueOrDefault(c.Numero) ?? 0m),
             ClosingPrincipal = c.SaldoFinal,
             IsExtraordinary = c.Extraordinaria != 0m,
             IsGraceInstallment = c.SoloInteres,
@@ -562,7 +597,9 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             InstallmentsPastDue = estado.AlturaDeMora.CuotasVencidas,
             IsSuspended = estado.Suspendida,
             UsuryCapped = estado.UsuraTopada,
-            AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
+            // 2026-11-24 (feature 025, HU2): con la tasa en MV la E.A. del día es la derivada; se guarda a los seis decimales de la columna.
+            AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA is { } aplicada
+                ? decimal.Round(aplicada, Domain.Lending.Rates.EquivalenciaDeTasas.DecimalesDeTasaPactada, MidpointRounding.ToEven) : null,
             InputsSha256 = estado.Huella,
             // K6b (T1059): la valoración de un crédito en UVR.
             UvrValue = estado.Uvr?.Valor,

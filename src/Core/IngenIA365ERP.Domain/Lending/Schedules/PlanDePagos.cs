@@ -64,6 +64,16 @@ public sealed record EntradaDePlan(
     /// <see cref="VersionesDeReglas.Vivienda"/> (la elige quien arma la entrada con <see cref="VersionesDeReglas.ParaCreditoNuevo"/>).
     /// </summary>
     public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la corriente pactada en mensual vencida (nula = en E.A.). Con valor manda ella y <c>TasaEfectivaAnual</c>
+    /// es la E.A. derivada, sólo informativa; exige 30/360 y lineal. (nuevo)
+    /// </summary>
+    public decimal? TasaMensual { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente con su base.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Rates.TasaPactada Tasa => Rates.TasaPactada.De(TasaEfectivaAnual, TasaMensual);
 }
 
 /// <summary>
@@ -85,6 +95,12 @@ public sealed record EntradaDeRegeneracion(DateOnly Fecha)
     public decimal CambioDeCapital { get; init; }
 
     public decimal? NuevaTasaEfectivaAnual { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la tasa nueva en mensual vencida (con <see cref="NuevaTasaEfectivaAnual"/> = su E.A. derivada). Nula con
+    /// una tasa nueva en E.A. (el reajuste de la tasa variable sigue en E.A.). (nuevo)
+    /// </summary>
+    public decimal? NuevaTasaMensual { get; init; }
 
     /// <summary>
     /// La elección del deudor ante un abono (FR-075): <see cref="PrepaymentChoice.ReduceTerm"/> conserva la cuota y quita cuotas del final;
@@ -116,6 +132,9 @@ public sealed record EntradaDeNovedadDePlan(
     public decimal Costos { get; init; }
 
     public decimal? TasaEfectivaAnual { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la tasa nueva en mensual vencida; con ella, <see cref="TasaEfectivaAnual"/> es su E.A. derivada. (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 
     public RepaymentPeriodicity? Periodicidad { get; init; }
 
@@ -160,6 +179,16 @@ public sealed record EntradaDePlanMigrado(
 {
     /// <summary>K6b (T1053): la versión de reglas del crédito migrado (la de vivienda para un crédito de vivienda).</summary>
     public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la corriente pactada en mensual vencida (nula = en E.A.). Con valor manda ella y <c>TasaEfectivaAnual</c>
+    /// es la E.A. derivada, sólo informativa; exige 30/360 y lineal. (nuevo)
+    /// </summary>
+    public decimal? TasaMensual { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente con su base.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Rates.TasaPactada Tasa => Rates.TasaPactada.De(TasaEfectivaAnual, TasaMensual);
 }
 
 /// <summary>Lo causado de un concepto en una cuota hasta una fecha (proyección con pagos a tiempo, US4).</summary>

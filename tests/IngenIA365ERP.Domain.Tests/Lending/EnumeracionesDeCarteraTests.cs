@@ -34,7 +34,9 @@ public class EnumeracionesDeCarteraTests
             // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
             ("UnaccruedInstallmentInterest", 21),
             // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período y lo que se devuelve al cerrarlo.
-            ("PeriodRecognition", 22), ("RecognitionRelease", 23)],
+            ("PeriodRecognition", 22), ("RecognitionRelease", 23),
+            // 2026-11-24 (feature 025, fase 3): el interés del período al corte de un crédito cargado.
+            ("CutoverInterestAdjustment", 24)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
@@ -45,7 +47,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(TermsVersionCause)] = [("Origination", 1), ("CommercialSale", 2), ("Migration", 3), ("RateReset", 4), ("Restructuring", 5),
             ("Modification", 6), ("Extension", 7), ("PaymentDateChange", 8), ("RateChange", 9), ("Novation", 10),
             // 2026-11-24: la versión que deja el cambio de plazo sin pagos ni causación.
-            ("TermCorrection", 11)],
+            ("TermCorrection", 11),
+            // 2026-11-24 (feature 025, fase 3): la corrección de la tasa de un crédito cargado desde el corte.
+            ("CutoverCorrection", 12)],
         [typeof(DisbursementForm)] = [("Transfer", 1), ("Check", 2), ("ThirdPartyPayment", 3), ("InKind", 4)],
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
@@ -60,6 +64,8 @@ public class EnumeracionesDeCarteraTests
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
         [typeof(RateEquivalence)] = [("Compound", 1), ("Linear", 2)],
+        // 2026-11-24 (feature 025, HU2): la base de la tasa pactada.
+        [typeof(RateBasis)] = [("EffectiveAnnual", 1), ("MonthlyNominal", 2)],
         [typeof(AmortizationSystem)] = [("LevelPayment", 1), ("ConstantPrincipal", 2), ("Bullet", 3)],
         [typeof(GraceKind)] = [("None", 0), ("Principal", 1), ("Total", 2)],
         [typeof(GraceInterestTreatment)] = [("FirstInstallment", 1), ("Distributed", 2)],
@@ -141,10 +147,10 @@ public class EnumeracionesDeCarteraTests
         [typeof(InboundEvaluationOutcome)] = [("Accepted", 1), ("ValidationFailed", 2), ("NotConvertible", 3), ("NotIncorporated", 4)],
         // Las cuatro clases de corrida de C59 y el vocabulario de C123.
         [typeof(LendingProcessKind)] = [("DailyCycle", 1), ("MonthlyClose", 2), ("CloseReopen", 3), ("NationalValueCorrection", 4),
-            ("ScheduledTask", 5), ("MigratedCollectionStages", 6), ("PeriodRecognition", 7)],
+            ("ScheduledTask", 5), ("MigratedCollectionStages", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8)],
         [typeof(LendingProcessRunStatus)] = [("Requested", 0), ("Running", 1), ("Completed", 2), ("CompletedWithErrors", 3), ("Failed", 4)],
         [typeof(AccountingFactPartSource)] = [("DailyCycleBatch", 1), ("LoanCatchUp", 2), ("NationalValueCorrectionBatch", 3), ("MonthlyClose", 4),
-            ("CloseReopening", 5), ("AccountCatchUp", 6), ("PeriodRecognition", 7)],
+            ("CloseReopening", 5), ("AccountCatchUp", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8)],
         [typeof(MigrationLoadStatus)] = [("Draft", 1), ("Applied", 2), ("Replaced", 3), ("Activated", 4)],
         [typeof(MigrationPartStatus)] = [("Imported", 1), ("Superseded", 2)],
         [typeof(MigrationDifferenceKind)] = [("BalanceCheck", 1), ("SaleNotMigrated", 2), ("SaleOutsideLending", 3)],
@@ -317,7 +323,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(NegotiatedRateRequestStatus)] = [("PendingDecision", 1), ("Approved", 2), ("Rejected", 3), ("Withdrawn", 4), ("Expired", 5)],
 
         // ---------------------------------------------------------------- proceso de causación (feature 024, fase 3, 2026-11-16) --
-        [typeof(AccrualProcessKind)] = [("Posting", 1), ("PeriodRecognition", 2)],
+        [typeof(AccrualProcessKind)] = [("Posting", 1), ("PeriodRecognition", 2), ("CutoverRecalculation", 3)],
         [typeof(AccrualProcessStatus)] = [("Draft", 1), ("PendingApproval", 2), ("Confirmed", 3), ("Reprocessed", 4), ("Voided", 5)],
         [typeof(AccrualProcessPeriodicity)] = [("Daily", 1), ("Weekly", 7), ("TenDay", 10), ("Biweekly", 15), ("Monthly", 30)],
         [typeof(AccrualProcessConcepts)] = [("None", 0), ("CurrentInterest", 1), ("DefaultInterest", 2), ("Insurance", 4), ("Administration", 8),
@@ -328,7 +334,16 @@ public class EnumeracionesDeCarteraTests
             ("AccountingNoResponse", 10),
             // Fase 4: los motivos de la clase PeriodRecognition.
             ("AlreadyRecognized", 11), ("CycleNotStarted", 12), ("AccrualSuspended", 13), ("WrittenOff", 14), ("NotActive", 15), ("UvrLoan", 16),
-            ("DailyAccrualLine", 17)],
+            ("DailyAccrualLine", 17),
+            // 2026-11-24 (feature 025, fase 3): los motivos de la clase CutoverRecalculation.
+            ("AlreadyAdjusted", 18), ("NotPeriodic", 19), ("NothingToAdjust", 20), ("NoInstallmentLeft", 21),
+            // 2026-11-24 (feature 025, fase 5): por período calendario, el tramo de la cuota empieza después de hoy.
+            ("PeriodNotStarted", 22)],
+        // 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento de la cuota del período.
+        [typeof(AccrualPaymentForm)] = [("Payroll", 1), ("Cashier", 2)],
+        [typeof(AccrualInstallmentScope)] = [("WithoutExtras", 1), ("OnlyExtras", 2)],
+        [typeof(AccrualDiscountCycle)] = [("FirstFortnight", 1), ("SecondFortnight", 2), ("FirstTenDay", 11), ("SecondTenDay", 12), ("ThirdTenDay", 13),
+            ("FirstWeek", 21), ("SecondWeek", 22), ("ThirdWeek", 23), ("FourthWeek", 24), ("FifthWeek", 25)],
         // 2026-11-18: los documentos para firma.
         [typeof(SignatureDocumentKind)] = [("PromissoryNote", 1), ("InstructionLetter", 2), ("PayrollDeductionAuthorization", 3), ("Other", 4)],
         [typeof(SignatureFieldKind)] = [("Text", 1), ("LongText", 2), ("Number", 3), ("Money", 4), ("Date", 5), ("YesNo", 6)],

@@ -159,6 +159,11 @@
                 <li>@res.NonDeductionsMarked.ToString("N0") no aplicado(s) marcados.</li>
                 <li>@res.ProvisionalCollectionsStored.ToString("N0") cobro(s) sin obligación pendiente(s): se aplican cuando Comercial reciba la obligación de su venta.</li>
                 <li>Cierre base: @(res.BaseClosePublicId is null ? "sin créditos" : "registrado").</li>
+                @if (res.FullPeriodInterest is { } pc)
+                {
+                    @* 2026-11-24 (feature 025, fase 4, HU4): lo que sumó la opción del período completo. *@
+                    <li>Período en curso al corte causado completo: @pc.Total.ToString("N2") de interés en @pc.Loans.ToString("N0") crédito(s), ingreso del día de la activación.</li>
+                }
             </ul>
         </div>
     }

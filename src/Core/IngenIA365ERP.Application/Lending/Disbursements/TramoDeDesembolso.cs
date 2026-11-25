@@ -164,6 +164,9 @@ public sealed class TramoDeDesembolso(
             InterestTaxTreatment = v.InterestTaxTreatment,
             RateKind = v.RateKind,
             AnnualRate = simulacion.TasaPactada,
+            // 2026-11-24 (feature 025, HU2): la base y la MV de la línea (o de la banda) que usó el plan.
+            RateBasis = e.TasaMensual is null ? RateBasis.EffectiveAnnual : RateBasis.MonthlyNominal,
+            MonthlyRate = e.TasaMensual,
             IndexCode = v.IndexCode,
             IndexKey = v.IndexKey,
             Margin = v.Margin,

@@ -144,7 +144,7 @@ Cartera» (enmienda D-08 de la 010).
 | `DS` | Desembolsos, su reverso y los ajustes que llegan de Comercial | `PG` + número del crédito |
 | `RC` | Pagos, reversos de pago, anticipos, saldos a favor, cobro de suspenso, recuperación de castigada, cobros provisionales incorporados | `PG`; `FV` + factura en los roles de Comercial |
 | `DN` | Lo que recauda Nómina (pago, reverso y recuperación de castigada con clase `Payroll`) | `PG` |
-| `CA` | Causación de interés, mora y seguro, ajustes por fecha valor, gasto de cobranza | `PG` |
+| `CA` | Causación de interés, mora y seguro, ajustes por fecha valor, gasto de cobranza y, desde la feature 025 (fase 3), el interés del período al corte de los créditos cargados (`InteresDelCorte`, `IDC`: interés por cobrar contra ingreso, como la causación de la corriente) | `PG` |
 | `PV` | Deterioro, reclasificación por calificación, reverso de cierre y castigo | `PG` |
 | `CN` (nuevo) | Reestructuración, modificación, novación, condonación, cambios de dimensión y contingentes | `PG` |
 | `CM`, `CS` (feature 024, sugeridos) | Causación de mora y de seguros cuando la empresa los elige para esos hechos; de fábrica **sin mapear** (siguen en `CA`) | `PG` |

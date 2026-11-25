@@ -85,6 +85,8 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(CorreccionMonetariaUvrCausadaV1), CorreccionMonetariaUvrCausadaV1.Type, "CMU", N, P, proceso: true),
         // K6b (decisión del dueño del 2026-10-17): el reparto en pesos de un pago aplicado en un día cuya UVR se corrigió, masivo como el ajuste.
         Hecho(typeof(PagoRedistribuidoPorValorNacionalV1), PagoRedistribuidoPorValorNacionalV1.Type, "PRN", N, P, proceso: true),
+        // 2026-11-24 (feature 025, fase 3): el interés del período al corte de los créditos cargados, masivo como la causación.
+        Hecho(typeof(InteresDelCorteV1), InteresDelCorteV1.Type, "IDC", N, P, proceso: true),
         // Feature 014 (T048; contracts/mensajes.md §1.1 de la 014, research C23): los 33 hechos de captaciones y aportes, declarados en la fase
         // fundacional; cada uno lo emite la historia de su entrega (K7 a K10). Viven en Contracts/Lending/Deposits.
         Hecho(typeof(ConsignacionEnCuentaAplicadaV1), ConsignacionEnCuentaAplicadaV1.Type, "CCN", N, C, proceso: false),

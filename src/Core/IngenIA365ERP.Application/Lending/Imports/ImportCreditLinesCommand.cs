@@ -311,6 +311,11 @@ public sealed class ImportCreditLinesCommandHandler(
             var plazoMinimo = f.Entero(C.PlazoMinimo);
             var plazoMaximo = f.Entero(C.PlazoMaximo);
             var unidad = f.Monto(C.RedondeoUnidad);
+            // 2026-11-24 (feature 025, HU2; FR-011): la tasa en E.A. o en MV, no las dos; con MV la versión se pacta en MV.
+            var tasaAnual = f.Porcentaje(C.TasaCorriente);
+            var tasaMensual = f.Porcentaje(C.TasaCorrienteMV);
+            if (tasaAnual is not null && tasaMensual is not null)
+                f.Error(C.TasaCorrienteMV, ImportErrors.CellFormat, "Traiga la tasa corriente en E.A. o en MV, no las dos.");
             if (f.TieneErrores || tipoDeTasa is null || tipoDeMora is null || convencion is null || sistema is null || periodicidades is null
                 || periodicidad is null || formas is null || forma is null || montoMinimo is null || montoMaximo is null || plazoMinimo is null
                 || plazoMaximo is null || modalidad is null)
@@ -328,7 +333,9 @@ public sealed class ImportCreditLinesCommandHandler(
                 InterestTaxTreatment = concepto,
                 InterestTaxSupportAttachmentPublicId = soporte,
                 RateKind = tipoDeTasa.Value,
-                AnnualRate = f.Porcentaje(C.TasaCorriente),
+                AnnualRate = tasaMensual is null ? tasaAnual : null,
+                RateBasis = tasaMensual is null ? RateBasis.EffectiveAnnual : RateBasis.MonthlyNominal,
+                MonthlyRate = tasaMensual,
                 IndexCode = f.Codigo(C.Indice, 20),
                 IndexKey = f.Texto(C.ClaveDelIndice, 20),
                 Margin = f.Porcentaje(C.Margen),
@@ -403,8 +410,12 @@ public sealed class ImportCreditLinesCommandHandler(
             ForEmployees = f.SiNoIndiferente(C.ParaEmpleados),
             MinSeniorityMonths = f.Entero(C.AntiguedadMinima),
             AnnualRate = f.Porcentaje(C.TasaCorriente),
+            // 2026-11-24 (feature 025, HU2): la MV de la banda de una línea pactada en MV.
+            MonthlyRate = f.Porcentaje(C.TasaCorrienteMV),
             Margin = f.Porcentaje(C.Margen),
         };
+        if (banda.AnnualRate is not null && banda.MonthlyRate is not null)
+            f.Error(C.TasaCorrienteMV, ImportErrors.CellFormat, "Traiga la tasa de la banda en E.A. o en MV, no las dos.");
         v.Bandas.Add((f, banda));
     }
 
@@ -540,7 +551,9 @@ public sealed class ImportCreditLinesCommandHandler(
         if (campo is not null && campo.StartsWith("rateBands[", StringComparison.Ordinal) && Orden(campo) is { } orden
             && v.Bandas.FirstOrDefault(b => b.Banda.Order == orden) is { Fila: { } filaDeBanda })
         {
-            filaDeBanda.Error(campo.EndsWith(".margin", StringComparison.Ordinal) ? C.Margen : C.TasaCorriente, codigo, error.Message);
+            filaDeBanda.Error(campo.EndsWith(".margin", StringComparison.Ordinal) ? C.Margen
+                : campo.EndsWith(".monthlyRate", StringComparison.Ordinal) || v.Borrador?.EsMensual == true ? C.TasaCorrienteMV : C.TasaCorriente,
+                codigo, error.Message);
             return;
         }
         if (error is ErrorConDatos { Data: IReadOnlyDictionary<string, object?> datos } && datos.TryGetValue("orders", out var ordenes)
@@ -552,6 +565,9 @@ public sealed class ImportCreditLinesCommandHandler(
         var (hoja, columna) = campo switch
         {
             "annualRate" => (H.Lineas, C.TasaCorriente),
+            // 2026-11-24 (feature 025, HU2).
+            "monthlyRate" or "rateBasis" => (H.Lineas, C.TasaCorrienteMV),
+            "dayCount" => (H.Lineas, C.ConvencionDeDias),
             "margin" => (H.Lineas, C.Margen),
             "indexCode" => (H.Lineas, C.Indice),
             "rateFloor" or "rateCeiling" => (H.Lineas, C.TasaPiso),
@@ -578,7 +594,7 @@ public sealed class ImportCreditLinesCommandHandler(
             "collateralRules" => (H.Garantias, C.TiposAdmitidos),
             _ when campo?.StartsWith("insurances", StringComparison.Ordinal) == true => (H.Seguros, C.Tarifa),
             _ when error.Code == ErroresDeLineasDeCredito.CodigoModalidadDesconocida || codigo == ImportErrors.CellNotYetAvailable => (H.Lineas, C.Modalidad),
-            _ when error.Code == ControlDeUsura.CodigoExcedida => (H.Lineas, C.TasaCorriente),
+            _ when error.Code == ControlDeUsura.CodigoExcedida => (H.Lineas, v.Borrador?.EsMensual == true ? C.TasaCorrienteMV : C.TasaCorriente),
             _ when error.Code == ErroresDeLineasDeCredito.CodigoNoAsociadosNoPermitidos => (H.Lineas, C.AdmiteNoAsociados),
             _ => (H.Lineas, C.VigenteDesde),
         };

@@ -10,7 +10,9 @@ using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Accrual;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 using IngenIA365ERP.Domain.Lending.Replay;
+using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Accrual;
@@ -159,14 +161,35 @@ public sealed class PuestaAlDiaDeCredito(
         ArgumentNullException.ThrowIfNull(reconocer);
         if (entrada.Uvr is not null || estado.Suspendida || estado.Plan is null || reconocer.Rubros.Count == 0) return [];
         if (entrada.Condiciones.CastigoDesde is { } castigo && castigo < dia) return [];
-        var cuota = estado.Plan.Cuotas.FirstOrDefault(q => q.Desde.AddDays(1) == dia);
-        if (cuota is null) return [];
-        var ya = entrada.Reconocimientos.Where(x => x.Cuota == cuota.Numero).Select(x => ConceptosReconocidos.RubroDe(x.Concepto)).ToHashSet();
-        var rubros = reconocer.Rubros.Where(x => !ya.Contains(x)).ToList();
-        if (rubros.Count == 0) return [];
-        return ReconstruccionDeCredito.CuotaPorReconocer(entrada, cuota.Numero, dia, rubros)
-            .Select(m => new ReconocimientoDeCuota(dia, cuota.Numero, ConceptosReconocidos.De(m.Rubro, reconocer.Modo), m.Monto, entrada.InformacionHasta))
-            .ToList();
+        // 2026-11-24 (feature 025, fase 5, HU5): por período calendario, la cuota se reconoce el primer día del tramo del calendario que contiene su
+        // vencimiento (o el primero de su ciclo, si el tramo empezó antes: un desembolso a mitad del tramo). El monto no cambia: lo que la cuota va a causar
+        // desde ese día hasta su vencimiento.
+        var plan = estado.Plan;
+        IEnumerable<CuotaDelPlan> cuotas = reconocer.PeriodoCalendario
+            ? plan.Cuotas.Where(q => DiaDeReconocimiento(q, plan.Entrada.Periodicidad) == dia)
+            : plan.Cuotas.FirstOrDefault(q => q.Desde.AddDays(1) == dia) is { } delCiclo ? [delCiclo] : [];
+        var salida = new List<ReconocimientoDeCuota>();
+        foreach (var cuota in cuotas)
+        {
+            var ya = entrada.Reconocimientos.Where(x => x.Cuota == cuota.Numero).Select(x => ConceptosReconocidos.RubroDe(x.Concepto)).ToHashSet();
+            var rubros = reconocer.Rubros.Where(x => !ya.Contains(x)).ToList();
+            if (rubros.Count == 0) continue;
+            salida.AddRange(ReconstruccionDeCredito.CuotaPorReconocer(entrada, cuota.Numero, dia, rubros)
+                .Select(m => new ReconocimientoDeCuota(dia, cuota.Numero, ConceptosReconocidos.De(m.Rubro, reconocer.Modo), m.Monto, entrada.InformacionHasta)));
+        }
+        return salida;
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): el día en que se reconoce una cuota por período calendario: el primero del tramo que contiene su vencimiento
+    /// (<see cref="PeriodoDeCausacion.TramoQueContiene"/>) o, si su ciclo empieza después (un desembolso a mitad del tramo), el primero de su ciclo. (nuevo)
+    /// </summary>
+    public static DateOnly DiaDeReconocimiento(CuotaDelPlan cuota, RepaymentPeriodicity periodicidad)
+    {
+        ArgumentNullException.ThrowIfNull(cuota);
+        var tramo = PeriodoDeCausacion.TramoQueContiene(cuota.Vencimiento, periodicidad).Desde;
+        var ciclo = cuota.Desde.AddDays(1);
+        return tramo > ciclo ? tramo : ciclo;
     }
 
     /// <summary>

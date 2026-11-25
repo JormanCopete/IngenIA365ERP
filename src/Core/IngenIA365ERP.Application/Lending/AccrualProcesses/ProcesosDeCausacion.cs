@@ -233,11 +233,17 @@ public sealed class ProcesosDeCausacion(
         var enFirme = await db.AccrualProcesses.AsNoTracking()
             .Where(x => !x.IsDeleted && x.Status == AccrualProcessStatus.Confirmed && x.Id != (reprocesado ?? 0) && x.DateFrom <= hasta && x.DateTo >= desde)
             .ToListAsync(ct);
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte no se cruza: cada crédito se ajusta una vez (su marca).
+        if (p.Clase == AccrualProcessKind.CutoverRecalculation) return null;
         // 2026-11-16 (fase 4): sólo los de su misma clase.
         return enFirme.FirstOrDefault(x => x.Kind == p.Clase && x.CompartenConcepto(p.Conceptos)
             && (x.BranchId is null || p.OficinaId is null || x.BranchId == p.OficinaId)
             && (x.CreditLineId is null || p.LineaId is null || x.CreditLineId == p.LineaId)
-            && (x.PaymasterPersonId is null || p.PagaduriaId is null || x.PaymasterPersonId == p.PagaduriaId));
+            && (x.PaymasterPersonId is null || p.PagaduriaId is null || x.PaymasterPersonId == p.PagaduriaId)
+            // 2026-11-24 (feature 025, fase 5, FR-018): ni dos reconocimientos de formas de pago, cuotas o ciclos de descuento distintos.
+            && (x.PaymentForm is null || p.FormaDePago is null || x.PaymentForm == p.FormaDePago)
+            && (x.InstallmentScope is null || p.Cuotas is null || x.InstallmentScope == p.Cuotas)
+            && (x.DiscountCycle is null || p.CicloDeDescuento is null || x.DiscountCycle == p.CicloDeDescuento));
     }
 
     /// <summary>
@@ -280,6 +286,8 @@ public sealed class ProcesosDeCausacion(
             Status = l.Estado, ExclusionReason = l.Motivo, BranchId = l.OficinaId, CreditLineId = l.LineaId,
             // 2026-11-16 (feature 024, fase 4): lo que reconoce la clase PeriodRecognition.
             InstallmentNumber = l.Cuota, RecognitionDate = l.FechaDeReconocimiento,
+            // 2026-11-24 (feature 025, fase 3): el detalle del crédito en el recálculo de la carga desde el corte.
+            Detail = l.Detalle,
         }));
         var problemas = JsonSerializer.Serialize(new ProblemasGuardados(calculo.Avisos.Select(a => new AccrualProcessIssueDto(a.Code, a.Message, a.Blocking)).ToList()), Json);
         proceso.SellarCalculo(calculo.Huella(ParametrosDelProceso.De(proceso)), problemas, calculo.Bloquea, calculo.Creditos, calculo.Incluidos.Count(),
@@ -445,7 +453,11 @@ public sealed class ProcesosDeCausacion(
         RefDeFiltroDto? pagaduria = null;
         if (p.PaymasterPersonId is { } pp && (await ReferenciasDeGobierno.PersonasAsync(db, [pp], ct)).TryGetValue(pp, out var persona))
             pagaduria = new RefDeFiltroDto(persona.PersonPublicId, null, persona.FullName);
-        return new AccrualProcessFiltersDto(linea, oficina, pagaduria);
+        // 2026-11-24 (feature 025, fase 5, FR-018): con la forma de pago, las cuotas y el ciclo de descuento.
+        return new AccrualProcessFiltersDto(linea, oficina, pagaduria)
+        {
+            PaymentForm = p.PaymentForm, InstallmentScope = p.InstallmentScope, DiscountCycle = p.DiscountCycle,
+        };
     }
 
     private async Task<AccrualProcessApprovalDto?> AprobacionAsync(AccrualProcess p, IReadOnlyDictionary<int, UsuarioRefDto> usuarios, CancellationToken ct)
