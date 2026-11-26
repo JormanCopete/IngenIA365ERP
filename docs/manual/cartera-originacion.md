@@ -450,7 +450,8 @@ misma pantalla de corrección con lo guardado y un campo obligatorio: **«Motivo
 - **Un codeudor nuevo necesita su autorización** de tratamiento de datos para el estudio del crédito, como al radicar.
 - **Queda el historial.** El detalle muestra **«Ediciones después de radicar»**: quién, cuándo, el motivo, cada dato con su valor antes y
   después, y el nivel antes y después. Cada edición queda además como intervención del expediente y en la auditoría
-  (`Lending.Application.EditedAfterSubmission`). Una edición sin nada distinto no deja rastro.
+  (`Lending.Application.EditedAfterSubmission`). Una edición sin nada distinto no deja rastro. La fecha del primer pago que la simulación
+  llena sola, porque la línea elegida la pide y es la misma que el plan ya ponía, no se anota como cambio. Una fecha distinta sí se anota.
 - **Quien decide ve que cambió.** La huella del enrutamiento cambia con cada edición: si alguien tenía la solicitud abierta para decidir, o
   estaba en un acta, al decidir recibe `Lending.Decision.ContentChanged` y tiene que mirarla de nuevo.
 - **No cambia el estado.** La solicitud sigue esperando decisión con su mismo radicado.
@@ -463,6 +464,7 @@ Errores que puede ver quien edita:
 | `Lending.Application.EditReasonRequired` | Falta el motivo del cambio. |
 | `Lending.Application.FieldNotEditable` | Cambió algo que «qué se puede corregir» deja fijo. |
 | `Lending.Application.UseSubmittedEditRoute` | Se intentó por la ruta del borrador (`PUT /{id}`); la radicada va por `PUT /{id}/submitted`. |
+| `Lending.CreditLine.Closed` | La línea de la solicitud se cerró después de crearla. Editar vuelve a simular y una línea cerrada no simula, ni siquiera para cambiar sólo el destino: elija otra línea en el simulador, simule y pulse «Usar en la solicitud». |
 
 Lo de la devuelta también vale aquí: el solicitante no cambia y la pantalla no edita las solicitudes con cuotas extraordinarias, gracia,
 créditos que recoge o convenio de libranza. Ya aprobada, negada o desembolsada, una solicitud no se edita.

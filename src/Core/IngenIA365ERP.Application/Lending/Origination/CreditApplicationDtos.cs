@@ -297,7 +297,12 @@ public static class ConsultasDeSolicitudes
             UsesAdvancedTerms = s.ExtraordinaryInstallments is not null || s.GraceKind is not null || s.PayoffRequest is not null
                 || s.PayrollAgreementId is not null,
             ChangesSinceReturn = FotoDeSolicitud.Leer(s.ReturnSnapshot) is { } foto
-                ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes), ct)
+                ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes) with
+                {
+                    PrimerPagoPorDefecto = s.ExpectedDisbursementDate is { } desembolso && s.Periodicity is { } periodicidad
+                        ? FotoDeSolicitud.PrimerPagoSinFecha(desembolso, periodicidad, version?.PaymentDay)
+                        : null,
+                }, ct)
                 : [],
             SubsidizedPurchase = await CompraAsync(db, s, version, ct),
             SubmittedEdits = await EdicionesAsync(db, s.Id, ct),
