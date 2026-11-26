@@ -37,7 +37,7 @@
             <label class="campo">Opción de descuento *
                 <select class="e-input" value="@_opcion" @onchange="@(e => { _opcion = e.Value?.ToString(); Recalcular(); })">
                     <option value="">Elija…</option>
-                    @foreach (var o in Opciones) { <option value="@o.Code">@o.Name (@((o.Fraction * 100m).ToString("0.##", Colombia)) %)</option> }
+                    @foreach (var o in Opciones) { <option value="@o.Code">@o.Name (@(o.Amount is > 0m and var fijo ? "$" + fijo.ToString("N0", Colombia) : (o.Fraction * 100m).ToString("0.##", Colombia) + " %"))</option> }
                 </select>
             </label>
         }
@@ -220,7 +220,9 @@
 
     /// <summary>Lo que paga el fondo con el valor y la opción elegidos (al peso, como el servidor).</summary>
     private decimal? Subsidio => _valorDelBien is { } v && Opciones.FirstOrDefault(o => o.Code == _opcion) is { } o
-        ? Math.Round(v * o.Fraction, 0, MidpointRounding.AwayFromZero)
+        ? o.Amount is > 0m and var fijo
+            ? Math.Min(Math.Round(fijo, 0, MidpointRounding.AwayFromZero), Math.Max(v, 0m))
+            : Math.Round(v * o.Fraction, 0, MidpointRounding.AwayFromZero)
         : null;
 
     private void Recalcular()

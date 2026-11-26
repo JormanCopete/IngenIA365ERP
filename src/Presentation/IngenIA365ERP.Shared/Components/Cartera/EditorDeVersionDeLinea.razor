@@ -400,13 +400,14 @@
         <h4>Descuento condicionado (financiar un bien con proveedor)</h4>
         <p class="texto-tenue">
             Para líneas como el SOAT: el asociado compra un bien a un proveedor y la entidad decide cuánto de su valor paga un fondo. Con un bien de
-            500.000 y la opción del 50 %, el crédito es de 250.000, el fondo pone 250.000 y al proveedor se le giran 500.000. Con opciones, la solicitud
+            500.000 y la opción del 50 %, el crédito es de 250.000, el fondo pone 250.000 y al proveedor se le giran 500.000. Cada opción es un porcentaje o un
+            valor fijo en pesos que paga el fondo, sea cual sea el valor del bien. Con opciones, la solicitud
             pide el valor del bien, el proveedor y la opción. La cuenta del fondo la pone Contabilidad en la matriz de Cartera, por su código.
         </p>
         @if (V.DiscountOptions.Count > 0)
         {
             <table class="data-grid">
-                <thead><tr><th>Código *</th><th>Nombre *</th><th class="numero">Descuento (%)</th><th>Fondo que lo paga</th><th></th></tr></thead>
+                <thead><tr><th>Código *</th><th>Nombre *</th><th class="numero">Descuento (%)</th><th class="numero">o valor fijo ($)</th><th>Fondo que lo paga</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var o in V.DiscountOptions)
                     {
@@ -414,8 +415,9 @@
                         <tr>
                             <td><input class="e-input" maxlength="10" @bind="opcion.Code" /></td>
                             <td><input class="e-input" maxlength="100" @bind="opcion.Name" /></td>
-                            <td class="numero"><input class="e-input numero" type="number" step="0.01" min="0" max="99.99" value="@Pct(opcion.Fraction)" @onchange="@(e => opcion.Fraction = LeerPct(e.Value) ?? 0m)" /></td>
-                            <td><input class="e-input" maxlength="20" @bind="opcion.FundCode" disabled="@(opcion.Fraction == 0m)" placeholder="@(opcion.Fraction == 0m ? "sin descuento" : "código del fondo")" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" step="0.01" min="0" max="99.99" value="@Pct(opcion.Fraction)" @onchange="@(e => opcion.Fraction = LeerPct(e.Value) ?? 0m)" disabled="@(opcion.Amount > 0m)" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" step="1" min="0" @bind="opcion.Amount" disabled="@(opcion.Fraction > 0m)" placeholder="pesos" /></td>
+                            <td><input class="e-input" maxlength="20" @bind="opcion.FundCode" disabled="@(opcion.Fraction == 0m && !(opcion.Amount > 0m))" placeholder="@(opcion.Fraction == 0m && !(opcion.Amount > 0m) ? "sin descuento" : "código del fondo")" /></td>
                             <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.DiscountOptions.Remove(opcion))">Quitar</SfButton></td>
                         </tr>
                     }
