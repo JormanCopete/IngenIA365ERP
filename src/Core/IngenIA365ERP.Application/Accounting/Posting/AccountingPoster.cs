@@ -505,10 +505,14 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
             if (centro is not null && cuenta is { RequiresCostCenter: false } && !request.Origin.EsContabilidad) centro = null;
 
             var tipo = string.IsNullOrWhiteSpace(l.CrossDocumentType) ? null : l.CrossDocumentType.Trim().ToUpperInvariant();
+            // 2026-11-26: en un comprobante que juntan dos módulos, cada línea se mide con el módulo que la manda.
+            var delaLinea = !request.Origin.EsContabilidad && ModuloContable.EsValido(l.Module) && l.Module != contexto.Module
+                ? contexto with { Module = l.Module! }
+                : contexto;
             var reglas = AccountLineRules.Evaluar(
                 cuenta is null ? null : CuentaParaReglas.De(cuenta, request.Date),
                 new LineaParaReglas(numero, l.AccountRef, l.Debit, l.Credit, sucursal, explicita, l.PersonId, centro, tipo, l.CrossDocumentNumber?.Trim(), l.TaxBase),
-                contexto);
+                delaLinea);
             errores.AddRange(reglas.Where(x => x.Bloquea));
             avisos.AddRange(reglas.Where(x => !x.Bloquea));
             resueltas.Add(new LineaResuelta(l, numero, cuenta, sucursal, centro, tipo is null ? null : r.TiposDeCruce.GetValueOrDefault(tipo), tipo));
