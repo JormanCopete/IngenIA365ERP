@@ -92,7 +92,9 @@ public sealed class RenovacionDeSesionHandler(RenovadorDeSesion sesion) : Delega
             return await base.SendAsync(request, cancellationToken);
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        sesion.RegistrarActividad();
+        // Una consulta que la pantalla hace sola (RenovadorDeSesion.DeFondo) no es la persona trabajando.
+        if (!(request.Options.TryGetValue(RenovadorDeSesion.DeFondo, out var deFondo) && deFondo))
+            sesion.RegistrarActividad();
 
         var cuerpo = await CapturarCuerpoAsync(request, cancellationToken);
         var respuesta = await base.SendAsync(request, cancellationToken);
