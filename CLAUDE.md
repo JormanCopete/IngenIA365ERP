@@ -1154,15 +1154,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/023-emision-asincrona-rabbitmq/plan.md](specs/023-emision-asincrona-rabbitmq/plan.md)
+[specs/026-cargos-masivos/plan.md](specs/026-cargos-masivos/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/023-emision-asincrona-rabbitmq/spec.md)
-- [research.md](specs/023-emision-asincrona-rabbitmq/research.md)
-- [data-model.md](specs/023-emision-asincrona-rabbitmq/data-model.md)
-- [quickstart.md](specs/023-emision-asincrona-rabbitmq/quickstart.md)
-- [contracts/](specs/023-emision-asincrona-rabbitmq/contracts/)
+- [spec.md](specs/026-cargos-masivos/spec.md)
+- [research.md](specs/026-cargos-masivos/research.md)
+- [data-model.md](specs/026-cargos-masivos/data-model.md)
+- [quickstart.md](specs/026-cargos-masivos/quickstart.md)
+- [contracts/](specs/026-cargos-masivos/contracts/)
 
-The 023 builds on the electronic invoicing of the 012 (I4: the electronic document row is already the
-transactional outbox) and on the integration tray; RabbitMQ only wakes and distributes work, the
-database stays the source of truth, and the POS checkout waits at most a short per-point-of-sale timeout.
+The 026 builds on Cartera (013): a run creates one obligation per associate of a line marked for bulk charges, without application
+or payout, through the single ledger writer, and posts the whole run as one summarized voucher (type CO) through the accounting
+matrix (new role «Contrapartida del cargo»).
 <!-- SPECKIT END -->

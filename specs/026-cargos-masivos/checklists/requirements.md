@@ -32,7 +32,7 @@
 ## Notes
 
 - Siguiendo la costumbre de las especificaciones del proyecto (013–025), se nombran los permisos (`Lending.BulkCharges.*`), los
-  parámetros (`Contabilidad.FaltaDeRegla`, `Segregacion.CargoMasivoPorOtraPersona`) y el tipo de comprobante `CM`, porque son lo que el
+  parámetros (`Contabilidad.FaltaDeRegla`, `Segregacion.CargoMasivoPorOtraPersona`) y el tipo de comprobante `CO`, porque son lo que el
   administrador configura. No se nombran tablas, clases, rutas ni tecnologías.
 - Las cinco preguntas abiertas se cerraron con las recomendaciones que aprobó el dueño el 2026-11-25 (D1–D5); no queda ninguna marca
   [NEEDS CLARIFICATION].

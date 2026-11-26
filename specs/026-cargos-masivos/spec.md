@@ -73,14 +73,14 @@ tenga, y cada una se puede pagar en caja ese mismo día.
 
 ### HU3 — Un solo comprobante por corrida (P1)
 
-Al terminar la corrida, Contabilidad recibe **un solo comprobante** de tipo `CM` («Cargos masivos»):
+Al terminar la corrida, Contabilidad recibe **un solo comprobante** de tipo `CO` («Cargos masivos»):
 - **débito** a la cuenta por cobrar de capital de la línea, una fila por asociado con su tercero;
 - **crédito** a la cuenta de contrapartida del cargo, con el tercero elegido en la ventana (el mismo asociado o un proveedor). Si la cuenta no
   exige tercero, va una sola fila por el total.
 
 **Por qué primero**: con `Contabilidad.FaltaDeRegla` en «Bloquear», sin esto no se confirma ninguna corrida en producción.
 
-**Prueba independiente**: una corrida de 455 cargos de 13.557 deja un comprobante `CM` que cuadra al peso con 6.168.435 y la conciliación
+**Prueba independiente**: una corrida de 455 cargos de 13.557 deja un comprobante `CO` que cuadra al peso con 6.168.435 y la conciliación
 contable de Cartera no muestra diferencia en la línea.
 
 **Escenarios**:
@@ -208,7 +208,7 @@ preparó y confirmó, y su comprobante. El detalle muestra asociado por asociado
   tercero, y acredita la contrapartida del cargo, con el tercero elegido en la corrida. Ningún hecho lleva una cuenta.
 - **FR-016** Todos los hechos de una corrida se asientan en **un solo comprobante** al terminarla, con una fila por asociado donde la cuenta
   exige tercero (o documento cruce) y una fila por sucursal y centro de costo donde no.
-- **FR-017** Se siembra el tipo de comprobante **`CM` «Cargos masivos»** con su consecutivo (D2), configurable como los demás tipos de Cartera.
+- **FR-017** Se siembra el tipo de comprobante **`CO` «Cargos masivos»** con su consecutivo (D2), configurable como los demás tipos de Cartera.
 - **FR-018** El comprobante se fecha en la fecha del cargo. Si contabilidad lo rechaza, queda en reproceso con su alerta.
 - **FR-019** Lo contabilizado por una corrida no se reversa desde Comprobantes: se corrige anulando desde Cartera (HU5).
 
@@ -243,7 +243,7 @@ preparó y confirmó, y su comprobante. El detalle muestra asociado por asociado
 
 - **D1** La contrapartida («acreditando a la cuota correspondiente») es la **cuenta de contrapartida de la línea**, que pone la matriz contable,
   con el tercero que se elija en la ventana: el mismo asociado o un proveedor.
-- **D2** Tipo de comprobante nuevo **`CM` «Cargos masivos»**.
+- **D2** Tipo de comprobante nuevo **«Cargos masivos»**. El código `CM` ya era «Causación de interés de mora», así que va con **`CO`** (plan, 2026-11-25).
 - **D3** Se excluyen retirados, fallecidos y quien tiene el retiro en trámite. Quien está en cobro jurídico se incluye.
 - **D4** La línea decide si sus obligaciones de cargo masivo se reportan a centrales y entran a cobranza; de fábrica, **no**.
 - **D5** Por defecto, **una obligación por asociado y por mes** (una cuota), como en la herramienta anterior; el proceso admite varias cuotas.
@@ -258,7 +258,7 @@ preparó y confirmó, y su comprobante. El detalle muestra asociado por asociado
 - **Versión de línea**: gana «Admite cargo masivo», los valores por defecto del cargo y las opciones de centrales y cobranza.
 - **Obligación**: gana el origen «Cargo masivo» y la referencia a su corrida; su desembolso, la forma «Cargo».
 - **Matriz de Cartera**: gana el rol «Contrapartida del cargo».
-- **Tipo de comprobante** `CM`.
+- **Tipo de comprobante** `CO`.
 
 ## Criterios de éxito
 
