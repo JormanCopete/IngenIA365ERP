@@ -129,7 +129,7 @@ public sealed class VoidBulkChargeLineCommandHandler(
             await cerrojo.BloquearDeudoresAsync([linea.PersonId], ModoDeEspera.Esperar, ct);
             var contable = await fechaContable.CalcularAsync(reloj.HoyLocal, ct);
             if (contable.IsFailure) return Result.Failure<BulkChargeRunDto>(contable.Error);
-            var alcance = EmisionDeCartera.AlcanceDeCargoMasivo(run.PublicId, $"linea:{linea.PublicId:N}");
+            var alcance = EmisionDeCartera.AlcanceDeCargoMasivo(run.PublicId, $"L{linea.Id}");
             var modo = await emision.ModoDeCargoMasivoAsync(CargoMasivoAnuladoV1.Type, "CMA", contable.Value, alcance, ct);
             if (modo.IsFailure) return Result.Failure<BulkChargeRunDto>(modo.Error);
             var anulado = await anulacion.AnularAsync(run, linea, request.Reason.Trim(), usuario, actor.CentralUserId, modo.Value, ct);

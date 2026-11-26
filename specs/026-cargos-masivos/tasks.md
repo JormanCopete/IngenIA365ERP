@@ -91,7 +91,7 @@ Rutas: `Dom` = `src/Core/IngenIA365ERP.Domain`, `App` = `src/Core/IngenIA365ERP.
 - [X] T046 [P] Manual `docs/manual/cartera-cargos-masivos.md`, entrada en `docs/manual/cartera.md` y en `Sh/Services/Manual/ManualCatalogo.cs`
 - [X] T047 [P] CLAUDE.md: viñeta «Cargos masivos (feature 026)»
 - [X] T048 Compilar la solución y correr Domain, Application, Architecture y Shared
-- [ ] T049 E2e `tests/IngenIA365ERP.API.IntegrationTests/Lending/CargosMasivosTests.cs` en PostgreSQL y SQL Server (una sola vez, al final)
+- [X] T049 E2e `tests/IngenIA365ERP.API.IntegrationTests/Lending/CargosMasivosTests.cs` en PostgreSQL y SQL Server (una sola vez, al final)
 
 ## Dependencias
 

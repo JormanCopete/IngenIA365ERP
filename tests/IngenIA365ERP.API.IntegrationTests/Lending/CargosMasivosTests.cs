@@ -25,7 +25,7 @@ public sealed class CargosMasivosTests(CentralIdentityApiFixture fx)
     public async Task Una_corrida_carga_a_los_asociados_activos_no_duplica_el_periodo_y_anula_un_cargo_sin_movimientos()
     {
         var hoy = CarteraE2E.Hoy(fx);
-        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "cargos-masivos");
+        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "cargos_masivos");
         await CarteraE2E.ActivarCarteraAsync(fx, coop);
         await LineasE2E.PrepararAsync(fx, coop);
         using var http = fx.CreateClient();
@@ -84,7 +84,7 @@ public sealed class CargosMasivosTests(CentralIdentityApiFixture fx)
         // La obligación es un crédito de la línea, de origen «Cargo masivo», por el valor del cargo.
         var credito = await CarteraE2E.GetAsync(http, admin, $"/api/lending/loans/{nuestras[0].Credito}");
         credito.GetProperty("origin").ToString().Should().BeOneOf("BulkCharge", ((int)LoanOrigin.BulkCharge).ToString());
-        credito.GetProperty("approvedAmount").GetDecimal().Should().Be(13_557m);
+        credito.GetProperty("amounts").GetProperty("approved").GetDecimal().Should().Be(13_557m);
 
         // Repetir el período no vuelve a cargar a nadie.
         var otra = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cargos, Cuerpo());

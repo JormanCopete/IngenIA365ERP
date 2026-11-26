@@ -209,7 +209,7 @@ public sealed class EjecutorDeAnulacionDeCargoMasivo(
         var ids = await Db.BulkChargeLines.AsNoTracking()
             .Where(l => l.RunId == run.Id && !l.IsDeleted && l.Status == BulkChargeLineStatus.Created && l.Id > cursor)
             .OrderBy(l => l.Id).Select(l => l.Id).Take(Tanda).ToListAsync(ct);
-        var alcance = EmisionDeCartera.AlcanceDeCargoMasivo(run.PublicId, $"anulacion:{corrida.PublicId:N}");
+        var alcance = EmisionDeCartera.AlcanceDeCargoMasivo(run.PublicId, $"A{corrida.Id}");
         if (ids.Count == 0)
         {
             await RecontarAsync(run, ct);

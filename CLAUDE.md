@@ -959,8 +959,8 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     segundo plano (`BulkChargeVoid`), un comprobante. Centrales y cobranza dejan fuera estos créditos salvo que la línea diga lo contrario
     (`CargosMasivosFuera`; de fábrica, fuera).
   - Permisos `Lending.BulkCharges.Read/Run/Void`, parámetro `Segregacion.CargoMasivoPorOtraPersona`, pantallas `/cartera/cargos-masivos`. Migración
-    aditiva `CargosMasivos`. Receta: `docs/manual/cartera-cargos-masivos.md`. Pendiente: la cuenta de contrapartida de `FDOSOL` (contadora) y las
-    e2e en los dos motores.
+    aditiva `CargosMasivos`. Receta: `docs/manual/cartera-cargos-masivos.md`. E2e `CargosMasivosTests` verde en PostgreSQL y SQL
+    Server. Pendiente: la cuenta de contrapartida de `FDOSOL` (contadora) y la exportación a Excel y PDF del detalle.
 
 - **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
   merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la

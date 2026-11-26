@@ -18,7 +18,10 @@ public sealed partial class EmisionDeCartera
     /// <summary>El disparador de la clave de horario de los cargos masivos: el lote lo crea la corrida al terminar, no un horario.</summary>
     public const string DisparadorCargoMasivo = "CargoMasivo";
 
-    /// <summary>El alcance del lote de una corrida de cargos masivos (o de la anulación de su lote <paramref name="tanda"/>).</summary>
+    /// <summary>
+    /// El alcance del lote de una corrida de cargos masivos (o de una anulación: <paramref name="tanda"/> corto, <c>L{línea}</c> o <c>A{corrida}</c>). La
+    /// columna <c>BatchScopeKey</c> admite 60 caracteres: la base ocupa 44.
+    /// </summary>
     public static string AlcanceDeCargoMasivo(Guid corrida, string? tanda = null) =>
         tanda is null ? $"CargoMasivo:{corrida:N}" : $"CargoMasivo:{corrida:N}:{tanda}";
 
