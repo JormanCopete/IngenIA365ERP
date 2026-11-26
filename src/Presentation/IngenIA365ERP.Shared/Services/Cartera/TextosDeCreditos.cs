@@ -59,6 +59,8 @@ public static class TextosDeCreditos
         "Origination" => "Originado en Cartera",
         "Commercial" => "Venta a crédito",
         "Migration" => "Saldo inicial",
+        // 2026-11-25 (feature 026).
+        "BulkCharge" => "Cargo masivo",
         _ => v ?? "—",
     };
 
@@ -187,6 +189,9 @@ public static class TextosDeCreditos
         "RateChange" => "Cambio de tasa",
         "Novation" => "Novación",
         "TermCorrection" => "Cambio de plazo",
+        "CutoverCorrection" => "Corrección desde el corte",
+        // 2026-11-25 (feature 026).
+        "BulkCharge" => "Cargo masivo",
         _ => v ?? "—",
     };
 

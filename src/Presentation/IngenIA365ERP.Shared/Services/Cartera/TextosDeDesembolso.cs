@@ -15,6 +15,8 @@ public static class TextosDeDesembolso
         "Check" => "Cheque",
         "ThirdPartyPayment" => "Giro a un tercero",
         "InKind" => "En especie",
+        // 2026-11-25 (feature 026): el cargo masivo no gira dinero.
+        "Charge" => "Cargo masivo (sin giro)",
         _ => v ?? "—",
     };
 

@@ -197,6 +197,13 @@ public sealed class VersionDeLineaRequest
     /// <summary>La originación pide la fecha del primer pago (las demás cuotas salen de ella con la periodicidad).</summary>
     public bool AsksFirstDueDate { get; set; }
 
+    /// <summary>2026-11-25 (feature 026): la línea admite cargos masivos y sus valores por defecto.</summary>
+    public bool AllowsBulkCharge { get; set; }
+    public decimal? BulkChargeDefaultAmount { get; set; }
+    public int? BulkChargeDefaultInstallments { get; set; }
+    public bool BulkChargeReportsToBureaus { get; set; }
+    public bool BulkChargeEntersCollection { get; set; }
+
     /// <summary>2026-11-23: las opciones de descuento condicionado (el caso del SOAT).</summary>
     public List<OpcionDeDescuentoRequest> DiscountOptions { get; set; } = [];
     public AmortizacionRequest Amortization { get; set; } = new();
@@ -267,6 +274,11 @@ public sealed class VersionDeLineaRequest
         PaymentDay = v.PaymentDay,
         CutoffDay = v.CutoffDay,
         AsksFirstDueDate = v.AsksFirstDueDate,
+        AllowsBulkCharge = v.AllowsBulkCharge,
+        BulkChargeDefaultAmount = v.BulkChargeDefaultAmount,
+        BulkChargeDefaultInstallments = v.BulkChargeDefaultInstallments,
+        BulkChargeReportsToBureaus = v.BulkChargeReportsToBureaus,
+        BulkChargeEntersCollection = v.BulkChargeEntersCollection,
         DiscountOptions = [.. v.DiscountOptions.Select(o => new OpcionDeDescuentoRequest { Code = o.Code, Name = o.Name, Fraction = o.Fraction, FundCode = o.FundCode })],
         Amortization = new AmortizacionRequest
         {
@@ -452,6 +464,13 @@ public sealed record VersionDeLineaDto(
 
     /// <summary>La originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
+
+    /// <summary>2026-11-25 (feature 026): la línea admite cargos masivos y sus valores por defecto.</summary>
+    public bool AllowsBulkCharge { get; init; }
+    public decimal? BulkChargeDefaultAmount { get; init; }
+    public int? BulkChargeDefaultInstallments { get; init; }
+    public bool BulkChargeReportsToBureaus { get; init; }
+    public bool BulkChargeEntersCollection { get; init; }
 
     /// <summary>2026-11-23: las opciones de descuento condicionado.</summary>
     public IReadOnlyList<OpcionDeDescuentoDto> DiscountOptions { get; init; } = [];

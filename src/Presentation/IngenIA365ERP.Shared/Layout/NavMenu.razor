@@ -316,6 +316,11 @@
             <PermissionGate Required="Lending.AccrualProcesses.Read">
                 <NavLink href="/cartera/causacion" class="nav-subitem">Proceso de causación</NavLink>
             </PermissionGate>
+            @* Feature 026 (2026-11-25): los cargos masivos —una obligación de una línea marcada por cada asociado activo, sin solicitud ni giro, en un
+               solo comprobante CO—. *@
+            <PermissionGate Required="Lending.BulkCharges.View">
+                <NavLink href="/cartera/cargos-masivos" class="nav-subitem">Cargos masivos</NavLink>
+            </PermissionGate>
             @* US9 (T0715): los cierres del mes —calificación, deterioro, reapertura— y la calificación informativa. *@
             <PermissionGate Required="Lending.Ratings.Read">
                 <NavLink href="/cartera/cierres" class="nav-subitem">Cierres del mes</NavLink>

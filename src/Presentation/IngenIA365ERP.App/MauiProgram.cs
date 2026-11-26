@@ -162,6 +162,7 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CastigosClient>();
             // Feature 024, fase 3 (2026-11-16): el proceso de causación.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ProcesosDeCausacionClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CargosMasivosClient>();
             // Feature 014 (T057): captaciones y aportes.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CaptacionesClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();

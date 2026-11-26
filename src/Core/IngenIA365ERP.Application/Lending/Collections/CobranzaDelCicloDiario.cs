@@ -318,7 +318,13 @@ public sealed class CobranzaDelCicloDiario(
         var personas = creditos.Select(c => c.DebtorPersonId).Distinct().ToList();
         var enInsolvencia = (await db.InsolvencyProceedings.AsNoTracking().Where(p => personas.Contains(p.PersonId) && !p.IsDeleted
             && p.Status == InsolvencyProceedingStatus.Negotiating && p.StartDate <= dia).Select(p => p.PersonId).ToListAsync(ct)).ToHashSet();
-        return creditos.Where(c => conReclamacion.Contains(c.Id) || enInsolvencia.Contains(c.DebtorPersonId)).Select(c => c.Id).ToHashSet();
+        // 2026-11-25 (feature 026, D4): las obligaciones de cargo masivo cuya línea no las manda a cobranza (de fábrica, ninguna).
+        var cargos = creditos.Where(c => c.Origin == LoanOrigin.BulkCharge).Select(c => c.Id).ToList();
+        var sinCobranza = cargos.Count == 0
+            ? new HashSet<int>()
+            : (await BulkCharges.CargosMasivosFuera.DeCobranza(db).Where(id => cargos.Contains(id)).ToListAsync(ct)).ToHashSet();
+        return creditos.Where(c => conReclamacion.Contains(c.Id) || enInsolvencia.Contains(c.DebtorPersonId) || sinCobranza.Contains(c.Id))
+            .Select(c => c.Id).ToHashSet();
     }
 
     /// <summary>

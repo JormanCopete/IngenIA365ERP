@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.BulkCharges;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -35,6 +36,12 @@ public class BulkChargesEndpoints : ICarterModule
                 await sender.Send(new ListBulkChargeRunsQuery(creditLinePublicId, period, status, page ?? 1, pageSize ?? 50), ct))
             .WithName("Lending_BulkCharges_List")
             .RequirePermission(Ver);
+
+        // HU4: el plano de una corrida en borrador con origen «plano» (GET /plano/template.xlsx y POST /plano/import?mode=review|apply).
+        cargos.MapGroup("/plano").MapPlantilla(
+            () => PlantillaDeCargosMasivos.Definicion, "plantilla-cartera-cargos-masivos", Correr, Correr, "Lending_BulkCharges_File",
+            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) => new ImportBulkChargeLinesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
 
         cargos.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetBulkChargeRunQuery(id), ct))
             .WithName("Lending_BulkCharges_Get")
