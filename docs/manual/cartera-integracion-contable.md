@@ -176,6 +176,24 @@ Se junta lo que comparte recaudador, número, fecha y oficina del recibo, y fech
 Si una obligación del recibo falla (le falta la regla, por ejemplo), sólo esa se rechaza y las demás se contabilizan. Lo de esa
 obligación sale en su propio comprobante al reprocesarla. Lo ya contabilizado no cambia al encender o apagar el parámetro.
 
+**El recibo de caja en un solo comprobante (2026-11-26).** Para revisar un recibo en un solo lugar, el parámetro del sistema
+`Accounting.CashReceiptSingleVoucher` (módulo `ACC`, de fábrica `false`) junta también la parte de Recaudo. Encendido, un recibo de
+caja que abona a créditos, aportes y ahorro sale **al instante en un solo comprobante** `RR`:
+- primero las líneas de Recaudo: caja (o el medio) y conceptos varios contra el puente;
+- después las de cada obligación: el puente contra capital, intereses, aportes y ahorro, sin sumarlas;
+- el puente queda a la vista, con débito y crédito por el mismo valor, así que el comprobante muestra que el recibo se aplicó entero;
+- la descripción dice «Recibo N · fecha · k créditos · m cuentas», y el origen es el recibo de Recaudo.
+
+Para poder juntarlo, el recibo de caja pasa en línea aunque `Contabilidad.ModoDePaso` de Recaudo diga «PorLotes». Cada línea se valida
+con el módulo que la manda: la caja tiene que estar habilitada para Recaudo y las cuentas de los créditos para Cartera, como siempre.
+
+**Todo o nada.** Si algo impide juntar el recibo (le falta una regla a una obligación, una parte ya estaba contabilizada, otra fecha
+contable, o el contrato rechaza el comprobante), no se guarda nada junto y el recibo sigue el camino de siempre: el `RR` de Recaudo por
+un lado y Cartera por el otro (en un comprobante por recibo si `Accounting.LendingVoucherPerReceipt` está encendido), y lo que falle
+se rechaza con su motivo. Nunca queda medio recibo en un comprobante. Se juntan sólo los recibos de caja de Recaudo: los recibos de
+banco y pagaduría (`RB`), los reversos y anulaciones, Nómina y lo que no trae número de recibo siguen igual. Lo ya contabilizado no
+cambia al encender o apagar el parámetro.
+
 El cruce sólo aparece en las líneas cuya cuenta lo exige. Los puentes de recaudo y de desembolso conviene que **no**
 lo exijan: el otro lado contabiliza con su propio documento y no saldarían.
 

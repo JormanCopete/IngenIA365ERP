@@ -50,6 +50,23 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
         ArgumentNullException.ThrowIfNull(trabajo);
         try
         {
+            // 2026-11-26: el recibo de caja con lo que abona a Cartera, en un solo comprobante; si no se juntan, cada módulo con el suyo, como siempre.
+            if (ReciboEnUnSoloComprobante.EsClaveDeGrupo(trabajo.ClaveDeGrupo))
+            {
+                var unido = await sender.Send(new PostCashReceiptVoucherCommand(trabajo.ClaveDeGrupo!, trabajo.Unidades.SelectMany(u => u.MessagePublicIds).ToList()), ct);
+                if (unido.IsSuccess) return unido.Value;
+                logger.LogInformation("El recibo {Grupo} se contabiliza por módulo: {Motivo}", trabajo.ClaveDeGrupo, unido.Error.Message);
+                var porSeparado = new List<ResultadoDeUnidad>();
+                foreach (var u in trabajo.Unidades.Where(u => u.OriginModule != ModulosDeOrigen.Cartera))
+                    porSeparado.AddRange(await ConsumirAsync(TrabajoDeConsumo.DeUnaUnidad(u), ct));
+                var abonos = trabajo.Unidades.Where(u => u.OriginModule == ModulosDeOrigen.Cartera).ToList();
+                if (abonos.Count > 1 && (unido.Error as Common.Models.ErrorConDatos)?.Data is ReciboNoSeJunta { LendingGroupKey: { } claveDeCartera })
+                    porSeparado.AddRange(await ConsumirAsync(new TrabajoDeConsumo(claveDeCartera, abonos), ct));
+                else
+                    foreach (var u in abonos) porSeparado.AddRange(await ConsumirAsync(TrabajoDeConsumo.DeUnaUnidad(u), ct));
+                return porSeparado;
+            }
+
             var deCartera = trabajo.Unidades.Count > 0 && trabajo.Unidades.All(u => u.OriginModule == ModulosDeOrigen.Cartera);
             if (trabajo.ClaveDeGrupo is null)
             {
