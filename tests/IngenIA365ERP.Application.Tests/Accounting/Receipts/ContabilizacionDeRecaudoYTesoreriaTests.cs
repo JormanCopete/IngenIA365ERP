@@ -164,6 +164,38 @@ public class ContabilizacionDeRecaudoYTesoreriaTests
     }
 
     [Fact]
+    public async Task El_recibo_con_su_caja_va_en_un_comprobante_y_si_no_se_junta_cada_modulo_va_con_el_suyo()
+    {
+        var sender = Substitute.For<ISender>();
+        var rec = new UnidadDeConsumo(IntegrationDestinations.Accounting, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0) { OriginModule = "REC" };
+        var a = new UnidadDeConsumo(IntegrationDestinations.Accounting, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0) { OriginModule = "CAR" };
+        var b = new UnidadDeConsumo(IntegrationDestinations.Accounting, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0) { OriginModule = "CAR" };
+        var trabajo = new TrabajoDeConsumo(ReciboEnUnSoloComprobante.PrefijoDeGrupo + "R-1|x|2026-11-03", [rec, a, b]);
+        var unico = new ResultadoDeConsumo.Processed(Guid.NewGuid(), "RR", "7");
+        sender.Send(Arg.Any<PostCashReceiptVoucherCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<IReadOnlyList<ResultadoDeUnidad>>([new(rec, unico), new(a, unico), new(b, unico)]));
+        var destino = new DestinoContabilidad(sender, NullLogger<DestinoContabilidad>.Instance);
+
+        (await destino.ConsumirAsync(trabajo, default)).Should().OnlyContain(x => x.Resultado == unico);
+
+        // No se juntan: el recibo con su RR y los abonos juntos por recibo (la clave de Cartera viene en el error).
+        sender.ClearReceivedCalls();
+        sender.Send(Arg.Any<PostCashReceiptVoucherCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Failure<IReadOnlyList<ResultadoDeUnidad>>(
+            new ErrorConDatos(PostCashReceiptVoucherCommand.CodigoNoSeJunta, "no", new ReciboNoSeJunta("Recibo|REC|R-1|x|y|z"))));
+        sender.Send(Arg.Any<PostReceiptsFactsCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(Guid.NewGuid(), "RR", "8")));
+        var rc = new ResultadoDeConsumo.Processed(Guid.NewGuid(), "RC", "9");
+        sender.Send(Arg.Any<Application.Accounting.Lending.Contabilizacion.PostLendingSummaryGroupCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success<IReadOnlyList<ResultadoDeUnidad>>([new(a, rc), new(b, rc)]));
+
+        var separados = await destino.ConsumirAsync(trabajo, default);
+
+        separados.Select(x => ((ResultadoDeConsumo.Processed)x.Resultado).VoucherTypeCode).Should().Equal("RR", "RC", "RC");
+        await sender.Received(1).Send(Arg.Is<Application.Accounting.Lending.Contabilizacion.PostLendingSummaryGroupCommand>(
+            c => c.GroupKey == "Recibo|REC|R-1|x|y|z" && c.MessagePublicIds.Count == 2), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public void Lo_de_Recaudo_y_Tesoreria_se_corrige_desde_su_modulo()
     {
         var error = AccountingErrors.DocumentReceiptsOrTreasuryOwned(ModuloContable.Recaudo, "Receipt", Guid.NewGuid());

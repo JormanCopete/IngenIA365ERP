@@ -113,7 +113,9 @@ public sealed partial class EmisionDeRecaudo
 
         var (fecha, modoEnLinea) = await FechaYModoAsync(recibo.ValueDate, ct);
         ModoDeEntrega modo = modoEnLinea;
-        if (modoEnLinea is ModoDeEntrega.Sellado { Modo: DeliveryMode.Online })
+        // 2026-11-26: con un recibo, un comprobante (ReciboEnUnSoloComprobante), el recibo de caja pasa en línea para juntarse con lo que Cartera
+        // contabiliza de él; «PorLotes» no aplica.
+        if (modoEnLinea is ModoDeEntrega.Sellado { Modo: DeliveryMode.Online } && !await ReciboEnUnSoloComprobante.EncendidoAsync(db, ct))
         {
             var leido = await lector.LeerAsync(ParametrosDeRecaudoYTesoreria.ModuloRecaudo, ParametrosDeRecaudoYTesoreria.ContabilidadModoDePaso, fecha, ct: ct);
             var texto = leido.IsSuccess ? leido.Value.Texto : "PorLotes";
