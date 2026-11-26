@@ -231,7 +231,7 @@ preparó y confirmó, y su comprobante. El detalle muestra asociado por asociado
 
 ### Gobierno y pantallas (transversal)
 
-- **FR-026** Permisos nuevos `Lending.BulkCharges.View` (consultar), `.Run` (preparar y confirmar) y `.Void` (anular), sembrados por la API.
+- **FR-026** Permisos nuevos `Lending.BulkCharges.Read` (consultar), `.Run` (preparar y confirmar) y `.Void` (anular), sembrados por la API.
 - **FR-027** Parámetro `Segregacion.CargoMasivoPorOtraPersona` (No de fábrica): con Sí, quien prepara la corrida no la puede confirmar.
 - **FR-028** Auditoría de la corrida: preparada, confirmada, terminada, anulada (entera o por asociado), con sus datos y totales.
 - **FR-029** Confirmar y anular son idempotentes por su clave: repetir la petición no repite el efecto.

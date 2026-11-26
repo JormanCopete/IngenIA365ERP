@@ -510,6 +510,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess> AccrualProcesses => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact> AccrualProcessFacts => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine> AccrualProcessLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine>();
+    // 2026-11-25 (feature 026): los cargos masivos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun> BulkChargeRuns => Set<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine> BulkChargeLines => Set<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
     // K4 (feature 013, CarteraCobranza).

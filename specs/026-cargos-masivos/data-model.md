@@ -86,7 +86,7 @@ descarta.
 - `voucher-types.json`: `CO` «Cargos masivos», `Module`, `CAR`.
 - `lending-voucher-mappings.json`: `CargoMasivoRegistrado → CO`, `CargoMasivoAnulado → CO` (cruce `PG`).
 - `LendingFactTypesSeeder`: `CargoMasivoRegistrado` (`CMS`) y `CargoMasivoAnulado` (`CMA`), modo de fábrica `PorLotes` (la corrida sella el suyo).
-- Permisos `Lending.BulkCharges.View/Run/Void` (API al arrancar). Parámetro `Segregacion.CargoMasivoPorOtraPersona`.
+- Permisos `Lending.BulkCharges.Read/Run/Void` (API al arrancar). Parámetro `Segregacion.CargoMasivoPorOtraPersona`.
 
 ## Mensajes (contratos de integración, versión 1)
 

@@ -21,7 +21,7 @@
    total y la evaluación contable (comprobante CO); confirmar manda la huella revisada y, si cambió, se recarga. (c) En curso o terminada: los
    conteos, que se actualizan solos mientras trabaja, y asociado por asociado con su obligación; se anula la corrida entera o el cargo de uno, con
    motivo. Receta: docs/manual/cartera-cargos-masivos.md. *@
-<PermissionGate Required="Lending.BulkCharges.View" MostrarAviso="true">
+<PermissionGate Required="Lending.BulkCharges.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>@(_corrida is { } c ? $"Cargo masivo {c.Number} · {TextosDeCargosMasivos.Estado(c.Status)}" : "Nueva corrida de cargos masivos")</h3>
@@ -45,7 +45,7 @@
                         </select>
                     </label>
                     <label class="campo">Período *
-                        <input type="month" class="e-input" @bind="_periodo" />
+                        <input type="month" class="e-input" value="@_periodo" @onchange="@(e => _periodo = e.Value?.ToString())" />
                     </label>
                     <label class="campo">Fecha del cargo *
                         <input type="date" class="e-input" value="@Texto(_fechaDelCargo)" @onchange="@(e => _fechaDelCargo = Fecha(e.Value) ?? _fechaDelCargo)" />

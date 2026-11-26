@@ -97,6 +97,9 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
             EntregaDeCartera.K6b),
         // 2026-11-24 (feature 025, fase 3): el interés del período al corte de los créditos cargados, en línea y en CA.
         [InteresDelCorteV1.Type] = new("Interés del período al corte", "CA", EnLinea, null, EntregaDeCartera.K1),
+        // 2026-11-25 (feature 026): el cargo masivo y su anulación (la corrida sella su modo: un lote y un comprobante por corrida).
+        [CargoMasivoRegistradoV1.Type] = new("Cargo masivo registrado", "CO", EnLinea, null, EntregaDeCartera.K1),
+        [CargoMasivoAnuladoV1.Type] = new("Cargo masivo anulado", "CO", EnLinea, null, EntregaDeCartera.K1),
         // Feature 014 (T048; contracts/mensajes.md §1.1 y contabilidad.md §3 y §5 de la 014): los 33 de captaciones y aportes. Los acompañantes
         // llevan el modo y el comprobante de su principal más frecuente; rige el del principal (C01 de la 013).
         [ConsignacionEnCuentaAplicadaV1.Type] = new("Consignación en cuenta aplicada", "MA", EnLinea, null, EntregaDeCartera.K8),
@@ -134,9 +137,6 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         [OperacionDeCuentaReversadaV1.Type] = new("Operación de cuenta reversada", "MA", EnLinea, null, EntregaDeCartera.K7),
         [CaptacionesActivadasV1.Type] = new("Captaciones activadas", null, EnLinea, null, EntregaDeCartera.K7),
         [CargaDeCaptacionesAplicadaV1.Type] = new("Carga de captaciones aplicada", null, EnLinea, null, EntregaDeCartera.K7),
-        // 2026-11-25 (feature 026): el cargo masivo y su anulación (la corrida sella su modo: un lote y un comprobante por corrida).
-        [CargoMasivoRegistradoV1.Type] = new("Cargo masivo registrado", "CO", EnLinea, null, EntregaDeCartera.K1),
-        [CargoMasivoAnuladoV1.Type] = new("Cargo masivo anulado", "CO", EnLinea, null, EntregaDeCartera.K1),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

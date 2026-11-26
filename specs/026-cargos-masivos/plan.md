@@ -103,7 +103,7 @@ de Contabilidad. Agrega dos hechos contables, un rol de la matriz, un tipo de co
     mes cerrado de Cartera o Contabilidad → `PeriodClosed`; encola `LendingProcessRun` con `RequestLendingProcessRunCommand`).
   - Consultas: opciones, lista, detalle, líneas.
 - Parámetro `Segregacion.CargoMasivoPorOtraPersona` en `ParametrosDeCartera.Definiciones`.
-- Permisos `Lending.BulkCharges.View/Run/Void` en `LendingPermissionCatalogSeeder` y `PerfilesSugeridos`; contadores de permisos en las pruebas.
+- Permisos `Lending.BulkCharges.Read/Run/Void` en `LendingPermissionCatalogSeeder` y `PerfilesSugeridos`; contadores de permisos en las pruebas.
 - Endpoints `API/Endpoints/Lending/BulkChargesEndpoints.cs` según [contracts/api.md](contracts/api.md); entra a `LosComandosDeCarteraLlevanClave`.
 - **Pruebas** (Application): población y exclusiones, forma de pago «de cada asociado», unicidad, huella, segregación, mes cerrado.
 

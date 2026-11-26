@@ -11,7 +11,7 @@
 @* 2026-11-25 (pedido del dueño; feature 026, HU6): la lista de corridas de cargos masivos —una obligación de una línea marcada por cada asociado, sin
    solicitud ni giro, contabilizada en un solo comprobante CO—, con filtros por línea, período y estado. «Nueva corrida» abre el detalle en blanco.
    Receta: docs/manual/cartera-cargos-masivos.md. *@
-<PermissionGate Required="Lending.BulkCharges.View" MostrarAviso="true">
+<PermissionGate Required="Lending.BulkCharges.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Cargos masivos</h3>
@@ -32,7 +32,7 @@
             </select>
         </label>
         <label class="campo">Período
-            <input type="month" class="e-input" @bind="_periodo" />
+            <input type="month" class="e-input" value="@_periodo" @onchange="@(e => _periodo = e.Value?.ToString())" />
         </label>
         <label class="campo">Estado
             <select class="e-input" @bind="_estado">

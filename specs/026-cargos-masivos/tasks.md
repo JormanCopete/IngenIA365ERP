@@ -48,7 +48,7 @@ Rutas: `Dom` = `src/Core/IngenIA365ERP.Domain`, `App` = `src/Core/IngenIA365ERP.
 **Prueba independiente**: una corrida de tres asociados (uno retirado) crea dos obligaciones, omite uno y se puede repetir sin duplicar.
 
 - [ ] T020 [US2] Parámetro `Segregacion.CargoMasivoPorOtraPersona` en `Dom/Lending/Parameters/ParametrosDeCartera.cs`
-- [ ] T021 [US2] Permisos `Lending.BulkCharges.View/Run/Void` en `src/Infrastructure/IngenIA365ERP.Identity/Seed/LendingPermissionCatalogSeeder.cs` y `App/Security/Roles/Plantillas/PerfilesSugeridos.cs`; contadores en `tests/.../PermisosDeCarteraTests.cs` y `SeguridadYHabeasDataDeCarteraTests.cs`
+- [ ] T021 [US2] Permisos `Lending.BulkCharges.Read/Run/Void` en `src/Infrastructure/IngenIA365ERP.Identity/Seed/LendingPermissionCatalogSeeder.cs` y `App/Security/Roles/Plantillas/PerfilesSugeridos.cs`; contadores en `tests/.../PermisosDeCarteraTests.cs` y `SeguridadYHabeasDataDeCarteraTests.cs`
 - [ ] T022 [US2] `PoblacionDeCargoMasivo` (activos, filtros, exclusiones, unicidad, forma de pago y convenio) en `App/Lending/BulkCharges/PoblacionDeCargoMasivo.cs`
 - [ ] T023 [US2] `VistaPreviaDeCargoMasivo` (líneas `Pending`/`Skipped`, totales, huella, evaluación contable) en `App/Lending/BulkCharges/VistaPreviaDeCargoMasivo.cs`
 - [ ] T024 [US2] Comandos crear, cambiar, recalcular, descartar y confirmar con validadores en `App/Lending/BulkCharges/BulkChargeRunCommands.cs`

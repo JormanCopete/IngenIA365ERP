@@ -129,6 +129,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Feature 024, fase 3 (2026-11-16): los procesos de causación por la oficina y la línea del proceso (ProcesosDeCausacion.Visibles y LeerAsync,
         // el 404 fuera), sus líneas por las de cada crédito y las opciones con lo pendiente de las oficinas del alcance.
         "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/AccrualProcessQueries.cs",
+        // Feature 026: las líneas de una corrida de cargos masivos (con personas) aplican el alcance.
+        "Core/IngenIA365ERP.Application/Lending/BulkCharges/BulkChargeVoidAndQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
         // K4 (US12, bloque B; T0932): la cobranza. La historia de asignaciones y la agenda por la oficina y la línea del crédito (las del deudor
@@ -269,6 +271,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListGoverningBodiesQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
         ["GetGoverningBodyQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
         ["ListLendingTemplatesQuery"] = "registro de plantillas vacías: no trae datos",
+        // Feature 026: las corridas de cargos masivos son de la cooperativa entera (abarcan todas las oficinas); las opciones son líneas, sin personas.
+        ["GetBulkChargeOptionsQuery"] = "catálogo de la cooperativa: las líneas que admiten cargos masivos no tienen oficina",
+        ["ListBulkChargeRunsQuery"] = "encabezados de corridas de la cooperativa: una corrida abarca todas las oficinas y no trae personas",
+        ["GetBulkChargeRunQuery"] = "encabezado de una corrida de la cooperativa con sus totales: abarca todas las oficinas; sus asociados salen por ListBulkChargeLinesQuery, con alcance",
         // US13 (bloque 14B, T0781): el logotipo y la firma de los documentos son de la cooperativa, no de una oficina.
         ["GetLendingDocumentImagesQuery"] = "configuración de la cooperativa: el logotipo y la imagen de la firma no tienen oficina",
         ["GetLendingTemplateQuery"] = "definición de una plantilla vacía: no trae datos",

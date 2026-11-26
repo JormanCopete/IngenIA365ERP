@@ -109,8 +109,8 @@ public class ElCatalogoDeMensajesEsUnico
         // DescuentosPorPagaduria (y, de Recaudo, la v2 de ResultadoDeDescuentos).
         // Feature 015, US10 (T0267; E-01 c): + ArchivoDeDesembolsosGenerado y ArchivoDeDesembolsosAnulado (CAR → Treasury).
         // Feature 024: + AdministracionCausada (ACA, fase 2) y CuotaReconocida (CUR, fase 4; CRC ya era de Tesorería).
-        // Feature 025, fase 3 (2026-11-24): + InteresDelCorte (IDC).
-        Assert.Equal(87, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // Feature 025, fase 3 (2026-11-24): + InteresDelCorte (IDC). Feature 026 (2026-11-25): + CargoMasivoRegistrado (CMS) y CargoMasivoAnulado (CMA).
+        Assert.Equal(89, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
         // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
         // T1 (fase 32): + TrasladoEntreCuentasEnviado (TEE), TrasladoConfirmado (TCF), ChequesReclasificadosAlCierre (CRC) y ChequeNoCobradoACuentaPorPagar (CNP).
@@ -131,7 +131,7 @@ public class ElCatalogoDeMensajesEsUnico
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         // Feature 024: + AdministracionCausada (ACA, fase 2) y CuotaReconocida (CUR, fase 4). Feature 025, fase 3: + InteresDelCorte (IDC).
-        Assert.Equal(73, hechos.Count);
+        Assert.Equal(75, hechos.Count); // Feature 026: + CMS y CMA.
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
         var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();

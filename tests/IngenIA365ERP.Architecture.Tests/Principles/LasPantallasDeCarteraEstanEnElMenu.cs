@@ -84,7 +84,7 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // Feature 024, fase 3 (2026-11-16): el proceso de causación, con su borrador, su firma de cuatro ojos y su reproceso.
         ("Pages/Cartera/Causacion.razor", "/cartera/causacion", "Lending.AccrualProcesses.Read"),
         // Feature 026 (2026-11-25): los cargos masivos, con su vista previa, su confirmación y su anulación.
-        ("Pages/Cartera/CargosMasivos.razor", "/cartera/cargos-masivos", "Lending.BulkCharges.View"),
+        ("Pages/Cartera/CargosMasivos.razor", "/cartera/cargos-masivos", "Lending.BulkCharges.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -104,7 +104,7 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Pagaduria.razor", "/cartera/pagadurias/{Id:guid}", "Lending.PayrollAgreements.View"),
         ("Pages/Cartera/ArchivoDeDescuento.razor", "/cartera/archivos-de-descuento/{Id:guid}", "Lending.PayrollDeductionFiles.Read"),
         // Feature 026 (2026-11-25): la corrida de cargos masivos, nueva o existente, se abre desde Cargos masivos.
-        ("Pages/Cartera/CargoMasivoDetalle.razor", "/cartera/cargos-masivos/{Id:guid}", "Lending.BulkCharges.View"),
+        ("Pages/Cartera/CargoMasivoDetalle.razor", "/cartera/cargos-masivos/{Id:guid}", "Lending.BulkCharges.Read"),
     ];
 
     /// <summary>

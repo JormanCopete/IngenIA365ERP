@@ -245,14 +245,18 @@ public sealed class GetBulkChargeRunQueryHandler(EntradaDeCargoMasivo entrada, C
 public sealed record ListBulkChargeLinesQuery(Guid RunPublicId, BulkChargeLineStatus? Status = null, int Page = 1, int PageSize = 100)
     : IRequest<Result<BulkChargeLinesPageDto>>;
 
-public sealed class ListBulkChargeLinesQueryHandler(IApplicationDbContext db) : IRequestHandler<ListBulkChargeLinesQuery, Result<BulkChargeLinesPageDto>>
+/// <remarks>Trae personas: aplica el alcance de oficinas y líneas de quien consulta (FR-004).</remarks>
+public sealed class ListBulkChargeLinesQueryHandler(IApplicationDbContext db, IAlcanceDeCartera alcanceDeLaPeticion)
+    : IRequestHandler<ListBulkChargeLinesQuery, Result<BulkChargeLinesPageDto>>
 {
     public async Task<Result<BulkChargeLinesPageDto>> Handle(ListBulkChargeLinesQuery request, CancellationToken ct)
     {
         var runId = await db.BulkChargeRuns.AsNoTracking().Where(r => r.PublicId == request.RunPublicId && !r.IsDeleted).Select(r => (int?)r.Id)
             .FirstOrDefaultAsync(ct);
         if (runId is not { } id) return Result.Failure<BulkChargeLinesPageDto>(ErroresDeCargoMasivo.Inexistente());
-        var consulta = from l in db.BulkChargeLines.AsNoTracking()
+        var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
+        var lineas = db.BulkChargeLines.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId);
+        var consulta = from l in lineas
                        join p in db.People.AsNoTracking() on l.PersonId equals p.Id
                        join b in db.Branches.AsNoTracking() on l.BranchId equals b.Id into bs
                        from b in bs.DefaultIfEmpty()

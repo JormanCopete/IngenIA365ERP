@@ -68,7 +68,7 @@ public class PermisosDeCarteraTests
         // 2026-11-24: el cambio de plazo de un crédito sin pagos ni causación.
         "Loans.ChangeTerm",
         // 2026-11-25 (feature 026): los cargos masivos.
-        "BulkCharges.View", "BulkCharges.Run", "BulkCharges.Void",
+        "BulkCharges.Read", "BulkCharges.Run", "BulkCharges.Void",
     ];
 
     private static bool DeCartera(string c) => c.StartsWith("Lending.", StringComparison.Ordinal);
@@ -118,7 +118,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(170 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(173 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

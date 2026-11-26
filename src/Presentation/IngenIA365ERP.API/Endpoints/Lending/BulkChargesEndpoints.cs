@@ -9,13 +9,13 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 
 /// <summary>
 /// Los cargos masivos de Cartera (2026-11-25, pedido del dueño; feature 026; specs/026-cargos-masivos/contracts/api.md): una corrida crea una obligación de
-/// una línea marcada por cada asociado, sin solicitud ni giro, y la contabiliza en un solo comprobante <c>CO</c>. Ver exige <c>Lending.BulkCharges.View</c>;
+/// una línea marcada por cada asociado, sin solicitud ni giro, y la contabiliza en un solo comprobante <c>CO</c>. Ver exige <c>Lending.BulkCharges.Read</c>;
 /// preparar, recalcular, descartar y confirmar, <c>.Run</c>; anular, <c>.Void</c>. Toda escritura lleva <c>Idempotency-Key</c>. Cada ruta sólo reenvía al
 /// <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class BulkChargesEndpoints : ICarterModule
 {
-    public const string Ver = "Lending.BulkCharges.View";
+    public const string Ver = "Lending.BulkCharges.Read";
     public const string Correr = "Lending.BulkCharges.Run";
     public const string Anular = "Lending.BulkCharges.Void";
 
@@ -27,6 +27,12 @@ public class BulkChargesEndpoints : ICarterModule
     {
         var cargos = LendingGroup.Grupo(app, "/bulk-charges", "Cartera Cargos masivos");
 
+        // HU4: el plano de una corrida en borrador con origen «plano» (GET /plano/template.xlsx y POST /plano/import?mode=review|apply), en su grupo base.
+        LendingGroup.Grupo(app, "/bulk-charges/plano", "Cartera Cargos masivos").MapPlantilla(
+            () => PlantillaDeCargosMasivos.Definicion, "plantilla-cartera-cargos-masivos", Correr, Correr, "Lending_BulkCharges_File",
+            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) => new ImportBulkChargeLinesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
+
         cargos.MapGet("/options", async (ISender sender, CancellationToken ct) => await sender.Send(new GetBulkChargeOptionsQuery(), ct))
             .WithName("Lending_BulkCharges_Options")
             .RequirePermission(Ver);
@@ -36,12 +42,6 @@ public class BulkChargesEndpoints : ICarterModule
                 await sender.Send(new ListBulkChargeRunsQuery(creditLinePublicId, period, status, page ?? 1, pageSize ?? 50), ct))
             .WithName("Lending_BulkCharges_List")
             .RequirePermission(Ver);
-
-        // HU4: el plano de una corrida en borrador con origen «plano» (GET /plano/template.xlsx y POST /plano/import?mode=review|apply).
-        cargos.MapGroup("/plano").MapPlantilla(
-            () => PlantillaDeCargosMasivos.Definicion, "plantilla-cartera-cargos-masivos", Correr, Correr, "Lending_BulkCharges_File",
-            "Lending.Reports.ExportPersonalData", IngenIA365ERP.Application.Common.Audit.AuditEventTypes.LendingReportExported,
-            importar: (modo, archivo, motivo, clave) => new ImportBulkChargeLinesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
 
         cargos.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetBulkChargeRunQuery(id), ct))
             .WithName("Lending_BulkCharges_Get")

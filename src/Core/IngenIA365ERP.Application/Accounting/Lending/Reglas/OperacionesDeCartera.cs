@@ -246,6 +246,9 @@ public static class OperacionesDeCartera
         // que lo pone en su lote en la misma transacción. Comprobante CA.
         new(InteresDelCorteV1.Type, "IDC", false, Causados, ContrasDeLaCausacion, EnLinea, null, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
 
+        // 2026-11-25 (pedido del dueño; feature 026): el cargo masivo y su anulación. De fábrica en línea, pero la corrida sella el suyo (un lote por corrida, un comprobante CO).
+        new(CargoMasivoRegistradoV1.Type, "CMS", false, [R.Capital], [R.ContrapartidaDelCargo], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
+        new(CargoMasivoAnuladoV1.Type, "CMA", false, [R.ContrapartidaDelCargo], [R.Capital], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
         // Feature 014 (T048; contracts/contabilidad.md §3 de la 014, con los roles en español de research C10): los 33 hechos de captaciones y
         // aportes, al final (37 → 70). El lado es el del importe positivo; un negativo lo invierte. Los de saldo, puente y pasivo se resuelven con
         // la regla de hecho «*»: el hecho sólo restringe qué roles de resultado admiten una regla con hecho fijo. Los acompañantes llevan el
@@ -319,9 +322,6 @@ public static class OperacionesDeCartera
             [AjusteDeCausacionDeCaptacionV1.Type, PagoReversadoV1.Type], HeredaElModo: true),
         new(CaptacionesActivadasV1.Type, "CAV", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
         new(CargaDeCaptacionesAplicadaV1.Type, "CAC", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
-        // 2026-11-25 (pedido del dueño; feature 026): el cargo masivo y su anulación. De fábrica en línea, pero la corrida sella el suyo (un lote por corrida, un comprobante CO).
-        new(CargoMasivoRegistradoV1.Type, "CMS", false, [R.Capital], [R.ContrapartidaDelCargo], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
-        new(CargoMasivoAnuladoV1.Type, "CMA", false, [R.ContrapartidaDelCargo], [R.Capital], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
     ];
 
     /// <summary>

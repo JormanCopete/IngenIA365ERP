@@ -128,7 +128,7 @@ Base de código: `origin/develop` @ `dc7ee87c` (2026-11-25). Rutas relativas a `
 
 ## R14. Gobierno
 
-- Permisos en `LendingPermissionCatalogSeeder.Catalog`: `Lending.BulkCharges.View`, `.Run`, `.Void` (sube el total de 169 a 172 en
+- Permisos en `LendingPermissionCatalogSeeder.Catalog`: `Lending.BulkCharges.Read`, `.Run`, `.Void` (sube el total de 169 a 172 en
   `SeguridadYHabeasDataDeCarteraTests` y `PermisosDeCarteraTests`). Perfiles sugeridos: Administrador de Cartera los tres; Analista View y Run.
 - Parámetro `Segregacion.CargoMasivoPorOtraPersona` (`SiNo`, falso) en `ParametrosDeCartera`, comprobado al confirmar contra quien creó el
   borrador.

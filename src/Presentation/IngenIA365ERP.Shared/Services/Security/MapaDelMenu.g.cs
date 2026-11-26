@@ -88,6 +88,7 @@ public static partial class MapaDelMenu
         new("Cartera", "Procesos e informes", "Bandeja de mensajes", "/cartera/bandeja-de-mensajes", ["Lending.Messages.Read"], ["Lending.Messages.Read"], ["Lending.Processes.View", "Lending.Messages.Reprocess", "Lending.Processes.Run"]),
         new("Cartera", "Procesos e informes", "Conciliación contable", "/cartera/conciliacion-contable", ["Lending.Reconciliation.View", "Lending.Messages.Read"], ["Lending.Reconciliation.View", "Lending.Messages.Read"], []),
         new("Cartera", "Procesos e informes", "Proceso de causación", "/cartera/causacion", ["Lending.AccrualProcesses.Read"], ["Lending.AccrualProcesses.Read"], ["Lending.AccrualProcesses.Calculate", "Lending.AccrualProcesses.Confirm", "Lending.AccrualProcesses.Reprocess"]),
+        new("Cartera", "Procesos e informes", "Cargos masivos", "/cartera/cargos-masivos", ["Lending.BulkCharges.Read"], ["Lending.BulkCharges.Read"], ["Lending.BulkCharges.Run"]),
         new("Cartera", "Procesos e informes", "Cierres del mes", "/cartera/cierres", ["Lending.Ratings.Read"], ["Lending.Ratings.Read"], ["Lending.MonthlyClose.Execute", "Lending.MonthlyClose.Reopen", "Lending.ImpairmentModel.Manage", "Lending.ArrearsHistory.Import"]),
         new("Cartera", "Procesos e informes", "Informes de cartera", "/cartera/informes", ["Lending.Reports.View"], ["Lending.Reports.View"], ["Lending.Reports.Export"]),
         new("Cartera", "Procesos e informes", "Tablero de cartera", "/cartera/tablero", ["Lending.Dashboard.View"], ["Lending.Dashboard.View"], []),
