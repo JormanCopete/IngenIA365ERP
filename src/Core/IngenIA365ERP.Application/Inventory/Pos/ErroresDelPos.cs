@@ -31,6 +31,13 @@ public static class ErroresDelPos
     public static Error CashSessionNotOpen() => new(CashSessionNotOpenCode,
         "La sesión de caja no está abierta o no es suya: abra su turno en una caja del punto antes de vender.");
 
+    public const string CashSessionFromPreviousDayCode = "Inventory.Pos.CashSessionFromPreviousDay";
+
+    /// <summary>2026-11-26: como en Recaudo, la caja que quedó abierta de un día anterior ya no vende; se cierra y se abre la de hoy (422). (nuevo)</summary>
+    public static Error CashSessionFromPreviousDay(DateOnly dia) => new ErrorConDatos(CashSessionFromPreviousDayCode,
+        $"Esta caja quedó abierta desde el {dia:dd/MM/yyyy} y ya no vende: ciérrela en «Mi caja» (Arquear y cerrar) y abra la de hoy.",
+        new { operatingDate = dia });
+
     /// <summary>El punto de la sesión no tiene POS (<c>INV_PointsOfSale.PosEnabled = false</c>, FR-058). (nuevo)</summary>
     public static Error NotEnabled(string pointOfSaleCode) => new ErrorConDatos(NotEnabledCode,
         $"El punto {pointOfSaleCode} no vende por el POS: sus cajas se usan para el cobro de las ventas de oficina.",

@@ -624,12 +624,18 @@ public sealed class CloseCollectionPointDayCommandHandler(
         var porMedio = lineas.GroupBy(l => l.PaymentMeansId)
             .Select(g => new DayCloseLine { PaymentMeansId = g.Key, Expected = g.Sum(x => x.Expected), Counted = g.Sum(x => x.Counted), Difference = g.Sum(x => x.Difference) })
             .ToList();
+        // 2026-11-26: un día reabierto se vuelve a cerrar con la versión siguiente.
+        var version = await db.ReceiptsDayCloses.AsNoTracking().Where(c => c.CollectionPointDayId == dia.Id).Select(c => (int?)c.Version).MaxAsync(ct);
         var cierre = new DayClose
         {
             CollectionPointDayId = dia.Id,
+            Version = (version ?? 0) + 1,
             SessionCount = sesiones.Count,
-            ReceiptCount = await db.IssuedReceipts.AsNoTracking().CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value), ct),
-            VoidingCount = 0,
+            // 2026-11-26: los recibos vigentes y, aparte, los anulados (hasta ese día los anulados se contaban como recibos y las anulaciones salían en cero).
+            ReceiptCount = await db.IssuedReceipts.AsNoTracking()
+                .CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value) && r.Status != ReceiptState.Voided, ct),
+            VoidingCount = await db.IssuedReceipts.AsNoTracking()
+                .CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value) && r.Status == ReceiptState.Voided, ct),
             Expected = porMedio.Sum(l => l.Expected),
             Counted = porMedio.Sum(l => l.Counted),
             Difference = porMedio.Sum(l => l.Difference),
@@ -671,7 +677,85 @@ public static class CierresDelDia
                             where l.DayCloseId == c.Id
                             orderby m.Code
                             select new DayCloseLineDto(m.PublicId, m.Code, l.Expected, l.Counted, l.Difference)).ToListAsync(ct);
+        // 2026-11-26, caja única: lo que entró del punto de venta va incluido en lo esperado y se dice aparte (el cierre del día del punto de venta ya no lo suma).
+        var delPunto = await (from m in db.CashMovements.AsNoTracking()
+                              join s in db.ReceiptsCashSessions.AsNoTracking() on m.CashSessionId equals s.Id
+                              where s.CollectionPointDayId == c.CollectionPointDayId && m.Kind == CashMovementKindR.FromPointOfSale
+                              select (decimal?)m.Amount).SumAsync(ct) ?? 0m;
+        var reapertura = await (from r in db.ReceiptsDayCloseReopenings.AsNoTracking()
+                                join u in db.Users.AsNoTracking().IgnoreQueryFilters() on r.ReopenedByUserId equals u.Id
+                                where r.DayCloseId == c.Id
+                                select new { r.ReopenedAt, r.Reason, u.Username }).FirstOrDefaultAsync(ct);
         return new DayCloseDto(c.PublicId, dia.PublicId, dia.BusinessDate, c.SessionCount, c.ReceiptCount, c.VoidingCount, c.Expected, c.Counted, c.Difference,
-            c.ClosedAt, c.VerificationCode, c.SupervisorDelegationId is not null, lineas);
+            c.ClosedAt, c.VerificationCode, c.SupervisorDelegationId is not null, lineas, delPunto, c.Version, reapertura?.ReopenedAt, reapertura?.Reason,
+            reapertura?.Username);
+    }
+
+    /// <summary>
+    /// 2026-11-26: el cierre vigente del día (el de mayor versión, si no se reabrió), o nulo si el día no está cerrado (nunca se cerró, o se reabrió y no
+    /// se ha vuelto a cerrar).
+    /// </summary>
+    public static async Task<DayClose?> VigenteAsync(IApplicationDbContext db, int collectionPointDayId, CancellationToken ct)
+    {
+        var ultimo = await db.ReceiptsDayCloses.AsNoTracking().Where(c => c.CollectionPointDayId == collectionPointDayId)
+            .OrderByDescending(c => c.Version).FirstOrDefaultAsync(ct);
+        if (ultimo is null) return null;
+        return await db.ReceiptsDayCloseReopenings.AsNoTracking().AnyAsync(r => r.DayCloseId == ultimo.Id, ct) ? null : ultimo;
+    }
+}
+
+/// <summary>
+/// <c>POST /api/receipts/collection-points/{id}/days/{date}/reopen</c> (<c>Receipts.Day.Close</c>, el supervisor): reabre el día cerrado con su motivo
+/// (2026-11-26, pedido del dueño, como el punto de venta). El cierre no se toca: una <see cref="DayCloseReopening"/> dice que dejó de regir, el día vuelve a
+/// <c>Open</c> (se pueden abrir sesiones si es el de hoy) y el siguiente cierre es la versión siguiente. (nuevo)
+/// </summary>
+public sealed record ReopenCollectionPointDayCommand(Guid CollectionPointPublicId, DateOnly BusinessDate, string Reason)
+    : IRequest<Result<DayCloseDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class ReopenCollectionPointDayCommandValidator : AbstractValidator<ReopenCollectionPointDayCommand>
+{
+    public ReopenCollectionPointDayCommandValidator()
+    {
+        RuleFor(x => x.CollectionPointPublicId).NotEmpty();
+        RuleFor(x => x.Reason).NotEmpty().WithMessage("Diga por qué reabre el día.").MaximumLength(500);
+    }
+}
+
+public sealed class ReopenCollectionPointDayCommandHandler(
+    IApplicationDbContext db,
+    IAlcanceDeRecaudo alcance,
+    IActorActual actorActual,
+    IDateTimeService reloj,
+    ICerrojoDeRecaudo cerrojo) : IRequestHandler<ReopenCollectionPointDayCommand, Result<DayCloseDto>>
+{
+    public async Task<Result<DayCloseDto>> Handle(ReopenCollectionPointDayCommand request, CancellationToken ct)
+    {
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (actor.UserId is not { } usuario) return Result.Failure<DayCloseDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
+        var punto = await Setup.AlcanceDePuntos.PuntoVisibleAsync(db, alcance, request.CollectionPointPublicId, seguir: false, ct);
+        if (punto is null) return Result.Failure<DayCloseDto>(ErroresDeRecaudo.NoEncontrado("El punto de recaudo"));
+        var dia = await db.CollectionPointDays.FirstOrDefaultAsync(d => d.CollectionPointId == punto.Id && d.BusinessDate == request.BusinessDate, ct);
+        if (dia is null) return Result.Failure<DayCloseDto>(ErroresDeRecaudo.NoEncontrado("El día del punto"));
+
+        await cerrojo.TomarSetupAsync(ct: ct);
+        await cerrojo.BloquearAsync(NivelDeRecaudo.DiaDelPunto, TablasDeRecaudo.DiasDelPunto, [dia.Id], exclusivo: true, ct);
+        var vigente = dia.Status == CollectionPointDayStatus.Closed ? await CierresDelDia.VigenteAsync(db, dia.Id, ct) : null;
+        if (vigente is null) return Result.Failure<DayCloseDto>(ErroresDeRecaudo.DiaNoCerrado());
+
+        db.ReceiptsDayCloseReopenings.Add(new DayCloseReopening
+        {
+            DayCloseId = vigente.Id,
+            Reason = request.Reason.Trim(),
+            ReopenedAt = reloj.UtcNow,
+            ReopenedByUserId = usuario,
+        });
+        dia.Status = CollectionPointDayStatus.Open;
+        dia.ClosedByUserId = null;
+        dia.ClosedAt = null;
+        await db.SaveChangesAsync(ct);
+        return Result.Success(await CierresDelDia.DtoAsync(db, vigente, ct));
     }
 }

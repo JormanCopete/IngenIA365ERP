@@ -28,7 +28,14 @@ public sealed record SesionDeCajaDto(
     int SalesCount,
     decimal SalesTotal,
     DocumentoDeCajaDto? DifferenceDocument,
-    Guid? LinkedSessionPublicId = null);
+    Guid? LinkedSessionPublicId = null,
+    decimal CreditSalesTotal = 0m)
+{
+    /// <summary>«N venta(s) por $X», neto de notas crédito, con lo vendido a crédito aparte si lo hubo.</summary>
+    public string Vendido => CreditSalesTotal != 0m
+        ? $"{SalesCount} venta(s) por {SalesTotal:N0} (a crédito {CreditSalesTotal:N0})"
+        : $"{SalesCount} venta(s) por {SalesTotal:N0}";
+}
 
 public sealed record SesionAbiertaDto(SesionDeCajaDto Session, DocumentoDeCajaDto? BaseIncomeDocument, IReadOnlyList<AvisoDeInventarioDto> Warnings);
 

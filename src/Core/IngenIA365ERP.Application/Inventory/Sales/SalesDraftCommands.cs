@@ -529,7 +529,7 @@ public sealed class BorradorDeVenta(
         }
 
         var abiertas = usuario is int u
-            ? await db.CashSessions.AsNoTracking().Where(s => s.CashierUserId == u && s.Status == CashSessionStatus.Open)
+            ? await db.CashSessions.AsNoTracking().Where(s => s.CashierUserId == u && s.Status == CashSessionStatus.Open && s.OperatingDate >= reloj.HoyLocal)
                 .Select(s => new { s.Id, s.PublicId }).ToListAsync(ct)
             : [];
         var terminalIds = entradas.Select(e => e.CardTerminalPublicId).OfType<Guid>().Distinct().ToList();

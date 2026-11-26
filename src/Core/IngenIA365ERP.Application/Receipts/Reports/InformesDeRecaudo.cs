@@ -252,6 +252,8 @@ public sealed partial class ReceiptsReportQueryHandler(IApplicationDbContext db,
                              join l in db.ReceiptsDayCloseLines.AsNoTracking() on c.Id equals l.DayCloseId
                              join m in db.PaymentMeans.AsNoTracking() on l.PaymentMeansId equals m.Id
                              where d.BusinessDate >= desde && d.BusinessDate <= hasta
+                                   // 2026-11-26: sólo los cierres vigentes (un cierre reabierto dejó de regir).
+                                   && !db.ReceiptsDayCloseReopenings.Any(r => r.DayCloseId == c.Id)
                              orderby d.BusinessDate, d.CollectionPointId, m.DisplayOrder
                              select new
                              {

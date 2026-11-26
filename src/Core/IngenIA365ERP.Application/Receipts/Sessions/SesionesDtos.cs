@@ -120,7 +120,12 @@ public sealed record DayCloseDto(
     DateTime ClosedAt,
     string VerificationCode,
     bool ByDelegate,
-    IReadOnlyList<DayCloseLineDto> Lines);
+    IReadOnlyList<DayCloseLineDto> Lines,
+    decimal FromPointOfSale = 0m,
+    int Version = 1,
+    DateTime? ReopenedAt = null,
+    string? ReopenReason = null,
+    string? ReopenedByName = null);
 
 public sealed record DayCloseLineDto(Guid PaymentMeansPublicId, string MeansCode, decimal Expected, decimal Counted, decimal Difference);
 

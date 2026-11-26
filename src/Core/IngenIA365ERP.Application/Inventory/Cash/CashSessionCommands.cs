@@ -121,7 +121,7 @@ public sealed class OpenCashSessionCommandHandler(
         var cajeros = await CajerosDeLaCaja.DeAsync(db, caja, fecha, ct);
         if (CajerosDeLaCaja.Rechazo(await sesiones.SoloCajerosAsignadosAsync(ct), caja.Code, cajeros, usuario) is { } noAsignado) return Falla(noAsignado);
         if (await ColisionesDeVenta.CajaOcupadaAsync(db, caja.Id, ct) is { } ocupada) return Falla(ocupada);
-        var exclusivo = await SiNoAsync(ParametrosDeInventario.CajaUnaSesionPorCajero, true, fecha, ParameterScopeKind.None, 0, ct);
+        var exclusivo = await sesiones.UnaSesionPorCajeroAsync(ct);
         if (exclusivo && await ColisionesDeVenta.CajeroOcupadoAsync(db, usuario, ct) is { } cajero) return Falla(cajero);
 
         // (3) Lo que se sella. La sesión vinculada (caja única) no lleva base propia: la base vive en la sesión de Recaudo.
@@ -129,8 +129,7 @@ public sealed class OpenCashSessionCommandHandler(
         var modo = vinculada
             ? CashSession.BaseFondoFijo
             : await TextoAsync(ParametrosDeInventario.CajaBaseModo, CashSession.BaseFondoFijo, fecha, ParameterScopeKind.CashRegister, caja.Id, ct);
-        var faltante = await TextoAsync(ParametrosDeInventario.CajaTratamientoFaltante, EvaluadorDeArqueo.FaltanteAlGasto, fecha,
-            ParameterScopeKind.PointOfSale, punto.Id, ct);
+        var faltante = await sesiones.TratamientoDelFaltanteAsync(ct);
         var ciego = await SiNoAsync(ParametrosDeInventario.CajaArqueoCiego, false, fecha, ParameterScopeKind.PointOfSale, punto.Id, ct);
         var persona = await db.Users.AsNoTracking().Where(u => u.Id == usuario).Select(u => u.PersonId).FirstOrDefaultAsync(ct);
         if (faltante == EvaluadorDeArqueo.FaltanteACargoDelCajero && persona is null) return Falla(ErroresDeCaja.CashierWithoutPerson());
@@ -407,8 +406,9 @@ public sealed class GetCashSessionQueryHandler(IApplicationDbContext db, Sesione
                                  orderby d.Id
                                  select new { m, d }).ToListAsync(ct);
         var borradores = await db.InventoryDocuments.AsNoTracking()
-            .Where(d => d.CashSessionId == sesion.Id && d.Status == DocumentStatus.Draft && d.Class != DocumentClass.CashMovement
-                        && d.Class != DocumentClass.CashCountDifference)
+            .Where(d => (d.CashSessionId == sesion.Id || db.DocumentPayments.Any(p => p.DocumentId == d.Id && p.CashSessionId == sesion.Id && !p.IsDeleted))
+                        && (d.Status == DocumentStatus.Draft || d.Status == DocumentStatus.PendingApproval)
+                        && d.Class != DocumentClass.CashMovement && d.Class != DocumentClass.CashCountDifference)
             .Select(d => d.IsSuspended).ToListAsync(ct);
         var arqueo = await (from l in db.CashCountLines.AsNoTracking()
                             join c in db.CashCounts.AsNoTracking() on l.CashCountId equals c.Id

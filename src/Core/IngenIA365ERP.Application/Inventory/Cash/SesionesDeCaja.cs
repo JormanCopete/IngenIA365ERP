@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
+using IngenIA365ERP.Application.Inventory.Reports;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Core.Payments;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
@@ -11,6 +12,7 @@ using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
 using IngenIA365ERP.Domain.Sales.Cash;
+using IngenIA365ERP.Domain.Sales.Payments;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Cash;
@@ -48,6 +50,24 @@ public sealed class SesionesDeCaja(
     /// </summary>
     public async Task<bool> SoloCajerosAsignadosAsync(CancellationToken ct) =>
         parametros is null || reloj is null || await IngenIA365ERP.Application.Receipts.Common.SoloCajerosAsignados.EsAsync(parametros, reloj.HoyLocal, ct);
+
+    /// <summary>
+    /// 2026-11-26: un cajero, una sesión (<c>Caja.UnaSesionPorCajero</c>, el de Recaudo, común a las dos cajas). Sin lector de parámetros, encendido.
+    /// </summary>
+    public async Task<bool> UnaSesionPorCajeroAsync(CancellationToken ct) =>
+        parametros is null || reloj is null
+        || await parametros.SiNoAsync(IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.CajaUnaSesionPorCajero, reloj.HoyLocal, ct);
+
+    /// <summary>
+    /// 2026-11-26: el tratamiento del faltante (<c>Caja.TratamientoFaltante</c>, el de Recaudo, común a las dos cajas), en el vocabulario del punto de venta.
+    /// Con el arqueo sencillo va al gasto, como en Recaudo. Sin lector de parámetros, al gasto.
+    /// </summary>
+    public async Task<string> TratamientoDelFaltanteAsync(CancellationToken ct)
+    {
+        if (parametros is null || reloj is null || !await ArqueoEstrictoAsync(ct)) return EvaluadorDeArqueo.FaltanteAlGasto;
+        var valor = await parametros.TextoAsync(IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante, reloj.HoyLocal, ct);
+        return valor == "CashierReceivable" ? EvaluadorDeArqueo.FaltanteACargoDelCajero : EvaluadorDeArqueo.FaltanteAlGasto;
+    }
 
     public const string PermisoVerTodas = "Inventory.CashSessions.ViewAll";
 
@@ -186,10 +206,6 @@ public sealed class SesionesDeCaja(
 
     // ------------------------------------------------------------------------------------------------ DTO --
 
-    /// <summary>Las clases que cuentan como venta en <c>salesCount</c>/<c>salesTotal</c>: las del grupo de ventas que sacan mercancía.</summary>
-    public static readonly IReadOnlyList<DocumentClass> ClasesDeVenta = ClasesDeDocumento.Todas
-        .Where(d => d.Group == DocumentClassGroup.Sales && d.Effect == InventoryEffect.Exit).Select(d => d.Class).ToList();
-
     public async Task<CashSessionDto> DtoAsync(CashSession sesion, CancellationToken ct) => (await DtosAsync([sesion], ct))[0];
 
     /// <summary>Los <see cref="CashSessionDto"/> de varias sesiones, en su orden.</summary>
@@ -207,12 +223,21 @@ public sealed class SesionesDeCaja(
         var personaIds = sesiones.Select(s => s.CashierPersonId).OfType<int>().Distinct().ToList();
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personaIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
         var sesionIds = sesiones.Select(s => s.Id).ToList();
-        var clases = ClasesDeVenta.ToList();
-        var ventas = await db.InventoryDocuments.AsNoTracking()
-            .Where(d => d.CashSessionId != null && sesionIds.Contains(d.CashSessionId.Value) && d.Status == DocumentStatus.Confirmed && clases.Contains(d.Class))
-            .GroupBy(d => d.CashSessionId!.Value)
-            .Select(g => new { Sesion = g.Key, Cantidad = g.Count(), Total = g.Sum(d => d.AmountDue) })
-            .ToDictionaryAsync(g => g.Sesion, ct);
+        // Lo vendido: la misma regla del informe de ventas por sesión (el POS por el encabezado, la factura de oficina por sus pagos),
+        // neto de notas crédito, y aparte lo que se vendió a crédito.
+        var filas = await VentasDeLasSesiones.LeerAsync(db, sesionIds, ct);
+        var docIds = filas.Select(f => f.Id).ToList();
+        var creditoPorDocumento = docIds.Count == 0 ? [] : (await db.DocumentPayments.AsNoTracking()
+                .Where(p => docIds.Contains(p.DocumentId) && !p.IsDeleted && p.Direction == PaymentDirection.Received)
+                .Select(p => new { p.DocumentId, p.MeansClass, p.Amount }).ToListAsync(ct))
+            .Where(p => ClasesDeMedio.EsCredito(p.MeansClass))
+            .GroupBy(p => p.DocumentId).ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
+        var ventas = filas.GroupBy(f => f.CashSessionId!.Value).ToDictionary(g => g.Key, g => new
+        {
+            Cantidad = g.Count(f => !f.EsDevolucion),
+            Total = CifrasDeVenta.De(g).Neto,
+            Credito = g.Sum(f => (f.EsDevolucion ? -1m : 1m) * creditoPorDocumento.GetValueOrDefault(f.Id)),
+        });
         var diferencias = await (from c in db.CashCounts.AsNoTracking()
                                  join d in db.InventoryDocuments.AsNoTracking() on c.DifferenceDocumentId equals d.Id
                                  where sesionIds.Contains(c.CashSessionId) && !c.IsDeleted
@@ -231,7 +256,7 @@ public sealed class SesionesDeCaja(
                 s.ClosedByUserId is int cerro ? usuarios.GetValueOrDefault(cerro)?.Username : null,
                 venta?.Cantidad ?? 0, venta?.Total ?? 0m,
                 diferencia is null ? null : new CashDocumentRefDto(diferencia.PublicId, VistaDeDocumentos.NumeroVisible(diferencia.Prefix, diferencia.Number), diferencia.Status),
-                s.LinkedSessionPublicId);
+                s.LinkedSessionPublicId, venta?.Credito ?? 0m);
         }).ToList();
     }
 

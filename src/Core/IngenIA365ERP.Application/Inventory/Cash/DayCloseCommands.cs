@@ -100,6 +100,15 @@ public sealed class ExecuteDayCloseCommandHandler(
                 .Select(s => new SesionAbiertaDto(s.PublicId, cajas.GetValueOrDefault(s.CashRegisterId) ?? string.Empty, s.CashierName)).ToList()));
         }
 
+        // 2026-11-26: como en Recaudo, el día no cierra con diferencias de arqueo esperando aprobación.
+        var idsDelDia = sesiones.Select(s => s.Id).ToList();
+        var porAprobar = await db.InventoryDocuments.AsNoTracking()
+            .Where(d => d.Class == DocumentClass.CashCountDifference && d.Status == DocumentStatus.PendingApproval
+                        && d.CashSessionId != null && idsDelDia.Contains(d.CashSessionId.Value))
+            .OrderBy(d => d.Id).Select(d => new { d.Prefix, d.Number }).ToListAsync(ct);
+        if (porAprobar.Count > 0)
+            return Falla(ErroresDeCaja.DayCloseDifferencesPending(porAprobar.Select(d => VistaDeDocumentos.NumeroVisible(d.Prefix, d.Number) ?? "sin número").ToList()));
+
         var version = await db.DayCloses.AsNoTracking().Where(d => d.PointOfSaleId == punto.Id && d.OperatingDate == fecha)
             .Select(d => (short?)d.Version).MaxAsync(ct);
         var cierre = new DayClose
@@ -111,7 +120,10 @@ public sealed class ExecuteDayCloseCommandHandler(
             ClosedByUserId = usuario,
             SessionCount = (short)sesiones.Count,
         };
-        foreach (var linea in await ConsolidarAsync(sesiones.Select(s => s.Id).ToList(), ct)) cierre.Lines.Add(linea);
+        // 2026-11-26: las sesiones de la caja única pasaron a Recaudo por el puente y se cuentan en su cierre del día; aquí sólo se listan (con
+        // «LinkedToCollection»). Antes sumaban en los dos cierres y el total del día salía doble.
+        var propias = sesiones.Where(s => s.LinkedSessionPublicId is null).Select(s => s.Id).ToList();
+        foreach (var linea in await ConsolidarAsync(propias, ct)) cierre.Lines.Add(linea);
         var porMedio = cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null).ToList();
         cierre.TotalExpected = porMedio.Sum(l => l.ExpectedAmount);
         cierre.TotalCounted = porMedio.Sum(l => l.CountedAmount);
@@ -122,10 +134,9 @@ public sealed class ExecuteDayCloseCommandHandler(
         if (request.Remittance is { } remesa)
         {
             if (remesas is null) return Falla(ErroresDeCaja.DayCloseRemittanceUnavailable());
-            // 2026-11-25: el efectivo de las sesiones de la caja única ya pasó a Recaudo por el puente: no se remesa desde aquí.
-            var propias = sesiones.Where(s => s.LinkedSessionPublicId is null).Select(s => s.Id).ToList();
-            IEnumerable<DayCloseLine> deLasPropias = propias.Count == sesiones.Count ? cierre.Lines : await ConsolidarAsync(propias, ct);
-            var efectivo = await EfectivoContadoAsync(deLasPropias, ct);
+            // 2026-11-25: el efectivo de las sesiones de la caja única ya pasó a Recaudo por el puente: no se remesa desde aquí (las líneas ya son sólo
+            // de las propias).
+            var efectivo = await EfectivoContadoAsync(cierre.Lines, ct);
             if (remesa.Amount > efectivo) return Falla(ErroresDeCaja.DayCloseRemittanceOverCash(remesa.Amount, efectivo));
             var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == punto.BranchId).Select(b => b.PublicId).FirstAsync(ct);
             try

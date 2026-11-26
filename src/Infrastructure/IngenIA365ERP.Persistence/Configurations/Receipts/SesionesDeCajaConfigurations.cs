@@ -232,7 +232,25 @@ public class DayCloseConfiguration : IEntityTypeConfiguration<DayClose>
         builder.Property(e => e.Counted).Monto();
         builder.Property(e => e.Difference).Monto();
         builder.Property(e => e.VerificationCode).HasMaxLength(40).IsRequired();
-        builder.HasIndex(e => e.CollectionPointDayId).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_CollectionPointDayId");
+        // 2026-11-26: una versión por cierre del día (se reabre y se vuelve a cerrar).
+        builder.Property(e => e.Version).HasDefaultValue(1);
+        builder.HasIndex(e => new { e.CollectionPointDayId, e.Version }).IsUnique().HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName($"UK_{Tabla}_CollectionPointDayId_Version");
+    }
+}
+
+/// <summary><c>RCD_DayCloseReopenings</c> (2026-11-26). (nuevo)</summary>
+public class DayCloseReopeningConfiguration : IEntityTypeConfiguration<DayCloseReopening>
+{
+    public const string Tabla = "RCD_DayCloseReopenings";
+
+    public void Configure(EntityTypeBuilder<DayCloseReopening> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<DayClose>().WithMany().HasForeignKey(e => e.DayCloseId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.ReopenedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Reason).HasMaxLength(500).IsRequired();
+        builder.HasIndex(e => e.DayCloseId).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_DayCloseId");
     }
 }
 

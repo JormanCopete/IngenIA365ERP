@@ -663,6 +663,7 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening> ReceiptsDayCloseReopenings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses { get; }

@@ -92,6 +92,16 @@ El testigo y el acta aparecen solo cuando se exigen: sesión olvidada y arqueo s
 - La caja del punto de venta de una sesión la abre **su cajero**; la consulta exige que la sesión esté en el alcance de quien pregunta.
 - Quien solo vende (un punto sin Recaudo) sigue con la caja del punto de venta como siempre.
 
+### Desde el 2026-11-26
+
+- **Mi caja de Recaudo** muestra lo esperado con lo del punto de venta sumado (POS y facturas de oficina), igual que «Arquear y cerrar».
+- **Un medio que Recaudo no recibe** y que el punto de venta cobró ya no se queda sin contar: el arqueo lo rechaza antes de cerrar nada
+  (`Receipts.SingleSession.PointOfSaleForeignMeans`) y dice qué hacer (agregar el medio al punto de Recaudo, o pasarlo a la caja fuerte desde el
+  punto de venta).
+- **Los cierres del día no repiten el dinero.** El del punto de venta ya no suma las sesiones de la caja única (las lista, marcadas), porque ese
+  dinero entra a Recaudo; el de Recaudo lo incluye y lo dice aparte («Del punto de venta»).
+- **El tablero** («Cajas abiertas») dice también lo vendido en la caja del punto de venta unida.
+
 ## Por dentro
 
 - Migración aditiva `CajaUnica`: `RCD_CashBoxes.PosCashRegisterPublicId` e `INV_CashSessions.LinkedSessionPublicId`.

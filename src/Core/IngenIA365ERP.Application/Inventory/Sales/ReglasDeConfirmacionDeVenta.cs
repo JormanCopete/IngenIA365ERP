@@ -396,7 +396,10 @@ public sealed class ReglasDeConfirmacionDeVenta(
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not int usuario) return [];
-        return await db.CashSessions.AsNoTracking().Where(s => s.CashierUserId == usuario && s.Status == CashSessionStatus.Open).Select(s => s.Id).ToListAsync(ct);
+        // 2026-11-26: sólo las de hoy; la que quedó abierta de un día anterior ya no recibe pagos (como en Recaudo y en el POS).
+        var hoy = reloj.HoyLocal;
+        return await db.CashSessions.AsNoTracking().Where(s => s.CashierUserId == usuario && s.Status == CashSessionStatus.Open && s.OperatingDate >= hoy)
+            .Select(s => s.Id).ToListAsync(ct);
     }
 
     /// <summary>Toca <c>LastActivityAt</c> de cada sesión de los pagos (T50, F14); una que ya no está abierta → <c>Inventory.CashSession.NotOpen</c>.</summary>

@@ -98,3 +98,23 @@ La pantalla lo pregunta en `GET /api/receipts/sessions/count-policy`.
 
 Lo vigilan `ArqueoSencilloTests` (Recaudo) y las pruebas del arqueo sencillo en `CashCommandsTests` (punto de venta). Las e2e de la caja de Recaudo
 encienden el estricto en su cooperativa.
+
+## Lo que cambió el 2026-11-26 (revisión de cajas y cierres)
+
+Pedido del dueño: «en Mi caja no me cuenta las ventas que hice por factura de venta, sólo las del POS».
+
+- **Lo vendido cuenta la factura de venta.** La factura que se hace en Ventas y se cobra con un medio que se arquea queda en la caja por su
+  pago, no por el documento. «Vendido» (Mi caja, Cajas del día, el arqueo y el detalle de la sesión) y la lista de documentos de la sesión ya
+  la cuentan, con la misma regla del informe «Ventas por sesión». La cifra es **neta de notas crédito**, y lo vendido a crédito va aparte en la
+  misma línea: «3 venta(s) por 250.000 (a crédito 80.000)».
+- **No se cierra con una factura pendiente.** Una factura en borrador o esperando aprobación con un pago en la caja impide cerrarla, como la
+  venta suspendida del POS. Antes la caja cerraba con ese dinero como sobrante y confirmar la factura después fallaba.
+- **La caja de un día anterior ya no vende.** Como la «olvidada» de Recaudo, la caja del punto de venta abierta desde otro día no abre
+  ventas, no retoma, no cobra y la factura no la toma: se cierra en Mi caja y se abre la de hoy. Descartar ventas y cerrar sí se puede.
+- **La base contada vale también en Recaudo.** Con el arqueo sencillo, la caja de fondo fijo de Recaudo abre con la base que cuenta el cajero,
+  como el punto de venta; con el estricto sigue exigiendo el fondo.
+- **Un solo parámetro para las dos cajas.** `Caja.UnaSesionPorCajero` y `Caja.TratamientoFaltante` son los de Recaudo (`RCD`) y los lee
+  también el punto de venta, como `Caja.ArqueoEstricto` y `Caja.SoloCajerosAsignados`. Los de Inventario se retiraron. El faltante va al gasto
+  por defecto y siempre con el arqueo sencillo.
+- **El cierre del día del punto de venta** no se hace con diferencias de arqueo esperando aprobación (`Inventory.DayClose.DifferencesPending`).
+- **El cierre del día de Recaudo** cuenta los recibos vigentes y, aparte, los anulados (antes las anulaciones salían siempre en cero).

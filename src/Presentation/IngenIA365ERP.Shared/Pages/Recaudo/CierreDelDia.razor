@@ -45,9 +45,27 @@
         <div class="toolbar">
             <PermissionGate Required="Receipts.Day.Close">
                 <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrEmpty(_punto))" OnClick="@CerrarAsync">Cerrar el día</SfButton>
+                @* 2026-11-26 (pedido del dueño): el supervisor reabre el día con su motivo y luego lo vuelve a cerrar (versión siguiente). *@
+                <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || string.IsNullOrEmpty(_punto))" OnClick="@(() => _reabriendo = !_reabriendo)">
+                    Reabrir el día</SfButton>
             </PermissionGate>
             <SfButton CssClass="e-outline" Disabled="@string.IsNullOrEmpty(_punto)" OnClick="@DescargarAsync">Informe del cierre</SfButton>
         </div>
+        @if (_reabriendo)
+        {
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Reabriendo…">
+                <div class="form-grid">
+                    <label class="campo">Motivo de la reapertura
+                        <input class="e-input" maxlength="500" @bind="_motivoReapertura" placeholder="Por qué se reabre el día" />
+                    </label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivoReapertura))" OnClick="@ReabrirAsync">
+                        Confirmar la reapertura</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _reabriendo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        }
     </IndicadorDeCarga>
 
     @* 2026-11-25 (pedido del dueño, igual que el punto de venta): el día cerrado se muestra en una ventana con su detalle por medio, en lugar de una
@@ -63,6 +81,14 @@
                         <div><dt>Día</dt><dd>@c.BusinessDate.ToString("dd/MM/yyyy")</dd></div>
                         <div><dt>Cerrado</dt><dd>@c.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(c.ByDelegate ? " · por el suplente" : "")</dd></div>
                         <div><dt>Recibos</dt><dd>@c.ReceiptCount · anulaciones @c.VoidingCount</dd></div>
+                        @if (c.Version > 1)
+                        {
+                            <div><dt>Versión</dt><dd>@c.Version (el día se reabrió y se volvió a cerrar)</dd></div>
+                        }
+                        @if (c.FromPointOfSale != 0m)
+                        {
+                            <div><dt>Del punto de venta</dt><dd>@c.FromPointOfSale.ToString("N0") (caja única, incluido en lo esperado)</dd></div>
+                        }
                     </dl>
                     <div class="kpi-grid kpi-compacto">
                         <div class="kpi-card"><span class="kpi-value">@c.SessionCount</span><span class="kpi-label">Sesiones</span></div>
@@ -165,6 +191,8 @@
     private string _punto = "";
     private string? _explicacion;
     private bool _verCierre;
+    private bool _reabriendo;
+    private string? _motivoReapertura;
 
     /// <summary>Faltante en rojo y sobrante resaltado; sin diferencia, sin clase.</summary>
     private static string ClaseDeDiferencia(decimal diferencia) => diferencia < 0 ? "diferencia-faltante" : diferencia > 0 ? "diferencia-sobrante" : "";
@@ -209,6 +237,19 @@
         _cierre = r.Value;
         _verCierre = _cierre is not null;
         await Notification.SuccessAsync("Día cerrado.");
+        await CargarAsync();
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto) || string.IsNullOrWhiteSpace(_motivoReapertura)) return;
+        using var g = _guardado.Iniciar();
+        var r = await Sesiones.ReabrirDiaAsync(punto, _dia, _motivoReapertura.Trim(), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reabrir el día."); return; }
+        _clave = new ClaveDeOperacion();
+        _reabriendo = false;
+        _motivoReapertura = null;
+        await Notification.SuccessAsync("Día reabierto. Ciérrelo de nuevo cuando termine.");
         await CargarAsync();
     }
 
