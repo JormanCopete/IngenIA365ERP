@@ -64,6 +64,35 @@ public class RenovacionDeSesionHandlerTests
     }
 
     [Fact]
+    public async Task Una_consulta_de_fondo_lleva_la_sesion_pero_no_cuenta_como_actividad()
+    {
+        // 2026-11-26: el aviso del correo en prueba consulta cada cinco minutos; si contara, una pestaña olvidada no llegaría
+        // nunca a la inactividad de la cooperativa.
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        var antes = _sesion.UltimaActividad;
+        _reloj.Avanzar(TimeSpan.FromMinutes(5));
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/core/email-mode");
+        req.Options.Set(RenovadorDeSesion.DeFondo, true);
+
+        var resp = await _http.SendAsync(req);
+
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        _servidor.A("/api/core/email-mode").Single().Bearer.Should().Be(_sesion.AccessToken);
+        _sesion.UltimaActividad.Should().Be(antes);
+    }
+
+    [Fact]
+    public async Task Una_peticion_de_la_persona_si_cuenta_como_actividad()
+    {
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        _reloj.Avanzar(TimeSpan.FromMinutes(5));
+
+        await _http.GetAsync("/api/payroll/pay-periods");
+
+        _sesion.UltimaActividad.Should().Be(Ahora.AddMinutes(5));
+    }
+
+    [Fact]
     public async Task Por_vencer_renueva_antes_de_enviar()
     {
         await ConSesionAsync(TimeSpan.FromSeconds(20));
