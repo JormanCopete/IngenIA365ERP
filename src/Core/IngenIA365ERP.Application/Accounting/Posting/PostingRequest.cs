@@ -32,6 +32,13 @@ public sealed record PostingLine
     public string? CrossDocumentNumber { get; init; }
     public decimal? TaxBase { get; init; }
 
+    /// <summary>
+    /// 2026-11-26: el módulo que manda <b>esta</b> línea en un comprobante que juntan dos módulos (el recibo de caja de Recaudo con lo que Cartera
+    /// contabiliza de él, <c>ReciboEnUnSoloComprobante</c>). «Habilitada para el módulo» se evalúa con él; nulo es el del origen del comprobante.
+    /// Sólo vale en un comprobante de módulo: la digitación lo ignora.
+    /// </summary>
+    public string? Module { get; init; }
+
     /// <summary>Cómo se nombra la cuenta en los errores: el código si vino, si no el Id.</summary>
     public string AccountRef => !string.IsNullOrWhiteSpace(AccountCode) ? AccountCode.Trim() : AccountId?.ToString() ?? string.Empty;
 
