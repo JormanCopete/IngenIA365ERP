@@ -82,7 +82,7 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
     }
 
     /// <summary>El tamaño del catálogo <c>Lending.*</c> de <c>LendingPermissionCatalogSeeder</c> (contracts/api.md §2.1; feature 014 T018: +39).</summary>
-    private const int CatalogoDeCartera = 169; // Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163); feature 024, fase 3: + los cuatro del proceso de causación (167); 2026-11-18: + las plantillas para firma (168); 2026-11-24: + el cambio de plazo (169).
+    private const int CatalogoDeCartera = 173; // 2026-11-25: + editar la solicitud radicada (170) y los tres de cargos masivos (173). Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163); feature 024, fase 3: + los cuatro del proceso de causación (167); 2026-11-18: + las plantillas para firma (168); 2026-11-24: + el cambio de plazo (169).
 
     /// <summary>
     /// US17-1 por desembolso (US3, bloque 7C): <c>lectura</c> no desembolsa, no anula órdenes ni créditos, no genera archivos de desembolsos ni

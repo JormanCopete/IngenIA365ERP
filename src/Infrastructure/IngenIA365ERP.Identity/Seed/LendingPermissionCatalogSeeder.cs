@@ -30,6 +30,10 @@ namespace IngenIA365ERP.Identity.Seed;
 /// <para>
 /// Feature 024, fase 3 (2026-11-16): suma los cuatro del proceso de causación (<c>Lending.AccrualProcesses.*</c>) —167 en total—.
 /// </para>
+///
+/// <para>
+/// Feature 026 (2026-11-25): suma los tres de los cargos masivos (<c>Lending.BulkCharges.*</c>).
+/// </para>
 /// </summary>
 public static class LendingPermissionCatalogSeeder
 {
@@ -118,6 +122,10 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.AccrualProcesses",    "Calculate",           "Armar, recalcular y anular el borrador de un proceso de causación"),
         ("Lending.AccrualProcesses",    "Confirm",             "Pedir que se ponga en firme un proceso de causación y aprobar el de otra persona"),
         ("Lending.AccrualProcesses",    "Reprocess",           "Reprocesar un proceso de causación en firme"),
+        // 2026-11-25 (pedido del dueño; feature 026): los cargos masivos.
+        ("Lending.BulkCharges",         "View",                "Ver las corridas de cargos masivos y sus asociados"),
+        ("Lending.BulkCharges",         "Run",                 "Preparar, revisar y confirmar una corrida de cargos masivos"),
+        ("Lending.BulkCharges",         "Void",                "Anular una corrida de cargos masivos o el cargo de un asociado sin movimientos"),
 
         // ---------------------------------------------------------------------------------------------------------- riesgo --
         ("Lending.Ratings",             "Read",                "Ver calificaciones, cierres, cambios y modelo por segmento"),
