@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Origination;
+using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Origination;
@@ -51,6 +52,17 @@ public sealed record FotoDeSolicitud(
     string? OpcionDeDescuento = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// 2026-11-25 (prueba a mano del dueño): la fecha que el plan pone solo al primer pago con las condiciones de esta foto (sin fecha pedida: un
+    /// período después del desembolso, o el día de pago de la línea). Sólo la lleva la foto de «después»; no se guarda en la foto de la devolución.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateOnly? PrimerPagoPorDefecto { get; init; }
+
+    /// <summary>La fecha del primer pago que el plan pone solo (<see cref="FechasDeVencimiento"/> sin primer vencimiento); en pago único, ninguna.</summary>
+    public static DateOnly? PrimerPagoSinFecha(DateOnly desembolso, RepaymentPeriodicity periodicidad, int? diaDePago) =>
+        periodicidad == RepaymentPeriodicity.SinglePayment ? null : FechasDeVencimiento.Generar(desembolso, periodicidad, 1, diaDePago)[0];
 
     /// <summary>La foto de la solicitud y sus partes vivas (el solicitante da la capacidad; los demás, los codeudores en su orden).</summary>
     public static FotoDeSolicitud De(CreditApplication s, IEnumerable<CreditApplicationParty> partes)
@@ -102,7 +114,10 @@ public sealed record FotoDeSolicitud(
         Si(C, "Plazo en meses", PlazoMeses, despues.PlazoMeses);
         Si(C, "Periodicidad", Periodicidad, despues.Periodicidad);
         Si(C, "Sistema de amortización", Sistema, despues.Sistema);
-        Si(C, "Primer pago", PrimerPago, despues.PrimerPago);
+        // 2026-11-25: sin fecha («según la periodicidad») y la fecha que el plan pone solo son el mismo primer pago: la simulación la llena al elegir
+        // una línea que la pide, y eso no es un cambio. Lo que la mueve (desembolso, periodicidad, línea) se anota en su propio renglón.
+        if (!MismoPrimerPago(PrimerPago, despues.PrimerPago, despues.PrimerPagoPorDefecto))
+            lista.Add(new CampoDistinto(C, "Primer pago", Texto(PrimerPago), Texto(despues.PrimerPago)));
         Si(C, "Desembolso previsto", Desembolso, despues.Desembolso);
         Si(C, "Gracia", Gracia, despues.Gracia);
         Si(C, "Períodos de gracia", PeriodosDeGracia, despues.PeriodosDeGracia);
@@ -129,6 +144,9 @@ public sealed record FotoDeSolicitud(
         Si(GrupoEditableAlDevolver.PreferenciaDeAbono, "Preferencia de abono a capital", Preferencia, despues.Preferencia);
         return lista;
     }
+
+    private static bool MismoPrimerPago(DateOnly? antes, DateOnly? ahora, DateOnly? porDefecto) =>
+        antes == ahora || (porDefecto is not null && (antes ?? porDefecto) == (ahora ?? porDefecto));
 
     /// <summary>Los grupos en que esta foto y <paramref name="despues"/> difieren.</summary>
     public GrupoEditableAlDevolver GruposDistintos(FotoDeSolicitud despues) =>
