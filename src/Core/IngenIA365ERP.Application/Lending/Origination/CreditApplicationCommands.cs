@@ -166,7 +166,7 @@ public sealed class ArmadoDeSolicitud(
         var codigo = e.DiscountOptionCode.Trim().ToUpperInvariant();
         var opcion = opciones.FirstOrDefault(o => o.Code == codigo);
         if (opcion is null) return Result.Failure<int?>(ErroresDeOriginacion.OpcionDeDescuentoDesconocida(codigo, opciones.Select(o => o.Code).ToList()));
-        var monto = valor - Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, opcion.Fraction);
+        var monto = valor - Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, opcion);
         if (e.Amount != monto) return Result.Failure<int?>(ErroresDeOriginacion.MontoDeLaCompra(valor, opcion.Name, monto));
         var id = await db.People.AsNoTracking().Where(p => p.PublicId == proveedor && !p.IsDeleted).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
         return id is null ? Result.Failure<int?>(ErroresDeGobierno.PersonaInexistente()) : Result.Success(id);

@@ -553,7 +553,7 @@ public sealed class RequisitosDelDesembolso(
             bloqueos.Add(ErroresDeDesembolso.CompraConDescuento($"la opción {codigo} ya no está en la versión de la línea."));
             return null;
         }
-        var subsidio = OpcionesDeDescuento.Subsidio(valor, opcion.Fraction);
+        var subsidio = OpcionesDeDescuento.Subsidio(valor, opcion);
         var proveedorPublicId = personas.TryGetValue(proveedor, out var p) ? p.PublicId
             : await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == proveedor).Select(x => x.PublicId).FirstAsync(ct);
         if (creditoId is not null || bruto != aprobado)

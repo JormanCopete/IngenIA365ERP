@@ -213,7 +213,11 @@ public sealed record CreditApplicationEditDto(DateTime EditedAt, string EditedBy
 
 /// <summary>Una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
 public sealed record SubsidizedPurchaseDto(decimal AssetValue, PersonaRefDto? Supplier, string OptionCode, string OptionName, decimal Fraction,
-    string? FundCode, decimal FundedAmount, decimal LoanAmount);
+    string? FundCode, decimal FundedAmount, decimal LoanAmount)
+{
+    /// <summary>2026-11-26: lo que paga el fondo en pesos fijos, si la opción no es un porcentaje.</summary>
+    public decimal? FixedAmount { get; init; }
+}
 
 /// <summary>Un dato que cambió desde la devolución: su grupo, el campo y los valores, ya legibles.</summary>
 public sealed record CreditApplicationChangeDto(string Group, string Field, string? Before, string? After);
@@ -338,8 +342,8 @@ public static class ConsultasDeSolicitudes
         var opcion = version?.LeerOpcionesDeDescuento().FirstOrDefault(o => o.Code == codigo);
         var proveedor = s.SupplierPersonId is { } id ? (await ReferenciasDeGobierno.PersonasAsync(db, [id], ct)).GetValueOrDefault(id) : null;
         var fraccion = opcion?.Fraction ?? 0m;
-        var fondo = Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, fraccion);
-        return new SubsidizedPurchaseDto(valor, proveedor, codigo, opcion?.Name ?? codigo, fraccion, opcion?.FundCode, fondo, valor - fondo);
+        var fondo = Domain.Lending.Configuration.OpcionesDeDescuento.Subsidio(valor, opcion);
+        return new SubsidizedPurchaseDto(valor, proveedor, codigo, opcion?.Name ?? codigo, fraccion, opcion?.FundCode, fondo, valor - fondo) { FixedAmount = opcion?.Amount };
     }
 
     /// <summary>Las diferencias entre la foto de la devolución y la solicitud de ahora, con líneas, oficinas y personas por su nombre.</summary>

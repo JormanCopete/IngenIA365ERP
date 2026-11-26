@@ -483,6 +483,16 @@ nombre, porcentaje y el fondo que paga el descuento, por ejemplo:
 | D35 | 35 % | FONDOSOAT |
 | D50 | 50 % | FONDOSOAT |
 
+**Valor fijo (2026-11-26).** En vez del porcentaje, una opción puede llevar un **valor fijo en pesos** (columna «o valor fijo»): el fondo
+paga ese valor sea cual sea el precio del bien, y el crédito es el bien menos ese valor. Si el bien vale menos que el valor fijo, el fondo
+paga a lo sumo el bien. Una opción es un porcentaje o un valor fijo, no los dos. Así se configuran las tarifas del SOAT de COOFLOPAL:
+
+| Código | Opción | Valor fijo | Fondo |
+|---|---|---|---|
+| SOAT1 | Tarifa 1 | 74.413 | FONDOSOAT |
+| SOAT2 | Tarifa 2 | 111.620 | FONDOSOAT |
+| SOAT3 | Tarifa 3 | 148.827 | FONDOSOAT |
+
 El fondo es un código de la cooperativa. Su cuenta la pone la contadora en la matriz contable de Cartera, con el rol `FondoQueSubsidia`, el
 motivo igual al código del fondo y la cuenta del fondo social. Hay una regla por cada fondo.
 
