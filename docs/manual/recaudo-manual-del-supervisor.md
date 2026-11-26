@@ -27,6 +27,10 @@ factor inscrito; sin un supervisor así, Recaudo no se activa (`SupervisorWithPe
 
 - Cada punto tiene su día. El cierre del día exige todas las sesiones cerradas y deja, medio por medio, lo esperado, lo contado y la
   diferencia (informe `day-close`).
+- **Reabrir el día** (2026-11-26): en `/recaudo/cierre-del-dia`, «Reabrir el día» con su motivo (`Receipts.Day.Close`). El cierre no se
+  borra ni se modifica: queda la reapertura con motivo, quién y cuándo (`RCD_DayCloseReopenings`), el día vuelve a recibir sesiones si es
+  el de hoy, y al cerrarlo de nuevo nace la versión 2 (el informe muestra siempre el cierre vigente). Lo ya contabilizado por el lote del día
+  no se toca: los recibos de las sesiones nuevas entran al lote siguiente.
 - La hora de corte (`Recaudo.HoraDeCorte`, 18:00 por defecto) cae antes del ciclo diario de Cartera. Tras el corte, la tarea
   `recaudo.lote-del-dia` contabiliza los recibos de caja de las sesiones cerradas en un comprobante `RR` por día y punto; un punto con
   el día abierto no detiene a los demás: sus recibos entran al lote siguiente (alerta `Recaudo.DiaDelPuntoAbierto`).

@@ -67125,6 +67125,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("VoidingCount")
                         .HasColumnType("int");
 
@@ -67132,16 +67137,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("ClosedByUserId");
 
-                    b.HasIndex("CollectionPointDayId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_RCD_DayCloses_CollectionPointDayId")
-                        .HasFilter("[IsDeleted] = 0");
-
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_RCD_DayCloses_PublicId");
 
                     b.HasIndex("SupervisorDelegationId");
+
+                    b.HasIndex("CollectionPointDayId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_DayCloses_CollectionPointDayId_Version")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("RCD_DayCloses", "dbo");
                 });
@@ -67220,6 +67225,80 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_RCD_DayCloseLines_PublicId");
 
                     b.ToTable("RCD_DayCloseLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DayCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ReopenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReopenedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DayCloseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_DayCloseReopenings_DayCloseId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_RCD_DayCloseReopenings_PublicId");
+
+                    b.HasIndex("ReopenedByUserId");
+
+                    b.ToTable("RCD_DayCloseReopenings", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault", b =>
@@ -86067,6 +86146,21 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
                         .WithMany()
                         .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose", null)
+                        .WithMany()
+                        .HasForeignKey("DayCloseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReopenedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

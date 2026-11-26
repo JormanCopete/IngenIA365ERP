@@ -708,6 +708,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening> ReceiptsDayCloseReopenings => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus>();

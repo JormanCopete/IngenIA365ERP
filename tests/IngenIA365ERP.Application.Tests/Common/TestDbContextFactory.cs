@@ -626,6 +626,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening> ReceiptsDayCloseReopenings => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus>();
@@ -876,6 +877,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseReopening>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

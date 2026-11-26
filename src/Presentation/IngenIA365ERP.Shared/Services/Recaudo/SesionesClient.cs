@@ -98,7 +98,7 @@ public sealed record LineaDelCierreDelDiaDto(Guid PaymentMeansPublicId, string M
 
 public sealed record CierreDelDiaDto(Guid PublicId, Guid CollectionPointPublicId, DateOnly BusinessDate, int SessionCount, int ReceiptCount, int VoidingCount,
     decimal Expected, decimal Counted, decimal Difference, DateTime ClosedAt, string VerificationCode, bool ByDelegate, IReadOnlyList<LineaDelCierreDelDiaDto> Lines,
-    decimal FromPointOfSale = 0m);
+    decimal FromPointOfSale = 0m, int Version = 1, DateTime? ReopenedAt = null, string? ReopenReason = null, string? ReopenedByName = null);
 
 public sealed record MovimientoDeBovedaDto(Guid PublicId, string Number, int Kind, decimal Amount, string? BagSeal, string? Reason, DateTime MovedAt);
 
@@ -203,6 +203,11 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<CierreDelDiaDto>> CerrarDiaAsync(Guid punto, DateOnly dia, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CierreDelDiaDto>(HttpMethod.Post, $"{Base}/collection-points/{punto}/days/{dia:yyyy-MM-dd}/close", null, clave, null, ct);
+
+    /// <summary>2026-11-26: reabre el día cerrado con su motivo (el supervisor, <c>Receipts.Day.Close</c>).</summary>
+    public Task<ResultadoDeInventario<CierreDelDiaDto>> ReabrirDiaAsync(Guid punto, DateOnly dia, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CierreDelDiaDto>(HttpMethod.Post, $"{Base}/collection-points/{punto}/days/{dia:yyyy-MM-dd}/reopen", new { reason = motivo }, clave, null, ct);
 
     public Task<ResultadoDeInventario<DetalleDeBovedaDto>> BovedaAsync(Guid boveda, CancellationToken ct = default) =>
         Get<DetalleDeBovedaDto>($"{Base}/vaults/{boveda}", ct);
