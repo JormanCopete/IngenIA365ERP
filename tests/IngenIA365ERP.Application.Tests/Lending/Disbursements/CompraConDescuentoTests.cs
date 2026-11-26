@@ -26,6 +26,7 @@ public sealed class CompraConDescuentoTests : IAsyncLifetime
         [
             new DiscountOptionDto("D0", "Sin descuento", 0m, null),
             new DiscountOptionDto("D50", "Descuento del 50 %", 0.5m, "FONDOSOAT"),
+            new DiscountOptionDto("SOAT1", "Tarifa 1", 0m, "FONDOSOAT", 74_413m),
         ],
     });
 
@@ -54,6 +55,36 @@ public sealed class CompraConDescuentoTests : IAsyncLifetime
         OpcionesDeDescuento.Problema([new OpcionDeDescuento("D20", "20 %", 0.2m, null)]).Should().NotBeNull("con descuento nombra el fondo");
         OpcionesDeDescuento.Problema([new OpcionDeDescuento("D100", "Todo", 1m, "F")]).Should().NotBeNull("el fondo no paga el bien entero");
         OpcionesDeDescuento.Problema([new OpcionDeDescuento("D0", "Sin descuento", 0m, null)]).Should().BeNull();
+    }
+
+    /// <summary>2026-11-26 (pedido del dueño): el fondo puede pagar un valor fijo en pesos, sea cual sea el valor del bien (las tarifas del SOAT).</summary>
+    [Fact]
+    public void El_fondo_puede_pagar_un_valor_fijo_y_nunca_mas_que_el_bien()
+    {
+        var fija = new OpcionDeDescuento("SOAT1", "Tarifa 1", 0m, "FONDOSOAT", 74_413m);
+        OpcionesDeDescuento.Subsidio(600_000m, fija).Should().Be(74_413m);
+        OpcionesDeDescuento.Subsidio(50_000m, fija).Should().Be(50_000m, "el fondo paga a lo sumo el bien");
+        OpcionesDeDescuento.Subsidio(500_000m, new OpcionDeDescuento("D50", "50 %", 0.5m, "F")).Should().Be(250_000m);
+        OpcionesDeDescuento.Problema([fija]).Should().BeNull();
+        OpcionesDeDescuento.Problema([fija with { FundCode = null }]).Should().NotBeNull("con descuento nombra el fondo");
+        OpcionesDeDescuento.Problema([fija with { Fraction = 0.2m }]).Should().NotBeNull("es un porcentaje o un valor fijo, no los dos");
+        OpcionesDeDescuento.Problema([fija with { Amount = -1m }]).Should().NotBeNull();
+
+        var json = OpcionesDeDescuento.Escribir([fija, new OpcionDeDescuento("D0", "Sin descuento", 0m, null)])!;
+        json.Should().Contain("\"amount\":74413").And.NotContain("\"amount\":null", "las opciones de porcentaje se escriben como antes");
+        OpcionesDeDescuento.Leer(json).Single(o => o.Code == "SOAT1").Amount.Should().Be(74_413m);
+    }
+
+    [Fact]
+    public async Task Con_valor_fijo_el_credito_es_el_bien_menos_lo_que_paga_el_fondo()
+    {
+        (await FallaAlCrearAsync(Compra(monto: 3_000_000m, opcion: "SOAT1"))).Code.Should().Be(ErroresDeOriginacion.CodigoMontoDeLaCompra);
+
+        var s = await _d.O.BorradorAsync(Compra(monto: 6_000_000m - 74_413m, opcion: "SOAT1"));
+
+        s.SubsidizedPurchase!.FundedAmount.Should().Be(74_413m);
+        s.SubsidizedPurchase.LoanAmount.Should().Be(5_925_587m);
+        s.SubsidizedPurchase.FixedAmount.Should().Be(74_413m);
     }
 
     [Fact]

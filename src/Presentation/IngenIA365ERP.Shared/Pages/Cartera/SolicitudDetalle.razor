@@ -150,7 +150,7 @@
                 {
                     @* 2026-11-23 (descuento condicionado): quien decide confirma la opción al aprobar; para cambiarla, devuelve la solicitud. *@
                     <p><strong>Compra con descuento:</strong> bien de @TextosDeOriginacion.Pesos(compra.AssetValue) a @(compra.Supplier?.FullName ?? "—") ·
-                        opción «@compra.OptionName» (@((compra.Fraction * 100m).ToString("0.##")) %) · el fondo @compra.FundCode pone @TextosDeOriginacion.Pesos(compra.FundedAmount)
+                        opción «@compra.OptionName» (@(compra.FixedAmount is > 0m and var fijo ? TextosDeOriginacion.Pesos(fijo) : (compra.Fraction * 100m).ToString("0.##") + " %")) · el fondo @compra.FundCode pone @TextosDeOriginacion.Pesos(compra.FundedAmount)
                         y el crédito @TextosDeOriginacion.Pesos(compra.LoanAmount)</p>
                 }
                 @if (s.Approval is { } a)

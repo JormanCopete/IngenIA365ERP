@@ -244,7 +244,11 @@ public sealed record EdicionDeSolicitudDto(DateTime EditedAt, string EditedBy, i
 
 /// <summary>2026-11-23: una compra con descuento condicionado: el bien, el proveedor, la opción y lo que ponen el crédito y el fondo.</summary>
 public sealed record CompraConDescuentoDto(decimal AssetValue, PersonaDeCarteraDto? Supplier, string OptionCode, string OptionName, decimal Fraction,
-    string? FundCode, decimal FundedAmount, decimal LoanAmount);
+    string? FundCode, decimal FundedAmount, decimal LoanAmount)
+{
+    /// <summary>2026-11-26: lo que paga el fondo en pesos fijos, si la opción no es un porcentaje.</summary>
+    public decimal? FixedAmount { get; init; }
+}
 
 /// <summary>Un dato que cambió desde la devolución: grupo, campo y valores, ya legibles.</summary>
 public sealed record CambioDeSolicitudDto(string Group, string Field, string? Before, string? After);

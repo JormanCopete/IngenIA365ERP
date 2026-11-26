@@ -279,7 +279,7 @@ public sealed class VersionDeLineaRequest
         BulkChargeDefaultInstallments = v.BulkChargeDefaultInstallments,
         BulkChargeReportsToBureaus = v.BulkChargeReportsToBureaus,
         BulkChargeEntersCollection = v.BulkChargeEntersCollection,
-        DiscountOptions = [.. v.DiscountOptions.Select(o => new OpcionDeDescuentoRequest { Code = o.Code, Name = o.Name, Fraction = o.Fraction, FundCode = o.FundCode })],
+        DiscountOptions = [.. v.DiscountOptions.Select(o => new OpcionDeDescuentoRequest { Code = o.Code, Name = o.Name, Fraction = o.Fraction, FundCode = o.FundCode, Amount = o.Amount })],
         Amortization = new AmortizacionRequest
         {
             Systems = [.. v.AmortizationSystems], Default = v.DefaultAmortizationSystem, AllowsExtraordinary = v.AllowsExtraordinaryInstallments,
@@ -476,8 +476,8 @@ public sealed record VersionDeLineaDto(
     public IReadOnlyList<OpcionDeDescuentoDto> DiscountOptions { get; init; } = [];
 }
 
-/// <summary>2026-11-23: una opción de descuento condicionado (la fracción la paga el fondo: 0,5 = 50 %).</summary>
-public sealed record OpcionDeDescuentoDto(string Code, string Name, decimal Fraction, string? FundCode);
+/// <summary>2026-11-23: una opción de descuento condicionado (la fracción la paga el fondo: 0,5 = 50 %; o, desde el 2026-11-26, un valor fijo en pesos).</summary>
+public sealed record OpcionDeDescuentoDto(string Code, string Name, decimal Fraction, string? FundCode, decimal? Amount = null);
 
 /// <summary>2026-11-23: una opción de descuento en el editor de la versión.</summary>
 public sealed class OpcionDeDescuentoRequest
@@ -486,6 +486,9 @@ public sealed class OpcionDeDescuentoRequest
     public string Name { get; set; } = "";
     public decimal Fraction { get; set; }
     public string? FundCode { get; set; }
+
+    /// <summary>2026-11-26: lo que paga el fondo en pesos fijos (en vez del porcentaje).</summary>
+    public decimal? Amount { get; set; }
 }
 
 /// <summary>Una versión en el historial de la línea.</summary>

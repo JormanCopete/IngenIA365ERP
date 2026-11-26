@@ -22,7 +22,7 @@
         }
         @if (V.DiscountOptions.Count > 0)
         {
-            <div class="campo campo-ancho"><b>Descuento condicionado</b> @string.Join(" · ", V.DiscountOptions.Select(o => $"{o.Name} ({(o.Fraction * 100m).ToString("0.##", Es)} %{(o.FundCode is { } f ? $", fondo {f}" : "")})"))</div>
+            <div class="campo campo-ancho"><b>Descuento condicionado</b> @string.Join(" · ", V.DiscountOptions.Select(o => $"{o.Name} ({(o.Amount is > 0m and var fijo ? "$" + fijo.ToString("N0", Es) : (o.Fraction * 100m).ToString("0.##", Es) + " %")}{(o.FundCode is { } f ? $", fondo {f}" : "")})"))</div>
         }
         <div class="campo"><b>Gracia</b> @TextosDeCartera.ClaseDeGracia(V.AllowedGraceKind)@(V.MaxGraceInstallments is { } maxGracia ? $" hasta {maxGracia} cuotas" : "")</div>
         <div class="campo"><b>Formas de pago</b> @TextosDeCartera.Lista(TextosDeCartera.FormasDePago, V.PaymentForms)</div>
