@@ -435,7 +435,7 @@ public sealed class UpdateCreditApplicationCommandHandler(
             return Falla(ErroresLineas("applicantPersonPublicId", "El solicitante no cambia: para otra persona, cree otra solicitud."));
 
         var armada = await armado.ArmarAsync(e, hoy, ct);
-        if (armada.IsFailure) return Falla(armada.Error);
+        if (armada.IsFailure) return Falla(ErroresDeOriginacion.ConElPasoParaCorregir(armada.Error));
         var a = armada.Value;
         // 2026-11-23 (pedido del dueño): devuelta para corregir —o, desde el 2026-11-25, radicada—, sólo cambia lo que el parámetro de su línea deja
         // (Originacion.GruposEditablesAlDevolver).
@@ -466,7 +466,14 @@ public sealed class UpdateCreditApplicationCommandHandler(
                 parte.Role = entrada.Role;
                 parte.Declarar(entrada.MonthlyIncome, entrada.MonthlyExpenses, entrada.ExternalInstallments);
             }
-            var despues = antes is null ? null : FotoDeSolicitud.De(s, partes.Concat(agregadas));
+            // 2026-11-25: con la fecha que el plan pone solo al primer pago, para no anotar como cambio la que llenó la simulación.
+            var plan = a.Simulacion.Entrada;
+            var despues = antes is null
+                ? null
+                : FotoDeSolicitud.De(s, partes.Concat(agregadas)) with
+                {
+                    PrimerPagoPorDefecto = FotoDeSolicitud.PrimerPagoSinFecha(plan.FechaDesembolso, plan.Periodicidad, plan.DiaDePago),
+                };
             if (antes is not null)
             {
                 var fuera = antes.GruposDistintos(despues!) & ~permitidos;

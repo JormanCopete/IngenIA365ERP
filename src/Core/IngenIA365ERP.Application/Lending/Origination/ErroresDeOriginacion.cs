@@ -157,6 +157,14 @@ public static class ErroresDeOriginacion
     public static Error LineaCerrada(string codigo, string motivo) => new ErrorConDatos(CodigoLineaCerrada,
         $"La línea {codigo} está cerrada a créditos nuevos ({motivo}).", new { creditLineCode = codigo, reason = motivo });
 
+    /// <summary>
+    /// 2026-11-25 (prueba a mano del dueño): al editar o corregir una solicitud cuya línea se cerró después de crearla, el mismo error dice qué hacer
+    /// —editar vuelve a simular, y una línea cerrada no simula—: elegir otra línea en el simulador. Los demás errores pasan como vienen.
+    /// </summary>
+    public static Error ConElPasoParaCorregir(Error error) => error is ErrorConDatos { Code: CodigoLineaCerrada } cerrada
+        ? cerrada with { Message = $"{cerrada.Message} Para seguir con esta solicitud, elija otra línea en el simulador, simule y pulse «Usar en la solicitud»." }
+        : error;
+
     public static Error LineaBloqueadaPorUsura(string codigo, DateOnly desde) => new ErrorConDatos(CodigoUsuraExcedida,
         $"La línea {codigo} está cerrada a créditos nuevos desde el {Fecha(desde)}: su tasa supera la usura certificada. Registre una versión bajo la usura.",
         new { creditLineCode = codigo, usuryBlockedSince = Fecha(desde) });
