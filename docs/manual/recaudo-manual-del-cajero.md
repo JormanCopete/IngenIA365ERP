@@ -120,7 +120,20 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
 - **Todo para cancelar (F7)** (2026-11-18): reemplaza «Qué paga» por todo lo que la persona debe: cada crédito por su valor de cancelación, las
   cuotas pendientes de sus cuentas y el saldo de sus facturas. Los conceptos varios y las consignaciones libres no entran.
 - **Con cuotas vencidas sólo se paga lo exigible o se cancela** (`Caja.ConMoraSoloExigible`, de fábrica Sí): sobre esa obligación no se abona a
-  capital ni se anticipan cuotas (`Receipts.Receipt.OverdueOnlyDue`).
+  capital ni se anticipan cuotas (`Receipts.Receipt.OverdueOnlyDue`). Desde el 2026-11-26, «vencidas» son las cuotas cuya fecha ya pasó o que
+  vencen hoy. Por período calendario (`Causacion.Periodo = PeriodoCalendario`), el interés ya causado de la cuota del mes en curso es exigible, pero
+  **no es mora**: el asociado al día paga la cuota del período completa, anticipa o abona a capital, y **F4** trae la cuota del período completa,
+  no sólo ese interés.
+- **Lo vencido y además anticipar o abonar en el mismo recibo** (`Caja.ConMoraPermiteAnticipar`, de fábrica No; 2026-11-26): con la regla anterior
+  encendida, este parámetro deja que el recibo pague lo vencido y además use cualquier modalidad, siempre que lo vencido se pague primero:
+  - «Cuota del ciclo», «Anticipo», «Valor libre» y «Abono a capital» ya pagan primero lo exigible, así que se admiten tal cual.
+  - Para anticipar cuotas, en «Detalle» se marcan como siempre. La caja pone antes un ítem «Lo exigible» por todo lo exigible y después las
+    cuotas.
+  - Si el mes en curso tiene interés ya causado, la cuota de ese período entra por su valor menos ese interés, que ya paga «Lo exigible».
+  - Una cuota futura sin «Lo exigible» antes, en el mismo recibo, se rechaza con el valor vencido.
+  - La cuota se anticipa aunque la línea no deje pagar cuotas fuera de orden: el recibo cubre primero las anteriores.
+  - La simulación de cada ítem de un crédito se hace sobre lo que deja el ítem anterior del mismo crédito, y al confirmar se aplican en ese
+    orden.
 - **Sin nada exigible se paga al menos una cuota** (`Caja.AnticipoMinimoUnaCuota`, de fábrica Sí; `Receipts.Receipt.BelowOneInstallment`). Para
   anticipar varias, en «Detalle» se marca hasta qué cuota: cada una entra a «Qué paga» con su valor completo (capital, interés, seguro y otros, menos
   lo que ya tenga anticipado). El plan ya calcula el interés de la siguiente sobre el saldo después de la anterior. Desde esta fecha se anticipa por

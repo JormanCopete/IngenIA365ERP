@@ -39,6 +39,12 @@ public sealed record DetalleDeObligacionDto(
     /// como la cuota del período y la precarga completa. (nuevo)
     /// </summary>
     public decimal RecognizedPending { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo exigible sin lo causado de la cuota del período calendario en curso —la mora para las reglas de la caja—; igual a
+    /// <see cref="DueToday"/> con el ciclo de la cuota. Nulo se lee como <c>DueToday</c>. (nuevo)
+    /// </summary>
+    public decimal? DueWithoutPeriodInProgress { get; init; }
 }
 
 /// <summary>Un saldo de la obligación por concepto: el concepto (<c>ConceptoDeObligacion</c> por nombre), su nombre en español y el valor. (nuevo)</summary>
@@ -72,4 +78,11 @@ public sealed record CuotaDeObligacionDto(
     /// administración): con lo causado, la cuota del período completa. Cero si no está reconocida. (nuevo)
     /// </summary>
     public decimal Recognized { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo que de una cuota por vencer ya es exigible —el interés, el seguro y los cargos causados de la cuota del período
+    /// calendario en curso, que entran en <c>DueToday</c>—. Si el mismo recibo paga antes lo exigible, anticipar esta cuota cuesta
+    /// <see cref="ValueToAnticipate"/> menos esto. Cero en las demás. (nuevo)
+    /// </summary>
+    public decimal DueInPeriod { get; init; }
 }

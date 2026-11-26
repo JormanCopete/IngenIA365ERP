@@ -413,6 +413,38 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task La_cuota_especifica_detras_de_lo_exigible_del_mismo_recibo_se_simula_sobre_lo_que_deja_sin_escribir()
+    {
+        // 2026-11-26 (pedido del dueño): la cuota 1 vencida y la 4 por anticipar en el mismo recibo, detrás de lo exigible; la línea no deja pagar fuera de orden.
+        await _p.CausarHastaAsync(PrimerVencimiento.AddDays(3));
+        var hoy = _p.G.HoyLocal;
+        var sola = await _p.Contrato().SimularAsync(new SolicitudDeSimulacion(PagosDePrueba.Prueba, _p.Credito.PublicId, ModalidadDePago.SpecificInstallment,
+            200_000m, hoy, InstallmentNumber: 4), default);
+        sola.Code.Should().Be("Lending.Payment.SpecificInstallmentBlocked", "sola, la cuota 4 salta la 1 vencida");
+
+        var detalle = (await _p.Contrato().DetalleAsync(new SolicitudDeDetalle(PagosDePrueba.Prueba, _p.Credito.PublicId, hoy), default)).Value!;
+        detalle.DueToday.Should().BePositive();
+        detalle.DueWithoutPeriodInProgress.Should().Be(detalle.DueToday, "por el ciclo de la cuota, lo vencido es lo exigible");
+        var cuota4 = detalle.Installments.Single(q => q.Number == 4).ValueToAnticipate;
+        var antes = await _p.Db.LoanOperations.CountAsync();
+
+        var encadenada = await _p.Contrato().SimularAsync(new SolicitudDeSimulacion(PagosDePrueba.Prueba, _p.Credito.PublicId, ModalidadDePago.SpecificInstallment,
+            cuota4, hoy, InstallmentNumber: 4) { Previous = [new PagoPrevioDeSimulacion(ModalidadDePago.PastDue, detalle.DueToday)] }, default);
+
+        encadenada.Result.Should().Be(ResultadoDelContrato.Answered, encadenada.Message);
+        encadenada.Value!.AdvanceAmount.Should().Be(cuota4);
+        encadenada.Value.Surplus.Should().Be(0m);
+        encadenada.Value.BalancesAfter.DueToday.Should().Be(0m, "los saldos después ya llevan lo exigible pagado por el ítem anterior");
+        (await _p.Db.LoanOperations.CountAsync()).Should().Be(antes, "simular no escribe, tampoco los pagos anteriores del recibo");
+
+        // Aplicado lo exigible, la cuota 4 sola se simula igual: la simulación encadenada es la que Cartera hará al aplicar en orden.
+        await _p.AplicadoAsync(_p.Pago(ModalidadDePago.PastDue, detalle.DueToday));
+        var despues = await _p.Contrato().SimularAsync(new SolicitudDeSimulacion(PagosDePrueba.Prueba, _p.Credito.PublicId, ModalidadDePago.SpecificInstallment,
+            cuota4, hoy, InstallmentNumber: 4), default);
+        despues.Value!.SimulationId.Should().Be(encadenada.Value.SimulationId);
+    }
+
+    [Fact]
     public async Task Un_pago_mayor_que_el_total_cancela_y_el_excedente_vuelve_al_recaudador()
     {
         var c = await _p.AplicadoAsync(_p.Pago(ModalidadDePago.FullPayoff, 3_100_000m));

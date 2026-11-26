@@ -47,6 +47,8 @@ public sealed class TransactionsReportQueryHandler(IApplicationDbContext db, IAl
         new("Cuota", TipoDeColumna.Entero),
         new("Valor", TipoDeColumna.Moneda),
         new("Operación"),
+        // 2026-11-26 (pedido del dueño): el recibo del recaudador, para saber de qué pago es cada movimiento.
+        new("Recibo"),
         new("Mensaje"),
         new("_credito", Clave: "_credito"),
         new("_operacion", Clave: "_operacion"),
@@ -102,20 +104,21 @@ public sealed class TransactionsReportQueryHandler(IApplicationDbContext db, IAl
 
         var operaciones = leidas.Where(x => x.Fila.OperationId is not null).Select(x => x.Fila.OperationId!.Value).Distinct().ToList();
         var deOperaciones = operaciones.Count == 0
-            ? new Dictionary<long, (string Numero, Guid PublicId)>()
-            : (await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id)).Select(o => new { o.Id, o.Number, o.PublicId }).ToListAsync(ct))
-                .ToDictionary(o => o.Id, o => (o.Number, o.PublicId));
+            ? new Dictionary<long, (string Numero, Guid PublicId, string? Recibo)>()
+            : (await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id)).Select(o => new { o.Id, o.Number, o.PublicId, o.ReceiptNumber })
+                    .ToListAsync(ct))
+                .ToDictionary(o => o.Id, o => (o.Number, o.PublicId, (string?)o.ReceiptNumber));
 
         var filas = leidas.Select(x =>
         {
             var t = x.Fila;
-            var operacion = t.OperationId is { } id && deOperaciones.TryGetValue(id, out var o) ? o : ((string Numero, Guid PublicId)?)null;
+            var operacion = t.OperationId is { } id && deOperaciones.TryGetValue(id, out var o) ? o : ((string Numero, Guid PublicId, string? Recibo)?)null;
             var registro = new DateTimeOffset(DateTime.SpecifyKind(t.RegisteredAt, DateTimeKind.Utc)).ToOffset(Colombia);
             return new FilaExportable(
             [
                 t.ValueDate, t.AccountingDate, registro.ToString("yyyy-MM-dd HH:mm"), x.Number, TextosDeInformesDeCartera.Transaccion(t.Kind),
                 TextosDeInformesDeCartera.Concepto(t.Concept), t.InstallmentNumber, t.Amount, operacion?.Numero ?? string.Empty,
-                t.MessagePublicId?.ToString() ?? string.Empty, x.LoanPublicId.ToString(), operacion?.PublicId.ToString(), t.MessagePublicId?.ToString(),
+                operacion?.Recibo ?? string.Empty, t.MessagePublicId?.ToString() ?? string.Empty, x.LoanPublicId.ToString(), operacion?.PublicId.ToString(), t.MessagePublicId?.ToString(),
             ]);
         }).ToList();
         var porFecha = clase.Value switch { PorFechaContable => "fecha contable", PorRegistro => "fecha de registro", _ => "fecha valor" };
