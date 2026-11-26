@@ -230,7 +230,7 @@ public sealed record CreditLineVersionInput
             BulkChargeDefaultInstallments = BulkChargeDefaultInstallments,
             BulkChargeReportsToBureaus = BulkChargeReportsToBureaus,
             BulkChargeEntersCollection = BulkChargeEntersCollection,
-            DiscountOptions = [.. (DiscountOptions ?? []).Select(o => new Domain.Lending.Configuration.OpcionDeDescuento(o.Code ?? "", o.Name ?? "", o.Fraction, o.FundCode))],
+            DiscountOptions = [.. (DiscountOptions ?? []).Select(o => new Domain.Lending.Configuration.OpcionDeDescuento(o.Code ?? "", o.Name ?? "", o.Fraction, o.FundCode, o.Amount))],
             AmortizationSystems = sistemas,
             DefaultAmortizationSystem = Amortization?.Default ?? sistemas.FirstOrDefault(),
             AllowsExtraordinaryInstallments = Amortization?.AllowsExtraordinary ?? false,
@@ -428,7 +428,7 @@ public sealed record CreditLineVersionDto(
             RateBasis = v.RateBasis,
             MonthlyRate = v.MonthlyRate,
             DenominationUnit = v.DenominationUnit,
-            DiscountOptions = [.. v.LeerOpcionesDeDescuento().Select(o => new DiscountOptionDto(o.Code, o.Name, o.Fraction, o.FundCode))],
+            DiscountOptions = [.. v.LeerOpcionesDeDescuento().Select(o => new DiscountOptionDto(o.Code, o.Name, o.Fraction, o.FundCode, o.Amount))],
         };
     }
 
@@ -456,7 +456,7 @@ public sealed record CreditLineVersionDto(
 }
 
 /// <summary>2026-11-23: una opción de descuento condicionado: código, nombre, fracción que paga el fondo (0,5 = 50 %) y el fondo.</summary>
-public sealed record DiscountOptionDto(string Code, string Name, decimal Fraction, string? FundCode);
+public sealed record DiscountOptionDto(string Code, string Name, decimal Fraction, string? FundCode, decimal? Amount = null);
 
 /// <summary>Una versión en el historial de la línea (api.md §3.1 <c>GET /{id}</c>).</summary>
 public sealed record CreditLineVersionSummaryDto(Guid PublicId, int VersionNumber, DateOnly ValidFrom, DateOnly? ValidTo, DateTime RegisteredAt,
