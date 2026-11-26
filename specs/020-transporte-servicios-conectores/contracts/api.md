@@ -156,7 +156,8 @@ El código se consulta con `GET /api/catalogos/transporte-{kind}/codigo/{codigo}
 | GET | `/billing/check?period=&vehicle=` | `Billing.View` o `Billing.Run` (2026-11-25): avisos antes de facturar —período anterior al mes en curso, suscripciones por facturar que empezaron después del día 1— en `notices[]`; vacío = nada que advertir. No bloquea |
 | POST | `/billing/runs` | `{ period, paymentMode }` + `Idempotency-Key` → 202 `{ runPublicId }`: `Billing.Run` |
 | POST | `/billing/single` | `{ vehiclePublicId, period, paymentMode }` + `Idempotency-Key` → `{ invoicePublicId, invoiceNumber, charges[] }`: `Billing.Run` |
-| GET | `/billing/runs` · `/billing/runs/{id}` | `Billing.View`: avance y resumen con omitidos; `lastActivityAt` (2026-11-25) dice el último avance, para «Continuar» una corrida interrumpida sin pisar otra sesión |
+| GET | `/billing/runs` · `/billing/runs/{id}` | `Billing.View`: avance y resumen con omitidos; `lastActivityAt` (2026-11-25) dice el último avance, para «Continuar» una corrida interrumpida sin pisar otra sesión; `voidedInvoices`, sus facturas con cargos anulados |
+| POST | `/billing/runs/{id}/void` | `{ reason, batchSize?, skip? }` → `{ voidedInvoices, voidedCharges, omitted[], pending }`: `Billing.Run` **y** `Inventory.Sales.Void` (2026-11-25). Anula por tandas las facturas abiertas y sin pagos de una corrida terminada por Comercial (nota de anulación total o documento contrario) y deja sus cargos `Voided`; `skip`, las que ya fallaron. En curso: 422 `Billing.RunNotFinished` |
 | GET | `/charges?vehicle=&period=&status=` | `Billing.View` |
 
 ### Envíos

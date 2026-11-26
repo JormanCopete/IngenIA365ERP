@@ -28,6 +28,7 @@ nombra, no cambia.
 | `ReciboEmitido` v1 | REC | CNT | aplicaciones `CommercialReceivable`, repartidas por prioridad (ruta sin Cartera) |
 | `ReciboAnulado` v1 | REC | CNT | reversa de las asignaciones de ese recibo |
 | `DocumentoAnulado` v1 | INV | CNT | anula los cargos abiertos de la factura |
+| `NotaCreditoEmitida` v1 | INV | CNT | (2026-11-25) recalcula los cargos de la factura `related` desde sus notas confirmadas: la total (o las que suman la línea) los anula con la regla de `DocumentoAnulado`; la parcial baja el valor |
 
 ## 2. Mensaje nuevo: `SolicitudDeConector` v1
 
@@ -73,8 +74,8 @@ nombra, no cambia.
 
 ### `DestinoTransporte` (`Destino = "TRN"`)
 
-**Acepta**: `PagoAplicado` v1, `PagoReversado` v1, `ReciboEmitido` v1, `ReciboAnulado` v1 y
-`DocumentoAnulado` v1.
+**Acepta**: `PagoAplicado` v1, `PagoReversado` v1, `ReciboEmitido` v1, `ReciboAnulado` v1,
+`DocumentoAnulado` v1 y, desde el 2026-11-25, `NotaCreditoEmitida` v1.
 
 **Resultados**:
 - Un mensaje que no toca ningún cargo responde `AlreadyProcessed` y no escribe nada.

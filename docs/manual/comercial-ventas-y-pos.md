@@ -122,6 +122,12 @@ filtros» los borra todos. La lista dice quién hizo cada documento y, si es ele
 Los filtros quedan en la dirección de la página: al abrir un documento y volver («Volver a las ventas» o «atrás» del
 navegador) la lista sale con los mismos filtros, y un enlace copiado abre la misma búsqueda.
 
+**Exportar a Excel** descarga la lista con los mismos filtros, sin página (hasta 20.000 documentos; si hay más, el
+archivo lo dice). Trae fecha, clase, tipo, número, estado, cliente, vendedor, punto y caja, total, por pagar, medios de
+pago, estado DIAN y quién lo hizo, con el total de los confirmados. Como trae al cliente, exige los permisos de
+exportar informes de Inventario y de sus datos personales (`Inventory.Reports.Export` y
+`Inventory.Reports.ExportPersonalData`), y queda en la auditoría como las demás exportaciones.
+
 ### Venta de oficina (factura)
 
 1. **Ventas → Nueva factura** (o «Nueva factura» desde Documentos de venta).

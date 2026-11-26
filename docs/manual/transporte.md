@@ -151,6 +151,48 @@ Cada vehículo recibe **una factura de Comercial** con una línea por servicio, 
 
 No se factura dos veces el mismo vehículo y período: repetir la corrida no duplica nada.
 
+### Validar la facturación en Excel
+
+Con el permiso de exportar los informes de Transporte (`Transport.Vehicles.Export`):
+
+- **Vista previa › Exportar a Excel**: una fila por servicio de cada vehículo que se facturaría (número interno,
+  placa, propietario, servicio, cantidad, precio, si es pactado y valor) y, en otra hoja, los omitidos con su motivo.
+  No guarda nada.
+- **Corridas anteriores › Exportar**: el resultado de una corrida, una fila por cargo, con:
+  - la factura y su **estado DIAN** («No electrónica» para un comprobante);
+  - el vehículo, el documento y el nombre del propietario;
+  - el servicio, el valor y lo pagado;
+  - la ruta y la **obligación de Cartera** con su estado;
+  - el estado del cargo (abierto, pagado o anulado) y si hay que revisarlo.
+
+  Es el informe «Facturación de servicios» limitado a la corrida; en Transporte › Informes sale por período.
+
+### Anular la corrida y volver a facturar
+
+**Corridas anteriores › Anular** (permisos `Transport.Billing.Run` y `Inventory.Sales.Void`), en una corrida
+terminada. Pide el motivo y confirmación, y anula por tandas cada factura de la corrida que siga **abierta y sin
+pagos** —sin abonos ni aviso al sistema externo—:
+
+- una **factura electrónica** con su **nota crédito de anulación total**, que va a la DIAN y, si fue a crédito, ajusta la
+  obligación en Cartera;
+- un **comprobante no electrónico** con su documento contrario.
+
+Sus cargos quedan anulados en el mismo momento y el período se puede volver a facturar con «Facturar el período»,
+sin otro bloqueo: lo que quedó vivo no se cobra dos veces. Al terminar dice cuántas anuló y cuáles no, con el motivo
+(ya pagada, con abonos, ya avisada, o lo que Comercial respondió, como un tipo de nota que falta o una aprobación
+pendiente). Una que falló no se vuelve a intentar en la misma anulación; se puede volver a anular la corrida.
+
+**Una nota crédito hecha en Comercial** sobre una factura de servicios también llega a Transporte:
+
+- la **total** anula el cargo con la misma regla de la anulación: sin pago ni aviso queda anulado; con pago o aviso,
+  queda para revisar;
+- una **parcial** sólo baja el valor del cargo en proporción a lo que queda de su línea; si lo asignado ya lo cubre,
+  queda pagado;
+- notas parciales que suman toda la línea cuentan como la total.
+
+El valor se recalcula siempre desde la factura y sus notas confirmadas, así que repetir el mensaje no cambia nada.
+Una factura acreditada del todo deja de ser «la factura del período» y la facturación emite otra.
+
 ## 7a. Vender un servicio en el POS o en la factura de oficina
 
 Los servicios también se venden sueltos en Comercial, con el precio que se digite en el momento (producto

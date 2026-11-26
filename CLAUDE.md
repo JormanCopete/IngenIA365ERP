@@ -1035,6 +1035,18 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
       curso o suscripciones por facturar que empezaron después del día 1. La pantalla pide confirmar.
     - **La corrida interrumpida se continúa** con las mismas tandas (`/runs/{id}/next`). `lastActivityAt` hace pedir confirmación si avanzó
       hace menos de dos minutos.
+    - **Anular y volver a facturar** (2026-11-25, segundo pedido):
+      - `NotaCreditoEmitida` va también a `TRN`, como destino opcional. `ApplyChargeAllocationsCommand` recalcula el valor de cada cargo
+        desde la factura y sus notas confirmadas (`FacturasDeServicios.AcreditadoPorLineaAsync`); por eso repetir el mensaje no cambia
+        nada.
+      - En cero, el cargo se anula con la regla de `DocumentoAnulado`; la nota parcial sólo baja el valor.
+      - `PorReferenciaAsync` ya no devuelve una factura acreditada del todo; si la devolviera, refacturar le colgaría cargos sin emitir nada.
+      - «Anular la corrida» (`VoidServiceBillingRunCommand`, `POST /billing/runs/{id}/void`, permisos `Billing.Run` y `Inventory.Sales.Void`)
+        anula por Comercial, por tandas, lo abierto y sin pagos: nota de anulación total para la factura electrónica, documento contrario
+        para el comprobante. Deja los cargos `Voided` en la misma petición.
+    - **Exportar para validar**: el informe `facturacion` admite `run`, y trae el estado DIAN y la obligación de Cartera. La vista nueva
+      `facturacion-previa` es la vista previa como tabla. `GET /api/inventory/sales/documents/export` exporta la lista de ventas
+      filtrada, con `Inventory.Reports.Export` y `ExportPersonalData`.
 
   Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
   `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,
