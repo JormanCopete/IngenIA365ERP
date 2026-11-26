@@ -29,11 +29,12 @@ public sealed record BillingPreviewDto(string Period, int Vehicles, decimal Tota
 
 /// <summary>
 /// Una corrida de facturación. <c>LastActivityAt</c> es la última vez que avanzó (2026-11-25): la pantalla la muestra al ofrecer «Continuar»
-/// una corrida interrumpida, para no correrla a la vez que otra sesión que todavía la está avanzando.
+/// una corrida interrumpida, para no correrla a la vez que otra sesión que todavía la está avanzando. <c>VoidedInvoices</c> cuenta sus
+/// facturas con cargos anulados (por «Anular la corrida», una nota crédito total o la anulación de la factura).
 /// </summary>
 public sealed record BillingRunDto(Guid PublicId, string Period, BillingMode Mode, BillingPaymentMode PaymentMode, BillingRunStatus Status, DateTime? StartedAt,
     DateTime? FinishedAt, string StartedBy, int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<BillingOmissionDto> Omitted,
-    int Pending, DateTime? LastActivityAt = null);
+    int Pending, DateTime? LastActivityAt = null, int VoidedInvoices = 0);
 
 public sealed record SingleBillingResultDto(Guid? InvoicePublicId, string? InvoiceNumber, decimal Total, bool AlreadyBilled, string? OmissionCode, string? OmissionReason,
     IReadOnlyList<Guid> Charges);
@@ -291,8 +292,10 @@ internal static class ConsultasDeFacturacion
         var pendientes = r.Mode == BillingMode.Batch && r.Status is BillingRunStatus.Queued or BillingRunStatus.Running
             ? await db.Vehicles.AsNoTracking().CountAsync(v => v.Status == VehicleStatus.Active && v.Id > cursor, ct)
             : 0;
+        var anuladas = r.Id == 0 ? 0 : await db.ServiceCharges.AsNoTracking()
+            .Where(c => c.BillingRunId == r.Id && c.Status == ChargeStatus.Voided).Select(c => c.InvoicePublicId).Distinct().CountAsync(ct);
         return new BillingRunDto(r.PublicId, r.Period, r.Mode, r.PaymentMode, r.Status, r.StartedAt, r.FinishedAt, r.StartedBy, r.InvoicesCount, r.TotalAmount,
-            r.AlreadyBilledCount, r.OmittedCount, Omitidos(r), pendientes, r.UpdatedAt ?? r.StartedAt);
+            r.AlreadyBilledCount, r.OmittedCount, Omitidos(r), pendientes, r.UpdatedAt ?? r.StartedAt, anuladas);
     }
 }
 
