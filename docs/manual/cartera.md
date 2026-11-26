@@ -33,6 +33,7 @@
 | Simulación, solicitudes, decisiones, cupos y bloqueos | [cartera-originacion.md](cartera-originacion.md) | — |
 | Desembolso, garantías y pagaré | [cartera-desembolso-y-garantias.md](cartera-desembolso-y-garantias.md) | [cartera-dobles-de-prueba.md](../operaciones/cartera-dobles-de-prueba.md) |
 | Causación diaria y liquidación (y, desde la feature 024, la causación configurable y el proceso de causación, §9) | [cartera-causacion-y-liquidacion.md](cartera-causacion-y-liquidacion.md) | [cartera-proceso-diario.md](../operaciones/cartera-proceso-diario.md) |
+| Cargos masivos: una obligación por asociado en lote, sin solicitud ni giro, con un comprobante CO por corrida (feature 026) | [cartera-cargos-masivos.md](cartera-cargos-masivos.md) | — |
 | Pagos y contrato de obligaciones | [cartera-pagos-y-contrato-de-obligaciones.md](cartera-pagos-y-contrato-de-obligaciones.md) | — |
 | Ventas a crédito de Comercial | [cartera-ventas-a-credito.md](cartera-ventas-a-credito.md) | [cartera-ventas-a-credito.md](../operaciones/cartera-ventas-a-credito.md) |
 | Integración contable (matriz, comprobantes, conciliación) | [cartera-integracion-contable.md](cartera-integracion-contable.md), [contabilidad-contrato-de-contabilizacion.md](contabilidad-contrato-de-contabilizacion.md) §9 | — |

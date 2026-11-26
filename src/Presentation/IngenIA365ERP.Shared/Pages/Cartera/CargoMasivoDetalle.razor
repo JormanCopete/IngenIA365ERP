@@ -1,0 +1,679 @@
+@page "/cartera/cargos-masivos/nueva"
+@page "/cartera/cargos-masivos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Components.Inventario
+@inject CargosMasivosClient Cargos
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+@implements IDisposable
+
+<PageTitle>Cargo masivo - IngenIA365ERP</PageTitle>
+
+@* 2026-11-25 (pedido del dueño; feature 026, HU2, HU4, HU5): una corrida de cargos masivos en sus pasos. (a) Los datos —línea (con los valores por
+   defecto de su versión), período, fechas, valor, cuotas, periodicidad, forma de pago fija o «la de cada asociado», ciclo de pago, tercero de la
+   contrapartida y a quién: filtros o plano—; crear calcula la vista previa y cambiar la recalcula. (b) La vista previa: incluidos, omitidos por motivo,
+   total y la evaluación contable (comprobante CO); confirmar manda la huella revisada y, si cambió, se recarga. (c) En curso o terminada: los
+   conteos, que se actualizan solos mientras trabaja, y asociado por asociado con su obligación; se anula la corrida entera o el cargo de uno, con
+   motivo. Receta: docs/manual/cartera-cargos-masivos.md. *@
+<PermissionGate Required="Lending.BulkCharges.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_corrida is { } c ? $"Cargo masivo {c.Number} · {TextosDeCargosMasivos.Estado(c.Status)}" : "Nueva corrida de cargos masivos")</h3>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-arrow-left" OnClick="@(() => Navegacion.NavigateTo("/cartera/cargos-masivos"))">Volver a las corridas</SfButton>
+    </div>
+
+    @if (EsEditable)
+    {
+        <div class="info-card">
+            <h4>1. Datos del cargo</h4>
+            <IndicadorDeCarga Cargando="@(_opcionesCarga.Activa || _accion.Activa)" Texto="@(_accion.Activa ? "Calculando la vista previa…" : "Leyendo las líneas…")">
+                @if (_opciones is { Lines.Count: 0 })
+                {
+                    <p class="aviso aviso-info">Ninguna línea de crédito está marcada para cargos masivos. Se marca en la versión de la línea.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo">Línea *
+                        <select class="e-input" value="@_lineaId" @onchange="@(e => ElegirLinea(e.Value?.ToString()))">
+                            <option value="">Elegir…</option>
+                            @foreach (var l in _opciones?.Lines ?? []) { <option value="@l.CreditLinePublicId">@l.Code · @l.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Período *
+                        <input type="month" class="e-input" value="@_periodo" @onchange="@(e => _periodo = e.Value?.ToString())" />
+                    </label>
+                    <label class="campo">Fecha del cargo *
+                        <input type="date" class="e-input" value="@Texto(_fechaDelCargo)" @onchange="@(e => _fechaDelCargo = Fecha(e.Value) ?? _fechaDelCargo)" />
+                    </label>
+                    <label class="campo">Fecha del primer pago *
+                        <input type="date" class="e-input" value="@Texto(_primerPago)" @onchange="@(e => _primerPago = Fecha(e.Value) ?? _primerPago)" />
+                    </label>
+                    <label class="campo">Valor *
+                        <input type="number" class="e-input" min="0" step="1" @bind="_valor"
+                               data-ayuda="@(Linea is { } lv ? $"Entre {TextosDeCreditos.Pesos(lv.MinAmount)} y {TextosDeCreditos.Pesos(lv.MaxAmount)}." : null)" />
+                    </label>
+                    <label class="campo">Cuotas *
+                        <input type="number" class="e-input" min="1" step="1" max="@(Linea?.MaxInstallments)" @bind="_cuotas" />
+                    </label>
+                    <label class="campo">Periodicidad *
+                        <select class="e-input" value="@_periodicidad" @onchange="@(e => _periodicidad = Numero(e.Value) ?? _periodicidad)">
+                            @foreach (var p in PeriodicidadesDeLaLinea) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Forma de pago *
+                        <select class="e-input" value="@_modoDeForma" @onchange="@(e => _modoDeForma = Numero(e.Value) ?? 1)">
+                            <option value="1">Una para todos</option>
+                            <option value="2">La de cada asociado</option>
+                        </select>
+                    </label>
+                    @if (_modoDeForma == 1)
+                    {
+                        <label class="campo">Cuál *
+                            <select class="e-input" value="@(_forma?.ToString(CultureInfo.InvariantCulture) ?? "")" @onchange="@(e => _forma = Numero(e.Value))">
+                                <option value="">Elegir…</option>
+                                @foreach (var f in FormasDeLaLinea) { <option value="@f.Valor">@f.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Ciclo de pago
+                        <select class="e-input" value="@(_ciclo?.ToString(CultureInfo.InvariantCulture) ?? "")" @onchange="@(e => _ciclo = Numero(e.Value))"
+                                data-ayuda="Opcional. Si se da, la fecha del primer pago tiene que caer en él.">
+                            <option value="">Sin ciclo</option>
+                            @foreach (var c in TextosDeCargosMasivos.CiclosDePago) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tercero de la contrapartida *
+                        <select class="e-input" value="@_contrapartida" @onchange="@(e => _contrapartida = Numero(e.Value) ?? 1)">
+                            <option value="1">El mismo asociado</option>
+                            <option value="2">Un proveedor</option>
+                        </select>
+                    </label>
+                    @if (_contrapartida == 2)
+                    {
+                        <label class="campo campo-ancho">Proveedor *
+                            <PersonSearchPicker @bind-Selected="_proveedor" ShowHelpText="false" Compacto="true" />
+                        </label>
+                    }
+                    <label class="campo">A quién *
+                        <select class="e-input" value="@_origen" @onchange="@(e => _origen = Numero(e.Value) ?? 1)">
+                            <option value="1">Asociados activos (filtros)</option>
+                            <option value="2">Un plano</option>
+                        </select>
+                    </label>
+                </div>
+                @if (Linea is { } li)
+                {
+                    <p class="texto-tenue">
+                        La línea admite de @TextosDeCreditos.Pesos(li.MinAmount) a @TextosDeCreditos.Pesos(li.MaxAmount)@(li.MaxInstallments is { } mx ? $" y hasta {mx} cuotas" : "").
+                        @(li.ReportsToBureaus ? "Se reporta a centrales." : "No se reporta a centrales.") @(li.EntersCollection ? "Entra a cobranza." : "No entra a cobranza.")
+                        @if (_modoDeForma == 2) { <span> Si la forma de pago de un asociado no la admite la línea, se le pone la de defecto con aviso.</span> }
+                    </p>
+                }
+
+                @if (_origen == 1)
+                {
+                    <h5>Filtros (opcionales; sin marcar = todos)</h5>
+                    <p class="texto-tenue">Siempre quedan fuera los retirados, los fallecidos, los que tienen retiro en trámite y los que ya tienen el cargo del período.</p>
+                    <h6>Agencias</h6>
+                    <div class="rejilla-checks">
+                        @foreach (var a in _agencias)
+                        {
+                            var agencia = a;
+                            <label class="campo-check">
+                                <input type="checkbox" checked="@_agenciasElegidas.Contains(agencia.PublicId)" @onchange="@(e => Marcar(_agenciasElegidas, agencia.PublicId, e.Value is true))" />
+                                @agencia.Name
+                            </label>
+                        }
+                    </div>
+                    <h6>Tipo de descuento</h6>
+                    <div class="rejilla-checks">
+                        @foreach (var t in TiposDeDescuento)
+                        {
+                            var tipo = t;
+                            <label class="campo-check">
+                                <input type="checkbox" checked="@_tiposElegidos.Contains(tipo.Codigo)" @onchange="@(e => Marcar(_tiposElegidos, tipo.Codigo, e.Value is true))" />
+                                @tipo.Texto
+                            </label>
+                        }
+                    </div>
+                    <h6>Período de descuento</h6>
+                    <div class="rejilla-checks">
+                        @foreach (var p in PeriodosDeDescuento)
+                        {
+                            var per = p;
+                            <label class="campo-check">
+                                <input type="checkbox" checked="@_periodosElegidos.Contains(per.Codigo)" @onchange="@(e => Marcar(_periodosElegidos, per.Codigo, e.Value is true))" />
+                                @per.Texto
+                            </label>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="texto-tenue">
+                        Con plano, los filtros no aplican; las exclusiones sí. Guarde el borrador y luego cargue el plano con la columna «corrida» = el número del borrador.
+                    </p>
+                }
+
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <PermissionGate Required="Lending.BulkCharges.Run">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _opciones is null)" OnClick="@GuardarAsync">@(_corrida is null ? "Preparar y ver la vista previa" : "Guardar cambios y recalcular")</SfButton>
+                        @if (_corrida is not null)
+                        {
+                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@RecalcularAsync">Recalcular vista previa</SfButton>
+                            <SfButton CssClass="e-flat" Disabled="@_accion.Activa" OnClick="@DescartarAsync">Descartar</SfButton>
+                        }
+                    </div>
+                </PermissionGate>
+            </IndicadorDeCarga>
+        </div>
+
+        @if (_corrida is { Source: 2 } enPlano)
+        {
+            <div class="info-card">
+                <h4>Plano de asociados</h4>
+                <p class="texto-tenue">Filas cargadas en el borrador: @enPlano.FileRows. El archivo lleva en la columna «corrida» el número @enPlano.Number.</p>
+                <ImportarPlantilla RutaBase="/api/lending/bulk-charges/plano" ConDatos="false"
+                                   PermisoDeDescarga="Lending.BulkCharges.Run" PermisoDeImportacion="Lending.BulkCharges.Run"
+                                   Aplicado="@(_ => CargarAsync())" />
+            </div>
+        }
+    }
+
+    @if (_corrida is { } r)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Leyendo la corrida…">
+                <h4>@(r.Status == TextosDeCargosMasivos.Borrador ? "2. Vista previa" : "Resultado de la corrida")</h4>
+                <p class="texto-tenue">
+                    @r.CreditLineCode · @r.CreditLineName · período @TextosDeCargosMasivos.Periodo(r.Period) · cargo del @TextosDeCreditos.Fecha(r.ChargeDate)
+                    · primer pago el @TextosDeCreditos.Fecha(r.FirstDueDate) · @TextosDeCreditos.Pesos(r.Amount) en @r.Installments @(r.Installments == 1 ? "cuota" : "cuotas")
+                    @TextosDeCargosMasivos.Periodicidad(r.Periodicity).ToLowerInvariant()
+                    · @(r.ChannelMode == 2 ? "forma de pago de cada asociado" : TextosDeCargosMasivos.FormaDePago(r.RepaymentChannel))
+                    · @TextosDeCargosMasivos.CicloDePago(r.PaymentCycle)
+                    · contrapartida: @(r.CounterpartMode == 2 ? r.CounterpartPersonName ?? "un proveedor" : "el mismo asociado")
+                    @if (r.Source == 2) { <span> · plano con @r.FileRows filas</span> }
+                </p>
+                <p class="texto-tenue">
+                    Preparada por @(r.PreparedByName ?? "—")
+                    @if (r.ConfirmedAt is { } conf) { <span> · confirmada por @(r.ConfirmedByName ?? "—") el @TextosDeCreditos.Instante(conf)</span> }
+                    @if (r.CompletedAt is { } fin) { <span> · terminada el @TextosDeCreditos.Instante(fin)</span> }
+                    @if (r.BatchNumber is { } lote) { <span> · lote @lote</span> }
+                    @if (r.VoidReason is { } anulada) { <span> · anulada: @anulada</span> }
+                </p>
+                @if (TextosDeCargosMasivos.Trabajando(r.Status))
+                {
+                    <p class="aviso aviso-info">La corrida está @TextosDeCargosMasivos.Estado(r.Status).ToLowerInvariant(): la pantalla se actualiza sola cada pocos segundos.</p>
+                }
+
+                <div class="kpi-grid kpi-compacto">
+                    @if (r.Status == TextosDeCargosMasivos.Borrador)
+                    {
+                        <div class="kpi-card"><span class="kpi-value">@r.PendingCount</span><span class="kpi-label">Incluidos</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@r.SkippedCount</span><span class="kpi-label">Omitidos</span></div>
+                    }
+                    else
+                    {
+                        <div class="kpi-card"><span class="kpi-value">@r.CreatedCount</span><span class="kpi-label">Cargados</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@r.PendingCount</span><span class="kpi-label">Pendientes</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@r.SkippedCount</span><span class="kpi-label">Omitidos</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@r.FailedCount</span><span class="kpi-label">Fallidos</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@r.VoidedCount</span><span class="kpi-label">Anulados</span></div>
+                    }
+                    <div class="kpi-card"><span class="kpi-value">@TextosDeCreditos.Pesos(r.TotalAmount)</span><span class="kpi-label">Total</span></div>
+                </div>
+
+                @if (r.SkippedByReason is { Count: > 0 } omitidos)
+                {
+                    <h5>Omitidos por motivo</h5>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Motivo</th><th class="numero">Asociados</th></tr></thead>
+                            <tbody>
+                                @foreach (var o in omitidos) { <tr><td>@TextosDeCargosMasivos.Motivo(o.Reason)</td><td class="numero">@o.Count</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (r.Accounting is { } contable)
+                {
+                    <h5>Contabilidad</h5>
+                    <p class="aviso @(contable.Blocked ? "aviso-error" : "aviso-info")" role="@(contable.Blocked ? "alert" : null)">
+                        Comprobante @contable.VoucherType · @TextosDeCargosMasivos.ResultadoContable(contable.Outcome)@(contable.Blocked ? " · impide confirmar" : "")
+                    </p>
+                    @foreach (var m in contable.Messages) { <p class="texto-tenue">@m</p> }
+                }
+
+                @if (r.Status == TextosDeCargosMasivos.Borrador)
+                {
+                    @if (_opciones?.SegregationRequired == true)
+                    {
+                        <p class="texto-tenue">La cooperativa exige que confirme otra persona distinta de quien preparó la corrida.</p>
+                    }
+                    @if (_errorDeConfirmacion is not null) { <p class="aviso aviso-error" role="alert">@_errorDeConfirmacion</p> }
+                    <PermissionGate Required="Lending.BulkCharges.Run">
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || !r.CanConfirm || string.IsNullOrEmpty(r.PreviewSha256))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+                else if (r.Status is TextosDeCargosMasivos.Terminada or TextosDeCargosMasivos.EnCurso && r.CreatedCount > 0)
+                {
+                    <PermissionGate Required="Lending.BulkCharges.Void">
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(null))">Anular corrida…</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+            </IndicadorDeCarga>
+        </div>
+
+        <div class="info-card">
+            <h4>Asociados</h4>
+            <div class="toolbar">
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_estadoDeLinea">
+                        <option value="">Todos</option>
+                        @foreach (var e in TextosDeCargosMasivos.EstadosDeLinea) { <option value="@e.Nombre">@e.Texto</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-outline e-small" Disabled="@_lineas.Activa" OnClick="@(() => CargarLineasAsync(1))">Filtrar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_lineas.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Documento</th><th>Asociado</th><th>Agencia</th><th class="numero">Valor</th><th class="numero">Cuotas</th><th>Primer pago</th><th>Forma de pago</th><th>Estado</th><th>Motivo</th><th>Obligación</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _filas)
+                            {
+                                var linea = l;
+                                <tr>
+                                    <td>@linea.PersonDocument</td>
+                                    <td>@linea.PersonName</td>
+                                    <td>@(linea.BranchName ?? "—")</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(linea.Amount)</td>
+                                    <td class="numero">@linea.Installments</td>
+                                    <td>@TextosDeCreditos.Fecha(linea.FirstDueDate)</td>
+                                    <td>@TextosDeCargosMasivos.FormaDePago(linea.RepaymentChannel)</td>
+                                    <td>@TextosDeCargosMasivos.EstadoDeLinea(linea.Status)</td>
+                                    <td>
+                                        @TextosDeCargosMasivos.Motivo(linea.Reason)
+                                        @if (linea.ReasonDetail is { } detalle) { <span class="texto-tenue"> · @detalle</span> }
+                                        @if (linea.Warning is { } aviso) { <span class="texto-tenue"> · @aviso</span> }
+                                    </td>
+                                    <td>
+                                        @if (linea.LoanPublicId is { } credito)
+                                        {
+                                            <a href="/cartera/creditos/@credito">@(linea.LoanNumber ?? "Ver")</a>
+                                        }
+                                        else { <span>—</span> }
+                                    </td>
+                                    <td>
+                                        @if (linea.Status == TextosDeCargosMasivos.LineaCreada)
+                                        {
+                                            <PermissionGate Required="Lending.BulkCharges.Void">
+                                                <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(linea))">Anular…</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_filas.Count == 0) { <p class="texto-tenue">No hay asociados con ese filtro.</p> }
+                @if (_totalDeLineas > TamanoDeLineas)
+                {
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat e-small" Disabled="@(_paginaDeLineas <= 1)" OnClick="@(() => CargarLineasAsync(_paginaDeLineas - 1))">Anterior</SfButton>
+                        <span>Página @_paginaDeLineas de @((_totalDeLineas + TamanoDeLineas - 1) / TamanoDeLineas)</span>
+                        <SfButton CssClass="e-flat e-small" Disabled="@(_paginaDeLineas * TamanoDeLineas >= _totalDeLineas)" OnClick="@(() => CargarLineasAsync(_paginaDeLineas + 1))">Siguiente</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+    else if (Id is not null)
+    {
+        <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Leyendo la corrida…">
+            @if (!_detalle.Activa) { <p class="texto-tenue">No se encontró la corrida.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_lineaPorAnular is null ? "Anular la corrida" : "Anular el cargo del asociado")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <p>
+                    @if (_lineaPorAnular is { } lp)
+                    {
+                        <span>Se anula la obligación de @lp.PersonName (@lp.PersonDocument), si no tiene pagos ni novedades; Contabilidad recibe su reverso y el período queda libre para volver a cargarlo.</span>
+                    }
+                    else
+                    {
+                        <span>Se anulan en segundo plano todas las obligaciones de la corrida que no tengan pagos ni novedades (las que los tengan quedan con su motivo); Contabilidad recibe un solo comprobante de reverso.</span>
+                    }
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorDeMotivo is not null) { <p class="aviso aviso-error" role="alert">@_errorDeMotivo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDeLineas = 100;
+    private static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(4);
+
+    private static readonly (string Codigo, string Texto)[] TiposDeDescuento = [("C", "Caja (C)"), ("N", "Nómina (N)")];
+    private static readonly (string Codigo, string Texto)[] PeriodosDeDescuento = [("M", "Mensual (M)"), ("Q", "Quincenal (Q)")];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private readonly EstadoDeCarga _opcionesCarga = new(), _detalle = new(), _lineas = new(), _accion = new();
+    private OpcionesDeCargoMasivoDto? _opciones;
+    private CargoMasivoDto? _corrida;
+    private List<ItemCrudo> _agencias = [];
+    private List<LineaDeCorridaDeCargoMasivoDto> _filas = [];
+    private LineaDeCorridaDeCargoMasivoDto? _lineaPorAnular;
+    private ClaveDeOperacion _clave = new(), _claveDeAnulacion = new();
+    private CancellationTokenSource? _refresco;
+
+    // Los datos del formulario.
+    private string? _lineaId, _periodo, _estadoDeLinea, _error, _errorDeConfirmacion, _errorDeMotivo, _motivo;
+    private DateOnly _fechaDelCargo = DateOnly.FromDateTime(DateTime.Today), _primerPago = DateOnly.FromDateTime(DateTime.Today);
+    private decimal? _valor;
+    private int? _cuotas, _forma, _ciclo;
+    private int _periodicidad = 30, _modoDeForma = 1, _contrapartida = 1, _origen = 1, _paginaDeLineas = 1, _totalDeLineas;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private HashSet<Guid> _agenciasElegidas = [];
+    private HashSet<string> _tiposElegidos = [], _periodosElegidos = [];
+    private bool _mostrarMotivo;
+
+    private bool EsEditable => _corrida is null ? Id is null : _corrida.Status == TextosDeCargosMasivos.Borrador;
+
+    private LineaDeCargoMasivoDto? Linea => Guid.TryParse(_lineaId, out var id) ? _opciones?.Lines.FirstOrDefault(l => l.CreditLinePublicId == id) : null;
+
+    private IEnumerable<(int Valor, string Nombre, string Texto)> PeriodicidadesDeLaLinea =>
+        Linea is { Periodicities.Count: > 0 } l ? TextosDeCargosMasivos.Periodicidades.Where(p => l.Periodicities.Contains(p.Valor)) : TextosDeCargosMasivos.Periodicidades;
+
+    private IEnumerable<(int Valor, string Nombre, string Texto)> FormasDeLaLinea =>
+        Linea is { RepaymentChannels.Count: > 0 } l ? TextosDeCargosMasivos.FormasDePago.Where(f => l.RepaymentChannels.Contains(f.Valor)) : TextosDeCargosMasivos.FormasDePago;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_opcionesCarga.Iniciar())
+        {
+            var o = await Cargos.OpcionesAsync();
+            if (!o.IsSuccess) await Notification.ErrorAsync(o.ErrorMessage ?? "No se pudieron leer las líneas de cargos masivos.");
+            else _opciones = o.Value;
+            _agencias = await Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        }
+        if (Id is null)
+        {
+            var hoy = DateOnly.FromDateTime(DateTime.Today);
+            _periodo = hoy.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            _primerPago = new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
+            if (_opciones?.Lines is { Count: 1 } unica) ElegirLinea(unica[0].CreditLinePublicId.ToString());
+        }
+        else
+        {
+            await CargarAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _refresco?.Cancel();
+        _refresco?.Dispose();
+    }
+
+    private static string Texto(DateOnly fecha) => fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParseExact(valor?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : null;
+
+    private static int? Numero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+
+    private static void Marcar<T>(HashSet<T> conjunto, T valor, bool marcado)
+    {
+        if (marcado) conjunto.Add(valor);
+        else conjunto.Remove(valor);
+    }
+
+    /// <summary>Elegir la línea propone sus valores por defecto: valor, cuotas, periodicidad y forma de pago.</summary>
+    private void ElegirLinea(string? valor)
+    {
+        _lineaId = valor;
+        if (Linea is not { } l) return;
+        _valor = l.DefaultAmount;
+        _cuotas = l.DefaultInstallments;
+        _periodicidad = l.DefaultPeriodicity;
+        _forma = l.DefaultRepaymentChannel;
+    }
+
+    private void LlenarFormulario(CargoMasivoDto c)
+    {
+        _lineaId = c.CreditLinePublicId.ToString();
+        _periodo = $"{c.Period / 100:0000}-{c.Period % 100:00}";
+        _fechaDelCargo = c.ChargeDate;
+        _primerPago = c.FirstDueDate;
+        _valor = c.Amount;
+        _cuotas = c.Installments;
+        _periodicidad = c.Periodicity;
+        _modoDeForma = c.ChannelMode;
+        _forma = c.RepaymentChannel;
+        _ciclo = c.PaymentCycle;
+        _contrapartida = c.CounterpartMode;
+        _proveedor = c.CounterpartPersonPublicId is { } p ? new PersonSearchPicker.PersonSearchItem { PublicId = p, FullName = c.CounterpartPersonName ?? "" } : null;
+        _origen = c.Source;
+        _agenciasElegidas = [.. c.Filters?.BranchPublicIds ?? []];
+        _tiposElegidos = [.. c.Filters?.DeductionTypes ?? []];
+        _periodosElegidos = [.. c.Filters?.DeductionPeriods ?? []];
+    }
+
+    private async Task CargarAsync()
+    {
+        var id = _corrida?.PublicId ?? Id;
+        if (id is null) return;
+        using (_detalle.Iniciar())
+        {
+            var r = await Cargos.CorridaAsync(id.Value);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la corrida."); return; }
+            Mostrar(r.Value);
+        }
+        await CargarLineasAsync(_paginaDeLineas);
+    }
+
+    /// <summary>Deja la corrida en pantalla, llena el formulario si es borrador y arranca o detiene el refresco.</summary>
+    private void Mostrar(CargoMasivoDto? corrida)
+    {
+        _corrida = corrida;
+        if (corrida is null) return;
+        if (corrida.Status == TextosDeCargosMasivos.Borrador) LlenarFormulario(corrida);
+        if (TextosDeCargosMasivos.Trabajando(corrida.Status)) IniciarRefresco();
+    }
+
+    private void IniciarRefresco()
+    {
+        if (_refresco is not null) return;
+        _refresco = new CancellationTokenSource();
+        _ = RefrescarAsync(_refresco.Token);
+    }
+
+    private async Task RefrescarAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var reloj = new PeriodicTimer(Intervalo);
+            while (await reloj.WaitForNextTickAsync(ct))
+            {
+                if (_corrida is not { } c) break;
+                var r = await Cargos.CorridaAsync(c.PublicId, ct);
+                if (r.IsSuccess && r.Value is { } nueva)
+                {
+                    _corrida = nueva;
+                    await CargarLineasAsync(_paginaDeLineas);
+                    await InvokeAsync(StateHasChanged);
+                    if (!TextosDeCargosMasivos.Trabajando(nueva.Status)) break;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            _refresco?.Dispose();
+            _refresco = null;
+        }
+    }
+
+    private async Task CargarLineasAsync(int pagina)
+    {
+        if (_corrida is not { } c) return;
+        using var carga = _lineas.Iniciar();
+        var r = await Cargos.LineasAsync(c.PublicId, string.IsNullOrEmpty(_estadoDeLinea) ? null : _estadoDeLinea, pagina, TamanoDeLineas);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los asociados de la corrida."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _totalDeLineas = r.Value?.Total ?? 0;
+        _paginaDeLineas = pagina;
+    }
+
+    // ------------------------------------------------------------------------------------------------ preparar --
+
+    private string? Validar()
+    {
+        if (Linea is null) return "Elija la línea.";
+        if (!DateOnly.TryParseExact((_periodo ?? "") + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) return "Elija el período.";
+        if (_valor is not > 0) return "Escriba el valor del cargo.";
+        if (_cuotas is not > 0) return "Escriba el número de cuotas.";
+        if (_modoDeForma == 1 && _forma is null) return "Elija la forma de pago.";
+        if (_contrapartida == 2 && _proveedor is null) return "Busque el proveedor de la contrapartida.";
+        return null;
+    }
+
+    private CargoMasivoRequest Pedido()
+    {
+        var periodo = DateOnly.ParseExact(_periodo + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return new CargoMasivoRequest(Linea!.CreditLinePublicId, periodo.Year * 100 + periodo.Month, _fechaDelCargo, _primerPago, _valor, _cuotas,
+            TextosDeCargosMasivos.NombreDePeriodicidad(_periodicidad),
+            _modoDeForma == 2 ? "FromAssociate" : "Fixed",
+            _modoDeForma == 1 ? TextosDeCargosMasivos.NombreDeFormaDePago(_forma) : null,
+            TextosDeCargosMasivos.NombreDeCiclo(_ciclo),
+            _contrapartida == 2 ? "Person" : "Debtor",
+            _contrapartida == 2 ? _proveedor?.PublicId : null,
+            _origen == 2 ? "File" : "Filters",
+            _origen == 1 ? new FiltrosDeCargoMasivoDto([.. _agenciasElegidas], [.. _tiposElegidos], [.. _periodosElegidos]) : null);
+    }
+
+    private async Task GuardarAsync()
+    {
+        _error = null;
+        if (Validar() is { } invalido) { _error = invalido; return; }
+        using (_accion.Iniciar())
+        {
+            var r = _corrida is { } c ? await Cargos.CambiarAsync(c.PublicId, Pedido(), _clave) : await Cargos.CrearAsync(Pedido(), _clave);
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo preparar la corrida."; return; }
+            _clave = new ClaveDeOperacion();
+            var nueva = _corrida is null;
+            Mostrar(r.Value);
+            if (nueva && r.Value is { } creada) Navegacion.NavigateTo($"/cartera/cargos-masivos/{creada.PublicId}", replace: true);
+            await Notification.SuccessAsync($"Corrida {r.Value?.Number} preparada: revise la vista previa antes de confirmar.");
+        }
+        await CargarLineasAsync(1);
+    }
+
+    private async Task RecalcularAsync()
+    {
+        if (_corrida is not { } c) return;
+        _error = null;
+        using (_accion.Iniciar())
+        {
+            var r = await Cargos.RecalcularAsync(c.PublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo recalcular la vista previa."; return; }
+            Mostrar(r.Value);
+        }
+        await CargarLineasAsync(1);
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (_corrida is not { } c) return;
+        using (_accion.Iniciar())
+        {
+            var r = await Cargos.DescartarAsync(c.PublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo descartar la corrida."; return; }
+            Mostrar(r.Value);
+            await Notification.SuccessAsync("Corrida descartada.");
+        }
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_corrida is not { PreviewSha256: { } huella } c) return;
+        _errorDeConfirmacion = null;
+        var cambio = false;
+        using (_accion.Iniciar())
+        {
+            var r = await Cargos.ConfirmarAsync(c.PublicId, huella, new ClaveDeOperacion());
+            if (!r.IsSuccess)
+            {
+                _errorDeConfirmacion = r.ErrorMessage ?? "No se pudo confirmar la corrida.";
+                cambio = r.ErrorCode == CargosMasivosClient.VistaPreviaCambiada || r.StatusCode == 409;
+            }
+            else
+            {
+                Mostrar(r.Value);
+                await Notification.SuccessAsync("Corrida confirmada: se cargan los asociados en segundo plano.");
+            }
+        }
+        if (cambio)
+        {
+            await CargarAsync();
+            _errorDeConfirmacion = (_errorDeConfirmacion ?? "") + " La vista previa se recargó: revísela y vuelva a confirmar.";
+            return;
+        }
+        await CargarLineasAsync(1);
+    }
+
+    // ------------------------------------------------------------------------------------------------- anular --
+
+    private void AbrirMotivo(LineaDeCorridaDeCargoMasivoDto? linea)
+    {
+        _lineaPorAnular = linea;
+        _motivo = _errorDeMotivo = null;
+        _claveDeAnulacion = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_corrida is not { } c || string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_accion.Iniciar())
+        {
+            _errorDeMotivo = null;
+            var r = _lineaPorAnular is { } l
+                ? await Cargos.AnularLineaAsync(c.PublicId, l.PublicId, _motivo.Trim(), _claveDeAnulacion)
+                : await Cargos.AnularAsync(c.PublicId, _motivo.Trim(), _claveDeAnulacion);
+            if (!r.IsSuccess) { _errorDeMotivo = r.ErrorMessage ?? "No se pudo anular."; return; }
+            _mostrarMotivo = false;
+            Mostrar(r.Value);
+            await Notification.SuccessAsync(_lineaPorAnular is null ? "Anulación de la corrida ordenada." : "Cargo del asociado anulado.");
+        }
+        await CargarLineasAsync(_paginaDeLineas);
+    }
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

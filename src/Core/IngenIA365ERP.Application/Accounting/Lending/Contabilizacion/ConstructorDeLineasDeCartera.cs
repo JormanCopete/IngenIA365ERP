@@ -234,6 +234,8 @@ public static partial class ConstructorDeLineasDeCartera
     {
         CreditoDesembolsadoV1 x => x.Loan,
         DesembolsoReversadoV1 x => x.Loan,
+        CargoMasivoRegistradoV1 x => x.Loan,
+        CargoMasivoAnuladoV1 x => x.Loan,
         CreditoAjustadoDesdeComercialV1 x => x.Loan,
         PagoAplicadoV1 x => x.Loan,
         PagoReversadoV1 x => x.Loan,
@@ -263,6 +265,7 @@ public static partial class ConstructorDeLineasDeCartera
     public static Guid? MensajeOriginal(object? contenido) => contenido switch
     {
         DesembolsoReversadoV1 x => x.Original?.MessageId,
+        CargoMasivoAnuladoV1 x => x.Original?.MessageId,
         CreditoAjustadoDesdeComercialV1 x => x.Original?.MessageId,
         PagoReversadoV1 x => x.Original?.MessageId,
         ReversoDeCierreV1 x => x.ReversedPart.MessageId,
@@ -293,6 +296,8 @@ public static partial class ConstructorDeLineasDeCartera
     {
         CreditoDesembolsadoV1 x => x.Dimensions,
         DesembolsoReversadoV1 x => x.Dimensions,
+        CargoMasivoRegistradoV1 x => x.Dimensions,
+        CargoMasivoAnuladoV1 x => x.Dimensions,
         CreditoAjustadoDesdeComercialV1 x => x.Dimensions,
         PagoAplicadoV1 x => x.Dimensions,
         PagoReversadoV1 x => x.Dimensions,
@@ -374,6 +379,9 @@ public static partial class ConstructorDeLineasDeCartera
             {
                 case CreditoDesembolsadoV1 x: Desembolso(x); break;
                 case DesembolsoReversadoV1 x: DesembolsoReversado(x); break;
+                // 2026-11-25 (feature 026): el cargo masivo, capital contra la contrapartida del cargo de la línea, y su anulación al revés.
+                case CargoMasivoRegistradoV1 x: CargoMasivo(x.Dimensions, x.Amounts, x.Loan, x.DebtorPersonPublicId, x.CounterpartPersonPublicId, anular: false); break;
+                case CargoMasivoAnuladoV1 x: CargoMasivo(x.Dimensions, x.Amounts, x.Loan, x.DebtorPersonPublicId, x.CounterpartPersonPublicId, anular: true); break;
                 case CreditoAjustadoDesdeComercialV1 x: AjusteDeComercial(x); break;
                 case InteresCausadoV1 x: Causaciones(x.Lines); break;
                 case MoraCausadaV1 x: Causaciones(x.Lines); break;
@@ -454,6 +462,22 @@ public static partial class ConstructorDeLineasDeCartera
 
         private Lado Fondo(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor, SubsidyV1 s) =>
             L(R.FondoQueSubsidia, d, a, credito, deudor, motivo: Texto(s.FundCode));
+
+        /// <summary>
+        /// 2026-11-25 (feature 026): el cargo masivo debita el capital (su regla de saldo, con el deudor) y acredita la contrapartida del cargo de la línea
+        /// con el tercero de la corrida (el deudor o un proveedor); su anulación, al revés.
+        /// </summary>
+        private void CargoMasivo(LoanFactDimensionsV1 d, IReadOnlyList<ConceptAmountV1> importes, LoanRefV1 credito, Guid deudor, Guid tercero, bool anular)
+        {
+            foreach (var a in importes)
+            {
+                var saldo = Saldo(d, a, credito, deudor);
+                if (saldo is null) continue;
+                var contra = L(R.ContrapartidaDelCargo, d, a, credito, tercero == Guid.Empty ? deudor : tercero);
+                if (anular) Asentar(contra, saldo, a.Amount);
+                else Asentar(saldo, contra, a.Amount);
+            }
+        }
 
         private void DesembolsoReversado(DesembolsoReversadoV1 x)
         {

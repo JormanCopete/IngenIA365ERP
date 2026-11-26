@@ -315,6 +315,17 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
     public async Task SerializarProcesosDeCausacionAsync(string prefijo, CancellationToken ct = default) =>
         _ = await SecuenciaAsync(LendingNumberKind.AccrualProcess, string.Empty, prefijo, ct);
 
+    /// <summary>2026-11-25 (pedido del dueño; feature 026): el número de una corrida de cargos masivos (<c>CGM-000001</c>), ámbito único.</summary>
+    public Task<string> NumeroDeCorridaDeCargosAsync(CancellationToken ct = default) =>
+        AsignarAsync(LendingNumberKind.BulkChargeRun, string.Empty, "CGM-", ct);
+
+    /// <summary>
+    /// 2026-11-25 (feature 026): toma (y bloquea hasta el final de la transacción en curso) la fila de numeración de las corridas de cargos masivos sin
+    /// consumir número: preparar, recalcular y confirmar corridas se hacen una a la vez en la cooperativa (la unicidad por período no se cruza).
+    /// </summary>
+    public async Task SerializarCorridasDeCargosAsync(CancellationToken ct = default) =>
+        _ = await SecuenciaAsync(LendingNumberKind.BulkChargeRun, string.Empty, "CGM-", ct);
+
     /// <summary>
     /// El número de una orden de giro de cuentas (data-model §3.9): el mismo consecutivo de las órdenes de desembolso (<c>DisbursementOrder</c>),
     /// que salta los números de las dos tablas.
@@ -417,6 +428,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.DeceasedHolderCase => db.DeceasedHolderCases.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
         // Feature 024, fase 3 (2026-11-16): el proceso de causación.
         LendingNumberKind.AccrualProcess => db.AccrualProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
+        // Feature 026 (2026-11-25): la corrida de cargos masivos.
+        LendingNumberKind.BulkChargeRun => db.BulkChargeRuns.IgnoreQueryFilters().AnyAsync(r => r.Number == numero, ct),
         _ => Task.FromResult(false),
     };
 

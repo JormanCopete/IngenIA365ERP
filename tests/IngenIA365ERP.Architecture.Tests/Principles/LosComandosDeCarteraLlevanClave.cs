@@ -87,6 +87,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RegulatoryEndpoints.cs",
         // Feature 024, fase 3 (2026-11-16): el proceso de causación —armar, recalcular, anular, pedir la firma, reprocesar— y su aprobación presente.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/AccrualProcessesEndpoints.cs",
+        // 2026-11-25 (feature 026): los cargos masivos.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/BulkChargesEndpoints.cs",
     ];
 
     /// <summary>

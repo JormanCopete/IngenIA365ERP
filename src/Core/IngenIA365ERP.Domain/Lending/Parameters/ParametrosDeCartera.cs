@@ -265,6 +265,9 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string SegregacionCambioDePlazoPorOtraPersona = "Segregacion.CambioDePlazoPorOtraPersona";
 
+    /// <summary>2026-11-25 (pedido del dueño; feature 026): quien prepara una corrida de cargos masivos no la confirma (no de fábrica). (nuevo)</summary>
+    public const string SegregacionCargoMasivoPorOtraPersona = "Segregacion.CargoMasivoPorOtraPersona";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -887,6 +890,11 @@ public static class ParametrosDeCartera
         SiNo(Modulo, SegregacionCambioDePlazoPorOtraPersona,
             "El plazo de un crédito sin pagos ni causación lo cambia una persona distinta de quien lo registró (quien desembolsó o vendió a crédito). "
             + "Con «No», quien lo registró también puede corregirlo.",
+            false, K1, General)
+            with { PermisoAdicional = PermisoDeSegregacion },
+        // 2026-11-25 (pedido del dueño; feature 026): la segregación de los cargos masivos.
+        SiNo(Modulo, SegregacionCargoMasivoPorOtraPersona,
+            "Una corrida de cargos masivos la confirma una persona distinta de quien la preparó. Con «No», quien la preparó también puede confirmarla.",
             false, K1, General)
             with { PermisoAdicional = PermisoDeSegregacion },
 

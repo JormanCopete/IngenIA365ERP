@@ -41,7 +41,7 @@ public class EnumeracionesDeCarteraTests
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
         [typeof(LoanStatus)] = [("PendingDisbursement", 1), ("Active", 2), ("PaidOff", 3), ("WrittenOff", 4), ("Voided", 5), ("Novated", 6)],
-        [typeof(LoanOrigin)] = [("Origination", 1), ("Commercial", 2), ("Migration", 3)],
+        [typeof(LoanOrigin)] = [("Origination", 1), ("Commercial", 2), ("Migration", 3), ("BulkCharge", 4)],
         [typeof(SaleObligationStatus)] = [("Validated", 1), ("ValidationFailed", 2), ("Migrated", 3), ("CancelledBeforeCutoff", 4)],
         [typeof(LoanLinkKind)] = [("Replacement", 1), ("Novation", 2), ("Refinancing", 3)],
         [typeof(TermsVersionCause)] = [("Origination", 1), ("CommercialSale", 2), ("Migration", 3), ("RateReset", 4), ("Restructuring", 5),
@@ -49,8 +49,10 @@ public class EnumeracionesDeCarteraTests
             // 2026-11-24: la versión que deja el cambio de plazo sin pagos ni causación.
             ("TermCorrection", 11),
             // 2026-11-24 (feature 025, fase 3): la corrección de la tasa de un crédito cargado desde el corte.
-            ("CutoverCorrection", 12)],
-        [typeof(DisbursementForm)] = [("Transfer", 1), ("Check", 2), ("ThirdPartyPayment", 3), ("InKind", 4)],
+            ("CutoverCorrection", 12),
+            // 2026-11-25 (feature 026): las condiciones de una obligación de cargo masivo.
+            ("BulkCharge", 13)],
+        [typeof(DisbursementForm)] = [("Transfer", 1), ("Check", 2), ("ThirdPartyPayment", 3), ("InKind", 4), ("Charge", 5)],
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
@@ -59,7 +61,9 @@ public class EnumeracionesDeCarteraTests
             // Feature 014 (T014; research E03).
             ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20),
             // Feature 024, fase 3 (2026-11-16): el proceso de causación.
-            ("AccrualProcess", 21)],
+            ("AccrualProcess", 21),
+            // Feature 026 (2026-11-25): la corrida de cargos masivos.
+            ("BulkChargeRun", 22)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -147,7 +151,14 @@ public class EnumeracionesDeCarteraTests
         [typeof(InboundEvaluationOutcome)] = [("Accepted", 1), ("ValidationFailed", 2), ("NotConvertible", 3), ("NotIncorporated", 4)],
         // Las cuatro clases de corrida de C59 y el vocabulario de C123.
         [typeof(LendingProcessKind)] = [("DailyCycle", 1), ("MonthlyClose", 2), ("CloseReopen", 3), ("NationalValueCorrection", 4),
-            ("ScheduledTask", 5), ("MigratedCollectionStages", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8)],
+            ("ScheduledTask", 5), ("MigratedCollectionStages", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8),
+            ("BulkCharge", 9), ("BulkChargeVoid", 10)],
+        // 2026-11-25 (feature 026): los cargos masivos.
+        [typeof(BulkChargeRunStatus)] = [("Draft", 1), ("Queued", 2), ("Running", 3), ("Completed", 4), ("Voiding", 5), ("Voided", 6), ("Discarded", 7)],
+        [typeof(BulkChargeLineStatus)] = [("Pending", 1), ("Created", 2), ("Skipped", 3), ("Failed", 4), ("Voided", 5)],
+        [typeof(BulkChargeSource)] = [("Filters", 1), ("File", 2)],
+        [typeof(BulkChargeChannelMode)] = [("Fixed", 1), ("FromAssociate", 2)],
+        [typeof(BulkChargeCounterpart)] = [("Debtor", 1), ("Person", 2)],
         [typeof(LendingProcessRunStatus)] = [("Requested", 0), ("Running", 1), ("Completed", 2), ("CompletedWithErrors", 3), ("Failed", 4)],
         [typeof(AccountingFactPartSource)] = [("DailyCycleBatch", 1), ("LoanCatchUp", 2), ("NationalValueCorrectionBatch", 3), ("MonthlyClose", 4),
             ("CloseReopening", 5), ("AccountCatchUp", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8)],

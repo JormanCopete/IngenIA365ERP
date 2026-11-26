@@ -287,8 +287,8 @@ public class ProcesadorDeCarteraTests
         (Parametros with { MaxParallelCooperatives = 0 }).Problemas().Should().NotBeEmpty();
         ConductorDeCorridasDeCartera.Clases.Should().BeEquivalentTo(
             [LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen, LendingProcessKind.NationalValueCorrection,
-                LendingProcessKind.MigratedCollectionStages],
-            "las cuatro clases de corrida de C59 y, desde K4, el registro de la etapa migrada");
+                LendingProcessKind.MigratedCollectionStages, LendingProcessKind.BulkCharge, LendingProcessKind.BulkChargeVoid],
+            "las cuatro clases de corrida de C59, desde K4 el registro de la etapa migrada y, desde la 026, los cargos masivos y su anulación");
     }
 
     // ----------------------------------------------------------------------------------------------- US4 (T0474) --
