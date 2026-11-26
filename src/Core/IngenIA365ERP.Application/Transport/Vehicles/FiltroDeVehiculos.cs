@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Common.Text;
 using IngenIA365ERP.Domain.Entities.Transport;
@@ -41,7 +42,8 @@ public sealed record FiltrosDeVehiculos(
 /// <para>
 /// <b>Búsqueda</b>: placa (contiene, sin guiones ni espacios), número interno o radio-móvil (exactos) y el propietario: con letras, todos los
 /// términos en su texto de búsqueda (nombres, apellidos, razón social, en cualquier orden y sin tildes); sólo con dígitos, su documento
-/// (exacto hasta 4 dígitos, para que un lateral corto no traiga a todos los documentos que lo contienen; desde 5, el que empieza así).
+/// (exacto hasta 4 dígitos por <see cref="ResolutorDePersonaPorDocumento"/> —sin tipo trae a todas las que tengan ese número—, para que un
+/// lateral corto no traiga a todos los documentos que lo contienen; desde 5, el que empieza así).
 /// </para>
 /// <para>
 /// <b>Servicio</b>: cuenta una suscripción viva que no haya terminado antes de hoy, aunque empiece después: «sin ningún servicio» no
@@ -122,7 +124,7 @@ public static class FiltroDeVehiculos
             {
                 dueños = documento.Length >= DigitosParaBuscarPorComienzo
                     ? db.People.AsNoTracking().Where(p => p.TaxId.StartsWith(documento)).Select(p => p.Id)
-                    : db.People.AsNoTracking().Where(p => p.TaxId == documento).Select(p => p.Id);
+                    : ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking(), null, documento).Select(p => p.Id);
             }
         }
 
