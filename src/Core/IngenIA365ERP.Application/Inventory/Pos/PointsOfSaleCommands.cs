@@ -266,7 +266,8 @@ public sealed class GetPointOfSaleQueryHandler(IApplicationDbContext db, IAlcanc
 /// <summary>Las cajas de un punto (§20.1, <c>GET /points-of-sale/{id}/cash-registers</c>). (nuevo)</summary>
 public sealed record ListCashRegistersQuery(Guid PointOfSalePublicId) : IRequest<Result<IReadOnlyList<CashRegisterDto>>>;
 
-public sealed class ListCashRegistersQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcance)
+public sealed class ListCashRegistersQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcance, IActorActual? actorActual = null,
+    Receipts.Common.ParametrosDeCaja? parametros = null, IDateTimeService? reloj = null)
     : IRequestHandler<ListCashRegistersQuery, Result<IReadOnlyList<CashRegisterDto>>>
 {
     public async Task<Result<IReadOnlyList<CashRegisterDto>>> Handle(ListCashRegistersQuery request, CancellationToken ct)
@@ -274,7 +275,23 @@ public sealed class ListCashRegistersQueryHandler(IApplicationDbContext db, IAlc
         var punto = await PuntosDelAlcance.BuscarAsync(db, alcance, request.PointOfSalePublicId, ct);
         if (punto is null) return Result.Failure<IReadOnlyList<CashRegisterDto>>(ErroresDePuntoDeVenta.PointOfSaleNotFound());
         var cajas = await db.CashRegisters.AsNoTracking().Where(c => c.PointOfSaleId == punto.Id && !c.IsDeleted).OrderBy(c => c.Code).ToListAsync(ct);
-        return Result.Success(await VistaDePuntosDeVenta.CajasAsync(db, punto, cajas, ct));
+        var vistas = await VistaDePuntosDeVenta.CajasAsync(db, punto, cajas, ct);
+        if (reloj is null) return Result.Success(vistas);
+        // 2026-11-25: quién abre cada caja (Caja.SoloCajerosAsignados), para que «Mi caja» no ofrezca la de otra persona.
+        var hoy = reloj.HoyLocal;
+        var cajeros = await Cash.CajerosDeLaCaja.VigentesAsync(db, cajas, hoy, ct);
+        var solo = parametros is null || await Receipts.Common.SoloCajerosAsignados.EsAsync(parametros, hoy, ct);
+        var usuario = actorActual is null ? null : (await actorActual.ObtenerAsync(ct)).UserId;
+        var porPublico = cajas.ToDictionary(c => c.PublicId, c => c.Id);
+        return Result.Success<IReadOnlyList<CashRegisterDto>>(vistas.Select(v =>
+        {
+            var deLaCaja = cajeros.GetValueOrDefault(porPublico[v.CashRegisterPublicId]) ?? [];
+            return v with
+            {
+                CashierNames = deLaCaja.Select(c => c.Nombre).ToList(),
+                OpenableByMe = usuario is { } u ? Cash.CajerosDeLaCaja.PuedeAbrir(solo, deLaCaja, u) : null,
+            };
+        }).ToList());
     }
 }
 

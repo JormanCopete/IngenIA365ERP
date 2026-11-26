@@ -152,6 +152,10 @@
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_cargaCajeros.Activa" Texto="Cargando…">
+                @* 2026-11-25 (pedido del dueño): con Caja.SoloCajerosAsignados sólo los cajeros abren la caja, y en la caja única también la del punto de
+                   venta unida. *@
+                <p class="hint">Sólo estos cajeros abren la caja (parámetro «Caja.SoloCajerosAsignados»).@(_cajaDeCajeros?.PosCashRegisterPublicId is not null
+                    ? " Como está unida a una caja del punto de venta (caja única), también la abren allá." : "")</p>
                 @if (_cajeros.Count == 0)
                 {
                     <p class="texto-tenue">La caja no tiene cajeros asignados.</p>

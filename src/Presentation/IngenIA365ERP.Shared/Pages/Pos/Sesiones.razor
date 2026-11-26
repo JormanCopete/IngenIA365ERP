@@ -136,7 +136,11 @@
         if (punto is not { } p) return;
         var r = await Ventas.ListarCajasAsync(p);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
-        _cajas = (r.Value ?? []).Where(c => c.IsActive).Select(c => new OpcionDeCaja(c.CashRegisterPublicId, $"{c.Code} · {c.Name}", c.OpenSession?.CashierName)).ToList();
+        // 2026-11-25: las cajas de otros cajeros (Caja.SoloCajerosAsignados) se ven pero no se eligen, y las asignadas a quien abre van primero.
+        _cajas = (r.Value ?? []).Where(c => c.IsActive)
+            .OrderByDescending(c => c.OpenableByMe == true && c.CashierNames is { Count: > 0 })
+            .Select(c => new OpcionDeCaja(c.CashRegisterPublicId, $"{c.Code} · {c.Name}", c.OpenSession?.CashierName,
+                OpcionDeCaja.Para(c.OpenableByMe, c.CashierNames))).ToList();
     }
 
     private async Task AbrirAsync(BaseDeApertura pedido)

@@ -185,7 +185,8 @@ public sealed class InactivateCollectionPointCommandHandler(IApplicationDbContex
 /// <summary><c>GET /api/receipts/cash-boxes</c>: las cajas al alcance. (nuevo)</summary>
 public sealed record ListCashBoxesQuery(Guid? CollectionPointPublicId = null, bool IncludeInactive = false) : IRequest<Result<IReadOnlyList<CashBoxDto>>>;
 
-public sealed class ListCashBoxesQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj)
+public sealed class ListCashBoxesQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Interfaces.Security.IActorActual? actorActual = null, ParametrosDeCaja? parametros = null)
     : IRequestHandler<ListCashBoxesQuery, Result<IReadOnlyList<CashBoxDto>>>
 {
     public async Task<Result<IReadOnlyList<CashBoxDto>>> Handle(ListCashBoxesQuery request, CancellationToken ct)
@@ -200,11 +201,34 @@ public sealed class ListCashBoxesQueryHandler(IApplicationDbContext db, IAlcance
         var visibles = filas.Where(f => AlcanceDePuntos.VeCaja(mio, f.Caja, f.Punto)).ToList();
         var hoy = reloj.HoyLocal;
         var ids = visibles.Select(f => f.Caja.Id).ToList();
-        var cajeros = await db.CashBoxCashiers.AsNoTracking()
-            .Where(c => ids.Contains(c.CashBoxId) && c.ValidFrom <= hoy && (c.ValidTo == null || c.ValidTo >= hoy))
-            .GroupBy(c => c.CashBoxId).Select(g => new { g.Key, Cantidad = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Cantidad, ct);
-        return Result.Success<IReadOnlyList<CashBoxDto>>(visibles
-            .Select(f => SetupMapeos.Caja(f.Caja, f.Punto, cajeros.GetValueOrDefault(f.Caja.Id))).ToList());
+        // 2026-11-25: los cajeros vigentes con su nombre y si quien pregunta abre la caja (Caja.SoloCajerosAsignados), para que «Mi caja» no ofrezca la
+        // de otra persona.
+        var vigentes = await (from c in db.CashBoxCashiers.AsNoTracking()
+                              join u in db.Users.AsNoTracking().IgnoreQueryFilters() on c.UserId equals u.Id
+                              join p in db.People.AsNoTracking().IgnoreQueryFilters() on u.PersonId equals p.Id into pp
+                              from p in pp.DefaultIfEmpty()
+                              where ids.Contains(c.CashBoxId) && c.ValidFrom <= hoy && (c.ValidTo == null || c.ValidTo >= hoy)
+                              select new
+                              {
+                                  c.CashBoxId, c.UserId, u.Username,
+                                  FirstName = p == null ? null : p.FirstName, OtherNames = p == null ? null : p.OtherNames,
+                                  LastName = p == null ? null : p.LastName, SecondLastName = p == null ? null : p.SecondLastName,
+                                  BusinessName = p == null ? null : p.BusinessName,
+                              }).ToListAsync(ct);
+        var cajeros = vigentes.GroupBy(c => c.CashBoxId).ToDictionary(g => g.Key, g => g.DistinctBy(c => c.UserId).ToList());
+        var usuario = actorActual is null ? null : (await actorActual.ObtenerAsync(ct)).UserId;
+        var solo = parametros is null || await SoloCajerosAsignados.EsAsync(parametros, hoy, ct);
+        return Result.Success<IReadOnlyList<CashBoxDto>>(visibles.Select(f =>
+        {
+            var deLaCaja = cajeros.GetValueOrDefault(f.Caja.Id) ?? [];
+            return SetupMapeos.Caja(f.Caja, f.Punto, deLaCaja.Count) with
+            {
+                CashierNames = deLaCaja.Select(c => c.FirstName is null && c.BusinessName is null
+                    ? c.Username
+                    : Core.People.Services.PersonFactory.NombreVisible(c.FirstName, c.OtherNames, c.LastName, c.SecondLastName, c.BusinessName)).ToList(),
+                OpenableByMe = usuario is { } u ? !solo || deLaCaja.Any(c => c.UserId == u) : null,
+            };
+        }).ToList());
     }
 }
 

@@ -44,6 +44,16 @@ public static class ErroresDeCaja
 
     public static Error SessionNotFound() => new(SessionNotFoundCode, "La sesión de caja no existe.");
 
+    public const string CashierNotAssignedCode = "Inventory.CashSession.CashierNotAssigned";
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño), <c>Caja.SoloCajerosAsignados</c>: la caja tiene cajeros asignados y quien abre no es uno de ellos (422). Dice quiénes
+    /// la abren para que elija la suya o pida que lo asignen. (nuevo)
+    /// </summary>
+    public static Error CashierNotAssigned(string cashRegisterCode, IReadOnlyList<string> cashiers) => new ErrorConDatos(CashierNotAssignedCode,
+        $"La caja {cashRegisterCode} sólo la abren sus cajeros asignados ({string.Join(", ", cashiers)}). Elija su caja, o pida que lo asignen en " +
+        "Ventas → Puntos de venta → Cajas → «Cajeros».", new { cashRegister = cashRegisterCode, cashiers });
+
     /// <summary>Con el faltante a cargo del cajero, el usuario tiene que ser una persona (422, §21.1).</summary>
     public static Error CashierWithoutPerson() => new(CashierWithoutPersonCode,
         "El faltante de arqueo de este punto va a cargo del cajero y su usuario no está vinculado a una persona: vincúlelo en " +

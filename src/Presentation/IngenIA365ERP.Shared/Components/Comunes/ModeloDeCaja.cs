@@ -3,8 +3,20 @@ namespace IngenIA365ERP.Shared.Components.Comunes;
 // 2026-11-24 (pedido del dueño): la caja es la misma en Comercial y en Recaudo. Estas piezas no conocen ningún módulo: cada pantalla traduce sus DTO a
 // estos modelos y lo digitado de vuelta a sus peticiones. Lo usan AperturaDeCaja, MiCajaAbierta, ArqueoDeCaja, ResultadoDelArqueo y TablaDeCajas. (nuevo)
 
-/// <summary>Una caja (o un punto) que se puede elegir; <see cref="OcupadaPor"/> dice quién la tiene abierta.</summary>
-public sealed record OpcionDeCaja(Guid Id, string Rotulo, string? OcupadaPor = null);
+/// <summary>
+/// Una caja (o un punto) que se puede elegir; <see cref="OcupadaPor"/> dice quién la tiene abierta. 2026-11-25: <see cref="SoloPara"/> no nulo, la caja es
+/// de otros cajeros (<c>Caja.SoloCajerosAsignados</c>) y dice por qué no («de Leidy Agudelo», «sin cajeros asignados»); tampoco se elige. Lo arma
+/// <see cref="Para"/>.
+/// </summary>
+public sealed record OpcionDeCaja(Guid Id, string Rotulo, string? OcupadaPor = null, string? SoloPara = null)
+{
+    /// <summary>Si se puede elegir para abrir.</summary>
+    public bool Libre => OcupadaPor is null && SoloPara is null;
+
+    /// <summary>El motivo de <see cref="SoloPara"/> a partir de lo que dice el servidor: nulo si quien pregunta la puede abrir (o no se sabe).</summary>
+    public static string? Para(bool? abreYo, IReadOnlyList<string>? cajeros) =>
+        abreYo != false ? null : cajeros is { Count: > 0 } c ? $"de {string.Join(", ", c)}" : "sin cajeros asignados";
+}
 
 /// <summary>Un billete o una moneda vigente.</summary>
 public sealed record DenominacionDeConteo(Guid Id, decimal Valor, bool EsMoneda);

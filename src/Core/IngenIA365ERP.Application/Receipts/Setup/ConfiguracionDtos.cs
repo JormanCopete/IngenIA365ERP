@@ -18,6 +18,8 @@ public sealed record CollectionPointDto(
     bool IsMainCashBoxVault,
     int CashBoxCount);
 
+/// <remarks>2026-11-25: <see cref="CashierNames"/> son los cajeros vigentes y <see cref="OpenableByMe"/> si quien pregunta puede abrirla con
+/// <c>Caja.SoloCajerosAsignados</c>; los llena sólo la lista de cajas.</remarks>
 public sealed record CashBoxDto(
     Guid PublicId,
     Guid CollectionPointPublicId,
@@ -34,7 +36,9 @@ public sealed record CashBoxDto(
     DateOnly ValidFrom,
     DateOnly? ValidTo,
     int ActiveCashiers,
-    Guid? PosCashRegisterPublicId = null);
+    Guid? PosCashRegisterPublicId = null,
+    IReadOnlyList<string>? CashierNames = null,
+    bool? OpenableByMe = null);
 
 public sealed record CashierDto(Guid UserPublicId, string UserName, Guid PersonPublicId, string PersonName, DateOnly ValidFrom, DateOnly? ValidTo);
 
