@@ -8,7 +8,7 @@ public sealed record PuntoDeRecaudoDto(Guid PublicId, Guid BranchPublicId, strin
 
 public sealed record CajaDeRecaudoDto(Guid PublicId, Guid CollectionPointPublicId, string CollectionPointCode, string Code, string Name, int BaseMode,
     decimal BaseAmount, decimal? CashWarnCap, decimal? CashBlockCap, decimal? DailyCashOutCap, bool IsMainCashBox, int Status, DateOnly ValidFrom,
-    DateOnly? ValidTo, int ActiveCashiers, Guid? PosCashRegisterPublicId = null);
+    DateOnly? ValidTo, int ActiveCashiers, Guid? PosCashRegisterPublicId = null, IReadOnlyList<string>? CashierNames = null, bool? OpenableByMe = null);
 
 public sealed record CajeroDto(Guid UserPublicId, string UserName, Guid PersonPublicId, string PersonName, DateOnly ValidFrom, DateOnly? ValidTo);
 

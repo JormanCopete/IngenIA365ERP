@@ -21,6 +21,8 @@ el de ver, y el administrador trae los dos.
   vigencia anterior se cierra la víspera y queda en el **Historial**.
 - Las reglas de cada módulo las aplica el servidor, y la pantalla muestra su mensaje tal cual. Por ejemplo:
   - `Caja.SesionUnica` no se enciende sin una caja unida y sin la cuenta puente (ver [caja-unica.md](caja-unica.md)).
+  - `Caja.SoloCajerosAsignados` (encendido de fábrica, 2026-11-25) hace que cada caja de Recaudo, del punto de venta y de la caja única la abran sólo
+    sus cajeros (ver [mi-caja-y-arqueo.md](mi-caja-y-arqueo.md#quién-abre-cada-caja)).
   - `Recaudo.HoraDeCorte` tiene que caer antes del ciclo diario de Cartera.
 - Las cajas leen sus parámetros al momento de cada operación. Por eso cambiar `Caja.ArqueoEstricto` o `Caja.SesionUnica` rige también para las sesiones que
   ya están abiertas.

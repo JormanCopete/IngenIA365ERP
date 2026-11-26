@@ -102,6 +102,40 @@ public class PointsOfSaleEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(PermisoDeEscritura);
 
+        // 2026-11-25 (pedido del dueño): los cajeros de cada caja. Con Caja.SoloCajerosAsignados, una caja con cajeros sólo la abren ellos (y los de la caja
+        // de Recaudo a la que esté unida, que la lista trae de sólo lectura).
+        group.MapGet("/{id:guid}/cash-registers/{registerId:guid}/cashiers", async (Guid id, Guid registerId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListCashRegisterCashiersQuery(id, registerId), ct))
+            .WithName("Inventory_CashRegisters_Cashiers_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeConsulta);
+
+        group.MapPost("/{id:guid}/cash-registers/{registerId:guid}/cashiers", async (Guid id, Guid registerId, CajeroDeCajaRequest body, HttpContext http,
+                ISender sender, CancellationToken ct) =>
+                await sender.Send(new AssignCashRegisterCashierCommand(id, registerId, body.UserPublicId ?? Guid.Empty, body.ValidFrom, body.ValidTo)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Inventory_CashRegisters_Cashiers_Assign")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PermisoDeEscritura);
+
+        group.MapPost("/{id:guid}/cash-registers/{registerId:guid}/cashiers/{userId:guid}/retire", async (Guid id, Guid registerId, Guid userId,
+                RetiroDeCajeroDeCajaRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new RetireCashRegisterCashierCommand(id, registerId, userId, body?.ValidTo) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_CashRegisters_Cashiers_Retire")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PermisoDeEscritura);
+
+        // Los usuarios que se pueden asignar como cajeros (la misma lista que en Recaudo), con el permiso de escribir puntos de venta.
+        group.MapGet("/cashier-candidates", async (string? search, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Receipts.Security.ListReceiptsUsersQuery(search), ct))
+            .WithName("Inventory_CashRegisters_Cashiers_Candidates")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeEscritura);
+
         // Feature 022 (T041; FR-046): las cuentas propias de recaudo habilitadas para transferencias y consignaciones en el punto.
         group.MapGet("/{id:guid}/transfer-accounts", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListSalesTransferAccountsQuery(id), ct))
@@ -180,6 +214,12 @@ public class PointsOfSaleEndpoints : ICarterModule
         string? DianCashRegisterTypeCode = null, bool? DirectPrint = null);
 
     /// <summary>Feature 022 (T041): la cuenta propia que se habilita para un medio en el punto (y, si se da, sólo en una caja).</summary>
+    /// <summary>2026-11-25: el cajero que se asigna a una caja y su vigencia (desde hoy si no viene). (nuevo)</summary>
+    public sealed record CajeroDeCajaRequest(Guid? UserPublicId, DateOnly? ValidFrom, DateOnly? ValidTo);
+
+    /// <summary>2026-11-25: hasta cuándo queda el cajero que se retira (ayer si no viene). (nuevo)</summary>
+    public sealed record RetiroDeCajeroDeCajaRequest(DateOnly? ValidTo);
+
     public sealed record CuentaDeTransferenciaRequest(Guid? PaymentMeansPublicId, Guid? OwnBankAccountPublicId, Guid? CashRegisterPublicId);
 
     /// <summary>Los tres conjuntos de la disponibilidad de un medio (§22.3).</summary>

@@ -235,8 +235,11 @@
         else
         {
             var c = await Configuracion.CajasAsync();
+            // 2026-11-25: las cajas de otros cajeros (Caja.SoloCajerosAsignados) se ven pero no se eligen, y las de quien abre van primero.
             _opcionesDeCaja = c.IsSuccess && c.Value is not null
-                ? c.Value.Select(x => new OpcionDeCaja(x.PublicId, $"{x.CollectionPointCode} · {x.Code} · {x.Name}")).ToList()
+                ? c.Value.OrderByDescending(x => x.OpenableByMe == true && x.CashierNames is { Count: > 0 })
+                    .Select(x => new OpcionDeCaja(x.PublicId, $"{x.CollectionPointCode} · {x.Code} · {x.Name}", null,
+                        OpcionDeCaja.Para(x.OpenableByMe, x.CashierNames))).ToList()
                 : [];
         }
     }

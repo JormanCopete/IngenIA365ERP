@@ -12,6 +12,29 @@ son comunes (`Components/Comunes`): `AperturaDeCaja`, `MiCajaAbierta`, `ArqueoDe
 
 Si la sesión abierta es de un día anterior, «Mi caja» y las pantallas de cobro lo avisan (`AvisoSesionDeOtroDia`).
 
+## Quién abre cada caja
+
+Desde el 2026-11-25 (pedido del dueño), cada caja sólo la abren sus cajeros. Así nadie abre por error la caja que usa otra persona. Lo rige el
+parámetro **`Caja.SoloCajerosAsignados`** (`RCD`), que **viene encendido**. Se cambia en **Recaudo → Configuración → Parámetros**.
+
+| Dónde | Quién la abre |
+|---|---|
+| **Recaudo** | Sólo sus cajeros vigentes. Se asignan en **Recaudo → Configuración → Cajas y cajeros → «Cajeros»**. Así funcionaba ya desde la feature 015. |
+| **Punto de venta** | Sus cajeros vigentes. Se asignan en **Ventas → Puntos de venta → «Cajas» → «Cajeros»**. Una caja **sin** cajeros la abre cualquiera con acceso al punto, para que nada se detenga mientras se configura. |
+| **Caja única** | La caja del punto de venta unida a una caja de Recaudo también la abren los cajeros de esa caja de Recaudo. Basta con asignarlos en Recaudo; el diálogo del punto de venta los muestra de sólo lectura. |
+
+- En «Mi caja», las cajas de otros cajeros se ven pero **no se pueden elegir**: dicen de quién son, por ejemplo «(de Leidy Agudelo)». Las propias van
+  primero.
+- Si alguien intenta abrir una caja que no es suya, el servidor responde `Inventory.CashSession.CashierNotAssigned` en el punto de venta y
+  `Receipts.Session.NotCashierOfBox` en Recaudo. El mensaje dice quiénes la abren.
+- Asignar a un cajero rige desde hoy. «Retirar» cierra su vigencia ayer, y nada se borra.
+- Con el parámetro apagado no se mira la asignación al abrir: en Recaudo abre quien tenga la caja en su alcance, y en el punto de venta, cualquiera
+  del punto.
+- La lista de cada caja del punto de venta (`INV_CashRegisterCashiers`) sale de
+  `GET/POST /api/inventory/points-of-sale/{id}/cash-registers/{registerId}/cashiers` y de `POST …/cashiers/{userId}/retire`. Consultarla pide
+  `Inventory.PointsOfSale.View`, y cambiarla, `Inventory.PointsOfSale.Manage`. Quién abre lo decide un solo sitio, `CajerosDeLaCaja`. La tabla
+  llegó con la migración aditiva `CajerosDeLaCajaDelPuntoDeVenta`.
+
 ## Ver el detalle en una ventana
 
 Desde el 2026-11-25 (pedido del dueño), el detalle se abre en una **ventana** con su resumen. Antes aparecía al final de la página o sólo se podía

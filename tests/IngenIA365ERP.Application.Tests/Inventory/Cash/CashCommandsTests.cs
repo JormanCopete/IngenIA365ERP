@@ -20,6 +20,7 @@ using IngenIA365ERP.Domain.Entities.Inventory.Pos;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Inventory.Parameters;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -682,5 +683,169 @@ public class CashCommandsTests
             .Handle(new ExecuteDayCloseCommand(t.V.Punto.PublicId, hoy) { Remittance = new RemesaDelCierreDelDia(Guid.NewGuid(), 50_000m) }, default);
 
         cierre.Error.Code.Should().Be(ErroresDeCaja.DayCloseRemittanceOverCashCode, "el efectivo de la sesión vinculada ya está en Recaudo");
+    }
+
+    // ------------------------------------------------------------------------------------ cajeros asignados --
+    // 2026-11-25 (pedido del dueño): con Caja.SoloCajerosAsignados (encendido por defecto) una caja con cajeros sólo la abren ellos y los de la caja de
+    // Recaudo a la que esté unida; sin ninguno, cualquiera del punto.
+
+    private void Usuarios()
+    {
+        Db.Users.AddRange(
+            new IngenIA365ERP.Domain.Entities.Security.User { Id = KardexDePrueba.Usuario, Username = "cajera.uno" },
+            new IngenIA365ERP.Domain.Entities.Security.User { Id = OtraCajera, Username = "cajera.dos" });
+        Db.SaveChanges();
+    }
+
+    private void CajeroDe(CashRegister caja, int usuario, DateOnly? hasta = null)
+    {
+        Db.CashRegisterCashiers.Add(new CashRegisterCashier { CashRegisterId = caja.Id, UserId = usuario, ValidFrom = Catalog.CatalogoDePrueba.Hoy.AddDays(-30), ValidTo = hasta });
+        Db.SaveChanges();
+    }
+
+    /// <summary>Una caja de Recaudo unida a la caja del punto de venta, con su cajero.</summary>
+    private void UnidaARecaudo(CashRegister caja, int cajero)
+    {
+        var deRecaudo = new IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox
+        {
+            CollectionPointId = 1, Code = "CAJA1", Name = "Caja de Recaudo", ValidFrom = Catalog.CatalogoDePrueba.Hoy.AddYears(-1), PosCashRegisterPublicId = caja.PublicId,
+        };
+        Db.CashBoxes.Add(deRecaudo);
+        Db.SaveChanges();
+        Db.CashBoxCashiers.Add(new IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier
+        {
+            CashBoxId = deRecaudo.Id, UserId = cajero, ValidFrom = Catalog.CatalogoDePrueba.Hoy.AddDays(-30),
+        });
+        Db.SaveChanges();
+    }
+
+    [Fact]
+    public async Task Una_caja_sin_cajeros_asignados_la_abre_cualquiera_del_punto()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+    }
+
+    [Fact]
+    public async Task Una_caja_con_cajeros_asignados_no_la_abre_otra_persona_y_dice_quienes_la_abren()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.CajeroDe(t._caja2, OtraCajera);
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.Error.Code.Should().Be(ErroresDeCaja.CashierNotAssignedCode);
+        r.Error.Message.Should().Contain("cajera.dos").And.Contain("CJ2");
+        t.Db.CashSessions.Should().NotContain(s => s.CashRegisterId == t._caja2.Id, "no se abre nada");
+    }
+
+    [Fact]
+    public async Task El_cajero_asignado_abre_su_caja()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.CajeroDe(t._caja2, OtraCajera);
+        t.CajeroDe(t._caja2, KardexDePrueba.Usuario);
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+    }
+
+    [Fact]
+    public async Task Un_cajero_retirado_ya_no_cuenta()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.CajeroDe(t._caja2, OtraCajera, hasta: Catalog.CatalogoDePrueba.Hoy.AddDays(-1));
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.IsSuccess.Should().BeTrue("sin cajeros vigentes la caja vuelve a estar libre");
+    }
+
+    [Fact]
+    public async Task La_caja_unida_a_Recaudo_la_abren_tambien_los_cajeros_de_esa_caja()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.CajeroDe(t._caja2, OtraCajera);
+        t.UnidaARecaudo(t._caja2, KardexDePrueba.Usuario);
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+    }
+
+    [Fact]
+    public async Task La_caja_unida_a_Recaudo_no_la_abre_quien_no_es_cajero_de_ninguna_de_las_dos()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.UnidaARecaudo(t._caja2, OtraCajera);
+
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId, 0m), default);
+
+        r.Error.Code.Should().Be(ErroresDeCaja.CashierNotAssignedCode);
+    }
+
+    [Fact]
+    public void Con_el_parametro_apagado_cualquiera_abre_y_sin_cajeros_tambien()
+    {
+        var cajeros = new[] { new CajeroDeLaCaja(OtraCajera, Guid.NewGuid(), "Cajera Dos", null) };
+
+        CajerosDeLaCaja.PuedeAbrir(soloAsignados: false, cajeros, KardexDePrueba.Usuario).Should().BeTrue();
+        CajerosDeLaCaja.PuedeAbrir(soloAsignados: true, [], KardexDePrueba.Usuario).Should().BeTrue();
+        CajerosDeLaCaja.PuedeAbrir(soloAsignados: true, cajeros, KardexDePrueba.Usuario).Should().BeFalse();
+        CajerosDeLaCaja.PuedeAbrir(soloAsignados: true, cajeros, OtraCajera).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Asignar_y_retirar_un_cajero_y_la_lista_trae_de_solo_lectura_los_de_la_caja_de_Recaudo()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.UnidaARecaudo(t._caja2, KardexDePrueba.Usuario);
+        var dos = t.Db.Users.Single(u => u.Id == OtraCajera).PublicId;
+        var hoy = Catalog.CatalogoDePrueba.Hoy;
+
+        var asignado = await new AssignCashRegisterCashierCommandHandler(t.Db, t.K.Alcance, t.V.Compras.C.Reloj)
+            .Handle(new AssignCashRegisterCashierCommand(t.V.Punto.PublicId, t._caja2.PublicId, dos), default);
+        asignado.IsSuccess.Should().BeTrue(asignado.IsFailure ? $"{asignado.Error.Code}: {asignado.Error.Message}" : null);
+        asignado.Value.Should().ContainSingle(c => c.UserPublicId == dos && c.Current && c.CollectionBoxCode == null && c.ValidFrom == hoy);
+        asignado.Value.Should().ContainSingle(c => c.UserName == "cajera.uno" && c.CollectionBoxCode == "CAJA1", "el de Recaudo se ve, de sólo lectura");
+
+        var repetido = await new AssignCashRegisterCashierCommandHandler(t.Db, t.K.Alcance, t.V.Compras.C.Reloj)
+            .Handle(new AssignCashRegisterCashierCommand(t.V.Punto.PublicId, t._caja2.PublicId, dos), default);
+        repetido.Error.Code.Should().Be(ErroresDePuntoDeVenta.CashierOverlapsCode);
+
+        var retirado = await new RetireCashRegisterCashierCommandHandler(t.Db, t.K.Alcance, t.V.Compras.C.Reloj)
+            .Handle(new RetireCashRegisterCashierCommand(t.V.Punto.PublicId, t._caja2.PublicId, dos), default);
+        retirado.IsSuccess.Should().BeTrue(retirado.IsFailure ? $"{retirado.Error.Code}: {retirado.Error.Message}" : null);
+        retirado.Value.Should().NotContain(c => c.UserPublicId == dos && c.Current, "asignado hoy y retirado hoy no llega a regir");
+        t.Db.CashRegisterCashiers.IgnoreQueryFilters().Should().ContainSingle(c => c.UserId == OtraCajera && c.IsDeleted, "nada se borra: queda de baja");
+    }
+
+    [Fact]
+    public async Task La_lista_de_cajas_dice_quien_las_abre_y_si_quien_pregunta_puede()
+    {
+        var t = await CrearAsync();
+        t.Usuarios();
+        t.CajeroDe(t._caja2, OtraCajera);
+
+        var r = await new ListCashRegistersQueryHandler(t.Db, t.K.Alcance, t.K.Actor,
+                new IngenIA365ERP.Application.Receipts.Common.ParametrosDeCaja(t.K.Lector()), t.V.Compras.C.Reloj)
+            .Handle(new ListCashRegistersQuery(t.V.Punto.PublicId), default);
+
+        r.IsSuccess.Should().BeTrue();
+        var caja2 = r.Value.Single(c => c.CashRegisterPublicId == t._caja2.PublicId);
+        caja2.CashierNames.Should().Equal("cajera.dos");
+        caja2.OpenableByMe.Should().BeFalse();
+        r.Value.Where(c => c.CashRegisterPublicId != t._caja2.PublicId).Should().OnlyContain(c => c.OpenableByMe == true && c.CashierNames!.Count == 0);
     }
 }
