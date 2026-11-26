@@ -53,7 +53,9 @@ El testigo y el acta aparecen solo cuando se exigen: sesión olvidada y arqueo s
 
 - **Abrir.** El cajero abre su caja en **Recaudo → Mi caja**, con una sola base. La caja del punto de venta se abre sola,
   vinculada y con base cero. Si no se pudo abrir (por ejemplo, porque ya tenía una abierta por su cuenta), la sesión lo dice y ofrece
-  «Abrir la caja del punto de venta».
+  «Abrir la caja del punto de venta». Con `Caja.SoloCajerosAsignados` (encendido de fábrica, 2026-11-25) la abren sólo los cajeros de la caja de
+  Recaudo y los propios de la caja del punto de venta: basta con asignarlos en Recaudo (ver
+  [mi-caja-y-arqueo.md](mi-caja-y-arqueo.md#quién-abre-cada-caja)).
 - **Durante el día.** Vende en el punto de venta y recauda en la Caja sin abrir nada más.
 - **Cerrar.** Un solo «Arquear y cerrar» en Recaudo, con todo el dinero del cajón. Sin arqueo ciego, lo esperado de cada medio ya incluye
   lo vendido. Al registrar:

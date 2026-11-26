@@ -741,6 +741,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
     la tolerancia, la diferencia se resuelve al cerrar con el faltante al gasto, no hay testigo ni segundo custodio y los adjuntos son opcionales.
   - Apagado, la base del punto de venta es lo que el cajero contó al abrir, aun con fondo fijo (hasta el 2026-11-25 heredaba la de la sesión anterior).
   - Encendido, rigen los controles de siempre.
+  - **Quién abre cada caja (2026-11-25)**: `Caja.SoloCajerosAsignados` (RCD, **encendido**). En Recaudo sólo sus cajeros (como desde la 015); en el punto de
+    venta sus cajeros (`INV_CashRegisterCashiers`, migración aditiva `CajerosDeLaCajaDelPuntoDeVenta`, «Cajeros» en Puntos de venta) más los de la caja
+    de Recaudo unida; una caja del punto de venta sin cajeros la abre cualquiera del punto. Lo decide sólo `CajerosDeLaCaja`
+    (`Inventory.CashSession.CashierNotAssigned`); «Mi caja» muestra las ajenas sin dejarlas elegir.
   - Receta: `docs/manual/mi-caja-y-arqueo.md`.
 
 - **Editar la solicitud radicada sin devolverla (2026-11-25, pedido del dueño)**: `PUT /api/lending/applications/{id}/submitted` (permiso

@@ -78,6 +78,14 @@ public static class ParametrosDeRecaudoYTesoreria
     /// </summary>
     public const string CajaSesionUnica = "Caja.SesionUnica";
 
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): sólo los cajeros asignados abren la caja, en Recaudo, en el punto de venta y en la caja única, para que nadie abra
+    /// por error la caja que usa otra persona. Encendido por defecto. En Recaudo toda caja tiene sus cajeros (como desde la feature 015); en el punto de
+    /// venta, una caja con cajeros asignados (<c>INV_CashRegisterCashiers</c>, más los de la caja de Recaudo a la que esté unida) sólo la abren ellos y una
+    /// sin ninguno la sigue abriendo cualquiera con acceso al punto. Apagado, no se mira la asignación al abrir.
+    /// </summary>
+    public const string CajaSoloCajerosAsignados = "Caja.SoloCajerosAsignados";
+
     /// <summary>Valores de <see cref="CajaFormaDeConteoDelEfectivo"/>.</summary>
     public const string ConteoAElegir = "AElegir", ConteoPorDenominaciones = "Denominaciones", ConteoPorValorGlobal = "ValorGlobal";
     public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
@@ -205,6 +213,9 @@ public static class ParametrosDeRecaudoYTesoreria
             SiNo(ModuloRecaudo, CajaSesionUnica,
                 "Caja única: quien vende y recauda abre y cierra una sola caja. La sesión de Recaudo abre con ella la caja del punto de venta vinculada a su caja (Configuración de Recaudo → Cajas) y al cerrar la cierra cuadrada y arquea todo junto. El efectivo del punto de venta pasa a la caja fuerte y entra a Recaudo por el rol «Puente de la caja del punto de venta»: configure las dos cuentas iguales.",
                 false, R0),
+            SiNo(ModuloRecaudo, CajaSoloCajerosAsignados,
+                "Sólo los cajeros asignados abren la caja, en Recaudo, en el punto de venta y en la caja única. En Recaudo los cajeros se asignan en Configuración → Cajas y cajeros; en el punto de venta, en Ventas → Puntos de venta → Cajas → «Cajeros» (una caja del punto de venta unida a una de Recaudo también la abren los cajeros de esa caja). Una caja del punto de venta sin cajeros asignados la abre cualquiera con acceso al punto. Con «No» no se mira la asignación al abrir.",
+                true, R0),
             SiNo(ModuloRecaudo, CajaArqueoEstricto,
                 "Arqueo estricto en la caja de Recaudo y en la del punto de venta. Con «No» (el defecto) el arqueo es sencillo: se ve lo esperado, el motivo se pide sólo si la diferencia pasa la tolerancia, la diferencia queda resuelta al cerrar con el faltante al gasto, la sesión olvidada la cierra su cajero o un supervisor sin testigo, el movimiento con la bóveda no pide segundo custodio y el acta y los soportes son opcionales. Con «Sí» rigen el arqueo ciego, la doble custodia, el tratamiento del faltante y la aprobación por otra persona.",
                 false, R1),

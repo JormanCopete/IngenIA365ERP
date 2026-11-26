@@ -15,7 +15,9 @@
 @* Feature 012, I3 (T637; FR-058; contracts/api.md §20.1, plantilla 10): los puntos de venta y sus cajas. El punto es de una sucursal
    (no cambia), vende por un canal, tiene bodega por defecto y dice si usa el POS (sin POS cobra en oficina). Cada caja tiene su bodega,
    el datáfono que se propone al cobrar, el formato de impresión y los tipos de documento de sus seis roles: venta POS, factura a pedido
-   del comprador, nota de ajuste POS, nota crédito de factura y los dos de contingencia. Se ve la sesión abierta de cada caja. *@
+   del comprador, nota de ajuste POS, nota crédito de factura y los dos de contingencia. Se ve la sesión abierta de cada caja.
+   2026-11-25 (pedido del dueño): «Cajeros» asigna quién abre cada caja. Con Caja.SoloCajerosAsignados (encendido), una caja con cajeros sólo la abren
+   ellos y los de la caja de Recaudo a la que esté unida (que se ven aquí de sólo lectura); sin ninguno, la abre cualquiera con acceso al punto. *@
 <PermissionGate Required="Inventory.PointsOfSale.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -80,7 +82,7 @@
             <IndicadorDeCarga Cargando="@_cargaCajas.Activa">
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th>Código</th><th>Nombre</th><th>Bodega</th><th>Datáfono</th><th>Impresión</th><th>Tipos por rol</th><th>Sesión abierta</th><th>Estado</th><th></th></tr></thead>
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Bodega</th><th>Datáfono</th><th>Impresión</th><th>Tipos por rol</th><th>Cajeros</th><th>Sesión abierta</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var c in _cajas)
                             {
@@ -89,9 +91,13 @@
                                     <td>@c.Code</td><td>@c.Name</td><td>@c.WarehouseCode</td><td>@Datafono(c.DefaultCardTerminalPublicId)</td>
                                     <td>@TextosDeVentas.FormatoDeImpresion(c.PrintFormat) · @c.PrintCopies copia(s)</td>
                                     <td>@string.Join(" · ", c.DocumentTypes.OrderBy(t => t.Role).Select(t => $"{TextosDeVentas.RolDeCaja(t.Role)}: {t.DocumentTypeCode}"))</td>
+                                    <td>@(c.CashierNames is { Count: > 0 } cajeros ? string.Join(", ", cajeros) : "Cualquiera del punto")</td>
                                     <td>@(c.OpenSession is { } s ? $"{s.CashierName} desde {s.OpenedAt.ToLocalTime():dd/MM HH:mm}" : "Sin sesión")</td>
                                     <td>@(c.IsActive ? "Activa" : "Inactiva")</td>
-                                    <td><PermissionGate Required="Inventory.PointsOfSale.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarCaja(caja))" /></PermissionGate></td>
+                                    <td>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirCajerosAsync(caja))">Cajeros</SfButton>
+                                        <PermissionGate Required="Inventory.PointsOfSale.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarCaja(caja))" /></PermissionGate>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -253,6 +259,64 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+
+<SfDialog @bind-Visible="_cajerosVisible" Header="@($"Cajeros de la caja {_cajaDeCajeros?.Code}")" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaCajeros.Activa" Texto="Cargando…">
+                <p class="hint">Con el parámetro «Caja.SoloCajerosAsignados» encendido, una caja con cajeros sólo la abren ellos. Sin cajeros, la abre
+                    cualquiera con acceso al punto. Si la caja está unida a una caja de Recaudo (caja única), también la abren los cajeros de esa caja, que se
+                    asignan en Recaudo → Configuración → Cajas y cajeros.</p>
+                @if (_cajerosDeCaja.Count == 0)
+                {
+                    <p class="texto-tenue">La caja no tiene cajeros asignados: la abre cualquiera con acceso al punto.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Cajero</th><th>Usuario</th><th>Desde</th><th>Hasta</th><th>Origen</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _cajerosDeCaja)
+                            {
+                                var cajero = c;
+                                <tr class="@(c.Current ? null : "texto-tenue")">
+                                    <td>@c.Name</td><td>@c.UserName</td>
+                                    <td>@(c.ValidFrom?.ToString("dd/MM/yyyy") ?? "")</td>
+                                    <td>@(c.ValidTo?.ToString("dd/MM/yyyy") ?? (c.Current ? "Vigente" : ""))</td>
+                                    <td>@(c.CollectionBoxCode is { } rcd ? $"Caja de Recaudo {rcd}" : "Esta caja")</td>
+                                    <td>
+                                        @if (c.CollectionBoxCode is null && c.Current)
+                                        {
+                                            <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                                                <SfButton CssClass="e-flat" Disabled="@_cargaCajeros.Activa" OnClick="@(() => RetirarCajeroAsync(cajero))">Retirar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                    <div class="form-grid">
+                        <label class="campo">Usuario
+                            <select class="e-input" @bind="_usuarioCajero">
+                                <option value="">Elija el usuario…</option>
+                                @foreach (var u in _candidatos) { <option value="@u.PublicId">@u.Username</option> }
+                            </select>
+                        </label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@_cargaCajeros.Activa" OnClick="@AsignarCajeroAsync">Asignar cajero</SfButton>
+                    </div>
+                </PermissionGate>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _cajerosVisible = false)" />
+    </DialogButtons>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -285,6 +349,14 @@
     private bool _impresionDirecta;
     private bool _activaCaja = true;
     private Dictionary<int, Guid> _tiposPorRol = [];
+
+    // 2026-11-25: los cajeros de la caja elegida.
+    private readonly EstadoDeCarga _cargaCajeros = new();
+    private bool _cajerosVisible;
+    private CajaDto? _cajaDeCajeros;
+    private IReadOnlyList<CajeroDeCajaDto> _cajerosDeCaja = [];
+    private IReadOnlyList<PersonaDeLaCooperativaDto> _candidatos = [];
+    private string _usuarioCajero = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -324,6 +396,55 @@
         if (!r.IsSuccess) { _cajas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
         _cajas = [.. r.Value ?? []];
         await CargarCuentasAsync(punto);
+    }
+
+    private async Task AbrirCajerosAsync(CajaDto caja)
+    {
+        if (_elegido is not { } punto) return;
+        _cajaDeCajeros = caja;
+        _cajerosDeCaja = [];
+        _usuarioCajero = "";
+        _cajerosVisible = true;
+        using var carga = _cargaCajeros.Iniciar();
+        if (_candidatos.Count == 0 && await Permisos.TieneAsync("Inventory.PointsOfSale.Manage"))
+        {
+            var u = await Ventas.CandidatosACajeroAsync();
+            if (u.IsSuccess && u.Value is not null) _candidatos = u.Value.Items.Where(x => x.IsActive).ToList();
+        }
+        var r = await Ventas.CajerosDeCajaAsync(punto, caja.CashRegisterPublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cajeros."); return; }
+        _cajerosDeCaja = r.Value;
+    }
+
+    private async Task AsignarCajeroAsync()
+    {
+        if (_elegido is not { } punto || _cajaDeCajeros is null) return;
+        if (!Guid.TryParse(_usuarioCajero, out var usuario)) { await Notification.WarningAsync("Elija el usuario."); return; }
+        using var carga = _cargaCajeros.Iniciar();
+        var r = await Ventas.AsignarCajeroDeCajaAsync(punto, _cajaDeCajeros.CashRegisterPublicId, new CajeroDeCajaRequest(usuario), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo asignar el cajero."); return; }
+        _cajerosDeCaja = r.Value;
+        _usuarioCajero = "";
+        await Notification.SuccessAsync("Cajero asignado.");
+        await RefrescarCajasAsync(punto);
+    }
+
+    private async Task RetirarCajeroAsync(CajeroDeCajaDto cajero)
+    {
+        if (_elegido is not { } punto || _cajaDeCajeros is null) return;
+        using var carga = _cargaCajeros.Iniciar();
+        var r = await Ventas.RetirarCajeroDeCajaAsync(punto, _cajaDeCajeros.CashRegisterPublicId, cajero.UserPublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el cajero."); return; }
+        _cajerosDeCaja = r.Value;
+        await Notification.SuccessAsync("Cajero retirado.");
+        await RefrescarCajasAsync(punto);
+    }
+
+    /// <summary>Vuelve a leer las cajas del punto para que la columna «Cajeros» quede al día.</summary>
+    private async Task RefrescarCajasAsync(Guid punto)
+    {
+        var r = await Ventas.ListarCajasAsync(punto);
+        if (r.IsSuccess) _cajas = [.. r.Value ?? []];
     }
 
     // Feature 022 (T042): las cuentas habilitadas del punto y, para quien administra, los medios de transferencia y las cuentas de recaudo.

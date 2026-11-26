@@ -244,6 +244,8 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Core.Payments.CashDenomination> CashDenominations { get; }
     DbSet<Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
+    /// <summary><c>INV_CashRegisterCashiers</c> (2026-11-25): quién abre cada caja del punto de venta. (nuevo)</summary>
+    DbSet<Domain.Entities.Inventory.Pos.CashRegisterCashier> CashRegisterCashiers { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
 
