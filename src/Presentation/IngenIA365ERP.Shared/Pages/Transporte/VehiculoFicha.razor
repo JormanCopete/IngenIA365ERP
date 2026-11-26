@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Transporte
 @inject VehiculosClient Vehiculos
 @inject INotificationService Notification
+@inject NavigationManager Nav
 
 <PageTitle>Ficha del vehículo - IngenIA365ERP</PageTitle>
 
@@ -11,6 +12,9 @@
    deudas vencidas del propietario saliente, sin bloquear. *@
 <PermissionGate Required="Transport.Vehicles.View" MostrarAviso="true">
 <div class="pagina">
+    <div class="toolbar">
+        <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left" OnClick="@VolverALaLista">Volver a vehículos</SfButton>
+    </div>
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (_v is not null)
         {
@@ -209,6 +213,17 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    // 2026-11-26 (pedido del dueño): la ficha no tenía cómo volver a la lista. «volver» trae la URL de la lista con sus filtros y página; sólo
+    // se acepta si es la lista de vehículos (nada de URLs externas).
+    [SupplyParameterFromQuery(Name = "volver")] public string? Volver { get; set; }
+
+    private void VolverALaLista()
+    {
+        const string lista = "/transporte/vehiculos";
+        var destino = Volver is { } v && (v == lista || v.StartsWith(lista + "?", StringComparison.Ordinal)) ? v : lista;
+        Nav.NavigateTo(destino);
+    }
 
     private enum Accion { Activar, Inactivar, Retirar, Propietario }
 
