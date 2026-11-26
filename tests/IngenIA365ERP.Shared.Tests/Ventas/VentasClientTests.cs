@@ -193,7 +193,7 @@ public class VentasClientTests
 
         r.IsSuccess.Should().BeTrue(r.ErrorMessage);
         r.Value!.Cashier.Name.Should().Be("Cajero Uno");
-        _servidor.Vistas.Single().Ruta.Should().Be("/api/inventory/cash-sessions?mine=true&status=Open&page=1&pageSize=1");
+        _servidor.Vistas.Single().Ruta.Should().Be("/api/inventory/cash-sessions?mine=true&status=Open&page=1&pageSize=20");
     }
 
     [Fact]

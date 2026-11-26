@@ -91,8 +91,14 @@ public sealed class BorradorDelPos(
         var usuario = await UsuarioAsync(ct);
         if (usuario.IsFailure) return Result.Failure<SesionDelPos>(usuario.Error);
         var sesion = await db.CashSessions.FirstOrDefaultAsync(s => s.PublicId == sesionPublicId, ct);
-        return await SesionAsync(sesion, usuario.Value.UserId, exigirPos, ct);
+        var resultado = await SesionAsync(sesion, usuario.Value.UserId, exigirPos, ct);
+        return resultado.IsSuccess && DeOtroDia(resultado.Value.Sesion) is { } viejo ? Result.Failure<SesionDelPos>(viejo) : resultado;
     }
+
+    /// <summary>
+    /// 2026-11-26: la sesión de un día anterior no vende (abrir venta, retomar, buscar, cobrar), como la «olvidada» de Recaudo; sí deja descartar y cerrar.
+    /// </summary>
+    public Error? DeOtroDia(CashSession sesion) => sesion.OperatingDate < reloj.HoyLocal ? ErroresDelPos.CashSessionFromPreviousDay(sesion.OperatingDate) : null;
 
     /// <summary>La sesión de la venta, si sigue abierta y es del usuario.</summary>
     public async Task<Result<SesionDelPos>> SesionDeLaVentaAsync(InventoryDocument venta, bool exigirPos, CancellationToken ct)

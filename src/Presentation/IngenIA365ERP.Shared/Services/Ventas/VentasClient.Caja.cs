@@ -22,8 +22,10 @@ public sealed partial class VentasClient
     /// <summary>La sesión abierta del usuario, o nula si no tiene (el POS y el menú la consultan al arrancar).</summary>
     public async Task<ResultadoDeInventario<SesionDeCajaDto?>> MiSesionAbiertaAsync(CancellationToken ct = default)
     {
-        var r = await ListarSesionesAsync(mias: true, estado: TextosDeVentas.SesionAbierta, pagina: 1, tamano: 1, ct: ct);
-        return new(r.IsSuccess, r.Value?.Items.FirstOrDefault(), r.ErrorCode, r.ErrorMessage, r.StatusCode, r.Data, r.Repetida);
+        // 2026-11-26: con varias abiertas (Caja.UnaSesionPorCajero apagado), la más reciente, la misma que toma la factura de venta.
+        var r = await ListarSesionesAsync(mias: true, estado: TextosDeVentas.SesionAbierta, pagina: 1, tamano: 20, ct: ct);
+        var sesion = r.Value?.Items.OrderByDescending(s => s.OperatingDate).ThenByDescending(s => s.OpenedAt).FirstOrDefault();
+        return new(r.IsSuccess, sesion, r.ErrorCode, r.ErrorMessage, r.StatusCode, r.Data, r.Repetida);
     }
 
     public Task<ResultadoDeInventario<DetalleDeSesionDto>> ObtenerSesionAsync(Guid id, CancellationToken ct = default) =>

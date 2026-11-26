@@ -97,7 +97,8 @@ public sealed record AjusteDeSesionDto(Guid PublicId, string Number, int Kind, G
 public sealed record LineaDelCierreDelDiaDto(Guid PaymentMeansPublicId, string MeansCode, decimal Expected, decimal Counted, decimal Difference);
 
 public sealed record CierreDelDiaDto(Guid PublicId, Guid CollectionPointPublicId, DateOnly BusinessDate, int SessionCount, int ReceiptCount, int VoidingCount,
-    decimal Expected, decimal Counted, decimal Difference, DateTime ClosedAt, string VerificationCode, bool ByDelegate, IReadOnlyList<LineaDelCierreDelDiaDto> Lines);
+    decimal Expected, decimal Counted, decimal Difference, DateTime ClosedAt, string VerificationCode, bool ByDelegate, IReadOnlyList<LineaDelCierreDelDiaDto> Lines,
+    decimal FromPointOfSale = 0m);
 
 public sealed record MovimientoDeBovedaDto(Guid PublicId, string Number, int Kind, decimal Amount, string? BagSeal, string? Reason, DateTime MovedAt);
 

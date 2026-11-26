@@ -144,8 +144,18 @@ public sealed class SesionesDeCajaAbiertas(IApplicationDbContext db, IAlcanceDeR
         var recaudado = await db.IssuedReceipts.AsNoTracking()
             .Where(r => r.CashSessionId != null && sesiones.Contains(r.CashSessionId.Value) && r.Status != ReceiptState.Voided)
             .SumAsync(r => (decimal?)r.TotalApplied, ct) ?? 0m;
-        var texto = recaudado.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-CO"));
-        return Result.Success(new ResultadoDeIndicador(sesiones.Count, Nota: $"Recaudado en ellas: $ {texto}"));
+        var cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
+        var nota = $"Recaudado en ellas: $ {recaudado.ToString("N0", cultura)}";
+        // 2026-11-26, caja única: lo vendido en la caja del punto de venta que abrió con ellas (POS y facturas de oficina, neto de notas).
+        var publicas = await db.ReceiptsCashSessions.AsNoTracking().Where(s => sesiones.Contains(s.Id)).Select(s => (Guid?)s.PublicId).ToListAsync(ct);
+        var unidas = await db.CashSessions.AsNoTracking().Where(s => publicas.Contains(s.LinkedSessionPublicId)).Select(s => s.Id).ToListAsync(ct);
+        if (unidas.Count > 0)
+        {
+            var vendido = IngenIA365ERP.Application.Inventory.Reports.CifrasDeVenta.De(
+                await IngenIA365ERP.Application.Inventory.Reports.VentasDeLasSesiones.LeerAsync(db, unidas, ct)).Neto;
+            nota += $" · vendido: $ {vendido.ToString("N0", cultura)}";
+        }
+        return Result.Success(new ResultadoDeIndicador(sesiones.Count, Nota: nota));
     }
 }
 

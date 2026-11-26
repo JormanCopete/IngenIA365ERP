@@ -628,8 +628,11 @@ public sealed class CloseCollectionPointDayCommandHandler(
         {
             CollectionPointDayId = dia.Id,
             SessionCount = sesiones.Count,
-            ReceiptCount = await db.IssuedReceipts.AsNoTracking().CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value), ct),
-            VoidingCount = 0,
+            // 2026-11-26: los recibos vigentes y, aparte, los anulados (hasta ese día los anulados se contaban como recibos y las anulaciones salían en cero).
+            ReceiptCount = await db.IssuedReceipts.AsNoTracking()
+                .CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value) && r.Status != ReceiptState.Voided, ct),
+            VoidingCount = await db.IssuedReceipts.AsNoTracking()
+                .CountAsync(r => r.CashSessionId != null && ids.Contains(r.CashSessionId.Value) && r.Status == ReceiptState.Voided, ct),
             Expected = porMedio.Sum(l => l.Expected),
             Counted = porMedio.Sum(l => l.Counted),
             Difference = porMedio.Sum(l => l.Difference),
@@ -671,7 +674,12 @@ public static class CierresDelDia
                             where l.DayCloseId == c.Id
                             orderby m.Code
                             select new DayCloseLineDto(m.PublicId, m.Code, l.Expected, l.Counted, l.Difference)).ToListAsync(ct);
+        // 2026-11-26, caja única: lo que entró del punto de venta va incluido en lo esperado y se dice aparte (el cierre del día del punto de venta ya no lo suma).
+        var delPunto = await (from m in db.CashMovements.AsNoTracking()
+                              join s in db.ReceiptsCashSessions.AsNoTracking() on m.CashSessionId equals s.Id
+                              where s.CollectionPointDayId == c.CollectionPointDayId && m.Kind == CashMovementKindR.FromPointOfSale
+                              select (decimal?)m.Amount).SumAsync(ct) ?? 0m;
         return new DayCloseDto(c.PublicId, dia.PublicId, dia.BusinessDate, c.SessionCount, c.ReceiptCount, c.VoidingCount, c.Expected, c.Counted, c.Difference,
-            c.ClosedAt, c.VerificationCode, c.SupervisorDelegationId is not null, lineas);
+            c.ClosedAt, c.VerificationCode, c.SupervisorDelegationId is not null, lineas, delPunto);
     }
 }
