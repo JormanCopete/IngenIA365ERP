@@ -96,7 +96,7 @@
 
 | Método | Ruta | Permiso |
 |---|---|---|
-| GET | `/vehicles?q=&status=&owner=&page=` | `Vehicles.View` |
+| GET | `/vehicles?q=&status=&owner=&affiliation=&service=&serviceFilter=&page=&pageSize=` | `Vehicles.View`. 2026-11-25: `affiliation` (`Associate`/`External`, deducida a hoy), `serviceFilter` = `Subscribed`/`NotSubscribed` (con `service`), `None` o `Any`; cada fila trae `services[]` (`name`, `agreedPrice`, `from`, `to`, `upcoming`) |
 | GET | `/vehicles/{id}` | `Vehicles.View`: ficha, equipos, propietario con clase deducida, documentos vigentes, conductores, suscripciones, historia |
 | POST | `/vehicles` | `Vehicles.Create` |
 | PUT | `/vehicles/{id}` | `Vehicles.Update`: sin estado ni propietario |
@@ -147,13 +147,16 @@ El código se consulta con `GET /api/catalogos/transporte-{kind}/codigo/{codigo}
 | GET/POST/PUT | `/services` | `ServiceSetup.Manage` (GET con `Services.View`): producto, prioridad, línea de Cartera, medios, conector |
 | GET/POST/PUT | `/billing-policies` | `ServiceSetup.Manage` |
 | POST | `/vehicles/{id}/subscriptions` | `{ servicePublicId, from, to?, price? }`: `Services.Manage` |
-| POST | `/vehicles/{id}/subscriptions/{sId}/end` | `{ to, reason }`: `Services.Manage` |
+| POST | `/vehicles/{id}/subscriptions/{sId}/end` | `{ to, reason }`: `Services.Manage`. Desde el 2026-11-25 el motivo es obligatorio y `to` puede ser cualquier fecha desde el inicio (también mueve un fin que ya tenía) |
+| POST | `/vehicles/{id}/subscriptions/{sId}/remove` | `{ reason }`: `Services.Manage` (2026-11-25). Baja lógica de la suscripción sin cargos de la facturación mensual no anulados en su vigencia; si los tiene, 422 `Subscription.Billed` |
+| POST | `/vehicles/{id}/subscriptions/{sId}/start` | `{ from, reason }`: `Services.Manage` (2026-11-25). Mueve el inicio con la misma condición que `remove` |
 | POST | `/vehicles/{id}/subscriptions/{sId}/prices` | `{ price, from }`: `Services.Manage` |
 | GET | `/subscriptions/template.xlsx` · POST `/subscriptions/import` | `Services.Manage`; `transport.subscriptions` |
 | GET | `/billing/preview?period=` | `Billing.View`: qué facturaría y qué omitiría, sin guardar |
+| GET | `/billing/check?period=&vehicle=` | `Billing.View` o `Billing.Run` (2026-11-25): avisos antes de facturar —período anterior al mes en curso, suscripciones por facturar que empezaron después del día 1— en `notices[]`; vacío = nada que advertir. No bloquea |
 | POST | `/billing/runs` | `{ period, paymentMode }` + `Idempotency-Key` → 202 `{ runPublicId }`: `Billing.Run` |
 | POST | `/billing/single` | `{ vehiclePublicId, period, paymentMode }` + `Idempotency-Key` → `{ invoicePublicId, invoiceNumber, charges[] }`: `Billing.Run` |
-| GET | `/billing/runs` · `/billing/runs/{id}` | `Billing.View`: avance y resumen con omitidos |
+| GET | `/billing/runs` · `/billing/runs/{id}` | `Billing.View`: avance y resumen con omitidos; `lastActivityAt` (2026-11-25) dice el último avance, para «Continuar» una corrida interrumpida sin pisar otra sesión |
 | GET | `/charges?vehicle=&period=&status=` | `Billing.View` |
 
 ### Envíos

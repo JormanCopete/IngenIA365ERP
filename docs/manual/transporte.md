@@ -33,6 +33,25 @@ Los **cambios de estado** (Activo, Inactivo, Retirado) y de **propietario** llev
 y quedan en la historia. Al cambiar de propietario, la ficha informa las deudas del saliente: **no
 bloquean**.
 
+### Buscar y filtrar el parque
+
+La lista de vehículos pagina en el servidor (25, 50, 100 o 200 por página) y dice cuántos hay con el
+criterio. Se combina:
+
+- **Buscar**: placa (con o sin guion), número interno, radio-móvil, nombre o razón social del propietario
+  (las palabras en cualquier orden, sin tildes) o su documento. Un número corto (hasta 4 dígitos) se busca
+  como número interno o lateral y como documento exacto; desde 5 dígitos, también los documentos que
+  empiezan así.
+- **Estado**, **vinculación** (asociado o externo, deducida a hoy) y **servicio**: «con algún servicio»,
+  «sin ningún servicio», o un servicio en particular con «suscritos» o «no suscritos».
+
+La columna **Servicios** muestra las suscripciones que no han terminado: las vigentes y las que empiezan más
+adelante («· desde 01/12»). En verde y con «· pactado», las que tienen precio pactado. Una suscripción
+terminada antes de hoy o quitada no cuenta.
+
+**Exportar a Excel** (permiso `Transport.Vehicles.Export`) descarga lo filtrado, con la columna de
+servicios. Es el informe «Vehículos» con los mismos filtros, y queda en la auditoría.
+
 ## 3. Plantillas
 
 **Transporte › Plantillas**: misma mecánica que las demás cargas (revisar sin guardar, aplicar todo o nada,
@@ -73,6 +92,30 @@ servicio, con su precio vigente. En la configuración del servicio se dice:
 Cada vehículo se suscribe a los servicios que quiera, con vigencia; la suscripción puede llevar un
 **precio pactado** con vigencia propia (no cuenta como descuento ni pide aprobación).
 
+En la ficha del vehículo, pestaña **Servicios** (permiso `Transport.Services.Manage`):
+
+- **Terminar** pide la fecha (el último día que se cobra, desde el inicio de la suscripción) y el motivo.
+  En una que ya tiene fin, **Cambiar fin** lo mueve; si lo alarga, el precio pactado se alarga con él.
+- **Quitar** da de baja, con motivo, una suscripción que **nunca se facturó**: la que todavía no empieza o
+  la que no tiene cargos de la facturación mensual no anulados en su vigencia. Las ventas sueltas con la
+  placa no cuentan. Queda en la auditoría y deja de verse en todo lado.
+- **Cambiar inicio**, con la misma condición, mueve el inicio y el primer precio pactado.
+- Lo ya facturado no se quita ni se le mueve el inicio: se termina.
+
+### Terminar en lote con la plantilla
+
+La plantilla de suscripciones (Transporte › Plantillas) es por **placa y código de producto**. La fecha
+`desde` crea la suscripción si no existe y, si existe, sólo la identifica: sirve cualquier fecha de su
+vigencia. Sobre una suscripción que ya existe:
+
+- con `hasta`, **la termina** en esa fecha si no tenía fin o tenía otro (se informa como «actualizar»,
+  campo `hasta`);
+- con `precioPactado`, pacta ese precio;
+- con «conservar» no se toca;
+- un `hasta` vacío no le quita el fin a una que lo tiene.
+
+Para quitar en lote las que nunca se facturaron no hay plantilla: se quitan una a una desde la ficha.
+
 La **política de facturación** (con vigencia) dice si a mitad de mes se cobra el mes completo o la
 fracción, el tipo de documento de venta, la bodega o punto de venta y el día de vencimiento.
 
@@ -83,7 +126,22 @@ fracción, el tipo de documento de venta, la bodega o punto de venta y el día d
 - **Vista previa** del período: qué vehículos se facturan, cuáles se omiten y por qué.
 - **Individual**: un vehículo, un período.
 - **Masiva**: todos los vehículos activos con suscripciones vigentes. La pantalla avanza la corrida por
-  tandas; si se cierra, se retoma donde iba.
+  tandas mientras siga abierta. Si se cierra, la corrida queda **en curso** donde iba y se retoma con
+  **Continuar**, en «Corridas anteriores» o en el aviso que sale al intentar facturar otra vez el mismo
+  período. Continuar sigue el mismo mecanismo de tandas: no duplica nada. Si la corrida avanzó hace menos de
+  dos minutos, la pantalla pide confirmar, porque puede que otra persona la esté corriendo. Las facturas de
+  lo que falte salen a nombre de quien continúa.
+
+**Antes de facturar**, la pantalla revisa el período y pide confirmar —es un aviso, no un bloqueo— si:
+
+- el período es **anterior al mes en curso**;
+- hay suscripciones por facturar que **empezaron después del día 1**. Con la política de mes completo se
+  cobran el mes entero. Si ese mes ya se cobró por otro medio, por ejemplo en la carga del sistema anterior,
+  facturarlo lo cobraría dos veces.
+
+Lo mismo hace «Facturar este mes» en la ficha del vehículo. La vista previa muestra los mismos avisos. Si el
+mes ya estaba cobrado, no lo facture: mueva el inicio de esas suscripciones (si nunca se facturaron) o
+facture desde el mes siguiente. La pantalla propone el mes en curso.
 
 Cada vehículo recibe **una factura de Comercial** con una línea por servicio, a nombre del propietario.
 

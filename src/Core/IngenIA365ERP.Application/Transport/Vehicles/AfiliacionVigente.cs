@@ -39,6 +39,16 @@ public static class AfiliacionVigente
         return resultado;
     }
 
+    /// <summary>
+    /// La misma regla que <see cref="DeVariasAsync"/>, como expresión que el motor traduce (2026-11-25, filtro por vinculación del listado de
+    /// vehículos): la ficha de asociado viva de una persona marcada asociada que no esté <see cref="Retirado"/> a la fecha. Una prueba fija que
+    /// dice lo mismo que <see cref="Retirado"/>.
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<Associate, bool>> VigenteEn(DateOnly fecha) =>
+        a => !a.IsDeleted && a.Person!.IsAssociate
+             && ((a.RejoinDate != null && a.RejoinDate <= fecha && (a.WithdrawalDate == null || a.RejoinDate >= a.WithdrawalDate))
+                 || !(a.Status == "R" || a.Status == "r" || (a.WithdrawalDate != null && a.WithdrawalDate <= fecha)));
+
     /// <summary>Copia de la regla de Cartera: retirado si su estado es «R» o su retiro ya pasó, salvo un reingreso posterior.</summary>
     public static bool Retirado(string? estado, DateOnly? retiro, DateOnly? reingreso, DateOnly fecha)
     {

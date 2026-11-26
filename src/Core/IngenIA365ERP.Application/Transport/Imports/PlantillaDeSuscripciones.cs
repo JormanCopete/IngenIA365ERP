@@ -17,7 +17,9 @@ namespace IngenIA365ERP.Application.Transport.Imports;
 /// <summary>
 /// La plantilla <c>transport.subscriptions</c> (feature 020, R8, T107; FR-025): suscribe los vehículos del parque a los servicios, con su
 /// vigencia y, si se pactó, su precio. La llave es placa y código de producto; pasa por <see cref="SuscripcionDeServicio"/>, el mismo
-/// camino de la pantalla. Una suscripción vigente que ya existe se conserva o, con «actualizar», se le pacta el precio de la fila.
+/// camino de la pantalla. Una suscripción que ya existe (la que se cruza con las fechas de la fila: <c>desde</c> sólo la identifica) se
+/// conserva o, con «actualizar», se le pacta el precio de la fila y, desde el 2026-11-25, <b>se termina</b> en el <c>hasta</c> de la fila si
+/// no tenía fin o tenía otro (<see cref="SuscripcionDeServicio.Terminar"/>). Un <c>hasta</c> vacío no le quita el fin a una que lo tiene.
 /// </summary>
 public static class PlantillaDeSuscripciones
 {
@@ -35,8 +37,10 @@ public static class PlantillaDeSuscripciones
         [
             new(PlacaCol, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "llave; placa de un vehículo vivo", Ejemplo: "AAA111"),
             new(Producto, TipoDeValor.Codigo, Obligatoria: true, Largo: 30, Reglas: "llave; código del producto de Comercial configurado como servicio", Ejemplo: "RADIO"),
-            new(Desde, TipoDeValor.Fecha, Obligatoria: true, Ejemplo: "2026-12-01"),
-            new(Hasta, TipoDeValor.Fecha, Reglas: "vacía = sin fin"),
+            new(Desde, TipoDeValor.Fecha, Obligatoria: true,
+                Reglas: "en una suscripción nueva, desde cuándo; si ya existe, sólo la identifica (cualquier fecha de su vigencia)", Ejemplo: "2026-12-01"),
+            new(Hasta, TipoDeValor.Fecha,
+                Reglas: "vacía = sin fin; en una suscripción que ya existe, la termina en esa fecha (vacía no le quita el fin que tenga)"),
             new(Precio, TipoDeValor.Monto, Reglas: "precio mensual pactado, impuestos incluidos; vacío = el de la lista de Comercial"),
         ]),
     ]);
@@ -57,9 +61,9 @@ public sealed class ImportSubscriptionsCommandHandler(IApplicationDbContext db, 
     : IRequestHandler<ImportSubscriptionsCommand, Result<ImportResultDto>>
 {
     public Task<Result<ImportResultDto>> Handle(ImportSubscriptionsCommand request, CancellationToken ct) =>
-        ejecutor.EjecutarAsync(P.Definicion, request, (ctx, c) => ProcesarAsync(ctx, request.Existentes == SiYaExiste.Conservar, c), ct);
+        ejecutor.EjecutarAsync(P.Definicion, request, (ctx, c) => ProcesarAsync(ctx, request.Existentes == SiYaExiste.Conservar, request.Reason, c), ct);
 
-    private async Task ProcesarAsync(ContextoDeImportacion ctx, bool conservar, CancellationToken ct)
+    private async Task ProcesarAsync(ContextoDeImportacion ctx, bool conservar, string? motivo, CancellationToken ct)
     {
         var filas = ctx.Datos.Filas;
         var placas = filas.Select(f => Placa.Normalizar(f.Texto(P.PlacaCol))).Where(p => p.Length > 0).Distinct().ToList();
@@ -93,13 +97,32 @@ public sealed class ImportSubscriptionsCommandHandler(IApplicationDbContext db, 
             var vigente = existentes.FirstOrDefault(x => x.VehicleId == v.Id && x.ServiceId == s.Id && !x.IsDeleted && x.SeCruzaCon(desde.Value, hasta));
             if (vigente is not null)
             {
-                if (conservar || precio is null) { ctx.Registrar(fila, $"{placa}|{producto}", AccionDeImportacion.Unchanged); continue; }
-                var actual = vigente.Prices.Where(p => !p.IsDeleted && p.VigenteEn(desde.Value)).Select(p => (decimal?)p.Price).FirstOrDefault();
-                if (actual == precio) { ctx.Registrar(fila, $"{placa}|{producto}", AccionDeImportacion.Unchanged); continue; }
-                var desdeDelPrecio = desde.Value < vigente.From ? vigente.From : desde.Value;
-                var r = suscripciones.PonerPrecio(vigente, precio.Value, desdeDelPrecio);
-                if (r.IsFailure) { fila.Error(P.Precio, r.Error.Code, r.Error.Message); continue; }
-                ctx.Registrar(fila, $"{placa}|{producto}", AccionDeImportacion.Update, [new CampoCambiadoDto(P.Precio, actual?.ToString(), precio.Value.ToString())]);
+                if (conservar) { ctx.Registrar(fila, $"{placa}|{producto}", AccionDeImportacion.Unchanged); continue; }
+                var cambios = new List<CampoCambiadoDto>();
+
+                // El fin primero: un precio pactado en la misma fila queda cerrado en el fin nuevo.
+                if (hasta is { } fin && vigente.To != fin)
+                {
+                    var anterior = vigente.To;
+                    var t = suscripciones.Terminar(vigente, fin, string.IsNullOrWhiteSpace(motivo) ? "Terminada por plantilla" : $"Terminada por plantilla: {motivo.Trim()}");
+                    if (t.IsFailure) { fila.Error(P.Hasta, t.Error.Code, t.Error.Message); continue; }
+                    cambios.Add(new CampoCambiadoDto(P.Hasta, anterior?.ToString("yyyy-MM-dd"), fin.ToString("yyyy-MM-dd")));
+                }
+
+                if (precio is { } nuevo)
+                {
+                    var desdeDelPrecio = desde.Value < vigente.From ? vigente.From : desde.Value;
+                    var actual = vigente.Prices.Where(p => !p.IsDeleted && p.VigenteEn(desdeDelPrecio)).Select(p => (decimal?)p.Price).FirstOrDefault();
+                    if (actual != nuevo)
+                    {
+                        var r = suscripciones.PonerPrecio(vigente, nuevo, desdeDelPrecio);
+                        if (r.IsFailure) { fila.Error(P.Precio, r.Error.Code, r.Error.Message); continue; }
+                        cambios.Add(new CampoCambiadoDto(P.Precio, actual?.ToString(), nuevo.ToString()));
+                    }
+                }
+
+                ctx.Registrar(fila, $"{placa}|{producto}", cambios.Count == 0 ? AccionDeImportacion.Unchanged : AccionDeImportacion.Update,
+                    cambios.Count == 0 ? null : cambios);
                 continue;
             }
 

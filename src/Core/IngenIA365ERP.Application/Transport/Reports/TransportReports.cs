@@ -40,10 +40,18 @@ public static class VistasDeTransporte
     public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Vistas.FirstOrDefault(v => v.Key == clave);
 }
 
-/// <summary>Los filtros de las vistas de Transporte (el formato lo usa la entrega del archivo).</summary>
-public sealed record FiltrosDeInformeDeTransporte(string? Format, DateOnly? From, DateOnly? To, string? Period, int? Days)
+/// <summary>
+/// Los filtros de las vistas de Transporte (el formato lo usa la entrega del archivo). <c>Q</c>, <c>Status</c>, <c>Affiliation</c>,
+/// <c>Service</c> y <c>ServiceFilter</c> son los del listado de vehículos (2026-11-25): «Exportar» de esa pantalla descarga lo filtrado, con
+/// las mismas reglas (<see cref="FiltroDeVehiculos"/>). Sin ellos, el informe trae todo el parque, como antes.
+/// </summary>
+public sealed record FiltrosDeInformeDeTransporte(string? Format, DateOnly? From, DateOnly? To, string? Period, int? Days,
+    string? Q = null, VehicleStatus? Status = null, AffiliationClass? Affiliation = null, Guid? Service = null, VehicleServiceFilter? ServiceFilter = null)
 {
-    public object ParaAuditoria() => new { from = From, to = To, period = Period, days = Days };
+    public object ParaAuditoria() => new
+    {
+        from = From, to = To, period = Period, days = Days, q = Q, status = Status, affiliation = Affiliation, service = Service, serviceFilter = ServiceFilter,
+    };
 }
 
 public sealed record TransportReportQuery(string Vista, FiltrosDeInformeDeTransporte Filtros) : IRequest<Result<TablaExportable>>;
@@ -58,7 +66,8 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
         var hoy = reloj.HoyLocal;
         return request.Vista switch
         {
-            VistasDeTransporte.Vehiculos => Result.Success(await VehiculosAsync(vista.Name, hoy, ct)),
+            VistasDeTransporte.Vehiculos => Result.Success(await VehiculosAsync(vista.Name, hoy,
+                new FiltrosDeVehiculos(f.Q, f.Status, null, f.Affiliation, f.Service, f.ServiceFilter), ct)),
             VistasDeTransporte.Historia => Result.Success(await HistoriaAsync(vista.Name, f.From ?? hoy.AddMonths(-1), f.To ?? hoy, ct)),
             VistasDeTransporte.Vencimientos => Result.Success(await VencimientosAsync(vista.Name, hoy, Math.Clamp(f.Days ?? 30, 0, 365), ct)),
             VistasDeTransporte.Conductores => Result.Success(await ConductoresAsync(vista.Name, hoy, ct)),
@@ -67,20 +76,23 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
         };
     }
 
-    private async Task<TablaExportable> VehiculosAsync(string titulo, DateOnly hoy, CancellationToken ct)
+    private async Task<TablaExportable> VehiculosAsync(string titulo, DateOnly hoy, FiltrosDeVehiculos filtros, CancellationToken ct)
     {
-        var filas = await db.Vehicles.AsNoTracking().Include(v => v.OwnerPerson).Include(v => v.Brand)
-            .OrderBy(v => v.InternalNumber).ToListAsync(ct);
+        var filas = await FiltroDeVehiculos.Aplicar(db, db.Vehicles.AsNoTracking(), filtros, hoy).Include(v => v.OwnerPerson).Include(v => v.Brand)
+            .OrderBy(v => v.InternalNumber).ThenBy(v => v.Plate).ToListAsync(ct);
         var clases = await AfiliacionVigente.DeVariasAsync(db, filas.Select(v => v.OwnerPersonId).Distinct().ToList(), hoy, ct);
+        var servicios = await ServiciosDelListado.DeAsync(db, filas.Select(v => v.Id).ToList(), hoy, ct);
+        string? Servicios(int vehiculo) => servicios.TryGetValue(vehiculo, out var s) && s.Count > 0 ? string.Join("; ", s.Select(ServiciosDelListado.Texto)) : null;
         return new TablaExportable(titulo, $"Con corte al {hoy:dd/MM/yyyy}",
         [
             new("Número interno"), new("Placa"), new("Radio-móvil"), new("Documento del propietario"), new("Propietario"), new("Vinculación"),
-            new("Estado"), new("Marca"), new("Línea"), new("Modelo", TipoDeColumna.Entero), new("Ingreso", TipoDeColumna.Fecha),
+            new("Estado"), new("Marca"), new("Línea"), new("Modelo", TipoDeColumna.Entero), new("Ingreso", TipoDeColumna.Fecha), new("Servicios"),
         ],
         filas.Select(v => new FilaExportable(
         [
             v.InternalNumber, v.Plate, v.RadioCode, v.OwnerPerson?.TaxId, v.OwnerPerson is { } p ? NombreVisible.De(p) : null,
             AfiliacionVigente.Texto(clases.GetValueOrDefault(v.OwnerPersonId, AffiliationClass.External)), Estado(v.Status), v.Brand?.Name, v.Line, (int?)v.ModelYear, v.JoinedOn,
+            Servicios(v.Id),
         ])).ToList(), null, [$"{filas.Count} vehículo(s)."]);
     }
 
