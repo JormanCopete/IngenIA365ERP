@@ -27,6 +27,20 @@ public static class ErroresDePuntoDeVenta
 
     public static Error PointOfSaleNotFound() => ErroresDeAlcance.PuntoInexistente();
 
+    public const string CashierUserNotFoundCode = "Inventory.CashRegister.CashierUserNotFound";
+    public const string CashierOverlapsCode = "Inventory.CashRegister.CashierOverlaps";
+    public const string CashierNotFoundCode = "Inventory.CashRegister.CashierNotFound";
+
+    /// <summary>2026-11-25: el usuario que se asigna como cajero no existe o está inactivo (404). (nuevo)</summary>
+    public static Error CashierUserNotFound() => new(CashierUserNotFoundCode, "El usuario no existe o está inactivo.");
+
+    /// <summary>2026-11-25: el usuario ya es cajero de la caja en esas fechas (422). (nuevo)</summary>
+    public static Error CashierOverlaps() => new(CashierOverlapsCode, "Ese usuario ya es cajero de esta caja en esas fechas.");
+
+    /// <summary>2026-11-25: el usuario no es cajero vigente propio de la caja (404); los de la caja de Recaudo unida se retiran en Recaudo. (nuevo)</summary>
+    public static Error CashierNotFound() => new(CashierNotFoundCode,
+        "Ese usuario no es cajero vigente de esta caja. Si viene de la caja de Recaudo unida, retírelo en Recaudo → Configuración → Cajas y cajeros.");
+
     public static Error CashRegisterNotFound(string? codigo = null) => new(CashRegisterNotFoundCode,
         codigo is null ? "La caja no existe en este punto." : $"No hay una caja «{codigo}». Créela en la hoja Cajas o en Ventas › Puntos de venta.");
 

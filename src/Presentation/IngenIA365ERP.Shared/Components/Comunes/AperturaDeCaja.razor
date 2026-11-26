@@ -1,5 +1,6 @@
 @* 2026-11-24 (pedido del dueño): abrir la caja, igual en Comercial y en Recaudo, en tres pasos a la vista: dónde (el punto, sólo si hay más de uno),
-   la caja (viene elegida si hay una libre) y la base. Las cajas abiertas por otra persona se ven pero no se eligen. (nuevo) *@
+   la caja (viene elegida si hay una libre) y la base. Las cajas abiertas por otra persona se ven pero no se eligen; 2026-11-25: tampoco las que son de
+   otros cajeros (Caja.SoloCajerosAsignados), que dicen de quiénes son. (nuevo) *@
 <section class="info-card caja-apertura" aria-label="Abrir la caja">
     <h4>Abrir la caja</h4>
     <div class="form-grid">
@@ -17,7 +18,7 @@
                 <option value="">@(Cajas.Count == 0 ? "No hay cajas para elegir" : "Elija…")</option>
                 @foreach (var c in Cajas)
                 {
-                    <option value="@c.Id" disabled="@(c.OcupadaPor is not null)">@c.Rotulo@(c.OcupadaPor is { } quien ? $" (abierta por {quien})" : "")</option>
+                    <option value="@c.Id" disabled="@(!c.Libre)">@c.Rotulo@(c.OcupadaPor is { } quien ? $" (abierta por {quien})" : c.SoloPara is { } motivo ? $" ({motivo})" : "")</option>
                 }
             </select>
             <span class="hint">@AyudaDeLaCaja</span>
@@ -70,8 +71,8 @@
         // Con cajas nuevas (otro punto), la primera libre queda elegida.
         if (ReferenceEquals(_cajasVistas, Cajas)) return;
         _cajasVistas = Cajas;
-        if (_caja is not { } elegida || Cajas.All(c => c.Id != elegida || c.OcupadaPor is not null))
-            _caja = Cajas.FirstOrDefault(c => c.OcupadaPor is null)?.Id;
+        if (_caja is not { } elegida || Cajas.All(c => c.Id != elegida || !c.Libre))
+            _caja = Cajas.FirstOrDefault(c => c.Libre)?.Id;
     }
 
     private async Task ElegirPuntoAsync(object? valor)

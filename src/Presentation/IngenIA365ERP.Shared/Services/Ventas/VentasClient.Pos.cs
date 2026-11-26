@@ -25,6 +25,22 @@ public sealed partial class VentasClient
     public Task<ResultadoDeInventario<IReadOnlyList<CajaDto>>> ListarCajasAsync(Guid punto, CancellationToken ct = default) =>
         Enviar<IReadOnlyList<CajaDto>>(HttpMethod.Get, $"{Rutas.Puntos}/{punto}/cash-registers", null, null, ct);
 
+    // 2026-11-25: los cajeros de cada caja (Caja.SoloCajerosAsignados).
+    public Task<ResultadoDeInventario<IReadOnlyList<CajeroDeCajaDto>>> CajerosDeCajaAsync(Guid punto, Guid caja, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CajeroDeCajaDto>>(HttpMethod.Get, $"{Rutas.Puntos}/{punto}/cash-registers/{caja}/cashiers", null, null, ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<CajeroDeCajaDto>>> AsignarCajeroDeCajaAsync(Guid punto, Guid caja, CajeroDeCajaRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CajeroDeCajaDto>>(HttpMethod.Post, $"{Rutas.Puntos}/{punto}/cash-registers/{caja}/cashiers", request, clave, ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<CajeroDeCajaDto>>> RetirarCajeroDeCajaAsync(Guid punto, Guid caja, Guid usuario,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CajeroDeCajaDto>>(HttpMethod.Post, $"{Rutas.Puntos}/{punto}/cash-registers/{caja}/cashiers/{usuario}/retire",
+            new RetiroDeCajeroDeCajaRequest(), clave, ct);
+
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<Inventario.PersonaDeLaCooperativaDto>>> CandidatosACajeroAsync(CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<Inventario.PersonaDeLaCooperativaDto>>(HttpMethod.Get, $"{Rutas.Puntos}/cashier-candidates", null, null, ct);
+
     public Task<ResultadoDeInventario<CajaDto>> GuardarCajaAsync(Guid punto, Guid? caja, CajaRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         caja is { } existente
             ? Enviar<CajaDto>(HttpMethod.Put, $"{Rutas.Puntos}/{punto}/cash-registers/{existente}", request, clave, ct)

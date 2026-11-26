@@ -46,6 +46,8 @@ public sealed record CashRegisterDocumentTypeDto(
 public sealed record CashRegisterOpenSessionDto(Guid CashSessionPublicId, string CashierName, DateTime OpenedAt);
 
 /// <summary>Una caja (§20.1). (nuevo)</summary>
+/// <remarks>2026-11-25: <see cref="CashierNames"/> son los cajeros vigentes que abren la caja (propios y de su caja de Recaudo unida; vacío, cualquiera)
+/// y <see cref="OpenableByMe"/> si quien pregunta puede abrirla con <c>Caja.SoloCajerosAsignados</c>; los llena sólo la lista de cajas del punto.</remarks>
 public sealed record CashRegisterDto(
     Guid CashRegisterPublicId,
     Guid PointOfSalePublicId,
@@ -61,7 +63,9 @@ public sealed record CashRegisterDto(
     IReadOnlyList<CashRegisterDocumentTypeDto> DocumentTypes,
     CashRegisterOpenSessionDto? OpenSession,
     string? DianCashRegisterTypeCode = null,
-    bool DirectPrint = false);
+    bool DirectPrint = false,
+    IReadOnlyList<string>? CashierNames = null,
+    bool? OpenableByMe = null);
 
 /// <summary>Un tipo de documento por rol, como lo pide la caja (§20.1 <c>documentTypes: [{ role, documentTypePublicId }]</c>). (nuevo)</summary>
 public sealed record CashRegisterDocumentTypeInput(CashRegisterDocumentRole Role, Guid DocumentTypePublicId);

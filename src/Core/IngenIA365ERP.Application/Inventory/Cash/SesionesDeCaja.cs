@@ -42,6 +42,13 @@ public sealed class SesionesDeCaja(
     public async Task<bool> ArqueoEstrictoAsync(CancellationToken ct) =>
         parametros is null || reloj is null || await IngenIA365ERP.Application.Receipts.Common.ArqueoEstricto.EsAsync(parametros, reloj.HoyLocal, ct);
 
+    /// <summary>
+    /// 2026-11-25: si sólo los cajeros asignados abren la caja (<c>Caja.SoloCajerosAsignados</c>, parámetro de la caja que comparten Recaudo y el punto de
+    /// venta). Sin lector de parámetros rige encendido, su defecto.
+    /// </summary>
+    public async Task<bool> SoloCajerosAsignadosAsync(CancellationToken ct) =>
+        parametros is null || reloj is null || await IngenIA365ERP.Application.Receipts.Common.SoloCajerosAsignados.EsAsync(parametros, reloj.HoyLocal, ct);
+
     public const string PermisoVerTodas = "Inventory.CashSessions.ViewAll";
 
     private bool? _veTodas;

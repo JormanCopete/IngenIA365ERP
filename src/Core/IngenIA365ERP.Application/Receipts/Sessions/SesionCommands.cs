@@ -66,7 +66,10 @@ public sealed class OpenCashSessionCommandHandler(
         var (caja, punto) = encontrada;
         if (!caja.VigenteEn(hoy) || !punto.VigenteEn(hoy)) return Result.Failure<CashSessionDto>(ErroresDeRecaudo.CajaNoVigente());
         var asignaciones = await db.CashBoxCashiers.AsNoTracking().Where(a => a.CashBoxId == caja.Id && a.UserId == cajero).ToListAsync(ct);
-        if (!asignaciones.Any(a => a.VigenteEn(hoy))) return Result.Failure<CashSessionDto>(ErroresDeRecaudo.NoEsCajeroDeLaCaja());
+        // 2026-11-25: la asignación se exige con Caja.SoloCajerosAsignados (encendido por defecto, como desde la feature 015); apagado, abre quien tenga la
+        // caja en su alcance.
+        if (!asignaciones.Any(a => a.VigenteEn(hoy)) && await SoloCajerosAsignados.EsAsync(parametros, hoy, ct))
+            return Result.Failure<CashSessionDto>(ErroresDeRecaudo.NoEsCajeroDeLaCaja());
 
         await cerrojo.TomarSetupAsync(ct: ct);
 

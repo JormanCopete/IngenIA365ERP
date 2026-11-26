@@ -17,6 +17,13 @@ public static class ArqueoEstricto
         parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaArqueoEstricto, fecha, ct);
 }
 
+/// <summary>2026-11-25 (pedido del dueño): si sólo los cajeros asignados abren la caja, en Recaudo, en el punto de venta y en la caja única. (nuevo)</summary>
+public static class SoloCajerosAsignados
+{
+    public static Task<bool> EsAsync(ParametrosDeCaja parametros, DateOnly fecha, CancellationToken ct) =>
+        parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaSoloCajerosAsignados, fecha, ct);
+}
+
 /// <summary>La forma de contar el efectivo y si el arqueo es estricto, para que las pantallas de abrir y arquear pidan sólo lo que corresponde. (nuevo)</summary>
 public sealed record CashCountPolicyDto(string CashCountMode, bool Strict);
 

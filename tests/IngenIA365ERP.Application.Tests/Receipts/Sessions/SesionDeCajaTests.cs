@@ -79,6 +79,18 @@ public class SesionDeCajaTests
     }
 
     [Fact]
+    public async Task Con_solo_cajeros_asignados_apagado_abre_quien_tiene_la_caja_en_su_alcance()
+    {
+        // 2026-11-25 (pedido del dueño): Caja.SoloCajerosAsignados es un parámetro, encendido por defecto.
+        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaSoloCajerosAsignados, "false");
+        _c.E.Como(_c.E.Supervisor);
+
+        var r = await _c.Abrir().Handle(new OpenCashSessionCommand(_c.C1.PublicId, CajaDePrueba.Billetes((_c.B50, 10))), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+    }
+
+    [Fact]
     public async Task Los_valores_sellados_no_cambian_aunque_cambie_la_caja()
     {
         var sesion = await _c.AbrirAsync();

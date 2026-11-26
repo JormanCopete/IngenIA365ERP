@@ -46,7 +46,19 @@ public sealed record CajaDto(
     IReadOnlyList<TipoDeCajaDto> DocumentTypes,
     SesionAbiertaDeCajaDto? OpenSession,
     string? DianCashRegisterTypeCode = null,
-    bool DirectPrint = false);
+    bool DirectPrint = false,
+    IReadOnlyList<string>? CashierNames = null,
+    bool? OpenableByMe = null);
+
+/// <summary>
+/// 2026-11-25: un cajero de una caja del punto de venta. Con <see cref="CollectionBoxCode"/> viene de la caja de Recaudo unida y se administra allá.
+/// </summary>
+public sealed record CajeroDeCajaDto(Guid UserPublicId, string UserName, string Name, DateOnly? ValidFrom, DateOnly? ValidTo, bool Current,
+    string? CollectionBoxCode = null);
+
+public sealed record CajeroDeCajaRequest(Guid UserPublicId, DateOnly? ValidFrom = null, DateOnly? ValidTo = null);
+
+public sealed record RetiroDeCajeroDeCajaRequest(DateOnly? ValidTo = null);
 
 public sealed record PuntoCreadoDto(Guid PointOfSalePublicId);
 

@@ -116,6 +116,10 @@ public sealed class OpenCashSessionCommandHandler(
         // (2) El día, la caja y el cajero.
         var fecha = reloj.HoyLocal;
         if (await ColisionesDeVenta.DiaCerradoAsync(db, punto.Id, fecha, ct) is not null) return Falla(ErroresDeCaja.DayClosed(fecha));
+        // 2026-11-25 (pedido del dueño): con Caja.SoloCajerosAsignados, una caja con cajeros asignados (propios o de su caja de Recaudo unida) sólo la
+        // abren ellos; también la sesión que abre la caja única, que llega con el mismo cajero.
+        var cajeros = await CajerosDeLaCaja.DeAsync(db, caja, fecha, ct);
+        if (CajerosDeLaCaja.Rechazo(await sesiones.SoloCajerosAsignadosAsync(ct), caja.Code, cajeros, usuario) is { } noAsignado) return Falla(noAsignado);
         if (await ColisionesDeVenta.CajaOcupadaAsync(db, caja.Id, ct) is { } ocupada) return Falla(ocupada);
         var exclusivo = await SiNoAsync(ParametrosDeInventario.CajaUnaSesionPorCajero, true, fecha, ParameterScopeKind.None, 0, ct);
         if (exclusivo && await ColisionesDeVenta.CajeroOcupadoAsync(db, usuario, ct) is { } cajero) return Falla(cajero);

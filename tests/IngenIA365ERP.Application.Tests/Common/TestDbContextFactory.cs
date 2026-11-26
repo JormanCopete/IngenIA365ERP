@@ -349,6 +349,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination> CashDenominations => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister> CashRegisters => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterCashier> CashRegisterCashiers => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterCashier>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount>();
@@ -855,6 +856,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterCashier>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
