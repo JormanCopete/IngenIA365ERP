@@ -134,6 +134,9 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         [OperacionDeCuentaReversadaV1.Type] = new("Operación de cuenta reversada", "MA", EnLinea, null, EntregaDeCartera.K7),
         [CaptacionesActivadasV1.Type] = new("Captaciones activadas", null, EnLinea, null, EntregaDeCartera.K7),
         [CargaDeCaptacionesAplicadaV1.Type] = new("Carga de captaciones aplicada", null, EnLinea, null, EntregaDeCartera.K7),
+        // 2026-11-25 (feature 026): el cargo masivo y su anulación (la corrida sella su modo: un lote y un comprobante por corrida).
+        [CargoMasivoRegistradoV1.Type] = new("Cargo masivo registrado", "CO", EnLinea, null, EntregaDeCartera.K1),
+        [CargoMasivoAnuladoV1.Type] = new("Cargo masivo anulado", "CO", EnLinea, null, EntregaDeCartera.K1),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

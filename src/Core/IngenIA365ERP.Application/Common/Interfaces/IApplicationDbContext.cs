@@ -543,6 +543,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess> AccrualProcesses { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact> AccrualProcessFacts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine> AccrualProcessLines { get; }
+    // 2026-11-25 (pedido del dueño; feature 026): los cargos masivos.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun> BulkChargeRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine> BulkChargeLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
     // K4 (feature 013, CarteraCobranza; data-model §26.3–§26.10).

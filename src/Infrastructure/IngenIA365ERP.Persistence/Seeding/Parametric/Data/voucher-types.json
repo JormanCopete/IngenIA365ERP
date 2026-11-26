@@ -24,6 +24,9 @@
   // Feature 024, fase 4 (pedido del dueño del 2026-11-16): sugerido para la cuota reconocida al inicio del ciclo (CuotaReconocida), igual que CM, CS y AD
   // (activo y sin mapear): mientras la empresa no lo elija, el reconocimiento va en CA.
   { "code": "CR", "name": "Cuota reconocida del período", "usage": "Module", "module": "CAR" },
+  // Feature 026 (pedido del dueño del 2026-11-25, D2): los cargos masivos de Cartera, un comprobante por corrida. El dueño pidió «CM», que ya es la
+  // causación de mora: va con CO.
+  { "code": "CO", "name": "Cargos masivos", "usage": "Module", "module": "CAR" },
   // Feature 014 (T046; research C17): AH y CD los sembró la 009 para el módulo heredado de ahorros y CDT, que se retiró; quedan
   // inactivos (la contadora decide si se borran de la semilla). Los de captaciones son MA, CC, TD, AO y RA.
   { "code": "AH", "name": "Intereses de ahorros", "usage": "Module", "module": "CDT", "active": false },

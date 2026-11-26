@@ -47,6 +47,12 @@ public enum LendingProcessKind
     /// interés del corte, las diferencias del recálculo desde el corte y las partes de sus hechos. (nuevo)
     /// </summary>
     CutoverRecalculation = 8,
+
+    /// <summary>2026-11-25 (feature 026): la ejecución de una corrida de cargos masivos (una obligación por línea pendiente). (nuevo)</summary>
+    BulkCharge = 9,
+
+    /// <summary>2026-11-25 (feature 026): la anulación de lo vivo de una corrida de cargos masivos. (nuevo)</summary>
+    BulkChargeVoid = 10,
 }
 
 /// <summary>Estado de una corrida. <c>Running = 1</c> es el filtro del único «una corriendo por cooperativa».</summary>

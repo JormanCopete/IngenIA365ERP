@@ -125,6 +125,9 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(OperacionDeCuentaReversadaV1), OperacionDeCuentaReversadaV1.Type, "RVC", N, C, proceso: false),
         Hecho(typeof(CaptacionesActivadasV1), CaptacionesActivadasV1.Type, "CAV", I, C, proceso: false),
         Hecho(typeof(CargaDeCaptacionesAplicadaV1), CargaDeCaptacionesAplicadaV1.Type, "CAC", I, C, proceso: false),
+        // 2026-11-25 (feature 026): el cargo masivo y su anulación; los emite la corrida de fondo (proceso) con la persona que confirmó en la operación.
+        Hecho(typeof(CargoMasivoRegistradoV1), CargoMasivoRegistradoV1.Type, "CMS", N, C, proceso: true),
+        Hecho(typeof(CargoMasivoAnuladoV1), CargoMasivoAnuladoV1.Type, "CMA", N, C, proceso: true),
     ];
 
     /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden, y la v2 de la orden de giro (feature 014).</summary>

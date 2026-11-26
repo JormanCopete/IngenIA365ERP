@@ -319,6 +319,9 @@ public static class OperacionesDeCartera
             [AjusteDeCausacionDeCaptacionV1.Type, PagoReversadoV1.Type], HeredaElModo: true),
         new(CaptacionesActivadasV1.Type, "CAV", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
         new(CargaDeCaptacionesAplicadaV1.Type, "CAC", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
+        // 2026-11-25 (pedido del dueño; feature 026): el cargo masivo y su anulación. De fábrica en línea, pero la corrida sella el suyo (un lote por corrida, un comprobante CO).
+        new(CargoMasivoRegistradoV1.Type, "CMS", false, [R.Capital], [R.ContrapartidaDelCargo], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
+        new(CargoMasivoAnuladoV1.Type, "CMA", false, [R.ContrapartidaDelCargo], [R.Capital], EnLinea, null, "CO", EntregaDelHecho.K1, Ninguno),
     ];
 
     /// <summary>
