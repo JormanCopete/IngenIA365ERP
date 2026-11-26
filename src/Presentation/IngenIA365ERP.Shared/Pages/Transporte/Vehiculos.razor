@@ -99,7 +99,7 @@
                         @foreach (var v in _pagina.Items)
                         {
                             <tr>
-                                <td><a class="enlace" href="@($"/transporte/vehiculos/{v.PublicId}")">@v.Plate</a></td><td>@v.InternalNumber</td><td>@v.RadioCode</td>
+                                <td><a class="enlace" href="@UrlDeFicha(v.PublicId)">@v.Plate</a></td><td>@v.InternalNumber</td><td>@v.RadioCode</td>
                                 <td>@TextosDeTransporte.Estado(v.Status) <span class="texto-tenue">desde @v.StatusSince.ToString("dd/MM/yyyy")</span></td>
                                 <td>@v.OwnerTaxId · @v.OwnerName</td><td>@TextosDeTransporte.Vinculacion(v.Affiliation)</td>
                                 <td>
@@ -198,8 +198,47 @@
 
     private int Paginas => _pagina is null || _pagina.PageSize == 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_pagina.TotalCount / (double)_pagina.PageSize));
 
+    // 2026-11-26 (pedido del dueño): la ficha vuelve a la lista con la misma búsqueda, filtros y página. La lista se arma desde la URL y cada
+    // enlace a la ficha lleva la URL de la lista en «volver».
+    [SupplyParameterFromQuery(Name = "q")] public string? QInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public int? EstadoInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "affiliation")] public int? VinculacionInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "service")] public Guid? ServicioInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "serviceFilter")] public string? FiltroDeServicioInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? PaginaInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "size")] public int? TamanoInicial { get; set; }
+
+    private string UrlDeLista()
+    {
+        var query = _filtros.ComoQuery();
+        var extra = $"page={_numero}&size={_tamano}";
+        return "/transporte/vehiculos?" + (string.IsNullOrEmpty(query) ? extra : query + "&" + extra);
+    }
+
+    private string UrlDeFicha(Guid id) => $"/transporte/vehiculos/{id}?volver={Uri.EscapeDataString(UrlDeLista())}";
+
+    private void AplicarFiltrosDeLaUrl()
+    {
+        _filtros.Q = QInicial;
+        _filtros.Estado = EstadoInicial;
+        _filtros.Vinculacion = VinculacionInicial;
+        _filtros.Servicio = ServicioInicial;
+        _filtros.FiltroDeServicio = FiltroDeServicioInicial is "Any" or "None" or "Subscribed" or "NotSubscribed" ? FiltroDeServicioInicial : null;
+        _servicio = _filtros.FiltroDeServicio switch
+        {
+            "Any" => ConAlguno,
+            "None" => SinNinguno,
+            _ when _filtros.Servicio is { } id && _filtros.FiltroDeServicio is not null => id.ToString(),
+            _ => "",
+        };
+        if (_servicio == "") { _filtros.Servicio = null; _filtros.FiltroDeServicio = null; }
+        _numero = Math.Max(1, PaginaInicial ?? 1);
+        _tamano = TamanoInicial is { } t && Tamanos.Contains(t) ? t : 50;
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        AplicarFiltrosDeLaUrl();
         // Los servicios para el filtro: quien no puede verlos no tiene el filtro por uno en particular (sigue «con alguno» y «sin ninguno»).
         var s = await ServiciosApi.ServiciosAsync(incluirInactivos: true);
         _servicios = s.IsSuccess ? [.. s.Value ?? []] : [];
@@ -306,7 +345,7 @@
             }
             _mostrar = false;
             await Notification.SuccessAsync($"Vehículo {_v.Plate.ToUpperInvariant()} registrado.");
-            Nav.NavigateTo($"/transporte/vehiculos/{r.Value.VehiclePublicId}");
+            Nav.NavigateTo(UrlDeFicha(r.Value.VehiclePublicId));
         }
     }
 
