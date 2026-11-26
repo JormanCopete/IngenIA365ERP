@@ -34,13 +34,13 @@ public class LendingFactTypesSeederTests
     {
         // K6b (T1056): 35 hasta K6a, la corrección monetaria UVR y el reparto de un pago corregido por la UVR (decisión del dueño del 2026-10-17).
         // Feature 014 (T048): los 33 de captaciones y aportes. Feature 024: la administración causada (fase 2) y la cuota reconocida (fase 4).
-        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(73);
+        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(75);
 
         // Feature 025 (fase 3): + InteresDelCorte.
         var filas = await _db.LendingFactTypes.ToListAsync();
-        filas.Should().HaveCount(73);
+        filas.Should().HaveCount(75);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(87, "los 14 a otros destinos (con la v2 de la orden de giro, el retiro a Asociados, la consignación reversada, los cargos a Comercial, la v2 del archivo de descuentos y, desde la feature 015 —E-01 c—, el archivo de desembolsos generado y anulado a Tesorería) no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(89, "con los dos del cargo masivo (feature 026); los 14 a otros destinos (con la v2 de la orden de giro, el retiro a Asociados, la consignación reversada, los cargos a Comercial, la v2 del archivo de descuentos y, desde la feature 015 —E-01 c—, el archivo de desembolsos generado y anulado a Tesorería) no son hechos contables y no tienen fila");
         filas.Single(f => f.Code == "CaptacionesActivadas").Should().BeEquivalentTo(new
         {
             ShortCode = "CAV", VoucherTypeCode = (string?)null, IsInformational = true, DeliveredIn = EntregaDeCartera.K7,
@@ -77,7 +77,7 @@ public class LendingFactTypesSeederTests
             ["CausacionSuspendida", "CausacionReanudada", "CarteraActivada", "CargaDeCarteraAplicada", "CierreDeCarteraRealizado", "CierreDeCarteraReabierto",
                 "DevolucionGirada", "CaptacionesActivadas", "CargaDeCaptacionesAplicada"]);
         filas.Where(f => f.IsInformational).Should().OnlyContain(f => f.VoucherTypeCode == null);
-        filas.Where(f => !f.IsInformational).Should().OnlyContain(f => new[] { "DS", "RC", "CA", "PV", "CN", "MA", "CC", "TD", "AO", "RA" }.Contains(f.VoucherTypeCode));
+        filas.Where(f => !f.IsInformational).Should().OnlyContain(f => new[] { "DS", "RC", "CA", "PV", "CN", "MA", "CC", "TD", "AO", "RA", "CO" }.Contains(f.VoucherTypeCode));
         filas.Single(f => f.Code == "InteresCausado").Should().BeEquivalentTo(new { VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K1 });
         filas.Single(f => f.Code == "DeterioroCalculado").DefaultBatchTrigger.Should().Be("CierreDeCartera");
         filas.Single(f => f.Code == "CreditoCastigado").DeliveredIn.Should().Be(EntregaDeCartera.K3);
@@ -110,6 +110,6 @@ public class LendingFactTypesSeederTests
         LendingFactTypesSeeder.Datos.Keys.Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => !string.IsNullOrWhiteSpace(t.CodigoCorto));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => t.Destination == IntegrationDestinations.Accounting);
-        LendingFactTypesSeeder.Catalogo().Should().HaveCount(73);
+        LendingFactTypesSeeder.Catalogo().Should().HaveCount(75);
     }
 }

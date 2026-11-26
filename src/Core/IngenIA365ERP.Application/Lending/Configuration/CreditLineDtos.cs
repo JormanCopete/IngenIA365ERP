@@ -147,6 +147,13 @@ public sealed record CreditLineVersionInput
     /// <summary>2026-11-17: la originación pide la fecha del primer pago y las demás cuotas salen de ella con la periodicidad.</summary>
     public bool AsksFirstDueDate { get; init; }
 
+    /// <summary>2026-11-25 (feature 026): la línea admite cargos masivos, con sus valores por defecto y si sus obligaciones van a centrales y a cobranza.</summary>
+    public bool AllowsBulkCharge { get; init; }
+    public decimal? BulkChargeDefaultAmount { get; init; }
+    public int? BulkChargeDefaultInstallments { get; init; }
+    public bool BulkChargeReportsToBureaus { get; init; }
+    public bool BulkChargeEntersCollection { get; init; }
+
     /// <summary>2026-11-23: las opciones de descuento condicionado (el caso del SOAT); vacía si la línea no financia un bien con descuento.</summary>
     public IReadOnlyList<DiscountOptionDto> DiscountOptions { get; init; } = [];
     public AmortizationInput Amortization { get; init; } = new();
@@ -218,6 +225,11 @@ public sealed record CreditLineVersionInput
             PaymentDay = PaymentDay,
             CutoffDay = CutoffDay,
             AsksFirstDueDate = AsksFirstDueDate,
+            AllowsBulkCharge = AllowsBulkCharge,
+            BulkChargeDefaultAmount = BulkChargeDefaultAmount,
+            BulkChargeDefaultInstallments = BulkChargeDefaultInstallments,
+            BulkChargeReportsToBureaus = BulkChargeReportsToBureaus,
+            BulkChargeEntersCollection = BulkChargeEntersCollection,
             DiscountOptions = [.. (DiscountOptions ?? []).Select(o => new Domain.Lending.Configuration.OpcionDeDescuento(o.Code ?? "", o.Name ?? "", o.Fraction, o.FundCode))],
             AmortizationSystems = sistemas,
             DefaultAmortizationSystem = Amortization?.Default ?? sistemas.FirstOrDefault(),
@@ -408,6 +420,11 @@ public sealed record CreditLineVersionDto(
                 ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList())
         {
             AsksFirstDueDate = v.AsksFirstDueDate,
+            AllowsBulkCharge = v.AllowsBulkCharge,
+            BulkChargeDefaultAmount = v.BulkChargeDefaultAmount,
+            BulkChargeDefaultInstallments = v.BulkChargeDefaultInstallments,
+            BulkChargeReportsToBureaus = v.BulkChargeReportsToBureaus,
+            BulkChargeEntersCollection = v.BulkChargeEntersCollection,
             RateBasis = v.RateBasis,
             MonthlyRate = v.MonthlyRate,
             DenominationUnit = v.DenominationUnit,
@@ -426,6 +443,13 @@ public sealed record CreditLineVersionDto(
 
     /// <summary>2026-11-17: la originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
+
+    /// <summary>2026-11-25 (feature 026): la línea admite cargos masivos, con sus valores por defecto y si sus obligaciones van a centrales y a cobranza.</summary>
+    public bool AllowsBulkCharge { get; init; }
+    public decimal? BulkChargeDefaultAmount { get; init; }
+    public int? BulkChargeDefaultInstallments { get; init; }
+    public bool BulkChargeReportsToBureaus { get; init; }
+    public bool BulkChargeEntersCollection { get; init; }
 
     /// <summary>2026-11-23: las opciones de descuento condicionado de la versión.</summary>
     public IReadOnlyList<DiscountOptionDto> DiscountOptions { get; init; } = [];

@@ -130,6 +130,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_LiquidityFundSnapshots", "LND_LiquidityFundHoldings",
         // Feature 024, fase 3 (2026-11-16, ProcesoDeCausacion): el proceso de causación, sus hechos y sus líneas
         "LND_AccrualProcesses", "LND_AccrualProcessFacts", "LND_AccrualProcessLines",
+        // Feature 026 (2026-11-25, CargosMasivos): la corrida de cargos masivos y sus líneas
+        "LND_BulkChargeRuns", "LND_BulkChargeLines",
         // 2026-11-18 (DocumentosParaFirma): las plantillas de los documentos para firma, sus campos propios y los juegos generados
         "LND_SignatureDocumentTemplates", "LND_SignatureDocumentFields", "LND_SignatureDocumentSets",
     ];
@@ -199,7 +201,9 @@ public class ModeloDeCarteraNucleoTests
             "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", "GmfMonthlyUsage",
             "PayrollDeductionFileAccountLine", "WithholdingAccumulation",
             // Feature 024, fase 3: los hechos y las líneas del borrador del proceso de causación (el evento es el del comando).
-            "AccrualProcessFact", "AccrualProcessLine", .. Preparacion];
+            "AccrualProcessFact", "AccrualProcessLine",
+            // Feature 026: las líneas de la corrida de cargos masivos (el evento es el de la corrida).
+            "BulkChargeLine", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -228,7 +232,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(191,
+        Tablas.Should().HaveCount(193,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"

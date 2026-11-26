@@ -165,6 +165,9 @@ public enum LoanOrigin
     Origination = 1,
     Commercial = 2,
     Migration = 3,
+
+    /// <summary>2026-11-25 (feature 026): la obligación nace de una corrida de cargos masivos, sin solicitud ni giro. (nuevo)</summary>
+    BulkCharge = 4,
 }
 
 /// <summary>Estado de la obligación de una venta que Cartera responde a Comercial (estados de <c>ObligacionCreada</c>, T18).</summary>
@@ -208,6 +211,9 @@ public enum TermsVersionCause
     /// corte (la escribe el proceso de causación <c>CutoverRecalculation</c>). (nuevo)
     /// </summary>
     CutoverCorrection = 12,
+
+    /// <summary>2026-11-25 (feature 026): las condiciones de una obligación nacida de una corrida de cargos masivos. (nuevo)</summary>
+    BulkCharge = 13,
 }
 
 /// <summary>Forma de un tramo de desembolso; <c>InKind</c> es la venta de Comercial y nunca emite orden de giro.</summary>
@@ -217,6 +223,9 @@ public enum DisbursementForm
     Check = 2,
     ThirdPartyPayment = 3,
     InKind = 4,
+
+    /// <summary>2026-11-25 (feature 026): el cargo masivo; no gira dinero ni emite orden: la contrapartida la pone la matriz contable. (nuevo)</summary>
+    Charge = 5,
 }
 
 /// <summary>Estado de una orden de giro (FR-045; data-model §8.4).</summary>
@@ -287,4 +296,7 @@ public enum LendingNumberKind
 
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación (<c>PCA-</c>; columna entera: sin migración).</summary>
     AccrualProcess = 21,
+
+    /// <summary>2026-11-25 (pedido del dueño; feature 026): la corrida de cargos masivos (<c>CGM-</c>; columna entera: sin migración).</summary>
+    BulkChargeRun = 22,
 }

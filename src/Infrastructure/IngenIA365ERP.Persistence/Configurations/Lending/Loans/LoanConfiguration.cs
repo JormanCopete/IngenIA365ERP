@@ -44,6 +44,9 @@ public class LoanConfiguration : IEntityTypeConfiguration<Loan>
         builder.HasOne<CreditDecision>().WithMany().HasForeignKey(e => e.ConfirmedByExceptionDecisionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.OriginLoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
+        // 2026-11-25 (feature 026; migración CargosMasivos): la línea de la corrida de cargos masivos de la que nació.
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine>().WithMany().HasForeignKey(e => e.BulkChargeLineId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_Loans_Number");
         builder.HasIndex(e => e.SourcePaymentPublicId).IsUnique()
@@ -52,5 +55,6 @@ public class LoanConfiguration : IEntityTypeConfiguration<Loan>
         builder.HasIndex(e => new { e.BranchId, e.Status }).HasDatabaseName("IX_LND_Loans_Branch_Status");
         builder.HasIndex(e => new { e.CreditLineId, e.Status }).HasDatabaseName("IX_LND_Loans_Line_Status");
         builder.HasIndex(e => e.SourceInvoiceNumber).HasDatabaseName("IX_LND_Loans_SourceInvoiceNumber");
+        builder.HasIndex(e => e.BulkChargeLineId).HasDatabaseName("IX_LND_Loans_BulkChargeLineId");
     }
 }

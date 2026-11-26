@@ -291,6 +291,12 @@ public static class AuditEventTypes
     /// <summary>2026-11-25 (pedido del dueño): una solicitud de crédito radicada se editó sin devolverla, con motivo y lo que cambió.</summary>
     public const string LendingApplicationEditedAfterSubmission = "Lending.Application.EditedAfterSubmission";
 
+    // 2026-11-25 (pedido del dueño; feature 026): los cargos masivos de Cartera.
+    public const string LendingBulkChargeConfirmed = "Lending.BulkCharge.Confirmed";
+    public const string LendingBulkChargeCompleted = "Lending.BulkCharge.Completed";
+    public const string LendingBulkChargeVoided = "Lending.BulkCharge.Voided";
+    public const string LendingBulkChargeLineVoided = "Lending.BulkCharge.LineVoided";
+
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
     public const string LendingDocumentIssued = "Lending.Document.Issued";

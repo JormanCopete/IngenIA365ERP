@@ -173,6 +173,13 @@ public static class RolesDeCuentaDeCartera
     /// fondo de la opción de descuento (libre, de la cooperativa): una regla por fondo. (nuevo)
     /// </summary>
     public const string FondoQueSubsidia = "FondoQueSubsidia";
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño; feature 026, D1): la contrapartida de un cargo masivo: la cuenta que se acredita cuando nace la obligación (el fondo
+    /// de solidaridad, un ingreso o una cuenta por pagar a un proveedor), por línea. El tercero es el elegido en la corrida (el deudor o un proveedor).
+    /// (nuevo)
+    /// </summary>
+    public const string ContrapartidaDelCargo = "ContrapartidaDelCargo";
     public const string Ingreso = "Ingreso";
     public const string GastoDeterioro = "GastoDeterioro";
     public const string RecuperacionDeterioro = "RecuperacionDeterioro";
@@ -368,6 +375,8 @@ public static class RolesDeCuentaDeCartera
         new(CuentaPorCobrarComercial, C, FamiliaDeRol.Puente, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Factura),
         // 2026-11-23 (descuento condicionado): un pasivo (el fondo social) que el desembolso debita; el motivo es el código del fondo, libre.
         new(FondoQueSubsidia, C, FamiliaDeRol.Pasivo, [Mot], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
+        // 2026-11-25 (feature 026): la contrapartida del cargo masivo, por línea; su tercero es el beneficiario que eligió la corrida.
+        new(ContrapartidaDelCargo, C, FamiliaDeRol.Pasivo, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Beneficiario, CruceDeRol.Credito),
         // K6b (T1056): el Ingreso admite también el capital, el anticipo y el saldo a favor, sólo para la corrección monetaria UVR (con su hecho
         // fijado en la regla, la contadora elige la cuenta de la corrección monetaria).
         new(Ingreso, C, FamiliaDeRol.Resultado, [Mod, Con], [Op, Lin, Emp, Gra, Sub, Ree, Pca, Suc],
@@ -412,7 +421,7 @@ public static class RolesDeCuentaDeCartera
     ];
 
     /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013, con el diferido de la cuota reconocida de la feature 024).</summary>
-    public const int RolesDeCredito = 28;
+    public const int RolesDeCredito = 29;
 
     /// <summary>Los 17 roles de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todos"/>.</summary>
     public static IReadOnlyList<RolDeCuentaDeCartera> DeCaptaciones { get; } = Todos.Skip(RolesDeCredito).ToList();

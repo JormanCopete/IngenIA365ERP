@@ -65,6 +65,9 @@ public sealed class ConductorDeCorridasDeCartera(
         LendingProcessKind.CloseReopen,
         // K4 (T0944; C64): el registro de la etapa de cobranza migrada, una vez al desplegar K4.
         LendingProcessKind.MigratedCollectionStages,
+        // 2026-11-25 (feature 026): los cargos masivos confirmados y su anulación.
+        LendingProcessKind.BulkCharge,
+        LendingProcessKind.BulkChargeVoid,
     ];
 
     /// <summary>El paso que se anota en el error de una corrida que falló entera.</summary>

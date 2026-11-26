@@ -107,6 +107,26 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     /// </summary>
     public bool AsksFirstDueDate { get; init; }
 
+    // ------------------------------------------------------------------------- cargos masivos (feature 026) --
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño; feature 026, migración <c>CargosMasivos</c>): la línea admite cargos masivos (una obligación por asociado, sin
+    /// solicitud ni giro). Incompatible con codeudores, garantías, documentos, vínculo laboral y consulta a centrales. (nuevo)
+    /// </summary>
+    public bool AllowsBulkCharge { get; init; }
+
+    /// <summary>El valor por defecto del cargo masivo (dentro de <see cref="MinAmount"/>–<see cref="MaxAmount"/>). (nuevo)</summary>
+    public decimal? BulkChargeDefaultAmount { get; init; }
+
+    /// <summary>Las cuotas por defecto del cargo masivo (una de fábrica). (nuevo)</summary>
+    public int? BulkChargeDefaultInstallments { get; init; }
+
+    /// <summary>Las obligaciones de cargo masivo se reportan a centrales (no de fábrica, D4). (nuevo)</summary>
+    public bool BulkChargeReportsToBureaus { get; init; }
+
+    /// <summary>Las obligaciones de cargo masivo entran a cobranza (no de fábrica, D4). (nuevo)</summary>
+    public bool BulkChargeEntersCollection { get; init; }
+
     /// <summary>
     /// 2026-11-23 (pedido del dueño, el caso del SOAT): las opciones de descuento condicionado en JSON (<see cref="OpcionesDeDescuento"/>); nulo si
     /// la línea no financia un bien con descuento. Con opciones, la solicitud lleva el valor del bien, el proveedor y la opción.
@@ -222,6 +242,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     public const string CodigoBandasCruzadas = "Lending.CreditLine.RateBandsOverlap";
     public const string CodigoSinConceptoTributario = "Lending.CreditLine.InterestTaxConceptMissing";
     public const string CodigoInvalida = "Validation.Invalid";
+    public const string CodigoCargoMasivoIncompatible = "Lending.CreditLine.BulkChargeIncompatible";
 
     /// <summary>
     /// Lo que está mal en la versión (sin consultar nada fuera de ella), o nulo si se puede registrar (data-model §1.3–§1.7; T0333):
@@ -331,10 +352,38 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
         if (b.Insurances.Any(s => s.Kind == InsuranceKind.Administration && s.IsDebtorLifeInsurance))
             return Invalida("insurances", "La administración no es un seguro de vida deudores: desmarque «Vida deudores» o cambie la clase a seguro.");
         if (OpcionesDeDescuento.Problema(b.DiscountOptions) is { } descuento) return Invalida("discountOptions", descuento);
+        if (ValidarCargoMasivo(b) is { } cargo) return cargo;
         if (b.CollateralRules.Select(g => g.Order).Distinct().Count() != b.CollateralRules.Count
             || b.CollateralRules.Any(g => g.RequiredCoDebtors < 0 || g.MinAmount > g.MaxAmount || g.MinTermMonths > g.MaxTermMonths))
             return Invalida("collateralRules", "Las reglas de garantía tienen órdenes distintos, rangos bien formados y codeudores no negativos.");
 
+        return null;
+    }
+
+    /// <summary>
+    /// 2026-11-25 (feature 026): una versión que admite cargos masivos no exige codeudores, garantía, documentos, vínculo laboral ni consulta a
+    /// centrales (el cargo no es una solicitud), y su valor y cuotas por defecto caben en la versión. Sin la marca, los valores del cargo no van.
+    /// </summary>
+    public static ProblemaDeCartera? ValidarCargoMasivo(BorradorDeVersionDeLinea b)
+    {
+        if (!b.AllowsBulkCharge)
+            return b.BulkChargeDefaultAmount is not null || b.BulkChargeDefaultInstallments is not null || b.BulkChargeReportsToBureaus
+                   || b.BulkChargeEntersCollection
+                ? Invalida("allowsBulkCharge", "Los valores del cargo masivo sólo van en una línea que admite cargos masivos.")
+                : null;
+        string? motivo =
+            b.CollateralRules.Any(g => g.RequiredCoDebtors > 0 || g.MinimumCoverage is > 0m) ? "exige codeudores o garantía"
+            : b.DocumentRequirements.Count > 0 ? "exige documentos"
+            : b.RequiresEmployment ? "exige vínculo laboral"
+            : b.RequiresBureauQuery ? "exige consulta a centrales"
+            : null;
+        if (motivo is not null)
+            return ProblemaDeCartera.Con(CodigoCargoMasivoIncompatible,
+                $"Una línea que admite cargos masivos no puede exigir requisitos de solicitud: ésta {motivo}.", "field", "allowsBulkCharge");
+        if (b.BulkChargeDefaultAmount is { } valor && (valor < b.MinAmount || valor > b.MaxAmount))
+            return Invalida("bulkChargeDefaultAmount", "El valor por defecto del cargo masivo está entre el monto mínimo y el máximo de la línea.");
+        if (b.BulkChargeDefaultInstallments is { } cuotas && (cuotas < 1 || b.MaxInstallments is { } max && cuotas > max))
+            return Invalida("bulkChargeDefaultInstallments", "Las cuotas por defecto del cargo masivo son al menos una y no pasan el máximo de cuotas.");
         return null;
     }
 
@@ -389,6 +438,11 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             PaymentDay = b.PaymentDay,
             CutoffDay = b.CutoffDay,
             AsksFirstDueDate = b.AsksFirstDueDate,
+            AllowsBulkCharge = b.AllowsBulkCharge,
+            BulkChargeDefaultAmount = b.AllowsBulkCharge ? b.BulkChargeDefaultAmount : null,
+            BulkChargeDefaultInstallments = b.AllowsBulkCharge ? b.BulkChargeDefaultInstallments : null,
+            BulkChargeReportsToBureaus = b.AllowsBulkCharge && b.BulkChargeReportsToBureaus,
+            BulkChargeEntersCollection = b.AllowsBulkCharge && b.BulkChargeEntersCollection,
             DiscountOptions = OpcionesDeDescuento.Escribir(b.DiscountOptions),
             AmortizationSystems = ListaDeEnums.Conjunto(b.AmortizationSystems),
             DefaultAmortizationSystem = b.DefaultAmortizationSystem,
@@ -554,6 +608,12 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             .Si(b.AsksFirstDueDate, h => h.Logico("asksFirstDueDate", true))
             // 2026-11-23: las opciones de descuento sólo entran si hay (las versiones anteriores conservan su huella).
             .Si(b.DiscountOptions.Count > 0, h => h.Texto("discountOptions", OpcionesDeDescuento.Escribir(b.DiscountOptions)))
+            // 2026-11-25 (feature 026): el cargo masivo sólo entra si la línea lo admite (las versiones anteriores conservan su huella).
+            .Si(b.AllowsBulkCharge, h => h.Logico("allowsBulkCharge", true)
+                .Decimal("bulkChargeDefaultAmount", b.BulkChargeDefaultAmount, 2)
+                .Entero("bulkChargeDefaultInstallments", b.BulkChargeDefaultInstallments)
+                .Logico("bulkChargeReportsToBureaus", b.BulkChargeReportsToBureaus)
+                .Logico("bulkChargeEntersCollection", b.BulkChargeEntersCollection))
             .Calcular();
 
     /// <summary>La huella de esta versión ya guardada con sus hijas, para verificar que nadie la cambió.</summary>

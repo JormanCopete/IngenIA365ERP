@@ -95,6 +95,8 @@ public class IdentidadConDocumento
             // Compara también el tipo (DIAN), y los grupos de descuento por empresa empleadora.
             "/ConstructorDelCanonico.cs",
             "/LineasDeGrupoDeDescuento.cs",
+            // Feature 026: la pagaduría de la empresa empleadora del asociado, por el NIT de la empresa (no busca personas por número).
+            "/CorridasDeCargoMasivo.cs",
         ];
         var compara = new Regex(@"\.TaxId\s*==|==\s*[\w.]*\.TaxId\b", RegexOptions.Compiled);
         var indexa = new Regex(@"\b(ToDictionary|ToLookup|GroupBy)\s*\(\s*\w+\s*=>\s*\w+\.TaxId\b", RegexOptions.Compiled);

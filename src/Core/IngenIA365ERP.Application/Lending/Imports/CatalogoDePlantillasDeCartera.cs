@@ -131,6 +131,12 @@ public static class CatalogoDePlantillasDeCartera
         public const string Activa = "activa";
         public const string AdmiteNoAsociados = "admiteNoAsociados";
         public const string AdmiteOrigenComercial = "admiteOrigenComercial";
+        // 2026-11-25 (feature 026): los cargos masivos.
+        public const string AdmiteCargoMasivo = "admiteCargoMasivo";
+        public const string ValorCargoMasivo = "valorCargoMasivo";
+        public const string CuotasCargoMasivo = "cuotasCargoMasivo";
+        public const string CargoReportaACentrales = "cargoReportaACentrales";
+        public const string CargoEntraACobranza = "cargoEntraACobranza";
         public const string ConceptoTributario = "conceptoTributarioDelInteres";
         public const string SoporteDelConcepto = "soporteDelConceptoTributario";
         public const string TipoDeTasa = "tipoDeTasa";
@@ -226,6 +232,11 @@ public static class CatalogoDePlantillasDeCartera
             new(ColumnasDeLineas.Activa, TipoDeValor.SiNo, Reglas: "«no» cierra la línea a créditos nuevos; vacío = sí", Ejemplo: "sí"),
             new(ColumnasDeLineas.AdmiteNoAsociados, TipoDeValor.SiNo, Reglas: "sólo si el perfil regulatorio de la cooperativa lo permite", Ejemplo: "no"),
             new(ColumnasDeLineas.AdmiteOrigenComercial, TipoDeValor.SiNo, Reglas: "admite ventas a crédito de Comercial", Ejemplo: "no"),
+            new(ColumnasDeLineas.AdmiteCargoMasivo, TipoDeValor.SiNo, Reglas: "admite cargos masivos (sin codeudores, garantías, documentos ni centrales)", Ejemplo: "no"),
+            new(ColumnasDeLineas.ValorCargoMasivo, TipoDeValor.Monto, Reglas: "con cargo masivo: el valor por defecto, dentro de los montos", Ejemplo: ""),
+            new(ColumnasDeLineas.CuotasCargoMasivo, TipoDeValor.Entero, Reglas: "con cargo masivo: las cuotas por defecto (1 si se deja vacío)", Ejemplo: ""),
+            new(ColumnasDeLineas.CargoReportaACentrales, TipoDeValor.SiNo, Reglas: "con cargo masivo: sus obligaciones se reportan a centrales", Ejemplo: "no"),
+            new(ColumnasDeLineas.CargoEntraACobranza, TipoDeValor.SiNo, Reglas: "con cargo masivo: sus obligaciones entran a cobranza", Ejemplo: "no"),
             new(ColumnasDeLineas.ConceptoTributario, TipoDeValor.Enumeracion, Reglas: "NotTaxed (no gravado) o Taxed (gravado); obligatorio con origen comercial y tasa mayor que cero", Ejemplo: ""),
             new(ColumnasDeLineas.SoporteDelConcepto, TipoDeValor.Texto, Largo: 200, Reglas: "el identificador del adjunto con el concepto de la contadora (súbalo primero en la línea)", Ejemplo: ""),
             new(ColumnasDeLineas.TipoDeTasa, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Fixed (fija) o Variable", Ejemplo: "Fixed"),
@@ -376,6 +387,11 @@ public static class CatalogoDePlantillasDeCartera
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
             "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false, PayrollAgreementsTemplate.Definicion),
+        // 2026-11-25 (pedido del dueño; feature 026, HU4): los asociados de una corrida de cargos masivos con origen «plano».
+        new(BulkCharges.PlantillaDeCargosMasivos.Clave, "Cargos masivos",
+            "Los asociados de una corrida de cargos masivos en borrador (origen «plano»): uno por fila, con su valor, cuotas, primer pago y forma de pago propios si se quiere.",
+            ["Datos"], "/api/lending/bulk-charges/plano", "Lending.BulkCharges.Run", "Lending.BulkCharges.Run", EntregaDeCartera.K1,
+            PersonalData: true, BulkCharges.PlantillaDeCargosMasivos.Definicion),
     ];
 
     /// <summary>La fila del registro de las 17 partes de la migración: cada parte es <c>lending.migration.{parte}</c> (US8, T0737).</summary>

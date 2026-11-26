@@ -269,6 +269,8 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
             PagoRedistribuidoPorValorNacionalV1.Type,
             // Feature 025 (fase 3): el interés del período al corte lo emite el proceso de causación CutoverRecalculation.
             InteresDelCorteV1.Type,
+            // Feature 026 (2026-11-25): el cargo masivo y su anulación los emite la corrida de fondo.
+            CargoMasivoRegistradoV1.Type, CargoMasivoAnuladoV1.Type,
             // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emite el ciclo diario o el proceso.
             "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
             "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",

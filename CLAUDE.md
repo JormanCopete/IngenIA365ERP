@@ -942,6 +942,26 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   (migración `FiltrosDelProcesoDeCausacion`; las otras clases los rechazan). Casos dorados 40–49; receta `docs/manual/cartera-causacion-y-liquidacion.md`
   §9.7–§9.9. Pendiente de la contadora validar los casos y la matriz del `IDC`.
 
+- **Cargos masivos (feature 026, rama `026-cargos-masivos`, 2026-11-25; sin merge ni despliegue)**: una corrida crea, por asociado, una obligación
+  de una línea marcada «Admite cargo masivo» (`CreditLineVersion.AllowsBulkCharge`, incompatible con codeudores, garantías, documentos, vínculo
+  laboral y centrales), **sin solicitud ni giro**, y la contabiliza en **un solo comprobante `CO`** (el caso: `FDOSOL` de COOFLOPAL cada mes).
+  - **Nace como cualquier crédito** por `NacimientoDeCargoMasivo` (copia del nacimiento de la venta a crédito): `Origin = BulkCharge`, operación
+    `Disbursement` con forma `Charge` (no emite orden de giro), condiciones `BulkCharge`, plan del simulador, posición y vínculo de forma de pago,
+    todo por `RegistroDeCartera`.
+  - **Contabilidad**: hechos `CargoMasivoRegistrado` (`CMS`) y `CargoMasivoAnulado` (`CMA`), capital contra el rol nuevo **`ContrapartidaDelCargo`**
+    con el tercero de la corrida (el deudor o un proveedor). La corrida **sella su modo** (`Batch`, alcance `CargoMasivo:{run}`) y al terminar crea
+    el lote con sus entregas: un comprobante. `CM` ya era la mora: el tipo nuevo es `CO`.
+  - **La corrida** (`LND_BulkChargeRuns`/`Lines`): borrador con vista previa y huella (no crea nada, no reserva), confirmar recalcula y exige la
+    misma huella (`PreviewChanged`), reserva el período (índice único por línea, persona y período sobre `HoldsPeriod`) y encola un
+    `LendingProcessRun` `BulkCharge` que conduce `ConductorDeCorridasDeCartera` por tandas, una transacción por asociado. Excluye retirados,
+    fallecidos y retiro en trámite (`ReglasDeCargoMasivo`), no el cobro jurídico. Plano `lending.bulk-charges` sobre un borrador «plano».
+  - **Anular** sólo sin movimientos (`AnulacionDeCargoMasivo`: espejo del capital, `Active → Voided`, libera el período); la corrida entera en
+    segundo plano (`BulkChargeVoid`), un comprobante. Centrales y cobranza dejan fuera estos créditos salvo que la línea diga lo contrario
+    (`CargosMasivosFuera`; de fábrica, fuera).
+  - Permisos `Lending.BulkCharges.Read/Run/Void`, parámetro `Segregacion.CargoMasivoPorOtraPersona`, pantallas `/cartera/cargos-masivos`. Migración
+    aditiva `CargosMasivos`. Receta: `docs/manual/cartera-cargos-masivos.md`. E2e `CargosMasivosTests` verde en PostgreSQL y SQL
+    Server. Pendiente: la cuenta de contrapartida de `FDOSOL` (contadora) y la exportación a Excel y PDF del detalle.
+
 - **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
   merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la
   013**, en reemplazo de las captaciones heredadas, retiradas con `RetiroDeCaptacionesHeredadas` (destructiva con guarda;
@@ -1179,15 +1199,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/023-emision-asincrona-rabbitmq/plan.md](specs/023-emision-asincrona-rabbitmq/plan.md)
+[specs/026-cargos-masivos/plan.md](specs/026-cargos-masivos/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/023-emision-asincrona-rabbitmq/spec.md)
-- [research.md](specs/023-emision-asincrona-rabbitmq/research.md)
-- [data-model.md](specs/023-emision-asincrona-rabbitmq/data-model.md)
-- [quickstart.md](specs/023-emision-asincrona-rabbitmq/quickstart.md)
-- [contracts/](specs/023-emision-asincrona-rabbitmq/contracts/)
+- [spec.md](specs/026-cargos-masivos/spec.md)
+- [research.md](specs/026-cargos-masivos/research.md)
+- [data-model.md](specs/026-cargos-masivos/data-model.md)
+- [quickstart.md](specs/026-cargos-masivos/quickstart.md)
+- [contracts/](specs/026-cargos-masivos/contracts/)
 
-The 023 builds on the electronic invoicing of the 012 (I4: the electronic document row is already the
-transactional outbox) and on the integration tray; RabbitMQ only wakes and distributes work, the
-database stays the source of truth, and the POS checkout waits at most a short per-point-of-sale timeout.
+The 026 builds on Cartera (013): a run creates one obligation per associate of a line marked for bulk charges, without application
+or payout, through the single ledger writer, and posts the whole run as one summarized voucher (type CO) through the accounting
+matrix (new role «Contrapartida del cargo»).
 <!-- SPECKIT END -->

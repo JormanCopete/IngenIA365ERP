@@ -16,6 +16,10 @@
         <div class="campo"><b>Periodicidades</b> @TextosDeCartera.Lista(TextosDeCartera.Periodicidades, V.Periodicities)</div>
         <div class="campo"><b>Sistemas</b> @TextosDeCartera.Lista(TextosDeCartera.Sistemas, V.AmortizationSystems)</div>
         <div class="campo"><b>Fecha del primer pago</b> @(V.AsksFirstDueDate ? "Se pide al simular y en la solicitud" : "Sale del desembolso y del día de pago")</div>
+        @if (V.AllowsBulkCharge)
+        {
+            <div class="campo campo-ancho"><b>Cargos masivos</b> Sí@(V.BulkChargeDefaultAmount is { } vc ? $" · valor {vc.ToString("N0", Es)}" : "") · @(V.BulkChargeDefaultInstallments ?? 1) cuota(s) · @(V.BulkChargeReportsToBureaus ? "se reporta a centrales" : "no va a centrales") · @(V.BulkChargeEntersCollection ? "entra a cobranza" : "fuera de cobranza")</div>
+        }
         @if (V.DiscountOptions.Count > 0)
         {
             <div class="campo campo-ancho"><b>Descuento condicionado</b> @string.Join(" · ", V.DiscountOptions.Select(o => $"{o.Name} ({(o.Fraction * 100m).ToString("0.##", Es)} %{(o.FundCode is { } f ? $", fondo {f}" : "")})"))</div>

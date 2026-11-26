@@ -1,0 +1,117 @@
+@page "/cartera/cargos-masivos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject CargosMasivosClient Cargos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Cargos masivos - IngenIA365ERP</PageTitle>
+
+@* 2026-11-25 (pedido del dueño; feature 026, HU6): la lista de corridas de cargos masivos —una obligación de una línea marcada por cada asociado, sin
+   solicitud ni giro, contabilizada en un solo comprobante CO—, con filtros por línea, período y estado. «Nueva corrida» abre el detalle en blanco.
+   Receta: docs/manual/cartera-cargos-masivos.md. *@
+<PermissionGate Required="Lending.BulkCharges.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cargos masivos</h3>
+        <PermissionGate Required="Lending.BulkCharges.Run">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Navegacion.NavigateTo("/cartera/cargos-masivos/nueva"))">Nueva corrida</SfButton>
+        </PermissionGate>
+    </div>
+    <p class="texto-tenue">
+        Carga a cada asociado activo una obligación de una línea marcada para cargos masivos (por ejemplo, el fondo de solidaridad del mes), sin solicitud
+        ni giro, y la contabiliza en un solo comprobante. Cada corrida se prepara, se revisa en la vista previa y se confirma.
+    </p>
+
+    <div class="toolbar">
+        <label class="campo">Línea
+            <select class="e-input" @bind="_linea">
+                <option value="">Todas</option>
+                @foreach (var l in _lineas) { <option value="@l.CreditLinePublicId">@l.Code · @l.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Período
+            <input type="month" class="e-input" value="@_periodo" @onchange="@(e => _periodo = e.Value?.ToString())" />
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCargosMasivos.Estados) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Estado</th><th>Línea</th><th>Período</th><th>Fecha del cargo</th><th class="numero">Cargados</th><th class="numero">Omitidos</th><th class="numero">Fallidos</th><th class="numero">Anulados</th><th class="numero">Pendientes</th><th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _filas)
+                    {
+                        var fila = f;
+                        <tr>
+                            <td>@fila.Number</td>
+                            <td>@TextosDeCargosMasivos.Estado(fila.Status)</td>
+                            <td>@fila.CreditLineCode · @fila.CreditLineName</td>
+                            <td>@TextosDeCargosMasivos.Periodo(fila.Period)</td>
+                            <td>@TextosDeCreditos.Fecha(fila.ChargeDate)</td>
+                            <td class="numero">@fila.CreatedCount</td>
+                            <td class="numero">@fila.SkippedCount</td>
+                            <td class="numero">@fila.FailedCount</td>
+                            <td class="numero">@fila.VoidedCount</td>
+                            <td class="numero">@fila.PendingCount</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.TotalAmount)</td>
+                            <td><a href="/cartera/cargos-masivos/@fila.PublicId">Ver</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay corridas con ese filtro.</p> }
+        @if (_pagina > 1 || _filas.Count == TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_filas.Count < TamanoDePagina)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<LineaDeCargoMasivoDto> _lineas = [];
+    private List<CargoMasivoEnListaDto> _filas = [];
+    private string? _linea, _periodo, _estado;
+    private int _pagina = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var o = await Cargos.OpcionesAsync();
+            if (o.IsSuccess) _lineas = [.. o.Value?.Lines ?? []];
+        }
+        await CargarAsync(1);
+    }
+
+    /// <summary>El período del filtro («2026-12») como aaaamm, o nulo.</summary>
+    private int? Periodo() =>
+        DateOnly.TryParseExact((_periodo ?? "") + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f.Year * 100 + f.Month : null;
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cargos.ListarAsync(Guid.TryParse(_linea, out var l) ? l : null, Periodo(), string.IsNullOrEmpty(_estado) ? null : _estado,
+            pagina, TamanoDePagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las corridas."); return; }
+        _filas = r.Value ?? [];
+        _pagina = pagina;
+    }
+}

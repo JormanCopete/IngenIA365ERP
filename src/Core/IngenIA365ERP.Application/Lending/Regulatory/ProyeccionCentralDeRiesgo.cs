@@ -239,8 +239,10 @@ public sealed class ProyeccionCentralDeRiesgo(
         var reportadosAntes = reportadas.Select(g => g.Key).ToList();
         // Las obligaciones de líneas de servicio no se reportan a las centrales.
         var lineasDeServicio = db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(c => c.IsService).Select(c => c.Id);
+        // 2026-11-25 (feature 026, D4): ni las de cargo masivo cuya línea no las reporta (de fábrica, ninguna).
+        var cargosSinCentrales = BulkCharges.CargosMasivosFuera.DeCentrales(db);
         var creditos = await db.Loans.AsNoTracking()
-            .Where(l => !l.IsDeleted && !lineasDeServicio.Contains(l.CreditLineId) && l.OpenedOn <= corte && l.Status != LoanStatus.PendingDisbursement
+            .Where(l => !l.IsDeleted && !lineasDeServicio.Contains(l.CreditLineId) && !cargosSinCentrales.Contains(l.Id) && l.OpenedOn <= corte && l.Status != LoanStatus.PendingDisbursement
                         && ((l.Status != LoanStatus.Voided
                              && !(l.PaidOffOn != null && l.PaidOffOn < desde && l.Status == LoanStatus.PaidOff)
                              && !(l.NovatedOn != null && l.NovatedOn < desde && l.Status == LoanStatus.Novated))

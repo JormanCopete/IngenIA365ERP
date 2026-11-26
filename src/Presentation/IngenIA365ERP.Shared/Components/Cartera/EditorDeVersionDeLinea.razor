@@ -247,6 +247,16 @@
             <label class="campo-check" title="La simulación y la solicitud piden la fecha del primer pago (primer descuento); las demás cuotas se calculan desde ella con la periodicidad.">
                 <input type="checkbox" @bind="V.AsksFirstDueDate" /> Pedir la fecha del primer pago
             </label>
+            <label class="campo-check" title="La línea se puede cargar en lote a los asociados (Cartera → Procesos e informes → Cargos masivos), sin solicitud ni giro. No puede exigir codeudores, garantías, documentos, vínculo laboral ni centrales.">
+                <input type="checkbox" @bind="V.AllowsBulkCharge" /> Admite cargos masivos
+            </label>
+            @if (V.AllowsBulkCharge)
+            {
+                <label class="campo">Valor por defecto del cargo <input class="e-input numero" type="number" min="0" step="1" @bind="V.BulkChargeDefaultAmount" /></label>
+                <label class="campo">Cuotas por defecto del cargo <input class="e-input numero" type="number" min="1" @bind="V.BulkChargeDefaultInstallments" /></label>
+                <label class="campo-check"><input type="checkbox" @bind="V.BulkChargeReportsToBureaus" /> Sus cargos se reportan a centrales</label>
+                <label class="campo-check"><input type="checkbox" @bind="V.BulkChargeEntersCollection" /> Sus cargos entran a cobranza</label>
+            }
             <div class="campo campo-ancho">Sistemas de amortización *
                 <div class="toolbar">
                     @foreach (var s in TextosDeCartera.Sistemas)
