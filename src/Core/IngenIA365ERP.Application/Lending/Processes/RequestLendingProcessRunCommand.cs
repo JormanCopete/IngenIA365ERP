@@ -58,6 +58,9 @@ public static class ErroresDeCorridas
         LendingProcessKind.PeriodRecognition => "reconocimiento de la cuota del período",
         // 2026-11-24 (feature 025, fase 3).
         LendingProcessKind.CutoverRecalculation => "recálculo de la carga desde el corte",
+        // 2026-11-25 (feature 026).
+        LendingProcessKind.BulkCharge => "cargos masivos",
+        LendingProcessKind.BulkChargeVoid => "anulación de cargos masivos",
         _ => "proceso",
     };
 }

@@ -63,6 +63,11 @@ public class CreditLineVersionConfiguration : IEntityTypeConfiguration<CreditLin
         builder.Property(e => e.DenominationUnit).HasConversion<int>().IsRequired().HasDefaultValue(DenominationUnit.Pesos);
         // 2026-11-17: la originación pide la fecha del primer pago; las versiones ya registradas no la piden.
         builder.Property(e => e.AsksFirstDueDate).IsRequired().HasDefaultValue(false);
+        // 2026-11-25 (feature 026; migración CargosMasivos): el cargo masivo; las versiones ya registradas no lo admiten.
+        builder.Property(e => e.AllowsBulkCharge).IsRequired().HasDefaultValue(false);
+        builder.Property(e => e.BulkChargeDefaultAmount).Monto();
+        builder.Property(e => e.BulkChargeReportsToBureaus).IsRequired().HasDefaultValue(false);
+        builder.Property(e => e.BulkChargeEntersCollection).IsRequired().HasDefaultValue(false);
 
         builder.Property(e => e.AllocationOrder).HasConversion<int>().IsRequired();
         builder.Property(e => e.ConceptPriority).HasMaxLength(200).IsRequired();

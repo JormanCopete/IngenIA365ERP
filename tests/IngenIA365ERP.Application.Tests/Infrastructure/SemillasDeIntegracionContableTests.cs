@@ -30,10 +30,10 @@ public class SemillasDeIntegracionContableTests
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(40, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046), los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1) y CM, CS, AD y CR de la causación por concepto y de la cuota reconocida (feature 024)");
+        tipos.Should().HaveCount(41, "el CO de los cargos masivos (feature 026), 23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046), los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1) y CM, CS, AD y CR de la causación por concepto y de la cuota reconocida (feature 024)");
         tipos.Where(t => t.Module == "REC").Select(t => t.Code).Should().BeEquivalentTo(["RR", "RB", "MC", "AR", "EG"]);
         tipos.Where(t => t.Module == "TES").Select(t => t.Code).Should().Contain(["TP", "TB"]);
-        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA", "CM", "CS", "AD", "CR"]);
+        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA", "CM", "CS", "AD", "CR", "CO"]);
         // 2026-11-16 (feature 024): CM, CS y AD (fase 2: la administración; CD ya era el de CDT retirado) se siembran activos y sin mapear: la empresa
         // los elige para la causación separada por concepto.
         tipos.Where(t => t.Code is "CM" or "CS" or "AD" or "CR").Should().OnlyContain(t => t.Active && t.Usage == VoucherUsage.Module);

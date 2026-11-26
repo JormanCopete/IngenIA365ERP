@@ -1066,6 +1066,13 @@ public static class DependencyInjection
         // Feature 013, K4 (T0943, T0944): el paso (7) del ciclo diario —la cobranza— y el ejecutor de la corrida que registra la etapa migrada (C64).
         services.AddScoped<Lending.Collections.CobranzaDelCicloDiario>();
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Collections.Stages.EjecutorDeEtapasMigradas>();
+        // 2026-11-25 (pedido del dueño; feature 026): los cargos masivos de Cartera y sus dos corridas de fondo (cargo y anulación).
+        services.AddScoped<Lending.BulkCharges.CorridasDeCargoMasivo>();
+        services.AddScoped<Lending.BulkCharges.EntradaDeCargoMasivo>();
+        services.AddScoped<Lending.BulkCharges.NacimientoDeCargoMasivo>();
+        services.AddScoped<Lending.BulkCharges.AnulacionDeCargoMasivo>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.BulkCharges.EjecutorDeCargoMasivo>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.BulkCharges.EjecutorDeAnulacionDeCargoMasivo>();
         // Feature 013, K5 (T0999): los layouts del SICSES y de las centrales se cargan y validan aquí, al componer: un JSON mal formado
         // impide arrancar (adaptadores-y-archivos.md §7.2).
         services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);

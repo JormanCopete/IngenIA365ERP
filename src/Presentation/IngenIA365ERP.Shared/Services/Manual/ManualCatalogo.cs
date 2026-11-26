@@ -865,6 +865,20 @@ public static class ManualCatalogo
             ["Cartera activada y el concepto en modo manual.", "Permisos Lending.AccrualProcesses.Read para ver, .Calculate para armar y recalcular, .Confirm para pedir la firma y aprobar la de otra persona, y .Reprocess para reprocesar."],
             ["cartera-parametros", "cartera-cierres", "cartera-bandeja-de-mensajes", "contabilidad-cartera-lotes"], [], TipoDeTema.Proceso));
 
+        // Feature 026 (2026-11-25): los cargos masivos. La receta completa, en docs/manual/cartera-cargos-masivos.md.
+        t.Add(Proceso("cartera-cargos-masivos", "Cargos masivos", Modulos.Cartera, "/cartera/cargos-masivos",
+            "Cargar a cada asociado activo una obligación de una línea marcada para cargos masivos (por ejemplo, el fondo de solidaridad del mes), sin solicitud ni giro, revisando la vista previa y contabilizando la corrida en un solo comprobante CO.",
+            [
+                P("Antes", "La versión de la línea va marcada para cargos masivos y la matriz contable tiene la regla del rol «Contrapartida del cargo».", "/cartera/lineas", "Abrir Líneas de crédito"),
+                P("Cartera → Cargos masivos", "«Nueva corrida»: la línea (propone valor, cuotas, periodicidad y forma de pago), el período, la fecha del cargo y la del primer pago, la forma de pago fija o «la de cada asociado», el ciclo de pago si se quiere, el tercero de la contrapartida (el mismo asociado o un proveedor) y a quién: asociados activos con filtros de agencia, tipo y período de descuento, o un plano.", "/cartera/cargos-masivos/nueva", "Abrir Nueva corrida"),
+                P("Revisar la vista previa", "Cuántos se incluyen, cuántos quedan fuera y por qué (retirado, fallecido, retiro en trámite, ya tiene el cargo del período…), el total y la evaluación contable. Se cambia y se recalcula cuantas veces se quiera; «Descartar» la deja sin efecto."),
+                P("Confirmar", "Con la vista previa sin bloqueos, «Confirmar» carga a los asociados en segundo plano; si algo cambió desde la vista previa, se recarga para revisarla de nuevo. La pantalla se actualiza sola mientras trabaja y cada obligación creada lleva a su crédito."),
+                P("Anular", "La corrida entera o el cargo de un asociado, con motivo, mientras la obligación no tenga pagos ni novedades. Contabilidad recibe el reverso y el período queda libre para volver a cargarlo."),
+            ],
+            ["cargos masivos", "cargo masivo", "fondo de solidaridad", "obligacion sin desembolso", "corrida", "vista previa", "asociados activos", "plano", "anular cargo", "comprobante co"],
+            ["Cartera activada y la línea marcada para cargos masivos.", "Permisos Lending.BulkCharges.Read para consultar, .Run para preparar y confirmar, y .Void para anular."],
+            ["cartera-lineas", "cartera-creditos-y-liquidacion", "contabilidad-cartera-matriz"], ["/cartera/cargos-masivos/nueva"], TipoDeTema.Proceso));
+
         t.Add(Proceso("cartera-valores-nacionales", "Valores nacionales: usura, UVR, festivos y límites", Modulos.Cartera, "/admin/valores-nacionales",
             "Los valores que fija la ley y son iguales para todas las cooperativas —salario mínimo, UVT, usura por modalidad, UVR, festivos, tope de vivienda y límites legales—: el maestro los registra una vez en la plataforma y cada cooperativa recibe una réplica que Cartera y Nómina leen.",
             [

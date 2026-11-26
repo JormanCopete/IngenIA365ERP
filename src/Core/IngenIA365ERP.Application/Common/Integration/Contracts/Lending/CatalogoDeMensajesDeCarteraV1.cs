@@ -89,6 +89,9 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(InteresDelCorteV1), InteresDelCorteV1.Type, "IDC", N, P, proceso: true),
         // Feature 014 (T048; contracts/mensajes.md §1.1 de la 014, research C23): los 33 hechos de captaciones y aportes, declarados en la fase
         // fundacional; cada uno lo emite la historia de su entrega (K7 a K10). Viven en Contracts/Lending/Deposits.
+        // 2026-11-25 (feature 026): el cargo masivo y su anulación; los emite la corrida de fondo (proceso) con la persona que confirmó en la operación.
+        Hecho(typeof(CargoMasivoRegistradoV1), CargoMasivoRegistradoV1.Type, "CMS", N, C, proceso: true),
+        Hecho(typeof(CargoMasivoAnuladoV1), CargoMasivoAnuladoV1.Type, "CMA", N, C, proceso: true),
         Hecho(typeof(ConsignacionEnCuentaAplicadaV1), ConsignacionEnCuentaAplicadaV1.Type, "CCN", N, C, proceso: false),
         Hecho(typeof(AporteRecibidoV1), AporteRecibidoV1.Type, "APR", N, C, proceso: false),
         Hecho(typeof(RetiroDeCuentaAplicadoV1), RetiroDeCuentaAplicadoV1.Type, "RCT", N, C, proceso: true),

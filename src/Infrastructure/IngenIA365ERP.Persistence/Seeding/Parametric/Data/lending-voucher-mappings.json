@@ -82,5 +82,8 @@
   { "operation": "EmbargoConsignado", "collectorClass": null, "voucherTypeCode": "MA", "crossDocumentTypeCode": "CTA" },
   { "operation": "OperacionDeCuentaReversada", "collectorClass": null, "voucherTypeCode": "MA", "crossDocumentTypeCode": "CTA" },
   { "operation": "ConsignacionEnCuentaAplicada", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "CTA" },
-  { "operation": "AporteRecibido", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "CTA" }
+  { "operation": "AporteRecibido", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "CTA" },
+  // Feature 026 (2026-11-25): los cargos masivos y su anulación, en CO.
+  { "operation": "CargoMasivoRegistrado", "collectorClass": null, "voucherTypeCode": "CO", "crossDocumentTypeCode": "PG" },
+  { "operation": "CargoMasivoAnulado", "collectorClass": null, "voucherTypeCode": "CO", "crossDocumentTypeCode": "PG" }
 ]

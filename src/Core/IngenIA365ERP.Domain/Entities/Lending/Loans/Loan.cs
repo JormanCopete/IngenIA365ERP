@@ -77,6 +77,9 @@ public class Loan : AuditableEntity
     /// <summary>Carga de migración de la que nació.</summary>
     public int? MigrationLoadId { get; set; }
 
+    /// <summary>2026-11-25 (feature 026; migración <c>CargosMasivos</c>): la línea de la corrida de cargos masivos de la que nació (<c>LND_BulkChargeLines</c>). (nuevo)</summary>
+    public int? BulkChargeLineId { get; set; }
+
     public DateOnly? PaidOffOn { get; set; }
 
     public DateOnly? WrittenOffOn { get; set; }

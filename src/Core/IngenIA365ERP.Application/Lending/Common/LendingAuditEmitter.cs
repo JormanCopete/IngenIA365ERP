@@ -188,6 +188,10 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirSolicitudRadicadaEditadaAsync(Guid applicationPublicId, object detalle, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingApplicationEditedAfterSubmission, "CreditApplication", applicationPublicId, detalle, ct);
 
+    /// <summary>2026-11-25 (pedido del dueño; feature 026): un evento de una corrida de cargos masivos (confirmada, terminada, anulada o un cargo anulado).</summary>
+    public Task<Guid?> EmitirCargoMasivoAsync(string tipo, Guid runPublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(tipo, "BulkChargeRun", runPublicId, detalle, ct);
+
     /// <summary>
     /// Feature 014, US4 (T123; api.md §4): las operaciones o el libro de una cuenta de un titular vistos en la pantalla (FR-003). Como los archivos de módulo,
     /// no va en <see cref="LecturasSensibles"/>, la lista cerrada de la 013.

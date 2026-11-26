@@ -63,6 +63,13 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
     /// <summary>2026-11-17: la originación pide la fecha del primer pago (<see cref="CreditLineVersion.AsksFirstDueDate"/>).</summary>
     public bool AsksFirstDueDate { get; init; }
 
+    /// <summary>2026-11-25 (feature 026): la línea admite cargos masivos y sus valores por defecto (<see cref="CreditLineVersion.AllowsBulkCharge"/>).</summary>
+    public bool AllowsBulkCharge { get; init; }
+    public decimal? BulkChargeDefaultAmount { get; init; }
+    public int? BulkChargeDefaultInstallments { get; init; }
+    public bool BulkChargeReportsToBureaus { get; init; }
+    public bool BulkChargeEntersCollection { get; init; }
+
     /// <summary>2026-11-23: las opciones de descuento condicionado de la línea (<see cref="OpcionDeDescuento"/>); vacía en las demás.</summary>
     public IReadOnlyList<OpcionDeDescuento> DiscountOptions { get; init; } = [];
 
@@ -175,6 +182,11 @@ public sealed record BorradorDeVersionDeLinea(DateOnly ValidFrom, string Reason,
             PaymentDay = v.PaymentDay,
             CutoffDay = v.CutoffDay,
             AsksFirstDueDate = v.AsksFirstDueDate,
+            AllowsBulkCharge = v.AllowsBulkCharge,
+            BulkChargeDefaultAmount = v.BulkChargeDefaultAmount,
+            BulkChargeDefaultInstallments = v.BulkChargeDefaultInstallments,
+            BulkChargeReportsToBureaus = v.BulkChargeReportsToBureaus,
+            BulkChargeEntersCollection = v.BulkChargeEntersCollection,
             DiscountOptions = v.LeerOpcionesDeDescuento(),
             AmortizationSystems = v.LeerSistemas(),
             DefaultAmortizationSystem = v.DefaultAmortizationSystem,

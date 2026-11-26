@@ -143,7 +143,9 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
         filas.Add(new(R.GastoDeterioro, null, null, null, null, R.Additional));
         filas.Add(new(R.RecuperacionDeterioro, null, null, null, null, R.General));
         foreach (var rol in new[] { R.ContraOrdenContingente, R.ContraOrdenControl, R.Anticipo, R.SaldoAFavor, R.SeguroPorPagar, R.CuentaPorPagarATercero,
-                     R.PuenteComercial, R.CuentaPorCobrarComercial, R.IngresoPorRecuperacion })
+                     R.PuenteComercial, R.CuentaPorCobrarComercial, R.IngresoPorRecuperacion,
+                     // 2026-11-25 (feature 026): la contrapartida de los cargos masivos (una general; la contadora la abre por línea si hace falta).
+                     R.ContrapartidaDelCargo })
             filas.Add(new(rol, null, null, null, null, null));
         return filas;
     }

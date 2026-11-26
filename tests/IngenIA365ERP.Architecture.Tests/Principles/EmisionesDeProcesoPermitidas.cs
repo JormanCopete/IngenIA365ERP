@@ -27,6 +27,8 @@ public class EmisionesDeProcesoPermitidas
         "PagoRedistribuidoPorValorNacional",
         // Feature 025, fase 3 (2026-11-24): el interés del período al corte lo emite el proceso de causación CutoverRecalculation.
         "InteresDelCorte",
+        // Feature 026 (2026-11-25): el cargo masivo y su anulación los emite la corrida de fondo de Cartera.
+        "CargoMasivoRegistrado", "CargoMasivoAnulado",
         // Feature 014 (T048; mensajes.md §1.1 de la 014, columna «Proceso»): los de captaciones que emiten el ciclo diario y sus procesos.
         "RetiroDeCuentaAplicado", "GmfRetenido", "InteresDeCaptacionCausado", "AjusteDeCausacionDeCaptacion", "InteresDeCaptacionLiquidado",
         "RetencionPracticada", "InteresesDeCdatPagados", "CdatProrrogado", "CdatCancelado", "PenalidadAplicada", "CaptacionReclasificada",
