@@ -106,9 +106,14 @@
             <div>
                 <label>Ciudad</label>
                 @* 2026-11-16: «Ciudad (Departamento)», porque hay municipios repetidos; la ciudad retirada que la persona ya tenía se
-                   agrega marcada y se puede limpiar. *@
+                   agrega marcada y se puede limpiar.
+                   2026-11-26 (pedido del dueño, «la pestaña Contacto se bloquea»): son los 1.122 municipios y sin virtualizar el
+                   navegador los pintaba todos al abrir la lista, con cada letra del filtro y al cerrarla: unos 3 s de pantalla
+                   congelada cada vez, medido en WebAssembly. Virtualizada pinta sólo lo visible (0,1 a 0,3 s). IgnoreAccent: «bogota»
+                   encuentra Bogotá. *@
                 <SfDropDownList TValue="Guid?" TItem="OpcionDeCiudad" @bind-Value="Modelo.CityPublicId"
                                 DataSource="@CiudadesVisibles" Placeholder="Seleccione ciudad" AllowFiltering="true" ShowClearButton="true"
+                                EnableVirtualization="true" PopupHeight="300px" IgnoreAccent="true"
                                 Enabled="@Editable">
                     <DropDownListFieldSettings Text="Texto" Value="PublicId" />
                 </SfDropDownList>
@@ -275,11 +280,29 @@
 
     private bool Editable => !Deshabilitado;
 
-    /// <summary>Las ciudades vivas y, si la persona tiene una dada de baja, ésa primero y marcada como retirada.</summary>
-    private IReadOnlyList<OpcionDeCiudad> CiudadesVisibles =>
-        Modelo.CiudadRetirada is { } retirada && !Ciudades.Any(c => c.PublicId == retirada.PublicId)
-            ? [retirada, .. Ciudades]
-            : Ciudades;
+    /// <summary>
+    /// Las ciudades vivas y, si la persona tiene una dada de baja, ésa primero y marcada como retirada. La lista se arma una vez y se
+    /// reutiliza (2026-11-26): una lista nueva en cada render hace que el desplegable de Syncfusion compare la vieja y la nueva
+    /// serializando los 1.123 elementos a JSON.
+    /// </summary>
+    private IReadOnlyList<OpcionDeCiudad> CiudadesVisibles
+    {
+        get
+        {
+            if (_visibles is null || !ReferenceEquals(_visiblesDe, Ciudades) || _visiblesConRetirada != Modelo.CiudadRetirada)
+            {
+                _visiblesDe = Ciudades;
+                _visiblesConRetirada = Modelo.CiudadRetirada;
+                _visibles = Modelo.CiudadRetirada is { } retirada && !Ciudades.Any(c => c.PublicId == retirada.PublicId)
+                    ? [retirada, .. Ciudades]
+                    : Ciudades;
+            }
+            return _visibles;
+        }
+    }
+
+    private IReadOnlyList<OpcionDeCiudad>? _visibles, _visiblesDe;
+    private OpcionDeCiudad? _visiblesConRetirada;
 
     /// <summary>El mensaje de validación del campo, sólo cuando hay un EditForm que lo alimente.</summary>
     private RenderFragment Mensaje(System.Linq.Expressions.Expression<Func<string?>> campo) => __builder =>
