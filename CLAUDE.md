@@ -101,7 +101,16 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   la pestaña activa rota sola dos minutos antes de ese límite, y **el corte exacto a
   los 30 lo hace la pestaña**: cinco minutos antes avisa con «Seguir trabajando», a
   cero revoca el refresh y va al login. Una renovación silenciosa **no** cuenta como
-  actividad: si contara, la pestaña abandonada se mantendría viva sola. En el cliente
+  actividad: si contara, la pestaña abandonada se mantendría viva sola. Tampoco cuenta una
+  consulta que la pantalla hace sola (`RenovadorDeSesion.DeFondo`, desde el 2026-11-26: el
+  aviso del correo en prueba consultaba cada cinco minutos y mantenía viva toda pestaña).
+  **El canje del refresh no lo corta ningún reloj del cliente** (2026-11-26): quien pide
+  deja de esperar a los 30 s (`EsperaDelCanje`), pero la petición sale sin token de
+  cancelación y sin `HttpClient.Timeout`, y lo que el servidor rotó se adopta cuando llegue.
+  En una pestaña en segundo plano el navegador despierta los temporizadores una vez por
+  minuto; con la espera de 30 s el cliente descartaba la respuesta, volvía a canjear el
+  refresh ya rotado y el servidor veía un reuso: la sesión caía a los 20–25 minutos aunque
+  la cooperativa tuviera 60. En el cliente
   la sesión la administra **un solo objeto**, `RenovadorDeSesion` (singleton, como
   `ISecureStorage`, porque los handlers HTTP viven en otro scope): renueva cuando al
   access le queda menos de un minuto, ante un 401 inesperado renueva y reintenta una

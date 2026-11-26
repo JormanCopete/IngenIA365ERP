@@ -40,7 +40,8 @@
     {
         try
         {
-            var r = await Correos.ModoAsync();
+            // De fondo: la revisión periódica no es la persona trabajando y no debe mantener viva la sesión.
+            var r = await Correos.ModoEnSegundoPlanoAsync();
             _modo = r.IsSuccess ? r.Value : null;
         }
         catch

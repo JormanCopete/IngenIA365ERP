@@ -67,6 +67,13 @@ public sealed class RenovadorDeSesion
     public static readonly HttpRequestOptionsKey<bool> SinSesion = new("IngenIA365ERP.SinSesion");
 
     /// <summary>
+    /// Marca de una petición que la pantalla hace sola, cada tanto, sin que la persona haga nada (2026-11-26): lleva la sesión
+    /// y la renueva si hace falta, pero <b>no cuenta como actividad</b>. El aviso del correo en prueba consultaba cada cinco
+    /// minutos y cada consulta contaba: una pestaña olvidada no llegaba nunca a la inactividad de la cooperativa.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<bool> DeFondo = new("IngenIA365ERP.DeFondo");
+
+    /// <summary>
     /// Cuánto antes del vencimiento del access se renueva. Un minuto cubre el reloj
     /// del navegador desfasado y el viaje de la petición; más que eso sólo gasta
     /// rotaciones.
@@ -546,25 +553,37 @@ public sealed class RenovadorDeSesion
     }
 
     /// <summary>
-    /// Cuánto espera el canje del refresh, ya en curso, antes de darlo por perdido. Pasado, es transitorio como sin red: la sesión
-    /// sigue y se reintenta en la próxima petición (si el servidor alcanzó a rotar, su ventana de gracia de reuso lo absorbe).
+    /// Cuánto espera <b>quien pide</b> el canje ya en curso. Pasado, para él es transitorio como sin red: sale con el token que
+    /// hay y se reintenta en la próxima petición. El canje <b>no</b> se abandona: sigue hasta que el servidor responda y adopta lo
+    /// que traiga (ver <see cref="RenovarAsync"/>).
     /// </summary>
     public TimeSpan EsperaDelCanje { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Canjea el refresh. Una sola en vuelo: quien llegue mientras otra corre espera
     /// y sale con el resultado de aquélla. <c>true</c> si hay un access nuevo o el
-    /// actual ya sirve. <c>false</c> si la red falló (la sesión sigue) o si el
-    /// servidor la rechazó (la sesión se terminó y se avisó).
+    /// actual ya sirve. <c>false</c> si la red falló o el canje no terminó dentro de
+    /// <see cref="EsperaDelCanje"/> (la sesión sigue) o si el servidor la rechazó (la
+    /// sesión se terminó y se avisó).
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>El canje no es de quien lo pidió.</b> <paramref name="ct"/> sólo vale para esperar el turno y para dejar de esperar el
-    /// resultado; la petición del canje y la lectura de su respuesta corren con su propio tiempo de espera
-    /// (<see cref="EsperaDelCanje"/>) y terminan aunque quien la pidió ya no la necesite. Hasta el 2026-11-12 viajaban con el token
-    /// de la petición que disparó la renovación: los buscadores que cancelan su consulta en cada tecla abortaban el canje después de
-    /// que el servidor ya había rotado el refresh, el cliente se quedaba con el viejo, lo volvía a canjear y el servidor, viendo un
-    /// reuso, invalidaba la familia: la persona salía al login a la hora de trabajo («Refresh token reusado detectado»).
+    /// resultado; la petición del canje y la lectura de su respuesta terminan aunque quien la pidió ya no la necesite. Hasta el
+    /// 2026-11-12 viajaban con el token de la petición que disparó la renovación: los buscadores que cancelan su consulta en cada
+    /// tecla abortaban el canje después de que el servidor ya había rotado el refresh, el cliente se quedaba con el viejo, lo volvía
+    /// a canjear y el servidor, viendo un reuso, invalidaba la familia: la persona salía al login a la hora de trabajo («Refresh
+    /// token reusado detectado»).
+    /// </para>
+    /// <para>
+    /// <b>Y ningún reloj del cliente lo corta.</b> Desde el 2026-11-12 hasta el 2026-11-26 el canje llevaba su propia espera de
+    /// treinta segundos. En una pestaña en segundo plano el navegador despierta los temporizadores una vez por minuto: el servidor
+    /// rotaba en milisegundos, pero la respuesta se procesaba un minuto después, cuando la espera ya había vencido; el cliente la
+    /// descartaba como «sin respuesta», se quedaba con el refresh viejo y a los cinco minutos (el aviso del correo en prueba) lo
+    /// volvía a canjear: reuso, familia invalidada, y la persona encontraba la sesión cerrada a los 20 o 25 minutos aunque la
+    /// cooperativa tuviera 60 (PDN, 2026-11-26). Ahora la petición sale sin token de cancelación y con el cliente HTTP sin tiempo
+    /// límite; la espera sólo decide cuánto aguarda quien pidió. Una red colgada la corta el proxy (Cloudflare responde 524 a los
+    /// cien segundos), no el cliente.
     /// </para>
     /// </remarks>
     /// <param name="motivo">Por qué se renueva; decide cuándo una renovación ya hecha por otro basta.</param>
@@ -580,17 +599,26 @@ public sealed class RenovadorDeSesion
         // Esperar el turno sí respeta a quien llama: si ya no necesita el token, no se queda en la fila.
         await _unaRenovacionALaVez.WaitAsync(ct);
 
-        // Con el turno tomado, el canje sigue solo; quien llama deja de esperarlo si se cancela, pero el canje termina, adopta los
-        // tokens nuevos (o decide que la sesión terminó) y suelta el turno.
+        // Con el turno tomado, el canje sigue solo; quien llama deja de esperarlo si se cancela o pasada la espera, pero el canje
+        // termina, adopta los tokens nuevos (o decide que la sesión terminó) y suelta el turno. Quien llegue después espera ese
+        // turno y encuentra los tokens ya adoptados.
         var canje = CanjearConElTurnoAsync(motivo, tokenRechazado);
-        return await canje.WaitAsync(ct);
+        try
+        {
+            return await canje.WaitAsync(EsperaDelCanje, ct);
+        }
+        catch (TimeoutException)
+        {
+            return false; // transitorio para quien pidió; el canje no se abandona
+        }
     }
 
     /// <summary>El canje, con el turno ya tomado; lo suelta al terminar, pase lo que pase.</summary>
     private async Task<bool> CanjearConElTurnoAsync(MotivoDeRenovacion motivo, string? tokenRechazado)
     {
-        using var espera = new CancellationTokenSource(EsperaDelCanje);
-        var ct = espera.Token;
+        // Sin token de cancelación a propósito (ver «Y ningún reloj del cliente lo corta» en RenovarAsync): lo que el servidor ya
+        // rotó tiene que llegar a adoptarse, tarde lo que tarde la pestaña en procesarlo.
+        var ct = CancellationToken.None;
         IAsyncDisposable? turnoDelNavegador = null;
         try
         {
@@ -628,15 +656,18 @@ public sealed class RenovadorDeSesion
             HttpResponseMessage resp;
             try
             {
-                resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
+                // El cliente HTTP sin tiempo límite: HttpClient.Timeout (cien segundos) también es un reloj del cliente, y en una
+                // pestaña en segundo plano descartaría una respuesta que el servidor ya dio.
+                var cliente = _http.CreateClient(NombreDelClienteHttp);
+                cliente.Timeout = Timeout.InfiniteTimeSpan;
+                resp = await cliente.SendAsync(req, ct);
             }
             catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
             {
-                // Sin red, o sin respuesta dentro de la espera (el TaskCanceledException del
-                // tiempo agotado), no hay veredicto: la sesión sigue y se reintenta en la
-                // próxima petición. Terminarla aquí echaría a alguien por un corte de wifi
-                // de dos segundos. Antes sólo se atrapaba HttpRequestException y el tiempo
-                // agotado escapaba hasta el reloj del aviso, que moría en silencio.
+                // Sin red no hay veredicto: la sesión sigue y se reintenta en la próxima
+                // petición. Terminarla aquí echaría a alguien por un corte de wifi de dos
+                // segundos. OperationCanceledException ya no la provoca este cliente (no
+                // lleva token ni tiempo límite); queda por si la plataforma corta la petición.
                 return false;
             }
 

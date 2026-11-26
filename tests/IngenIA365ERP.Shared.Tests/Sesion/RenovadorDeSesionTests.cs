@@ -154,7 +154,6 @@ public class RenovadorDeSesionTests
 
         await pedir.Should().ThrowAsync<OperationCanceledException>("quien pidió el token ya no lo espera");
         await adoptada.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        _servidor.UltimoToken.CanBeCanceled.Should().BeTrue("el canje lleva su propia espera");
         _servidor.UltimoToken.IsCancellationRequested.Should().BeFalse("el canje no viaja con el token de la tecla");
         r.AccessToken.Should().Be("access-2");
         r.RefreshToken.Should().Be("refresh-2");
@@ -180,6 +179,85 @@ public class RenovadorDeSesionTests
         terminada.Should().BeFalse();
         r.TieneSesion.Should().BeTrue();
         r.RefreshToken.Should().Be("refresh-1");
+    }
+
+    [Fact]
+    public async Task Una_respuesta_que_llega_pasada_la_espera_se_adopta_igual_y_el_refresh_rotado_no_se_vuelve_a_canjear()
+    {
+        // 2026-11-26, en producción: en una pestaña en segundo plano el navegador despierta los temporizadores una vez por
+        // minuto y la respuesta del canje se procesaba pasada la espera de treinta segundos. El cliente la descartaba, se
+        // quedaba con el refresh que el servidor ya había rotado y a los cinco minutos lo volvía a canjear: «Refresh token
+        // reusado», familia invalidada y la persona fuera a los 20 o 25 minutos aunque la cooperativa tuviera 60.
+        var r = new RenovadorDeSesion(_almacen, new FabricaDeUnSoloServidor(_servidor), _reloj) { EsperaDelCanje = TimeSpan.FromMilliseconds(50) };
+        await r.AdoptarAsync(Jwt.ConVencimiento(Ahora.AddSeconds(30)), Ahora.AddSeconds(30), "refresh-1", Ahora.AddHours(12));
+        _servidor.Peticiones.Clear();
+        ElServidorRenueva();
+        var laPestanaDespierta = new TaskCompletionSource();
+        _servidor.AntesDeResponder = _ => laPestanaDespierta.Task;
+        var adoptada = new TaskCompletionSource();
+        r.SesionRenovada += () => adoptada.TrySetResult();
+        var terminada = false;
+        r.SesionTerminada += _ => terminada = true;
+
+        var ok = await r.RenovarAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        ok.Should().BeFalse("quien pidió dejó de esperar");
+        r.RefreshToken.Should().Be("refresh-1", "la respuesta todavía no se procesó");
+
+        laPestanaDespierta.SetResult();
+        await adoptada.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        terminada.Should().BeFalse();
+        r.RefreshToken.Should().Be("refresh-2", "lo que el servidor ya rotó se adopta, tarde lo que tarde");
+        _almacen.Datos[RenovadorDeSesion.ClaveRefreshToken].Should().Be("refresh-2");
+        (await r.TokenVigenteAsync()).Should().Be("access-2");
+        _servidor.A("/api/auth/refresh").Should().ContainSingle("el refresh rotado no se vuelve a canjear");
+    }
+
+    [Fact]
+    public async Task Mientras_el_canje_sigue_en_vuelo_otra_renovacion_espera_su_resultado_y_no_canjea_otra_vez()
+    {
+        var r = new RenovadorDeSesion(_almacen, new FabricaDeUnSoloServidor(_servidor), _reloj) { EsperaDelCanje = TimeSpan.FromMilliseconds(50) };
+        await r.AdoptarAsync(Jwt.ConVencimiento(Ahora.AddSeconds(30)), Ahora.AddSeconds(30), "refresh-1", Ahora.AddHours(12));
+        _servidor.Peticiones.Clear();
+        ElServidorRenueva();
+        var laPestanaDespierta = new TaskCompletionSource();
+        _servidor.AntesDeResponder = _ => laPestanaDespierta.Task;
+
+        (await r.RenovarAsync().WaitAsync(TimeSpan.FromSeconds(5))).Should().BeFalse();
+        var segunda = r.RenovarAsync();
+        laPestanaDespierta.SetResult();
+        await segunda.WaitAsync(TimeSpan.FromSeconds(5));
+
+        _servidor.A("/api/auth/refresh").Should().ContainSingle("la segunda esperó el turno y encontró los tokens ya adoptados");
+        r.RefreshToken.Should().Be("refresh-2");
+    }
+
+    [Fact]
+    public async Task El_canje_sale_con_un_cliente_http_sin_tiempo_limite()
+    {
+        // HttpClient.Timeout también es un reloj del cliente: en una pestaña en segundo plano cortaría una respuesta ya dada.
+        var fabrica = new FabricaQueRecuerda(_servidor);
+        var r = new RenovadorDeSesion(_almacen, fabrica, _reloj);
+        await r.AdoptarAsync(Jwt.ConVencimiento(Ahora.AddSeconds(30)), Ahora.AddSeconds(30), "refresh-1", Ahora.AddHours(12));
+        ElServidorRenueva();
+
+        (await r.RenovarAsync()).Should().BeTrue();
+
+        fabrica.Creados.Should().NotBeEmpty();
+        fabrica.Creados[^1].Timeout.Should().Be(Timeout.InfiniteTimeSpan);
+    }
+
+    private sealed class FabricaQueRecuerda(HttpMessageHandler raiz) : IHttpClientFactory
+    {
+        public List<HttpClient> Creados { get; } = [];
+
+        public HttpClient CreateClient(string name)
+        {
+            var cliente = new HttpClient(raiz, disposeHandler: false) { BaseAddress = new Uri("https://erp.pruebas") };
+            Creados.Add(cliente);
+            return cliente;
+        }
     }
 
     [Fact]

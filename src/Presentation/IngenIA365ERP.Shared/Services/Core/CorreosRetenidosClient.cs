@@ -28,6 +28,31 @@ public sealed class CorreosRetenidosClient(HttpClient http, CentralAuthClient au
     public Task<ResultadoDeInventario<ModoDeCorreoDto>> ModoAsync(CancellationToken ct = default) =>
         EnviarAsync<ModoDeCorreoDto>(http, auth, HttpMethod.Get, "/api/core/email-mode", null, null, ct);
 
+    /// <summary>
+    /// El modo vigente para la franja del encabezado, que lo revisa sola cada cinco minutos: va marcada
+    /// <see cref="RenovadorDeSesion.DeFondo"/> para que no cuente como actividad de la persona (2026-11-26; hasta ese día cada
+    /// revisión mantenía viva la sesión de una pestaña olvidada).
+    /// </summary>
+    public async Task<ResultadoDeInventario<ModoDeCorreoDto>> ModoEnSegundoPlanoAsync(CancellationToken ct = default)
+    {
+        if (auth.CurrentAccessToken is null) return ResultadoDeInventario<ModoDeCorreoDto>.SinToken();
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/core/email-mode");
+            req.Options.Set(RenovadorDeSesion.DeFondo, true);
+            using var resp = await http.SendAsync(req, ct);
+            return await ResultadoDeInventario<ModoDeCorreoDto>.DesdeAsync(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return ResultadoDeInventario<ModoDeCorreoDto>.ErrorDeRed(ex.Message);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            return ResultadoDeInventario<ModoDeCorreoDto>.FormatoInesperado(ex.Message);
+        }
+    }
+
     public Task<ResultadoDeInventario<List<CorreoRetenidoDto>>> ListarAsync(string? estado, CancellationToken ct = default) =>
         EnviarAsync<List<CorreoRetenidoDto>>(http, auth, HttpMethod.Get, ConQuery(Ruta, Query(("status", estado))), null, null, ct);
 
