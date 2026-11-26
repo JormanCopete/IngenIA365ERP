@@ -83,10 +83,13 @@
                     </div>
                     <div>
                         @* Feature 012 (T178): el municipio DIVIPOLA de la sucursal; ReteICA de compras lo propone y la
-                           carga de plantillas lo exige. Sólo las ciudades con código DANE. *@
+                           carga de plantillas lo exige. Sólo las ciudades con código DANE.
+                           2026-11-26 (pedido del dueño): virtualizada, como la ciudad de la persona (PersonaCampos): sin eso el navegador
+                           pintaba los 1.122 municipios al abrir, filtrar y cerrar, unos 3 s de pantalla congelada cada vez. *@
                         <label>Municipio (DIVIPOLA)</label>
                         <SfDropDownList TValue="string" TItem="MunicipioItem" @bind-Value="_model.MunicipalityDaneCode"
                                         DataSource="@_municipios" AllowFiltering="true" ShowClearButton="true"
+                                        EnableVirtualization="true" PopupHeight="300px" IgnoreAccent="true"
                                         Placeholder="Seleccione el municipio">
                             <DropDownListFieldSettings Text="@nameof(MunicipioItem.Etiqueta)" Value="@nameof(MunicipioItem.DaneCode)" />
                         </SfDropDownList>
