@@ -184,7 +184,9 @@ public class EsperaYEntregaElectronicaTests
     {
         var e = await VentaElectronicaDePrueba.CrearAsync();
         e.Db.ElectronicEmissionSettings.Remove(e.Configuracion);
-        e.V.Parametro(Domain.Inventory.Parameters.ParametrosDeInventario.CajaUnaSesionPorCajero, "false");
+        // 2026-11-26: Caja.UnaSesionPorCajero es el de Recaudo, común a las dos cajas.
+        e.V.Compras.Parametro(Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo,
+            Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.CajaUnaSesionPorCajero, "false");
         var fv = e.V.K.Tipo("FV");
         var caja = new CashRegister { PointOfSaleId = e.V.Punto.Id, Code = "CJ9", Name = "Caja 9", WarehouseId = e.V.K.Principal.Id, ReceiptWidthMm = 80 };
         e.Db.CashRegisters.Add(caja);
@@ -193,7 +195,9 @@ public class EsperaYEntregaElectronicaTests
         await e.Db.SaveChangesAsync();
 
         var abrir = new OpenCashSessionCommandHandler(e.Db, e.V.K.Actor, e.V.Compras.C.Reloj, e.V.K.Alcance, e.V.K.Lector(), Substitute.For<ICerrojoPorClave>(),
-            e.Guardia(), new SesionesDeCaja(e.Db, e.V.K.Actor, e.V.K.Alcance, e.V.K.Permisos), e.V.Confirmacion(), Substitute.For<IAuditoriaDelPuntoDeVenta>());
+            e.Guardia(), new SesionesDeCaja(e.Db, e.V.K.Actor, e.V.K.Alcance, e.V.K.Permisos,
+                new IngenIA365ERP.Application.Receipts.Common.ParametrosDeCaja(e.V.K.Lector()), e.V.Compras.C.Reloj),
+            e.V.Confirmacion(), Substitute.For<IAuditoriaDelPuntoDeVenta>());
         var r = await abrir.Handle(new OpenCashSessionCommand(caja.PublicId, 100_000m), default);
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);

@@ -30,8 +30,7 @@
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando lo que debería haber…">
         @if (_sesion is { } s)
         {
-            <p class="texto-apoyo">Caja @s.CashRegister.Code de @s.PointOfSale.Name · @s.Cashier.Name · día @s.OperatingDate.ToString("dd/MM/yyyy") · @s.SalesCount venta(s)
-                por @s.SalesTotal.ToString("N0")</p>
+            <p class="texto-apoyo">Caja @s.CashRegister.Code de @s.PointOfSale.Name · @s.Cashier.Name · día @s.OperatingDate.ToString("dd/MM/yyyy") · @s.Vendido</p>
             @if (_resultado is { } res)
             {
                 <ResultadoDelArqueo Lineas="@Lineas(res)">

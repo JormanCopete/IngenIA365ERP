@@ -71,7 +71,7 @@ recibo en `/recaudo/contingencia` con la fecha valor del talonario, el número d
 ## 7. Cerrar la sesión
 
 Cuente el efectivo por denominación y los demás medios en `/recaudo/sesiones` → «Arquear y cerrar». Una diferencia la aprueba el
-supervisor (otra persona); un faltante aprobado se trata según `Caja.TratamientoFaltante` (por defecto, cuenta por cobrar al cajero).
+supervisor (otra persona); un faltante aprobado se trata según `Caja.TratamientoFaltante` (por defecto, al gasto desde el 2026-11-26; con el arqueo sencillo, siempre al gasto).
 
 ## 8. Anular un recibo
 

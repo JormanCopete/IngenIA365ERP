@@ -55,7 +55,12 @@ internal sealed class CajaDePrueba
     /// </param>
     public CajaDePrueba(bool estricto = true)
     {
-        if (estricto) E.Parametro(ParametrosDeRecaudoYTesoreria.CajaArqueoEstricto, "true");
+        if (estricto)
+        {
+            E.Parametro(ParametrosDeRecaudoYTesoreria.CajaArqueoEstricto, "true");
+            // 2026-11-26: el defecto del faltante pasó a gasto; estas pruebas prueban el de siempre, a cargo del cajero.
+            E.Parametro(ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante, "CashierReceivable");
+        }
         E.Reloj.AhoraLocal.Returns(new DateTimeOffset(2026, 12, 1, 10, 0, 0, TimeSpan.FromHours(-5)));
         Contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null));

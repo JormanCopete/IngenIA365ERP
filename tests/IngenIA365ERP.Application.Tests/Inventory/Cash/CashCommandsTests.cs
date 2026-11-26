@@ -253,9 +253,13 @@ public class CashCommandsTests
     public async Task Con_el_faltante_a_cargo_del_cajero_un_usuario_sin_persona_no_abre()
     {
         var t = await CrearAsync();
-        t.K.Parametro(ParametrosDeInventario.CajaTratamientoFaltante, "CargoAlCajero", ParameterScopeKind.PointOfSale, t.V.Punto.Id);
+        // 2026-11-26: el tratamiento del faltante es el de Recaudo, común a las dos cajas, y sólo rige con el arqueo estricto.
+        t.V.Compras.Parametro(Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo,
+            Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.CajaArqueoEstricto, "true");
+        t.V.Compras.Parametro(Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo,
+            Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante, "CashierReceivable");
 
-        var r = await t.Abrir().Handle(new OpenCashSessionCommand(t._caja2.PublicId), default);
+        var r = await t.AbrirSencillo().Handle(new OpenCashSessionCommand(t._caja2.PublicId), default);
 
         r.Error.Code.Should().Be(ErroresDeCaja.CashierWithoutPersonCode);
     }
@@ -847,5 +851,35 @@ public class CashCommandsTests
         caja2.CashierNames.Should().Equal("cajera.dos");
         caja2.OpenableByMe.Should().BeFalse();
         r.Value.Where(c => c.CashRegisterPublicId != t._caja2.PublicId).Should().OnlyContain(c => c.OpenableByMe == true && c.CashierNames!.Count == 0);
+    }
+
+    // ------------------------------------------------------------------------------------- 2026-11-26, factura de oficina --
+
+    [Fact]
+    public async Task Lo_vendido_de_la_caja_cuenta_la_factura_de_oficina_cobrada_en_ella()
+    {
+        var t = await CrearAsync();
+        var venta = await t.V.VentaConfirmadaAsync(lineas: t.V.Linea(t.V.P1, 1m));
+        venta.CashSessionId.Should().BeNull("la factura de oficina lleva la caja sólo en sus pagos");
+
+        var dto = await t.Sesiones().DtoAsync(t.V.Sesion, default);
+
+        dto.SalesCount.Should().Be(1);
+        dto.SalesTotal.Should().Be(venta.Total);
+        dto.CreditSalesTotal.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task No_cierra_con_una_factura_de_oficina_en_borrador_cobrada_en_la_caja()
+    {
+        var t = await CrearAsync();
+        var borrador = await t.V.GuardarAsync(t.V.Venta(lineas: t.V.Linea(t.V.P1, 1m)));
+        var total = t.V.Documento(borrador.Value.PublicId).AmountDue;
+        var conPago = await t.V.GuardarAsync(t.V.Venta(pagos: [t.V.Pago(t.V.Efectivo, total)], lineas: t.V.Linea(t.V.P1, 1m)), borrador.Value.PublicId);
+        conPago.IsSuccess.Should().BeTrue(conPago.IsFailure ? $"{conPago.Error.Code}: {conPago.Error.Message}" : null);
+
+        var r = await t.Cerrar().Handle(new CloseCashSessionCommand(t.V.Sesion.PublicId, []), default);
+
+        r.Error.Code.Should().Be(ErroresDeCaja.HasOpenDraftsCode);
     }
 }

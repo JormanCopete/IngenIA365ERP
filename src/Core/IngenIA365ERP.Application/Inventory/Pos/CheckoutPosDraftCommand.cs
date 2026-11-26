@@ -112,6 +112,7 @@ public sealed class CheckoutPosDraftCommandHandler(
         var sesion = await pos.SesionDeLaVentaAsync(venta, exigirPos: false, ct);
         if (sesion.IsFailure) return Falla(sesion.Error);
         var (s, caja, punto) = sesion.Value;
+        if (pos.DeOtroDia(s) is { } viejo) return Falla(viejo);
         var usuario = await pos.UsuarioAsync(ct);
 
         var final = await pos.EsConsumidorFinalAsync(venta, ct);

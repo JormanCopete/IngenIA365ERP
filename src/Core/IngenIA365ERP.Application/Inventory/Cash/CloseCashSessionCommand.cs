@@ -137,10 +137,12 @@ public sealed class CloseCashSessionCommandHandler(
         if (!sesion.EstaAbierta || !await toque.TocarAsync(sesion.Id, reloj.UtcNow, ct)) return Falla(ErroresDelPos.CashSessionNotOpen());
         if (sesion.LinkedSessionPublicId is not null && !request.DesdeLaCajaUnica) return Falla(ErroresDeCaja.ClosesWithReceipts());
 
-        // (2) Ventas y movimientos en curso.
+        // (2) Ventas y movimientos en curso. 2026-11-26: también la factura de oficina, que lleva la sesión sólo en sus pagos, y lo que
+        // espera aprobación: si no, la caja cerraba con ese dinero como sobrante y confirmar la factura después fallaba.
         var borradores = await db.InventoryDocuments.AsNoTracking()
-            .Where(d => d.CashSessionId == sesion.Id && d.Status == DocumentStatus.Draft && d.Class != DocumentClass.CashMovement
-                        && d.Class != DocumentClass.CashCountDifference)
+            .Where(d => (d.CashSessionId == sesion.Id || db.DocumentPayments.Any(p => p.DocumentId == d.Id && p.CashSessionId == sesion.Id && !p.IsDeleted))
+                        && (d.Status == DocumentStatus.Draft || d.Status == DocumentStatus.PendingApproval)
+                        && d.Class != DocumentClass.CashMovement && d.Class != DocumentClass.CashCountDifference)
             .OrderBy(d => d.Id)
             .Select(d => new BorradorAbiertoDto(d.PublicId, d.SuspendedLabel, d.AmountDue)).ToListAsync(ct);
         if (borradores.Count > 0) return Falla(ErroresDeCaja.HasOpenDrafts(borradores));

@@ -57,7 +57,7 @@
                 <div class="kpi-card"><span class="label">Cajero</span><span>@s.Cashier.Name</span></div>
                 <div class="kpi-card"><span class="label">Fecha operativa</span><span>@s.OperatingDate.ToString("dd/MM/yyyy")</span></div>
                 <div class="kpi-card"><span class="label">Base</span><span>@s.OpeningBase.ToString("N0")</span></div>
-                <div class="kpi-card"><span class="label">Ventas</span><span>@s.SalesCount · @s.SalesTotal.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">Ventas</span><span>@s.Vendido</span></div>
                 <div class="kpi-card"><span class="label">Abierta / cerrada</span><span>@s.OpenedAt.ToLocalTime().ToString("dd/MM HH:mm") / @(s.ClosedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—")</span></div>
             </div>
             @if (det.SuspendedDrafts + det.OpenDrafts + det.PendingDeliveries > 0)

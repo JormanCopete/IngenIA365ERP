@@ -111,7 +111,9 @@ public class CierreDeSesionTests
     [Fact]
     public async Task Con_el_tratamiento_sellado_en_gasto_el_faltante_no_va_al_cajero()
     {
-        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante, "Expense");
+        // 2026-11-26: la caja de prueba fija «CashierReceivable» (el defecto de antes); aquí se cambia a gasto.
+        _c.E.Db.ParameterVersions.Single(p => p.Key == ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante).Value = "Expense";
+        await _c.E.Db.SaveChangesAsync();
         var sesion = await _c.AbrirAsync();
 
         await ContarAsync(sesion, _c.EnBilletes("Moneda", (_c.B50, 9), (_c.B20, 2), (_c.B1, 9)));

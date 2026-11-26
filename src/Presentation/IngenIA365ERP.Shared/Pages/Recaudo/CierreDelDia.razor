@@ -63,6 +63,10 @@
                         <div><dt>Día</dt><dd>@c.BusinessDate.ToString("dd/MM/yyyy")</dd></div>
                         <div><dt>Cerrado</dt><dd>@c.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(c.ByDelegate ? " · por el suplente" : "")</dd></div>
                         <div><dt>Recibos</dt><dd>@c.ReceiptCount · anulaciones @c.VoidingCount</dd></div>
+                        @if (c.FromPointOfSale != 0m)
+                        {
+                            <div><dt>Del punto de venta</dt><dd>@c.FromPointOfSale.ToString("N0") (caja única, incluido en lo esperado)</dd></div>
+                        }
                     </dl>
                     <div class="kpi-grid kpi-compacto">
                         <div class="kpi-card"><span class="kpi-value">@c.SessionCount</span><span class="kpi-label">Sesiones</span></div>

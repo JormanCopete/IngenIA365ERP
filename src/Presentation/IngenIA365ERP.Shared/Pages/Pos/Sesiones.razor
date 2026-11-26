@@ -43,7 +43,7 @@
         else
         {
             <MiCajaAbierta Caja="@($"{m.PointOfSale.Name} · caja {m.CashRegister.Code}")" Dia="@m.OperatingDate" AbiertaEl="@m.OpenedAt" Base="@m.OpeningBase"
-                           Movido="@($"{m.SalesCount} venta(s) por {m.SalesTotal:N0}")" EtiquetaDeLoMovido="Vendido" Esperados="@_esperados" Ciego="@_ciego"
+                           Movido="@m.Vendido" EtiquetaDeLoMovido="Vendido" Esperados="@_esperados" Ciego="@_ciego"
                            UrlParaCerrar="@UrlDelCierre(m)">
                 <Avisos>
                     @if (m.LinkedSessionPublicId is not null)

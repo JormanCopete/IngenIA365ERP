@@ -153,4 +153,13 @@ public static partial class ErroresDeRecaudo
         $"En la caja del punto de venta salió más {medio} del que entró ({Math.Abs(valor):N0}), por ejemplo por una devolución: registre en el punto de venta "
         + "un ingreso desde la caja fuerte por ese valor (Movimiento de caja) y vuelva a arquear.",
         new { paymentMeans = medio, amount = valor });
+
+    public const string CodigoPuntoDeVentaConMedioAjeno = "Receipts.SingleSession.PointOfSaleForeignMeans";
+
+    /// <summary>2026-11-26: con la caja única, el punto de venta recibió un medio que esta caja de Recaudo no arquea; nadie lo contaría.</summary>
+    public static Error PuntoDeVentaConMedioAjeno(string medio, decimal valor) => new ErrorConDatos(CodigoPuntoDeVentaConMedioAjeno,
+        $"La caja del punto de venta recibió {valor:N0} en {medio}, un medio que esta caja de Recaudo no recibe, y con la caja única nadie lo contaría: "
+        + "agregue el medio al punto de Recaudo (Recaudo → Configuración) y abra una sesión nueva, o páselo a la caja fuerte desde el punto de venta "
+        + "(Movimiento de caja) antes de arquear.",
+        new { paymentMeans = medio, amount = valor });
 }
