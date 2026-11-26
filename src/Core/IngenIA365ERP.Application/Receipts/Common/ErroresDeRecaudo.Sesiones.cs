@@ -109,6 +109,11 @@ public static partial class ErroresDeRecaudo
 
     public static Error DiaCerrado() => new(CodigoDiaCerrado, "El día del punto ya está cerrado.");
 
+    public const string CodigoDiaNoCerrado = "Receipts.Day.NotClosed";
+
+    /// <summary>2026-11-26: se pidió reabrir un día que no está cerrado (nunca se cerró o ya se reabrió). (nuevo)</summary>
+    public static Error DiaNoCerrado() => new(CodigoDiaNoCerrado, "El día del punto no está cerrado: no hay nada que reabrir.");
+
     public static Error DobleCustodia() => new(CodigoDobleCustodia,
         "Con doble custodia, el movimiento lleva un segundo custodio vigente de la bóveda, distinto de quien lo registra.");
 

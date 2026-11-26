@@ -298,7 +298,7 @@ public class LosHechosInmutablesNoSeModifican
         ["CashCount"] = [], ["CashCountDenomination"] = [], ["CashCountTerminalBatch"] = [], ["CashCountReference"] = [],
         ["CashCountLine"] = ["ApprovalRequestPublicId", "ApprovedByUserId", "ApprovedAt", "ApprovalReason"],
         ["CashMovement"] = [], ["CashMovementDenomination"] = [], ["CashSessionAdjustment"] = [],
-        ["DayClose"] = [], ["DayCloseLine"] = [], ["VaultMovement"] = [], ["VaultMovementDenomination"] = [],
+        ["DayClose"] = [], ["DayCloseLine"] = [], ["DayCloseReopening"] = [], ["VaultMovement"] = [], ["VaultMovementDenomination"] = [],
         // Fase 6, US3 (T0110; data-model §3.3 a §3.7): el recibo y sus filas se insertan al confirmar; lo que el contrato informa al aplicar (número del
         // producto, comprobante y firmeza, la operación del módulo de cada porción) y la clave del reverso se escriben una vez.
         ["Receipt"] = [], ["ReceiptMeans"] = [], ["SourceOfFundsDeclaration"] = [],

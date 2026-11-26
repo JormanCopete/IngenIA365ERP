@@ -147,6 +147,11 @@ public class SessionsEndpoints : ICarterModule
         g.MapPost("/collection-points/{id:guid}/days/{date}/close", async (Guid id, DateOnly date, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new CloseCollectionPointDayCommand(id, date) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Days_Close").ConClaveDeOperacion().RequirePermission(CerrarDia);
+        // 2026-11-26 (pedido del dueño, como el punto de venta): el supervisor reabre el día con su motivo.
+        g.MapPost("/collection-points/{id:guid}/days/{date}/reopen", async (Guid id, DateOnly date, ReaperturaRequest body, HttpContext http, ISender s,
+                CancellationToken ct) =>
+                await s.Send(new ReopenCollectionPointDayCommand(id, date, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_Days_Reopen").ConClaveDeOperacion().RequirePermission(CerrarDia);
         g.MapGet("/collection-points/{id:guid}/days/{date}/report", async (Guid id, DateOnly date, ISender s, IDocumentosDeRecaudoEnPdf pdf, CancellationToken ct) =>
             {
                 var r = await s.Send(new GetDayCloseReportQuery(id, date), ct);
@@ -179,6 +184,8 @@ public class SessionsEndpoints : ICarterModule
     public sealed record ConteoRequest(IReadOnlyList<ConteoDeMedioDto>? Means);
 
     public sealed record AprobacionRequest(string? Reason, CountTreatment? Treatment);
+
+    public sealed record ReaperturaRequest(string? Reason);
 
     public sealed record OlvidadaRequest(Guid? WitnessUserPublicId, IReadOnlyList<ConteoDeMedioDto>? Means);
 
