@@ -234,6 +234,13 @@ public static class ParametrosDeCartera
     public const string SegregacionQuienRadicaDecide = "Segregacion.QuienRadicaDecide";
 
     /// <summary>
+    /// 2026-11-26 (pedido del dueño): una misma persona hace todo el proceso de un expediente de Cartera —radica, decide, vota y aplica—. Apaga
+    /// la regla fija de segregación (<c>Radicar × Decidir</c>, <c>Radicar × Votar</c>, <c>Radicar × Aplicar</c>) en cualquier expediente; los
+    /// pares de <c>Segregacion.Incompatibilidades</c> siguen como estén. «No» (de fábrica) es lo de siempre. (nuevo)
+    /// </summary>
+    public const string SegregacionUnaPersonaHaceTodo = "Segregacion.UnaPersonaHaceTodo";
+
+    /// <summary>
     /// 2026-11-23 (pedido del dueño): qué grupos de datos de una solicitud devuelta para corregir se pueden modificar, como nombres de
     /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica, todo (desde el 2026-11-24). (nuevo)
     /// </summary>
@@ -865,6 +872,13 @@ public static class ParametrosDeCartera
             "Quien radicó una solicitud de crédito también la decide, si tiene la atribución del nivel: para cooperativas donde una sola persona "
             + "atiende el crédito de principio a fin. Con «No», otra persona la decide (regla de segregación de funciones). No cambia los cupos, las "
             + "novedades, las captaciones ni el voto en el comité o el consejo.",
+            false, K1, General)
+            with { PermisoAdicional = PermisoDeSegregacion },
+        // 2026-11-26 (pedido del dueño): una sola persona hace todo el proceso de cada expediente de Cartera.
+        SiNo(Modulo, SegregacionUnaPersonaHaceTodo,
+            "Una misma persona puede hacer todo el proceso de un expediente de Cartera: radicar, decidir, votar en el comité o el consejo y aplicar "
+            + "(solicitudes, cupos, novedades, condonaciones, captaciones). Para cooperativas donde una sola persona atiende todo. Con «No», quien "
+            + "radica no decide, no vota ni aplica lo suyo. No cambia los pares de Segregacion.Incompatibilidades.",
             false, K1, General)
             with { PermisoAdicional = PermisoDeSegregacion },
 

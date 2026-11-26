@@ -76,6 +76,7 @@ public class ParametrosDeCarteraTests
         { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", [N], EntregaDeCartera.K1 },
         // 2026-11-17 (pedido del dueño, COOFLOPAL): quien radica una solicitud de crédito también la decide; de fábrica, no.
         { "Segregacion.QuienRadicaDecide", "false", [N], EntregaDeCartera.K1 },
+        { "Segregacion.UnaPersonaHaceTodo", "false", [N], EntregaDeCartera.K1 },
         // 2026-11-23 (pedido del dueño): qué se corrige en una solicitud devuelta; de fábrica, todo (desde el 2026-11-24).
         { "Autorizaciones.ExigenEvidencia", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.GruposEditablesAlDevolver", "Condiciones,Linea,Oficina,Destino,FormaDePago,Seguros,Capacidad,Codeudores,Recogidas,ExcepcionDePolitica,PreferenciaDeAbono,Documentos,Garantias", [N, L], EntregaDeCartera.K1 },

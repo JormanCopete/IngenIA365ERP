@@ -63,6 +63,21 @@ public class ReglasDeSegregacionTests
     }
 
     [Fact]
+    public void Con_UnaPersonaHaceTodo_quien_radico_decide_vota_y_aplica()
+    {
+        // 2026-11-26: el parámetro apaga toda la regla fija.
+        foreach (var accion in new[] { Decidir, Votar, Aplicar })
+            ReglasDeSegregacion.Evaluar(Acto(accion, 7, 70), [Previa(Radicar, 7, 70)], [], sinReglaFija: true).Should().BeNull();
+    }
+
+    [Fact]
+    public void Con_UnaPersonaHaceTodo_los_pares_activos_siguen_mordiendo()
+    {
+        var pares = new[] { new ParIncompatible(Decidir, Desembolsar, Activo: true) };
+        ReglasDeSegregacion.Evaluar(Acto(Desembolsar, 7, 70), [Previa(Decidir, 7, 70)], pares, sinReglaFija: true).Should().NotBeNull();
+    }
+
+    [Fact]
     public void La_misma_persona_con_dos_usuarios_entra_en_conflicto()
     {
         var conflicto = ReglasDeSegregacion.Evaluar(Acto(Decidir, 8, 70), [Previa(Radicar, 7, 70)], []);
