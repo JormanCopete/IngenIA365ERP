@@ -4,7 +4,10 @@
 @inject INotificationService Notification
 
 @* Feature 020 (US6; FR-029, FR-032): los servicios del vehículo, con su vigencia y su precio pactado vigente; suscribir, terminar, pactar
-   precio y facturar este vehículo (a crédito o de contado) sin esperar la corrida del mes. *@
+   precio y facturar este vehículo (a crédito o de contado) sin esperar la corrida del mes.
+   2026-11-25 (pedido del dueño): «Terminar» pide la fecha y el motivo (antes mandaba siempre hoy y rechazaba la que todavía no empezaba);
+   «Quitar» y «Cambiar inicio» para la suscripción sin cargos de la facturación mensual (lo decide el servidor: Billed); y facturar este mes
+   avisa antes si la suscripción empezó después del día 1 (puede cobrar dos veces un mes ya cobrado por otro medio). *@
 <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
     @if (Vehiculo.Status != 3)
     {
@@ -13,8 +16,8 @@
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAsync">Suscribir a un servicio</SfButton>
             </PermissionGate>
             <PermissionGate Required="Transport.Billing.Run">
-                <SfButton CssClass="e-outline" OnClick="@(() => FacturarAsync(1))">Facturar este mes a crédito</SfButton>
-                <SfButton CssClass="e-outline" OnClick="@(() => FacturarAsync(2))">Facturar este mes de contado</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => RevisarYFacturarAsync(1))">Facturar este mes a crédito</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => RevisarYFacturarAsync(2))">Facturar este mes de contado</SfButton>
             </PermissionGate>
         </div>
     }
@@ -25,19 +28,32 @@
     else
     {
         <table class="data-grid">
-            <thead><tr><th>Servicio</th><th>Desde</th><th>Hasta</th><th>Precio pactado</th><th>Vigente</th><th></th></tr></thead>
+            <thead><tr><th>Servicio</th><th>Desde</th><th>Hasta</th><th>Precio pactado</th><th>Vigente</th><th>Motivo</th><th></th></tr></thead>
             <tbody>
                 @foreach (var s in Vehiculo.Subscriptions)
                 {
                     <tr>
                         <td>@s.ServiceName (@s.ProductCode)</td><td>@s.From.ToString("dd/MM/yyyy")</td><td>@s.To?.ToString("dd/MM/yyyy")</td>
-                        <td>@(s.AgreedPrice?.ToString("N0") ?? "El del producto")</td><td>@(s.IsCurrent ? "Sí" : "No")</td>
+                        <td>@(s.AgreedPrice?.ToString("N0") ?? "El del producto")</td>
+                        <td>@(s.IsCurrent ? "Sí" : s.From > Hoy ? $"Desde {s.From:dd/MM/yyyy}" : "No")</td>
+                        <td>@s.Reason</td>
                         <td>
-                            @if (s.To is null && Vehiculo.Status != 3)
+                            @if (Vehiculo.Status != 3)
                             {
                                 <PermissionGate Required="Transport.Services.Manage">
-                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirPrecio(s))">Pactar precio</SfButton>
-                                    <SfButton CssClass="e-flat" OnClick="@(() => TerminarAsync(s))">Terminar hoy</SfButton>
+                                    @if (s.To is null || s.To >= Hoy)
+                                    {
+                                        @if (s.To is null)
+                                        {
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirPrecio(s))">Pactar precio</SfButton>
+                                        }
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirTerminar(s))">@(s.To is null ? "Terminar" : "Cambiar fin")</SfButton>
+                                    }
+                                    @if (!s.Billed)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirInicio(s))">Cambiar inicio</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirQuitar(s))">Quitar</SfButton>
+                                    }
                                 </PermissionGate>
                             }
                         </td>
@@ -45,6 +61,7 @@
                 }
             </tbody>
         </table>
+        <p class="texto-apoyo">«Quitar» y «Cambiar inicio» sólo aparecen en una suscripción que nunca se facturó; la facturada se termina.</p>
     }
 </IndicadorDeCarga>
 
@@ -59,7 +76,7 @@
                             @foreach (var s in _servicios) { <option value="@s.PublicId">@s.Name</option> }
                         </select>
                     </label>
-                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
                     <label class="campo">Precio pactado (vacío = el del producto) <input type="number" class="e-input" @bind="_precio" /></label>
                 </div>
                 <div class="toolbar">
@@ -77,11 +94,69 @@
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
                 <div class="form-grid">
                     <label class="campo">Precio mensual con impuestos * <input type="number" class="e-input" @bind="_precio" /></label>
-                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
                 </div>
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _precio is null or <= 0)" OnClick="@PactarAsync">Guardar</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPrecio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAccion" Header="@TituloDeAccion" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_suscripcion is not null)
+                {
+                    <p>@_suscripcion.ServiceName, desde el @_suscripcion.From.ToString("dd/MM/yyyy")@(_suscripcion.To is { } h ? $" hasta el {h:dd/MM/yyyy}" : ", sin fin").</p>
+                }
+                <div class="form-grid">
+                    @if (_accion == Accion.Terminar)
+                    {
+                        <label class="campo">Hasta (último día que se cobra) *
+                            <input type="date" class="e-input" min="@(_suscripcion?.From.ToString("yyyy-MM-dd"))" value="@_fecha.ToString("yyyy-MM-dd")"
+                                   @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" />
+                        </label>
+                    }
+                    else if (_accion == Accion.Inicio)
+                    {
+                        <label class="campo">Nuevo inicio *
+                            <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" />
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Motivo *
+                        <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="400" />
+                    </label>
+                </div>
+                @if (_accion == Accion.Terminar && _suscripcion is not null && _fecha < _suscripcion.From)
+                {
+                    <div class="aviso aviso-alerta"><p>La suscripción empieza el @_suscripcion.From.ToString("dd/MM/yyyy"): no puede terminar antes. Si no debió existir, quítela.</p></div>
+                }
+                @if (_accion == Accion.Quitar)
+                {
+                    <p class="texto-apoyo">Quitar la da de baja como si no hubiera existido (queda en la auditoría con el motivo). Sólo se puede porque nunca se facturó.</p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || (_accion == Accion.Terminar && _fecha < (_suscripcion?.From ?? _fecha)))"
+                              OnClick="@ConfirmarAccionAsync">@TituloDeAccion</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAccion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAviso" Header="Antes de facturar" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Facturando…">
+                @foreach (var a in _avisos) { <div class="aviso aviso-alerta"><p>@a</p></div> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@(() => FacturarAsync(_modo))">Facturar de todos modos</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAviso = false)">Cancelar</SfButton>
                 </div>
             </IndicadorDeCarga>
         </Content>
@@ -93,20 +168,36 @@
 
     [Parameter] public EventCallback Cambio { get; set; }
 
+    private enum Accion { Terminar, Quitar, Inicio }
+
     private readonly EstadoDeCarga _guardado = new();
     private ClaveDeOperacion _clave = new();
     private List<ServicioDeTransporteDto> _servicios = [];
-    private bool _mostrar, _mostrarPrecio;
+    private bool _mostrar, _mostrarPrecio, _mostrarAccion, _mostrarAviso;
     private Guid? _servicio;
     private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
     private decimal? _precio;
+    private string? _motivo;
+    private Accion _accion;
+    private int _modo = 1;
+    private IReadOnlyList<string> _avisos = [];
     private SuscripcionDto? _suscripcion;
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    private string TituloDeAccion => _accion switch
+    {
+        Accion.Terminar => _suscripcion?.To is null ? "Terminar la suscripción" : "Cambiar el fin",
+        Accion.Inicio => "Cambiar el inicio",
+        _ => "Quitar la suscripción",
+    };
 
     private async Task AbrirAsync()
     {
         _servicio = null;
         _precio = null;
-        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _desde = Hoy;
         _mostrar = true;
         var r = await Api.ServiciosAsync();
         _servicios = r.IsSuccess ? [.. r.Value ?? []] : [];
@@ -116,8 +207,23 @@
     {
         _suscripcion = s;
         _precio = s.AgreedPrice;
-        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _desde = s.From > Hoy ? s.From : Hoy;
         _mostrarPrecio = true;
+    }
+
+    private void AbrirTerminar(SuscripcionDto s) => AbrirAccion(s, Accion.Terminar, s.To ?? (Hoy < s.From ? s.From : Hoy));
+
+    private void AbrirInicio(SuscripcionDto s) => AbrirAccion(s, Accion.Inicio, s.From);
+
+    private void AbrirQuitar(SuscripcionDto s) => AbrirAccion(s, Accion.Quitar, s.From);
+
+    private void AbrirAccion(SuscripcionDto s, Accion accion, DateOnly fecha)
+    {
+        _suscripcion = s;
+        _accion = accion;
+        _fecha = fecha;
+        _motivo = null;
+        _mostrarAccion = true;
     }
 
     private async Task SuscribirAsync()
@@ -142,26 +248,59 @@
         await Cambio.InvokeAsync();
     }
 
-    private async Task TerminarAsync(SuscripcionDto s)
+    private async Task ConfirmarAccionAsync()
     {
+        if (_suscripcion is null || string.IsNullOrWhiteSpace(_motivo)) return;
         using (_guardado.Iniciar())
         {
-            var r = await Api.TerminarAsync(Vehiculo.PublicId, s.PublicId, DateOnly.FromDateTime(DateTime.Today), "Terminada desde la ficha");
-            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo terminar."); return; }
+            var motivo = _motivo.Trim();
+            var r = _accion switch
+            {
+                Accion.Terminar => await Api.TerminarAsync(Vehiculo.PublicId, _suscripcion.PublicId, _fecha, motivo),
+                Accion.Inicio => await Api.CambiarInicioAsync(Vehiculo.PublicId, _suscripcion.PublicId, _fecha, motivo),
+                _ => await Api.QuitarAsync(Vehiculo.PublicId, _suscripcion.PublicId, motivo),
+            };
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el cambio."); return; }
+            _mostrarAccion = false;
+            await Notification.SuccessAsync(_accion switch
+            {
+                Accion.Terminar => $"La suscripción termina el {_fecha:dd/MM/yyyy}.",
+                Accion.Inicio => $"La suscripción empieza el {_fecha:dd/MM/yyyy}.",
+                _ => "Suscripción quitada.",
+            });
         }
         await Cambio.InvokeAsync();
     }
+
+    /// <summary>Antes de facturar este mes, los avisos del período para este vehículo; sin avisos, factura de una vez.</summary>
+    private async Task RevisarYFacturarAsync(int modo)
+    {
+        _modo = modo;
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.RevisarPeriodoAsync(Periodo, Vehiculo.PublicId);
+            _avisos = r.IsSuccess && r.Value is not null ? r.Value.Notices : [];
+        }
+        if (_avisos.Count > 0) { _mostrarAviso = true; return; }
+        await FacturarAsync(modo);
+    }
+
+    private static string Periodo => DateTime.Today.ToString("yyyyMM");
 
     private async Task FacturarAsync(int modo)
     {
         using (_guardado.Iniciar())
         {
-            var r = await Api.FacturarVehiculoAsync(Vehiculo.PublicId, DateTime.Today.ToString("yyyyMM"), modo, _clave);
+            var r = await Api.FacturarVehiculoAsync(Vehiculo.PublicId, Periodo, modo, _clave);
             if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo facturar."); return; }
             _clave = new();
+            _mostrarAviso = false;
             if (r.Value.OmissionReason is { } motivo) { await Notification.WarningAsync($"No se facturó: {motivo}"); return; }
             await Notification.SuccessAsync($"Factura {r.Value.InvoiceNumber} por {r.Value.Total:N0}.");
         }
         await Cambio.InvokeAsync();
     }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
 }

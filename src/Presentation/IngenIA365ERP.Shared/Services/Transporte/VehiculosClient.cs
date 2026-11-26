@@ -17,8 +17,14 @@ public sealed class VehiculosClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<PaginaDeTransporteDto<VehiculoListadoDto>>> ListarAsync(string? q = null, int? estado = null, Guid? propietario = null,
         int pagina = 1, int tamano = 50, CancellationToken ct = default) =>
-        EnviarAsync<PaginaDeTransporteDto<VehiculoListadoDto>>(http, auth, HttpMethod.Get, ConQuery(Ruta, Query(("q", q), ("status", Texto(estado)),
-            ("owner", Texto(propietario)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+        ListarAsync(new FiltrosDeVehiculosDto { Q = q, Estado = estado, Propietario = propietario }, pagina, tamano, ct);
+
+    /// <summary>El listado paginado con todos los filtros (2026-11-25: vinculación y servicio).</summary>
+    public Task<ResultadoDeInventario<PaginaDeTransporteDto<VehiculoListadoDto>>> ListarAsync(FiltrosDeVehiculosDto f, int pagina, int tamano,
+        CancellationToken ct = default) =>
+        EnviarAsync<PaginaDeTransporteDto<VehiculoListadoDto>>(http, auth, HttpMethod.Get,
+            ConQuery(Ruta, Query(("q", f.Busqueda), ("status", Texto(f.Estado)), ("affiliation", Texto(f.Vinculacion)), ("service", Texto(f.Servicio)),
+                ("serviceFilter", f.FiltroDeServicio), ("owner", Texto(f.Propietario)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
 
     public Task<ResultadoDeInventario<VehiculoDetalleDto>> ObtenerAsync(Guid id, CancellationToken ct = default) =>
         EnviarAsync<VehiculoDetalleDto>(http, auth, HttpMethod.Get, $"{Ruta}/{id}", null, null, ct);
@@ -68,7 +74,40 @@ public sealed class VehiculosClient(HttpClient http, CentralAuthClient auth)
 public sealed record PaginaDeTransporteDto<T>(IReadOnlyList<T> Items, int PageNumber, int PageSize, int TotalCount);
 
 public sealed record VehiculoListadoDto(Guid PublicId, string Plate, string InternalNumber, string? RadioCode, int Status, DateOnly StatusSince,
-    Guid OwnerPersonPublicId, string OwnerTaxId, string OwnerName, int Affiliation, string? Brand, string? Line, short? ModelYear);
+    Guid OwnerPersonPublicId, string OwnerTaxId, string OwnerName, int Affiliation, string? Brand, string? Line, short? ModelYear,
+    IReadOnlyList<ServicioDelListadoDto>? Services = null);
+
+/// <summary>Un servicio del vehículo en el listado: vigente o por empezar (<c>Upcoming</c>), con marca de precio pactado.</summary>
+public sealed record ServicioDelListadoDto(Guid ServicePublicId, string Name, bool AgreedPrice, DateOnly From, DateOnly? To, bool Upcoming);
+
+/// <summary>
+/// Los filtros del listado de vehículos (2026-11-25). Los mismos viajan al informe de vehículos para exportar lo filtrado. <c>FiltroDeServicio</c>:
+/// <c>Subscribed</c> o <c>NotSubscribed</c> (con <c>Servicio</c>), <c>None</c> o <c>Any</c>.
+/// </summary>
+public sealed class FiltrosDeVehiculosDto
+{
+    public string? Q { get; set; }
+    public int? Estado { get; set; }
+    public int? Vinculacion { get; set; }
+    public Guid? Servicio { get; set; }
+    public string? FiltroDeServicio { get; set; }
+    public Guid? Propietario { get; set; }
+
+    public string? Busqueda => string.IsNullOrWhiteSpace(Q) ? null : Q.Trim();
+
+    /// <summary>Los filtros como query string (sin página ni propietario), para el informe exportable.</summary>
+    public string ComoQuery()
+    {
+        var partes = new List<string>();
+        void Poner(string clave, string? valor) { if (!string.IsNullOrEmpty(valor)) partes.Add($"{clave}={Uri.EscapeDataString(valor)}"); }
+        Poner("q", Busqueda);
+        Poner("status", Estado?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Poner("affiliation", Vinculacion?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Poner("service", Servicio?.ToString());
+        Poner("serviceFilter", FiltroDeServicio);
+        return string.Join('&', partes);
+    }
+}
 
 public sealed record VehiculoCreadoDto(Guid VehiclePublicId, Guid OwnerPersonPublicId);
 
@@ -157,7 +196,7 @@ public sealed record ConductorDelVehiculoDto(Guid DriverPublicId, Guid Assignmen
     DateOnly From, DateOnly? To, bool IsPrimary, bool IsCurrent);
 
 public sealed record SuscripcionDto(Guid PublicId, Guid ServicePublicId, string ServiceName, string ProductCode, DateOnly From, DateOnly? To,
-    decimal? AgreedPrice, bool IsCurrent);
+    decimal? AgreedPrice, bool IsCurrent, string? Reason = null, bool Billed = false);
 
 /// <summary>Textos de Transporte que repiten varias pantallas.</summary>
 public static class TextosDeTransporte

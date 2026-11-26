@@ -32,6 +32,14 @@ public sealed class ServiciosDeTransporteClient(HttpClient http, CentralAuthClie
     public Task<ResultadoDeInventario<object>> TerminarAsync(Guid vehiculo, Guid suscripcion, DateOnly hasta, string? motivo, CancellationToken ct = default) =>
         EnviarAsync<object>(http, auth, HttpMethod.Post, $"/api/transport/vehicles/{vehiculo}/subscriptions/{suscripcion}/end", new { to = hasta, reason = motivo }, null, ct);
 
+    /// <summary>Quita una suscripción sin cargos de la facturación mensual (2026-11-25), con motivo.</summary>
+    public Task<ResultadoDeInventario<object>> QuitarAsync(Guid vehiculo, Guid suscripcion, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<object>(http, auth, HttpMethod.Post, $"/api/transport/vehicles/{vehiculo}/subscriptions/{suscripcion}/remove", new { reason = motivo }, null, ct);
+
+    /// <summary>Mueve el inicio de una suscripción sin cargos de la facturación mensual (2026-11-25), con motivo.</summary>
+    public Task<ResultadoDeInventario<object>> CambiarInicioAsync(Guid vehiculo, Guid suscripcion, DateOnly desde, string motivo, CancellationToken ct = default) =>
+        EnviarAsync<object>(http, auth, HttpMethod.Post, $"/api/transport/vehicles/{vehiculo}/subscriptions/{suscripcion}/start", new { from = desde, reason = motivo }, null, ct);
+
     public Task<ResultadoDeInventario<object>> PactarPrecioAsync(Guid vehiculo, Guid suscripcion, decimal precio, DateOnly desde, CancellationToken ct = default) =>
         EnviarAsync<object>(http, auth, HttpMethod.Post, $"/api/transport/vehicles/{vehiculo}/subscriptions/{suscripcion}/prices", new { price = precio, from = desde }, null, ct);
 
@@ -39,6 +47,11 @@ public sealed class ServiciosDeTransporteClient(HttpClient http, CentralAuthClie
 
     public Task<ResultadoDeInventario<VistaPreviaDeFacturacionDto>> VistaPreviaAsync(string periodo, CancellationToken ct = default) =>
         EnviarAsync<VistaPreviaDeFacturacionDto>(http, auth, HttpMethod.Get, ConQuery("/api/transport/billing/preview", Query(("period", periodo))), null, null, ct);
+
+    /// <summary>Los avisos antes de facturar un período (2026-11-25); con vehículo, sólo los de ese vehículo.</summary>
+    public Task<ResultadoDeInventario<RevisionDePeriodoDto>> RevisarPeriodoAsync(string periodo, Guid? vehiculo = null, CancellationToken ct = default) =>
+        EnviarAsync<RevisionDePeriodoDto>(http, auth, HttpMethod.Get, ConQuery("/api/transport/billing/check", Query(("period", periodo), ("vehicle", Texto(vehiculo)))),
+            null, null, ct);
 
     public Task<ResultadoDeInventario<FacturaIndividualDto>> FacturarVehiculoAsync(Guid vehiculo, string periodo, int modo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<FacturaIndividualDto>(http, auth, HttpMethod.Post, "/api/transport/billing/single", new { vehiclePublicId = vehiculo, period = periodo, paymentMode = modo }, clave, ct);
@@ -96,7 +109,17 @@ public sealed record FacturaIndividualDto(Guid? InvoicePublicId, string? Invoice
     IReadOnlyList<Guid> Charges);
 
 public sealed record CorridaDeFacturacionDto(Guid PublicId, string Period, int Mode, int PaymentMode, int Status, DateTime? StartedAt, DateTime? FinishedAt, string StartedBy,
-    int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<OmisionDto> Omitted, int Pending);
+    int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<OmisionDto> Omitted, int Pending, DateTime? LastActivityAt = null)
+{
+    /// <summary>Una corrida en lote que quedó en cola o en curso: se puede continuar.</summary>
+    public bool SePuedeContinuar => Mode == 1 && Status is 1 or 2;
+}
+
+public sealed record InicioTardioDto(DateOnly From, int Subscriptions);
+
+/// <summary>Los avisos antes de facturar un período (2026-11-25): sin avisos, nada que advertir.</summary>
+public sealed record RevisionDePeriodoDto(string Period, string PeriodText, bool BeforeCurrentMonth, bool CurrentMonth, bool FullMonthPolicy,
+    int StartedAfterFirstDay, IReadOnlyList<InicioTardioDto> LateStarts, IReadOnlyList<string> Notices);
 
 public sealed record CargoDeServicioDto(Guid PublicId, Guid? VehiclePublicId, string Plate, string? InternalNumber, string Service, string Period, string InvoiceNumber,
     decimal Amount, decimal Paid, int Route, int Status, DateTime? PaidAt, int ReviewFlag, Guid ExternalId);

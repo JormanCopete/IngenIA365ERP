@@ -27,9 +27,13 @@ public sealed record BillingPreviewLineDto(string Service, decimal Quantity, dec
 public sealed record BillingPreviewDto(string Period, int Vehicles, decimal Total, IReadOnlyList<BillingPreviewItemDto> Items, IReadOnlyList<BillingOmissionDto> Omitted,
     int AlreadyBilled, string? Warning);
 
+/// <summary>
+/// Una corrida de facturación. <c>LastActivityAt</c> es la última vez que avanzó (2026-11-25): la pantalla la muestra al ofrecer «Continuar»
+/// una corrida interrumpida, para no correrla a la vez que otra sesión que todavía la está avanzando.
+/// </summary>
 public sealed record BillingRunDto(Guid PublicId, string Period, BillingMode Mode, BillingPaymentMode PaymentMode, BillingRunStatus Status, DateTime? StartedAt,
     DateTime? FinishedAt, string StartedBy, int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<BillingOmissionDto> Omitted,
-    int Pending);
+    int Pending, DateTime? LastActivityAt = null);
 
 public sealed record SingleBillingResultDto(Guid? InvoicePublicId, string? InvoiceNumber, decimal Total, bool AlreadyBilled, string? OmissionCode, string? OmissionReason,
     IReadOnlyList<Guid> Charges);
@@ -288,7 +292,72 @@ internal static class ConsultasDeFacturacion
             ? await db.Vehicles.AsNoTracking().CountAsync(v => v.Status == VehicleStatus.Active && v.Id > cursor, ct)
             : 0;
         return new BillingRunDto(r.PublicId, r.Period, r.Mode, r.PaymentMode, r.Status, r.StartedAt, r.FinishedAt, r.StartedBy, r.InvoicesCount, r.TotalAmount,
-            r.AlreadyBilledCount, r.OmittedCount, Omitidos(r), pendientes);
+            r.AlreadyBilledCount, r.OmittedCount, Omitidos(r), pendientes, r.UpdatedAt ?? r.StartedAt);
+    }
+}
+
+/// <summary>Cuántas suscripciones por facturar empezaron un día después del 1 del período.</summary>
+public sealed record BillingLateStartDto(DateOnly From, int Subscriptions);
+
+/// <summary>
+/// Lo que conviene saber antes de facturar un período (2026-11-25, pedido del dueño): si es anterior al mes en curso y cuántas suscripciones
+/// por facturar empezaron después del día 1. <c>Notices</c> trae los avisos ya redactados; vacía = nada que advertir.
+/// </summary>
+public sealed record BillingPeriodCheckDto(string Period, string PeriodText, bool BeforeCurrentMonth, bool CurrentMonth, bool FullMonthPolicy,
+    int StartedAfterFirstDay, IReadOnlyList<BillingLateStartDto> LateStarts, IReadOnlyList<string> Notices);
+
+/// <summary>
+/// Revisa el período antes de facturarlo, sin guardar nada (2026-11-25). Es un <b>aviso</b>, no un bloqueo: la pantalla pide confirmar.
+/// <para>
+/// Por qué: la política por defecto cobra el mes completo a una suscripción que empieza a mitad de mes (FR-034). Si ese mes ya se cobró por
+/// otro medio —en COOFLOPAL, noviembre venía cobrado de la carga del sistema anterior y las suscripciones rigen desde el 25/11—, facturarlo lo
+/// cobraría dos veces. Igual con un período anterior al mes en curso. Cuenta sólo lo que la corrida facturaría: suscripción viva de un
+/// servicio activo, vehículo activo y sin cargo no anulado del mismo servicio y período. Con <c>VehiclePublicId</c>, sólo ese vehículo (la
+/// factura individual de la ficha).
+/// </para>
+/// </summary>
+public sealed record CheckServiceBillingPeriodQuery(string Period, Guid? VehiclePublicId = null) : IRequest<Result<BillingPeriodCheckDto>>;
+
+public sealed class CheckServiceBillingPeriodQueryHandler(IApplicationDbContext db, IDateTimeService reloj)
+    : IRequestHandler<CheckServiceBillingPeriodQuery, Result<BillingPeriodCheckDto>>
+{
+    public async Task<Result<BillingPeriodCheckDto>> Handle(CheckServiceBillingPeriodQuery request, CancellationToken ct)
+    {
+        if (!PeriodoDeServicio.TryParse(request.Period, out var p))
+            return Result.Failure<BillingPeriodCheckDto>("Billing.PeriodInvalid", $"«{request.Period}» no es un período (aaaamm).");
+        var hoy = reloj.HoyLocal;
+        var actual = PeriodoDeServicio.De(hoy);
+        var fecha = hoy < p.Inicio ? p.Inicio : hoy;
+        var politica = await db.TransportBillingPolicies.AsNoTracking()
+            .Where(x => x.ValidFrom <= fecha && (x.ValidTo == null || x.ValidTo >= fecha)).OrderByDescending(x => x.ValidFrom)
+            .Select(x => (ProrationPolicy?)x.Proration).FirstOrDefaultAsync(ct);
+        var mesCompleto = politica != ProrationPolicy.Prorated;
+
+        var codigo = p.Codigo;
+        var (inicio, fin) = (p.Inicio, p.Fin);
+        var tarde = db.VehicleSubscriptions.AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Service!.IsActive && s.Vehicle!.Status == VehicleStatus.Active && s.From > inicio && s.From <= fin
+                        && !db.ServiceCharges.Any(c => c.VehicleId == s.VehicleId && c.ServiceId == s.ServiceId && c.Period == codigo
+                                                       && c.Origin == ChargeOrigin.Billing && c.Status != ChargeStatus.Voided && !c.IsDeleted));
+        if (request.VehiclePublicId is { } vehiculo) tarde = tarde.Where(s => s.Vehicle!.PublicId == vehiculo);
+        var porFecha = (await tarde.GroupBy(s => s.From).Select(g => new { From = g.Key, Cuantas = g.Count() }).ToListAsync(ct))
+            .OrderBy(x => x.From).Select(x => new BillingLateStartDto(x.From, x.Cuantas)).ToList();
+        var total = porFecha.Sum(x => x.Subscriptions);
+
+        var avisos = new List<string>();
+        var anterior = p.Inicio < actual.Inicio;
+        if (anterior)
+            avisos.Add($"El período {p.Texto()} es anterior al mes en curso ({actual.Texto()}). Confirme que ese mes no se cobró ya por otro medio.");
+        if (total > 0)
+        {
+            var fechas = string.Join(", ", porFecha.Take(5).Select(x => $"{x.Subscriptions} el {x.From:dd/MM/yyyy}")) + (porFecha.Count > 5 ? "…" : "");
+            avisos.Add($"{total} suscripción(es) por facturar empezaron después del 1 de {p.Texto()} ({fechas}). "
+                       + (mesCompleto
+                           ? "Con la política vigente se cobran el mes completo. "
+                           : "Con la política vigente se cobran proporcionales a los días. ")
+                       + "Si ese mes ya se cobró por otro medio —por ejemplo, en la carga del sistema anterior—, facturarlo lo cobraría dos veces.");
+        }
+        return Result.Success(new BillingPeriodCheckDto(codigo, p.Texto(), anterior, p == actual, mesCompleto, total, porFecha, avisos));
     }
 }
 

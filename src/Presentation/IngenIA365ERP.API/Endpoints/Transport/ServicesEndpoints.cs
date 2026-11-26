@@ -39,8 +39,14 @@ public sealed class ServicesEndpoints : ICarterModule
                     id => $"/api/transport/vehicles/{vehicleId}/subscriptions/{id}"))
             .WithName("Transport_Subscriptions_Create").RequirePermission(TransportPermissions.ServicesManage);
         v.MapPost("/{sId:guid}/end", async (Guid vehicleId, Guid sId, TerminarRequest b, ISender x, CancellationToken ct) =>
-                await x.Send(new EndSubscriptionCommand(vehicleId, sId, b.To, b.Reason), ct))
+                await x.Send(new EndSubscriptionCommand(vehicleId, sId, b.To, b.Reason ?? string.Empty), ct))
             .WithName("Transport_Subscriptions_End").RequirePermission(TransportPermissions.ServicesManage);
+        v.MapPost("/{sId:guid}/remove", async (Guid vehicleId, Guid sId, QuitarRequest b, ISender x, CancellationToken ct) =>
+                await x.Send(new RemoveSubscriptionCommand(vehicleId, sId, b.Reason ?? string.Empty), ct))
+            .WithName("Transport_Subscriptions_Remove").RequirePermission(TransportPermissions.ServicesManage);
+        v.MapPost("/{sId:guid}/start", async (Guid vehicleId, Guid sId, InicioRequest b, ISender x, CancellationToken ct) =>
+                await x.Send(new ChangeSubscriptionStartCommand(vehicleId, sId, b.From, b.Reason ?? string.Empty), ct))
+            .WithName("Transport_Subscriptions_ChangeStart").RequirePermission(TransportPermissions.ServicesManage);
         v.MapPost("/{sId:guid}/prices", async (Guid vehicleId, Guid sId, PrecioRequest b, ISender x, CancellationToken ct) =>
                 await x.Send(new SetSubscriptionPriceCommand(vehicleId, sId, b.Price, b.From), ct))
             .WithName("Transport_Subscriptions_Price").RequirePermission(TransportPermissions.ServicesManage);
@@ -55,6 +61,10 @@ public sealed class ServicesEndpoints : ICarterModule
     public sealed record SuscripcionRequest(Guid? ServicePublicId, DateOnly From, DateOnly? To, decimal? Price, string? Reason);
 
     public sealed record TerminarRequest(DateOnly To, string? Reason);
+
+    public sealed record QuitarRequest(string? Reason);
+
+    public sealed record InicioRequest(DateOnly From, string? Reason);
 
     public sealed record PrecioRequest(decimal Price, DateOnly From);
 }

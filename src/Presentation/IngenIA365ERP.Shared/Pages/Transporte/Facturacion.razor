@@ -9,17 +9,20 @@
 
 @* Feature 020 (US6; R10; FR-030 a FR-033, FR-059; SC-003): la facturación mensual de servicios por vehículo. Primero la vista previa (qué se
    facturaría y qué se omitiría, sin guardar); luego la corrida, que avanza por tandas mientras esta pantalla siga abierta y produce una
-   factura de Comercial por vehículo con una forma de pago por servicio. Lanzarla otra vez sólo factura lo que falte. *@
+   factura de Comercial por vehículo con una forma de pago por servicio. Lanzarla otra vez sólo factura lo que falte.
+   2026-11-25 (pedido del dueño): «Continuar» retoma una corrida que quedó en cola o en curso (se cerró la pantalla), desde «Corridas
+   anteriores» o al recibir Billing.RunInProgress; antes de facturar se revisa el período y, si es anterior al mes en curso o tiene
+   suscripciones que empezaron después del día 1, se pide confirmar (aviso, no bloqueo). *@
 <PermissionGate Required="Transport.Billing.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Facturación de servicios</h3>
         <div class="toolbar">
-            <label class="campo">Período <input type="month" class="e-input" value="@_mes" @onchange="@(e => _mes = e.Value?.ToString() ?? _mes)" /></label>
+            <label class="campo">Período <input type="month" class="e-input" value="@_mes" @onchange="@(e => CambiarMes(e.Value?.ToString()))" /></label>
             <select class="e-input" @bind="_modo"><option value="1">A crédito</option><option value="2">De contado</option></select>
             <SfButton CssClass="e-outline" Disabled="@(_carga.Activa || _corriendo)" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
             <PermissionGate Required="Transport.Billing.Run">
-                <SfButton CssClass="e-primary" Disabled="@(_carga.Activa || _corriendo)" OnClick="@FacturarAsync">Facturar el período</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(_carga.Activa || _corriendo)" OnClick="@RevisarYFacturarAsync">Facturar el período</SfButton>
             </PermissionGate>
         </div>
     </div>
@@ -27,6 +30,22 @@
     @if (_previa?.Warning is { } aviso)
     {
         <div class="aviso aviso-alerta"><p>@aviso</p></div>
+    }
+    @if (_corrida is null && _revision is { Notices.Count: > 0 } revision)
+    {
+        @foreach (var a in revision.Notices) { <div class="aviso aviso-alerta"><p>@a</p></div> }
+    }
+    @if (_enCurso is not null && !_corriendo)
+    {
+        <div class="aviso aviso-info">
+            <p>Ya hay una facturación en curso del período @_enCurso.Period: la inició @_enCurso.StartedBy el @_enCurso.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+               y le faltan @_enCurso.Pending vehículo(s) por procesar. @UltimaActividad(_enCurso)</p>
+            <PermissionGate Required="Transport.Billing.Run">
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_corriendo" OnClick="@(() => ContinuarAsync(_enCurso))">Continuar la corrida</SfButton>
+                </div>
+            </PermissionGate>
+        </div>
     }
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
@@ -39,7 +58,11 @@
                 <div class="kpi-card"><span class="kpi-label">Omitidos</span><span class="kpi-value">@_corrida.OmittedCount</span></div>
                 <div class="kpi-card"><span class="kpi-label">Por procesar</span><span class="kpi-value">@_corrida.Pending</span></div>
             </div>
-            @if (_corriendo) { <p class="texto-apoyo">Facturando… no cierre esta pantalla hasta que termine.</p> }
+            @if (_corriendo)
+            {
+                <p class="texto-apoyo">Facturando el período @_corrida.Period… no cierre esta pantalla hasta que termine. Si se cierra, la corrida queda en curso y se
+                   retoma con «Continuar».</p>
+            }
             @if (_corrida.Omitted.Count > 0)
             {
                 <h4>Vehículos omitidos</h4>
@@ -80,13 +103,22 @@
         <h4>Corridas anteriores</h4>
         <IndicadorDeCarga Cargando="@_historia.Activa">
             <table class="data-grid">
-                <thead><tr><th>Período</th><th>Tipo</th><th>Por</th><th>Inicio</th><th>Facturas</th><th>Valor</th><th>Omitidos</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Período</th><th>Tipo</th><th>Por</th><th>Inicio</th><th>Facturas</th><th>Valor</th><th>Omitidos</th><th>Estado</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var c in _corridas)
                     {
                         <tr>
                             <td>@c.Period</td><td>@(c.Mode == 1 ? "En lote" : "Individual")</td><td>@c.StartedBy</td><td>@c.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                            <td>@c.InvoicesCount</td><td>@c.TotalAmount.ToString("N0")</td><td>@c.OmittedCount</td><td>@Estado(c.Status)</td>
+                            <td>@c.InvoicesCount</td><td>@c.TotalAmount.ToString("N0")</td><td>@c.OmittedCount</td>
+                            <td>@Estado(c.Status)@(c.SePuedeContinuar ? $" · faltan {c.Pending}" : "")</td>
+                            <td>
+                                @if (c.SePuedeContinuar)
+                                {
+                                    <PermissionGate Required="Transport.Billing.Run">
+                                        <SfButton CssClass="e-flat" Disabled="@_corriendo" OnClick="@(() => ContinuarAsync(c))">Continuar</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -94,21 +126,69 @@
         </IndicadorDeCarga>
     </div>
 </div>
+
+<SfDialog @bind-Visible="_mostrarAviso" Header="@($"Antes de facturar {(_revision?.PeriodText ?? Periodo)}")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_revision is not null)
+            {
+                @foreach (var a in _revision.Notices) { <div class="aviso aviso-alerta"><p>@a</p></div> }
+            }
+            <p class="texto-apoyo">Revise la vista previa si tiene dudas. Si el mes ya se cobró, no lo facture: corrija el inicio de las suscripciones o facture el mes siguiente.</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" OnClick="@ConfirmarFacturarAsync">Facturar de todos modos</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAviso = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarContinuar" Header="Continuar la corrida" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            @if (_porContinuar is not null)
+            {
+                <div class="aviso aviso-alerta">
+                    <p>La corrida del período @_porContinuar.Period avanzó hace menos de @MinutosDeActividadReciente minutos (@UltimaActividad(_porContinuar)).
+                       Puede que otra persona la esté corriendo en este momento: continúela sólo si está seguro de que se interrumpió.</p>
+                </div>
+            }
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" OnClick="@(() => AvanzarAsync(_porContinuar!))">Continuar</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarContinuar = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
+    /// <summary>Una corrida que avanzó hace menos de esto puede estar corriendo en otra sesión: se pide confirmar antes de continuarla.</summary>
+    private const int MinutosDeActividadReciente = 2;
+
     private readonly EstadoDeCarga _carga = new(), _historia = new();
     private ClaveDeOperacion _clave = new();
     private string _mes = DateTime.Today.ToString("yyyy-MM");
     private int _modo = 1;
-    private bool _corriendo;
+    private bool _corriendo, _mostrarAviso, _mostrarContinuar;
     private VistaPreviaDeFacturacionDto? _previa;
-    private CorridaDeFacturacionDto? _corrida;
+    private RevisionDePeriodoDto? _revision;
+    private CorridaDeFacturacionDto? _corrida, _enCurso, _porContinuar;
     private List<CorridaDeFacturacionDto> _corridas = [];
 
     private string Periodo => _mes.Replace("-", "");
 
     protected override Task OnInitializedAsync() => CargarCorridasAsync();
+
+    private void CambiarMes(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor) || valor == _mes) return;
+        _mes = valor;
+        _previa = null;
+        _revision = null;
+        _corrida = null;
+        _enCurso = null;
+    }
 
     private async Task CargarCorridasAsync()
     {
@@ -121,9 +201,30 @@
     {
         _corrida = null;
         using var carga = _carga.Iniciar();
+        var revision = await Api.RevisarPeriodoAsync(Periodo);
+        _revision = revision.IsSuccess ? revision.Value : null;
         var r = await Api.VistaPreviaAsync(Periodo);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la vista previa."); return; }
         _previa = r.Value;
+    }
+
+    /// <summary>Revisa el período: con avisos pide confirmar; sin ellos abre la corrida.</summary>
+    private async Task RevisarYFacturarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Api.RevisarPeriodoAsync(Periodo);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar el período."); return; }
+            _revision = r.Value;
+        }
+        if (_revision.Notices.Count > 0) { _mostrarAviso = true; return; }
+        await FacturarAsync();
+    }
+
+    private async Task ConfirmarFacturarAsync()
+    {
+        _mostrarAviso = false;
+        await FacturarAsync();
     }
 
     private async Task FacturarAsync()
@@ -132,18 +233,15 @@
         try
         {
             var r = await Api.AbrirCorridaAsync(Periodo, _modo, _clave);
+            if (r.ErrorCode == "Billing.RunInProgress")
+            {
+                _corriendo = false;
+                await MostrarLaQueEstaEnCursoAsync(r.ErrorMessage);
+                return;
+            }
             if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo iniciar la facturación."); return; }
             _clave = new();
-            _corrida = r.Value;
-            while (_corrida.Status is 1 or 2)
-            {
-                StateHasChanged();
-                var t = await Api.AvanzarCorridaAsync(_corrida.PublicId);
-                if (!t.IsSuccess || t.Value is null) { await Notification.ErrorAsync(t.ErrorMessage ?? "La facturación se detuvo; puede continuarla."); break; }
-                _corrida = t.Value;
-            }
-            if (_corrida.Status is 3 or 4)
-                await Notification.SuccessAsync($"Facturación terminada: {_corrida.InvoicesCount} factura(s) por {_corrida.TotalAmount:N0}.");
+            await RecorrerAsync(r.Value);
         }
         finally
         {
@@ -151,6 +249,75 @@
         }
         await CargarCorridasAsync();
     }
+
+    /// <summary>Billing.RunInProgress: busca la corrida en curso del período y ofrece continuarla.</summary>
+    private async Task MostrarLaQueEstaEnCursoAsync(string? mensaje)
+    {
+        await CargarCorridasAsync();
+        var r = await Api.CorridasAsync(Periodo);
+        _enCurso = (r.IsSuccess ? r.Value ?? [] : []).FirstOrDefault(c => c.SePuedeContinuar);
+        if (_enCurso is null) await Notification.WarningAsync(mensaje ?? "Ya hay una facturación en curso del período.");
+    }
+
+    /// <summary>«Continuar»: si la corrida avanzó hace muy poco puede estar corriendo en otra sesión, y se pide confirmar.</summary>
+    private async Task ContinuarAsync(CorridaDeFacturacionDto c)
+    {
+        var actual = await Api.CorridasAsync(c.Period);
+        var fresca = (actual.IsSuccess ? actual.Value ?? [] : []).FirstOrDefault(x => x.PublicId == c.PublicId) ?? c;
+        if (!fresca.SePuedeContinuar)
+        {
+            await Notification.InfoAsync("Esa corrida ya terminó.");
+            _enCurso = null;
+            await CargarCorridasAsync();
+            return;
+        }
+        // La hora viaja en UTC; sin zona (SQL Server) se toma como UTC, no como hora local.
+        if (fresca.LastActivityAt is { } ultima
+            && DateTime.UtcNow - (ultima.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(ultima, DateTimeKind.Utc) : ultima.ToUniversalTime())
+            < TimeSpan.FromMinutes(MinutosDeActividadReciente))
+        {
+            _porContinuar = fresca;
+            _mostrarContinuar = true;
+            return;
+        }
+        await AvanzarAsync(fresca);
+    }
+
+    private async Task AvanzarAsync(CorridaDeFacturacionDto c)
+    {
+        _mostrarContinuar = false;
+        _enCurso = null;
+        _previa = null;
+        _mes = $"{c.Period[..4]}-{c.Period[4..]}";
+        _corriendo = true;
+        try
+        {
+            await RecorrerAsync(c);
+        }
+        finally
+        {
+            _corriendo = false;
+        }
+        await CargarCorridasAsync();
+    }
+
+    /// <summary>El mecanismo de tandas de siempre: pide la siguiente mientras la corrida siga en cola o en curso.</summary>
+    private async Task RecorrerAsync(CorridaDeFacturacionDto inicial)
+    {
+        _corrida = inicial;
+        while (_corrida.Status is 1 or 2)
+        {
+            StateHasChanged();
+            var t = await Api.AvanzarCorridaAsync(_corrida.PublicId);
+            if (!t.IsSuccess || t.Value is null) { await Notification.ErrorAsync(t.ErrorMessage ?? "La facturación se detuvo; puede continuarla."); break; }
+            _corrida = t.Value;
+        }
+        if (_corrida.Status is 3 or 4)
+            await Notification.SuccessAsync($"Facturación terminada: {_corrida.InvoicesCount} factura(s) por {_corrida.TotalAmount:N0}.");
+    }
+
+    private static string UltimaActividad(CorridaDeFacturacionDto c) =>
+        c.LastActivityAt is { } u ? $"Último avance: {u.ToLocalTime():dd/MM/yyyy HH:mm}." : "";
 
     private static string Estado(int e) => e switch { 1 => "En cola", 2 => "En curso", 3 => "Terminada", 4 => "Terminada con omisiones", 5 => "Fallida", _ => e.ToString() };
 }
