@@ -116,7 +116,9 @@ public static class CatalogoDeMensajesV1
         Inv(typeof(DocumentoAnuladoV1), DocumentoAnuladoV1.Type, A, null, FormaDeClaveDeEvento.Confirmacion)
             with { DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Transport) },
         Inv(typeof(AjusteDeCostoReconocidoV1), AjusteDeCostoReconocidoV1.Type, A, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId),
-        Inv(typeof(NotaCreditoEmitidaV1), NotaCreditoEmitidaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
+        // 2026-11-25 (pedido del dueño: anular y volver a facturar): la nota crédito sobre una factura de servicios anula o rebaja sus cargos.
+        Inv(typeof(NotaCreditoEmitidaV1), NotaCreditoEmitidaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion)
+            with { DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Transport) },
         Inv(typeof(NotaDebitoEmitidaV1), NotaDebitoEmitidaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(GrupoContableReclasificadoV1), GrupoContableReclasificadoV1.Type, A, N, FormaDeClaveDeEvento.Reclasificacion),
         Inv(typeof(MovimientoDeCajaRegistradoV1), MovimientoDeCajaRegistradoV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),

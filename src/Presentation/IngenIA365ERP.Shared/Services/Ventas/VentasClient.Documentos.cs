@@ -14,18 +14,28 @@ namespace IngenIA365ERP.Shared.Services.Ventas;
 public sealed partial class VentasClient
 {
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<ResumenDeVentaDto>>> ListarDocumentosAsync(FiltroDeVentas f, CancellationToken ct = default) =>
-        Enviar<PaginaDeInventarioDto<ResumenDeVentaDto>>(HttpMethod.Get, Q(Rutas.Documentos,
+        Enviar<PaginaDeInventarioDto<ResumenDeVentaDto>>(HttpMethod.Get, Q(Rutas.Documentos, ParametrosDeLaLista(f, conPagina: true)), null, null, ct);
+
+    /// <summary>
+    /// 2026-11-25 (pedido del dueño): la lista filtrada a Excel o PDF (<c>GET …/documents/export</c>), con los mismos filtros y sin página. Exige
+    /// exportar informes de Inventario y sus datos personales.
+    /// </summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> ExportarDocumentosAsync(FiltroDeVentas f, string formato = "xlsx", CancellationToken ct = default) =>
+        Descargar(Q($"{Rutas.Documentos}/export", [.. ParametrosDeLaLista(f, conPagina: false), ("format", formato)]), $"ventas.{formato}", ct);
+
+    private static (string Nombre, string? Valor)[] ParametrosDeLaLista(FiltroDeVentas f, bool conPagina) =>
+    [
             ("class", Texto(f.Class)), ("documentType", Texto(f.DocumentType)), ("status", Texto(f.Status)), ("from", Texto(f.From)), ("to", Texto(f.To)),
             ("pointOfSale", Texto(f.PointOfSale)), ("cashRegister", Texto(f.CashRegister)), ("cashSession", Texto(f.CashSession)), ("person", Texto(f.Person)),
             ("salesperson", Texto(f.Salesperson)), ("number", f.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             ("pendingDelivery", Texto(f.PendingDelivery)), ("pendingValidation", Texto(f.PendingValidation)),
-            ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize)),
+            ("page", conPagina ? Texto(f.Page) : null), ("pageSize", conPagina ? Texto(f.PageSize) : null),
             ("validity", string.IsNullOrWhiteSpace(f.Validity) ? null : f.Validity), ("invoicing", string.IsNullOrWhiteSpace(f.Invoicing) ? null : f.Invoicing),
             ("customer", string.IsNullOrWhiteSpace(f.Customer) ? null : f.Customer.Trim()), ("createdBy", string.IsNullOrWhiteSpace(f.CreatedBy) ? null : f.CreatedBy.Trim()),
             ("paymentMeans", Texto(f.PaymentMeans)), ("minTotal", f.MinTotal?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             ("maxTotal", f.MaxTotal?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            ("electronicStatus", string.IsNullOrWhiteSpace(f.ElectronicStatus) ? null : f.ElectronicStatus)),
-            null, null, ct);
+            ("electronicStatus", string.IsNullOrWhiteSpace(f.ElectronicStatus) ? null : f.ElectronicStatus),
+    ];
 
     // ------------------------------------------------------------------------------- la cotización como base (2026-11-12) --
 

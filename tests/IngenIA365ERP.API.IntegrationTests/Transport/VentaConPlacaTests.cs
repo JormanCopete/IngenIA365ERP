@@ -12,8 +12,11 @@ namespace IngenIA365ERP.API.IntegrationTests.Transport;
 /// 2026-11-18 (feature 020, pedido del dueño): la radio se vende en el POS con la placa o el lateral del vehículo en la línea y el aviso al
 /// sistema externo depende del interruptor <c>Transporte.AvisoAlSistemaExterno</c>, apagado por defecto. Por HTTP y contra la base real:
 /// <list type="number">
-/// <item>sin la placa, la venta no se cobra (<c>Inventory.Line.ReferenceRequired</c>), y un lateral inexistente tampoco;</item>
+/// <item>sin la placa, la venta no se cobra (<c>Inventory.Line.ReferenceRequired</c>), y una placa que no está en el parque tampoco
+/// (<c>Inventory.Line.ReferenceInvalid</c>);</item>
 /// <item>con el aviso apagado, la venta con el lateral se cobra, se guarda la placa y no sale nada al proveedor;</item>
+/// <item>un número que no es de ningún vehículo del parque es el lateral de un vehículo externo (2026-11-25, #199): la venta se cobra, la línea
+/// guarda ese lateral y el cargo nace sin vehículo («Externo, lateral …»);</item>
 /// <item>encendido, la siguiente venta avisa una vez, con el lateral del vehículo y el valor de la línea; lo vendido antes no se avisa.</item>
 /// </list>
 /// </summary>
@@ -67,7 +70,7 @@ public class VentaConPlacaTests(ApiConProveedorFalsoFixture fx)
         var despachador = new ConductorDelDespachador(fx);
         var antes = fx.Proveedor.Cuerpos.Count;
 
-        // 1. Sin la placa no se cobra; con un lateral que no existe, tampoco.
+        // 1. Sin la placa no se cobra; con una placa que no está en el parque, tampoco (un número sí: es el lateral de un externo, paso 2b).
         var venta = await EscenarioDeVentas.NuevaVentaAsync(http, t, sesion);
         var id = EscenarioDeVentas.VentaId(venta);
         venta = await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"/api/inventory/pos/drafts/{id}/lines",
@@ -77,8 +80,9 @@ public class VentaConPlacaTests(ApiConProveedorFalsoFixture fx)
         sinPlaca.IsSuccessStatusCode.Should().BeFalse();
         (await TransporteE2E.CodigoAsync(sinPlaca)).Should().Be("Inventory.Line.ReferenceRequired");
 
-        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Patch, $"/api/inventory/pos/drafts/{id}/lines/{linea}", new { itemReference = "999" });
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Patch, $"/api/inventory/pos/drafts/{id}/lines/{linea}", new { itemReference = "ZZZ999" });
         var inexistente = await EscenarioDeVentas.PedirCobrarAsync(http, t, id, PrecioRadio, [v.Efectivo(PrecioRadio)]);
+        inexistente.IsSuccessStatusCode.Should().BeFalse("una placa fuera del parque se sigue rechazando");
         (await TransporteE2E.CodigoAsync(inexistente)).Should().Be("Inventory.Line.ReferenceInvalid");
 
         // 2. Con el lateral y el aviso apagado (el defecto): se cobra, la línea guarda la placa y no sale nada.
@@ -88,6 +92,25 @@ public class VentaConPlacaTests(ApiConProveedorFalsoFixture fx)
         fx.Proveedor.Cuerpos.Count.Should().Be(antes, "con el aviso apagado no se avisa");
         (await InventarioE2E.GetAsync(http, t, "/api/transport/notifications")).GetProperty("items").EnumerateArray()
             .Should().NotContain(e => e.GetProperty("plate").GetString() == "PLA101");
+
+        // 2b. Un número que no es de ningún vehículo del parque es el lateral de un vehículo externo (#199): se resuelve como «fuera del parque»,
+        // la venta se cobra con ese lateral y el cargo nace sin vehículo. Con el aviso apagado no sale nada.
+        var externo = await InventarioE2E.GetAsync(http, t, $"/api/inventory/sales/line-references/resolve?product={radio}&q=999");
+        externo.GetProperty("valor").GetString().Should().Be("999");
+        externo.GetProperty("etiqueta").GetString().Should().Be("lateral 999 · fuera del parque");
+        var deExterno = await EscenarioDeVentas.NuevaVentaAsync(http, t, sesion);
+        var deExternoId = EscenarioDeVentas.VentaId(deExterno);
+        deExterno = await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"/api/inventory/pos/drafts/{deExternoId}/lines",
+            new { productPublicId = radio, unitPublicId = unidad, quantity = 1m });
+        var lineaDeExterno = deExterno.GetProperty("lines").EnumerateArray().Single().GetProperty("linePublicId").GetGuid();
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Patch, $"/api/inventory/pos/drafts/{deExternoId}/lines/{lineaDeExterno}", new { itemReference = "999" });
+        await EscenarioDeVentas.CobrarAsync(http, t, deExternoId, PrecioRadio, [v.Efectivo(PrecioRadio)]);
+        await despachador.PasadasAsync(coop.TenantPublicId);
+        var cargos = (await InventarioE2E.GetAsync(http, t, "/api/transport/charges")).EnumerateArray().ToList();
+        var cargoExterno = cargos.Should().ContainSingle(c => c.GetProperty("plate").GetString() == "Externo, lateral 999").Subject;
+        cargoExterno.GetProperty("vehiclePublicId").ValueKind.Should().Be(JsonValueKind.Null, "el externo no es un vehículo del parque");
+        cargoExterno.GetProperty("amount").GetDecimal().Should().Be(PrecioRadio);
+        fx.Proveedor.Cuerpos.Count.Should().Be(antes, "con el aviso apagado tampoco se avisa al externo");
 
         // 3. Encendido: la siguiente venta avisa una vez, con el lateral y el valor; lo de antes no.
         await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/parameters/TRN/Transporte.AvisoAlSistemaExterno/versions", new

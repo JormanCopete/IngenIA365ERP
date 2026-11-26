@@ -36,6 +36,12 @@ public sealed class BillingEndpoints : ICarterModule
                 await s.Send(new ProcessServiceBillingRunCommand(id, batchSize ?? 20), ct))
             .WithName("Transport_Billing_NextBatch").RequirePermission(TransportPermissions.BillingRun);
 
+        // 2026-11-25: anular una corrida terminada por tandas (nota crédito total o documento contrario por Comercial), para volver a facturar.
+        // Exige facturar en Transporte y anular ventas en Comercial.
+        g.MapPost("/runs/{id:guid}/void", async (Guid id, AnularCorridaRequest b, ISender s, CancellationToken ct) =>
+                await s.Send(new VoidServiceBillingRunCommand(id, b.Reason ?? string.Empty, b.BatchSize ?? 10, b.Skip), ct))
+            .WithName("Transport_Billing_VoidRun").RequirePermission(TransportPermissions.BillingRun).RequirePermission("Inventory.Sales.Void");
+
         g.MapGet("/runs", async (string? period, ISender s, CancellationToken ct) => await s.Send(new GetBillingRunsQuery(period), ct))
             .WithName("Transport_Billing_Runs").RequirePermission(TransportPermissions.BillingView);
 
@@ -51,4 +57,6 @@ public sealed class BillingEndpoints : ICarterModule
     public sealed record IndividualRequest(Guid? VehiclePublicId, string? Period, BillingPaymentMode PaymentMode);
 
     public sealed record CorridaRequest(string? Period, BillingPaymentMode PaymentMode);
+
+    public sealed record AnularCorridaRequest(string? Reason, int? BatchSize, IReadOnlyList<Guid>? Skip);
 }

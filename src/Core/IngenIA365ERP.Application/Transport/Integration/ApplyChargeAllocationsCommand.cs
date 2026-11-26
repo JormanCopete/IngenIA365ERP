@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Transport.Notifications;
 using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Connectors;
@@ -47,6 +48,14 @@ public sealed class ApplyChargeAllocationsCommandValidator : AbstractValidator<A
 /// la forma de pago de la venta); <c>ReciboEmitido</c> reparte sus aplicaciones a cuentas por cobrar comerciales entre los cargos de la
 /// factura por prioridad; <c>ReciboAnulado</c> reversa lo asignado por ese recibo; <c>DocumentoAnulado</c> anula los cargos abiertos de la
 /// factura y deja para revisar los pagados.
+/// <para>
+/// 2026-11-25 (pedido del dueño: anular y volver a facturar): <c>NotaCreditoEmitida</c> sobre una factura de servicios (la factura es el
+/// <c>related</c> del sobre). El valor de cada cargo se recalcula desde la factura: su valor original × lo que queda de su línea después de
+/// todas las notas confirmadas ÷ la línea. Si no queda nada —la nota de anulación total, o notas parciales que suman toda la línea—, el cargo
+/// se anula con la misma regla de <c>DocumentoAnulado</c>: sin pago ni aviso queda <c>Voided</c> y el vehículo se puede volver a facturar en
+/// el período; con pago o aviso se marca para revisar. Una nota parcial sólo baja el valor del cargo, que queda pagado si lo asignado ya lo
+/// cubre. El cálculo sale siempre de la factura y sus notas, así que repetir el mensaje no cambia nada.
+/// </para>
 /// </summary>
 public sealed class ApplyChargeAllocationsCommandHandler(
     IApplicationDbContext db,
@@ -115,6 +124,10 @@ public sealed class ApplyChargeAllocationsCommandHandler(
                     break;
                 case DocumentoAnuladoV1 d:
                     escribio |= await FacturaAnuladaAsync(d, avisos, ct);
+                    break;
+                case NotaCreditoEmitidaV1:
+                    if (m.Envelope.Related?.PublicId is { } acreditada)
+                        escribio |= await FacturaAcreditadaAsync(acreditada, tocados, avisos, ct);
                     break;
                 default:
                     return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Rejected("Integration.VersionNotAccepted",
@@ -227,23 +240,72 @@ public sealed class ApplyChargeAllocationsCommandHandler(
         var cargos = await db.ServiceCharges.Include(c => c.Allocations)
             .Where(c => c.InvoicePublicId == d.VoidedDocument.PublicId && c.Status != ChargeStatus.Voided).ToListAsync(ct);
         var escribio = false;
+        foreach (var c in cargos) escribio |= await AnularCargoAsync(c, $"Se anuló la factura {c.InvoiceNumber}, que ya tenía pagos o aviso", avisos, ct);
+        return escribio;
+    }
+
+    /// <summary>
+    /// El cargo de una factura anulada o acreditada del todo: sin pago ni aviso se anula y el vehículo puede volver a facturarse en el período;
+    /// si no, se marca para revisar (el sistema externo no deshace).
+    /// </summary>
+    private async Task<bool> AnularCargoAsync(ServiceCharge c, string asunto, List<Aviso> avisos, CancellationToken ct)
+    {
+        if (SePuedeAnular(c))
+        {
+            c.Status = ChargeStatus.Voided;
+            return true;
+        }
+        if (c.ReviewFlag == ChargeReviewFlag.PaymentVoidedAfterNotice) return false;
+        c.ReviewFlag = ChargeReviewFlag.PaymentVoidedAfterNotice;
+        await MarcarEnvioAnuladoAsync(c, ct);
+        avisos.Add(new Aviso(TiposDeAlerta.TransportePagoAnuladoTrasAviso, c, asunto));
+        return true;
+    }
+
+    /// <summary>Un cargo abierto, sin nada asignado y sin aviso al sistema externo: se puede anular sin revisar nada.</summary>
+    public static bool SePuedeAnular(ServiceCharge c) => c.Status == ChargeStatus.Open && c.NotifiedRequestPublicId is null && Asignado(c) == 0m;
+
+    /// <summary>
+    /// Una nota crédito sobre la factura: recalcula el valor de cada cargo vivo desde la factura y sus notas confirmadas; el que queda en cero se
+    /// anula (o se marca para revisar) como en <see cref="FacturaAnuladaAsync"/>.
+    /// </summary>
+    private async Task<bool> FacturaAcreditadaAsync(Guid facturaId, Dictionary<int, (ServiceCharge Cargo, bool Saldada, PagoQueSalda Pago)> tocados,
+        List<Aviso> avisos, CancellationToken ct)
+    {
+        var cargos = await db.ServiceCharges.Include(c => c.Allocations)
+            .Where(c => c.InvoicePublicId == facturaId && c.Status != ChargeStatus.Voided).ToListAsync(ct);
+        if (cargos.Count == 0) return false;
+        var facturas = new FacturasDeServicios(db);
+        var factura = await facturas.PorPublicIdAsync(facturaId, ct);
+        if (factura is null) return false;
+        var acreditado = await facturas.AcreditadoPorLineaAsync(facturaId, ct);
+        var escribio = false;
         foreach (var c in cargos)
         {
-            if (c.Status == ChargeStatus.Open && c.NotifiedRequestPublicId is null && Asignado(c) == 0m)
+            var linea = factura.Lines.FirstOrDefault(l => l.PublicId == c.InvoiceLinePublicId);
+            if (linea is null) continue;
+            var original = c.PaymentPublicId is { } pago ? factura.Payments.FirstOrDefault(p => p.PublicId == pago)?.Amount ?? linea.Weight : linea.Weight;
+            var valor = ValorDespuesDeNotas(original, linea.Weight, acreditado.GetValueOrDefault(linea.PublicId));
+            if (valor <= 0m)
             {
-                // Sin pago ni aviso: el cargo se anula y el vehículo puede volver a facturarse en el período.
-                c.Status = ChargeStatus.Voided;
-                escribio = true;
+                escribio |= await AnularCargoAsync(c, $"Se acreditó del todo la factura {c.InvoiceNumber}, que ya tenía pagos o aviso", avisos, ct);
             }
-            else if (c.ReviewFlag != ChargeReviewFlag.PaymentVoidedAfterNotice)
+            else if (valor != c.Amount)
             {
-                c.ReviewFlag = ChargeReviewFlag.PaymentVoidedAfterNotice;
-                await MarcarEnvioAnuladoAsync(c, ct);
-                avisos.Add(new Aviso(TiposDeAlerta.TransportePagoAnuladoTrasAviso, c, $"Se anuló la factura {c.InvoiceNumber}, que ya tenía pagos o aviso"));
+                c.Amount = valor;
+                Tocar(tocados, c, false, new PagoQueSalda(null, null));
                 escribio = true;
             }
         }
         return escribio;
+    }
+
+    /// <summary>El valor del cargo después de las notas: su valor original en proporción a lo que queda de la línea, a dos decimales.</summary>
+    public static decimal ValorDespuesDeNotas(decimal original, decimal pesoDeLaLinea, decimal acreditado)
+    {
+        if (pesoDeLaLinea <= 0m) return 0m;
+        var queda = Math.Max(0m, pesoDeLaLinea - acreditado);
+        return queda == 0m ? 0m : Math.Round(original * queda / pesoDeLaLinea, 2, MidpointRounding.AwayFromZero);
     }
 
     private async Task RecalcularAsync(ServiceCharge cargo, bool saldada, PagoQueSalda pago, List<Aviso> avisos, DateTime ahora, CancellationToken ct)

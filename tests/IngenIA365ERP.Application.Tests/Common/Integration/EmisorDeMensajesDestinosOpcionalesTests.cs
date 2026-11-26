@@ -46,7 +46,7 @@ public class EmisorDeMensajesDestinosOpcionalesTests
         _db.IntegrationMessageDeliveries.Local.Where(d => ReferenceEquals(d.Message, mensaje)).ToList();
 
     [Fact]
-    public void El_catalogo_declara_Transporte_opcional_en_los_cinco_mensajes_de_pago_y_anulacion()
+    public void El_catalogo_declara_Transporte_opcional_en_los_seis_mensajes_de_pago_anulacion_y_nota_credito()
     {
         var conTransporte = CatalogoDeMensajes.Todos
             .Where(t => t.DestinosOpcionales.Contains(IntegrationDestinations.Transport))
@@ -54,7 +54,7 @@ public class EmisorDeMensajesDestinosOpcionalesTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        conTransporte.Should().BeEquivalentTo(["DocumentoAnulado", "PagoAplicado", "PagoReversado", "ReciboAnulado", "ReciboEmitido"]);
+        conTransporte.Should().BeEquivalentTo(["DocumentoAnulado", "NotaCreditoEmitida", "PagoAplicado", "PagoReversado", "ReciboAnulado", "ReciboEmitido"]);
     }
 
     [Fact]

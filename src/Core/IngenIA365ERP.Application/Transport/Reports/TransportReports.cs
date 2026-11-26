@@ -1,4 +1,8 @@
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Inventory.Sales;
+using IngenIA365ERP.Application.Transport.Billing;
+using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Transport.Vehicles;
@@ -21,6 +25,7 @@ public static class VistasDeTransporte
     public const string Vencimientos = "vencimientos";
     public const string Conductores = "conductores";
     public const string Facturacion = "facturacion";
+    public const string FacturacionPrevia = "facturacion-previa";
     public const string Envios = "envios";
 
     public static IReadOnlyList<VistaDeInformeDeRecaudoYTesoreria> Vistas { get; } =
@@ -31,8 +36,12 @@ public static class VistasDeTransporte
         new(Vencimientos, "Vencimientos de documentos", "Los documentos vigentes vencidos o que vencen en los próximos días, por vehículo.", "vencimientos",
             ["days"]),
         new(Conductores, "Conductores", "Los conductores con sus vehículos asignados y las fechas de cada asignación.", "conductores", []),
-        new(Facturacion, "Facturación de servicios", "Los cargos de un período por vehículo y servicio, con su factura, su ruta de pago y su estado.",
+        new(Facturacion, "Facturación de servicios",
+            "Los cargos de un período (o de una corrida) por vehículo y servicio, con su factura, su estado DIAN, la obligación de Cartera y el estado del cargo.",
             "facturacion-servicios", ["period"]),
+        new(FacturacionPrevia, "Vista previa de la facturación",
+            "Lo que facturaría el período, vehículo por vehículo y servicio por servicio, y lo que se omitiría con su motivo. No guarda nada.",
+            "facturacion-vista-previa", ["period"]),
         new(Envios, "Envíos a sistemas externos", "Los avisos de servicios pagados en el rango, con su estado, intentos y última respuesta (sin cuerpos).",
             "envios", ["from", "to"]),
     ];
@@ -46,17 +55,20 @@ public static class VistasDeTransporte
 /// las mismas reglas (<see cref="FiltroDeVehiculos"/>). Sin ellos, el informe trae todo el parque, como antes.
 /// </summary>
 public sealed record FiltrosDeInformeDeTransporte(string? Format, DateOnly? From, DateOnly? To, string? Period, int? Days,
-    string? Q = null, VehicleStatus? Status = null, AffiliationClass? Affiliation = null, Guid? Service = null, VehicleServiceFilter? ServiceFilter = null)
+    string? Q = null, VehicleStatus? Status = null, AffiliationClass? Affiliation = null, Guid? Service = null, VehicleServiceFilter? ServiceFilter = null,
+    Guid? Run = null)
 {
     public object ParaAuditoria() => new
     {
         from = From, to = To, period = Period, days = Days, q = Q, status = Status, affiliation = Affiliation, service = Service, serviceFilter = ServiceFilter,
+        run = Run,
     };
 }
 
 public sealed record TransportReportQuery(string Vista, FiltrosDeInformeDeTransporte Filtros) : IRequest<Result<TablaExportable>>;
 
-public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateTimeService reloj) : IRequestHandler<TransportReportQuery, Result<TablaExportable>>
+public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateTimeService reloj, ISender? sender = null, IConsultaDeObligaciones? cartera = null)
+    : IRequestHandler<TransportReportQuery, Result<TablaExportable>>
 {
     public async Task<Result<TablaExportable>> Handle(TransportReportQuery request, CancellationToken ct)
     {
@@ -71,7 +83,8 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
             VistasDeTransporte.Historia => Result.Success(await HistoriaAsync(vista.Name, f.From ?? hoy.AddMonths(-1), f.To ?? hoy, ct)),
             VistasDeTransporte.Vencimientos => Result.Success(await VencimientosAsync(vista.Name, hoy, Math.Clamp(f.Days ?? 30, 0, 365), ct)),
             VistasDeTransporte.Conductores => Result.Success(await ConductoresAsync(vista.Name, hoy, ct)),
-            VistasDeTransporte.Facturacion => await FacturacionAsync(vista.Name, f.Period ?? PeriodoDeServicio.De(hoy).Codigo, ct),
+            VistasDeTransporte.Facturacion => await FacturacionAsync(vista.Name, f.Period ?? PeriodoDeServicio.De(hoy).Codigo, f.Run, ct),
+            VistasDeTransporte.FacturacionPrevia => await VistaPreviaAsync(vista.Name, f.Period ?? PeriodoDeServicio.De(hoy).Codigo, ct),
             _ => Result.Success(await EnviosAsync(vista.Name, f.From ?? hoy.AddMonths(-1), f.To ?? hoy, ct)),
         };
     }
@@ -148,28 +161,119 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
         ])).ToList(), null, []);
     }
 
-    private async Task<Result<TablaExportable>> FacturacionAsync(string titulo, string periodo, CancellationToken ct)
+    /// <summary>
+    /// Los cargos de un período, o de una corrida (<c>run</c>), para validar la facturación (2026-11-25, pedido del dueño): factura, vehículo,
+    /// propietario, servicio, valor, lo pagado, el estado DIAN de la factura, la obligación de Cartera y el estado del cargo.
+    /// </summary>
+    private async Task<Result<TablaExportable>> FacturacionAsync(string titulo, string periodo, Guid? corrida, CancellationToken ct)
     {
-        if (!PeriodoDeServicio.TryParse(periodo, out var p))
-            return Result.Failure<TablaExportable>("Transport.Billing.PeriodInvalid", "El período va como aaaamm.");
-        var filas = await db.ServiceCharges.AsNoTracking().Include(c => c.Vehicle).Include(c => c.Service).Include(c => c.OwnerPerson)
-            .Where(c => c.Period == p.Codigo).OrderBy(c => c.Vehicle!.InternalNumber).ThenBy(c => c.Service!.Priority).ToListAsync(ct);
+        var consulta = db.ServiceCharges.AsNoTracking().Include(c => c.Vehicle).Include(c => c.Service).Include(c => c.OwnerPerson).Include(c => c.Allocations)
+            .AsQueryable();
+        string subtitulo;
+        if (corrida is { } run)
+        {
+            var r = await db.TransportBillingRuns.AsNoTracking().Where(x => x.PublicId == run).Select(x => new { x.Id, x.Period, x.StartedAt, x.StartedBy })
+                .FirstOrDefaultAsync(ct);
+            if (r is null) return Result.Failure<TablaExportable>("Billing.RunNotFound", "No existe esa corrida.");
+            consulta = consulta.Where(c => c.BillingRunId == r.Id);
+            subtitulo = $"Corrida del período {(PeriodoDeServicio.TryParse(r.Period, out var pr) ? pr.Texto() : r.Period)}, iniciada por {r.StartedBy}"
+                        + (r.StartedAt is { } inicio ? $" el {inicio:dd/MM/yyyy HH:mm} (UTC)" : "");
+        }
+        else
+        {
+            if (!PeriodoDeServicio.TryParse(periodo, out var p))
+                return Result.Failure<TablaExportable>("Transport.Billing.PeriodInvalid", "El período va como aaaamm.");
+            consulta = consulta.Where(c => c.Period == p.Codigo);
+            subtitulo = $"Período {p.Texto()}";
+        }
+        var filas = await consulta.OrderBy(c => c.Vehicle!.InternalNumber).ThenBy(c => c.InvoiceNumber).ThenBy(c => c.Service!.Priority).ToListAsync(ct);
+
+        var dian = await new FacturasDeServicios(db).EstadosDianAsync(filas.Select(c => c.InvoicePublicId).ToList(), ct);
+        var pagos = filas.Where(c => c.PaymentPublicId is not null).Select(c => c.PaymentPublicId!.Value).Distinct().ToList();
+        var obligaciones = cartera is null || pagos.Count == 0
+            ? new Dictionary<Guid, ObligacionDeVentaDto>()
+            : (await cartera.PorPagoDeVentaAsync(pagos, ct)).GroupBy(o => o.PaymentPublicId).ToDictionary(g => g.Key, g => g.First());
+        string? Obligacion(ServiceCharge c) =>
+            c.PaymentPublicId is { } pago && obligaciones.TryGetValue(pago, out var o) ? $"{o.Number} ({o.Status})" : c.Route == ChargeRoute.Lending ? "Sin obligación todavía" : null;
+
         var columnas = new List<ColumnaExportable>
         {
-            new("Número interno"), new("Placa"), new("Propietario"), new("Servicio"), new("Factura"), new("Valor", TipoDeColumna.Moneda), new("Ruta"),
-            new("Estado"), new("Pagado", TipoDeColumna.Fecha), new("Revisar"),
+            new("Factura"), new("Estado DIAN"), new("Número interno"), new("Placa"), new("Documento del propietario"), new("Propietario"), new("Servicio"),
+            new("Período"), new("Valor", TipoDeColumna.Moneda), new("Pagado", TipoDeColumna.Moneda), new("Ruta"), new("Obligación de Cartera"),
+            new("Estado del cargo"), new("Pagado el", TipoDeColumna.Fecha), new("Revisar"),
         };
-        var total = filas.Where(c => c.Status != ChargeStatus.Voided).Sum(c => c.Amount);
-        return Result.Success(new TablaExportable(titulo, $"Período {p.Texto()}", columnas,
+        var vivos = filas.Where(c => c.Status != ChargeStatus.Voided).ToList();
+        return Result.Success(new TablaExportable(titulo, subtitulo, columnas,
             filas.Select(c => new FilaExportable(
             [
-                c.Vehicle?.InternalNumber, c.Vehicle?.Plate ?? $"Externo, lateral {c.VehicleReference}", c.OwnerPerson is { } o ? NombreVisible.De(o) : null, c.Service?.Name, c.InvoiceNumber, c.Amount,
-                c.Route.ToString(), c.Status.ToString(), c.PaidAt is { } pagado ? DateOnly.FromDateTime(pagado) : (DateOnly?)null,
-                c.ReviewFlag == ChargeReviewFlag.None ? null : c.ReviewFlag.ToString(),
+                c.InvoiceNumber, dian.GetValueOrDefault(c.InvoicePublicId, "No electrónica"), c.Vehicle?.InternalNumber,
+                c.Vehicle?.Plate ?? $"Externo, lateral {c.VehicleReference}", c.OwnerPerson?.TaxId, c.OwnerPerson is { } o ? NombreVisible.De(o) : null,
+                c.Service?.Name, c.Period, c.Amount, c.Allocations.Where(a => !a.IsDeleted).Sum(a => a.Amount), Ruta(c.Route), Obligacion(c), EstadoDeCargo(c.Status),
+                c.PaidAt is { } pagado ? DateOnly.FromDateTime(pagado) : (DateOnly?)null, Revision(c.ReviewFlag),
             ])).ToList(),
-            new FilaExportable(["Total", null, null, null, null, total, null, null, null, null], Resaltada: true),
-            ["Los cargos anulados no suman."]));
+            new FilaExportable(["Total", null, null, null, null, null, null, null, vivos.Sum(c => c.Amount),
+                vivos.Sum(c => c.Allocations.Where(a => !a.IsDeleted).Sum(a => a.Amount)), null, null, null, null, null], Resaltada: true),
+            [$"{filas.Select(c => c.InvoicePublicId).Distinct().Count()} factura(s); {filas.Count(c => c.Status == ChargeStatus.Voided)} cargo(s) anulado(s), que no suman."]));
     }
+
+    /// <summary>
+    /// La vista previa del período como tabla (2026-11-25, pedido del dueño): una fila por servicio de cada vehículo que se facturaría y una por
+    /// vehículo omitido con su motivo, en hojas aparte. Es la misma consulta de la pantalla: no guarda nada.
+    /// </summary>
+    private async Task<Result<TablaExportable>> VistaPreviaAsync(string titulo, string periodo, CancellationToken ct)
+    {
+        if (sender is null) return Result.Failure<TablaExportable>("Report.Unavailable", "La vista previa no está disponible.");
+        var r = await sender.Send(new PreviewServiceBillingQuery(periodo), ct);
+        if (r.IsFailure) return Result.Failure<TablaExportable>(r.Error);
+        var v = r.Value;
+        var columnas = new List<ColumnaExportable>
+        {
+            new("Número interno"), new("Placa"), new("Propietario"), new("Servicio"), new("Cantidad", TipoDeColumna.Decimal), new("Precio", TipoDeColumna.Moneda),
+            new("Precio pactado"), new("Valor", TipoDeColumna.Moneda), new("Motivo de omisión"),
+        };
+        var filas = new List<FilaExportable>();
+        foreach (var i in v.Items)
+        {
+            foreach (var l in i.Lines)
+            {
+                var valor = l.UnitPrice is { } precio ? Math.Round(l.Quantity * precio, 2, MidpointRounding.AwayFromZero) : (decimal?)null;
+                filas.Add(new FilaExportable([i.InternalNumber, i.Plate, i.OwnerName, l.Service, l.Quantity, l.UnitPrice, l.AgreedPrice ? "Sí" : "No", valor, null],
+                    Seccion: "Por facturar"));
+            }
+        }
+        foreach (var o in v.Omitted)
+            filas.Add(new FilaExportable([o.InternalNumber, o.Plate, null, null, null, null, null, null, o.Reason], Seccion: "Omitidos"));
+        var notas = new List<string> { $"{v.Vehicles} vehículo(s) por facturar; {v.Omitted.Count} omitido(s); {v.AlreadyBilled} ya tenían su factura del período." };
+        if (v.Warning is { } aviso) notas.Add(aviso);
+        return Result.Success(new TablaExportable(titulo, $"Período {v.Period} · sin guardar", columnas, filas,
+            new FilaExportable(["Total", null, null, null, null, null, null, v.Total, null], Resaltada: true), notas));
+    }
+
+    private static string Ruta(ChargeRoute ruta) => ruta switch
+    {
+        ChargeRoute.Lending => "Cartera",
+        ChargeRoute.CommercialReceivable => "Cuenta por cobrar",
+        ChargeRoute.Cash => "Contado",
+        _ => ruta.ToString(),
+    };
+
+    private static string EstadoDeCargo(ChargeStatus estado) => estado switch
+    {
+        ChargeStatus.Open => "Abierto",
+        ChargeStatus.Paid => "Pagado",
+        ChargeStatus.Voided => "Anulado",
+        _ => estado.ToString(),
+    };
+
+    private static string? Revision(ChargeReviewFlag marca) => marca switch
+    {
+        ChargeReviewFlag.None => null,
+        ChargeReviewFlag.PaymentVoidedAfterNotice => "Pago anulado después del aviso",
+        ChargeReviewFlag.PaidAgainAfterVoid => "Pagado otra vez después de anulado",
+        ChargeReviewFlag.NoConnector => "Sin conector",
+        ChargeReviewFlag.NoticeOff => "Aviso apagado",
+        _ => marca.ToString(),
+    };
 
     private async Task<TablaExportable> EnviosAsync(string titulo, DateOnly desde, DateOnly hasta, CancellationToken ct)
     {
