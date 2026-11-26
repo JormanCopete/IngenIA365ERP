@@ -39,6 +39,12 @@ public sealed class LineaDelCiclo
     /// </summary>
     public string? Referencia { get; set; }
     public string? EtiquetaDeReferencia { get; set; }
+
+    /// <summary>
+    /// 2026-11-26: la referencia digitada pide un segundo dato (el vehículo externo, su placa) y falta: el rótulo del campo. Mientras tanto
+    /// <see cref="Referencia"/> lleva sólo la primera parte y la venta no se confirma.
+    /// </summary>
+    public string? FaltaComplemento { get; set; }
 }
 
 /// <summary>
@@ -99,7 +105,7 @@ public static class FormularioDelCiclo
                 ?? (i < antes.Count && antes[i].ProductPublicId == d.ProductPublicId ? antes[i] : null);
             if (a is null) continue;
             (d.Lote, d.Serie, d.ControlaLote, d.ControlaSerie) = (a.Lote, a.Serie, a.ControlaLote, a.ControlaSerie);
-            if (d.Referencia == a.Referencia) d.EtiquetaDeReferencia = a.EtiquetaDeReferencia;
+            if (d.Referencia == a.Referencia) (d.EtiquetaDeReferencia, d.FaltaComplemento) = (a.EtiquetaDeReferencia, a.FaltaComplemento);
             // El precio releído sale de una fracción a seis decimales; el que se escribió es el exacto (si cambiara un centavo, la
             // huella del descuento cambiaría y la aprobación pendiente se volvería a pedir).
             if (d.Precio is not null && a.Precio is not null) d.Precio = a.Precio;

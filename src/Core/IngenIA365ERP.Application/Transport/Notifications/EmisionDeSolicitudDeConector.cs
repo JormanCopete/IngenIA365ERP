@@ -76,8 +76,8 @@ public sealed class EmisionDeSolicitudDeConector(
             return null;
         }
 
-        // Un vehículo externo (vendido sin estar en el parque) se avisa con el lateral digitado; placa y número interno van vacíos (al enviar,
-        // DestinoConectores.Valores pone el lateral como placa).
+        // Un vehículo externo (vendido sin estar en el parque) se avisa con el lateral y la placa digitados (2026-11-26); el número interno va
+        // vacío. Los cargos externos anteriores no tienen placa: al enviar, DestinoConectores.Valores pone el lateral como placa.
         var vehiculo = cargo.Vehicle ?? (cargo.VehicleId is int vehiculoId ? await db.Vehicles.AsNoTracking().FirstAsync(v => v.Id == vehiculoId, ct) : null);
         var propietario = cargo.OwnerPersonId is int deudorId
             ? await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == deudorId, ct)
@@ -87,7 +87,7 @@ public sealed class EmisionDeSolicitudDeConector(
 
         var variables = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["vehiculo.placa"] = vehiculo?.Plate ?? string.Empty,
+            ["vehiculo.placa"] = vehiculo?.Plate ?? cargo.ExternalPlate ?? string.Empty,
             ["vehiculo.numeroInterno"] = vehiculo?.InternalNumber ?? string.Empty,
             ["vehiculo.radioMovil"] = vehiculo is null ? cargo.VehicleReference ?? string.Empty : vehiculo.RadioCode ?? string.Empty,
             ["propietario.documento"] = propietario?.TaxId ?? string.Empty,

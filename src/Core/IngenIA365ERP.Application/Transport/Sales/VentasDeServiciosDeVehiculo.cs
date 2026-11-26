@@ -24,7 +24,9 @@ namespace IngenIA365ERP.Application.Transport.Sales;
 /// <item>si no es de ningún vehículo del parque y es un número de 1 a 10 dígitos, es el <b>lateral de un vehículo externo</b> (2026-11-25, pedido
 /// del dueño: los servicios también se venden a quien no pertenece a la cooperativa); se guarda tal cual y el cargo nace sin vehículo, con
 /// <see cref="ServiceCharge.VehicleReference"/>, y avisa al sistema externo con ese lateral. Lo que no es número y no está en el parque se
-/// rechaza: los externos se identifican por el lateral;</item>
+/// rechaza: los externos se identifican por el lateral. Desde el 2026-11-26 el externo pide además su <b>placa</b> (el sistema externo recibe
+/// las dos): el lateral solo responde que falta el complemento, y la línea guarda «lateral/placa»; la placa es válida
+/// (<see cref="Placa.EsValida"/>) y no es de un vehículo del parque (ése se vende por su placa, no como externo);</item>
 /// <item>al confirmar la venta nace un cargo por línea (<see cref="ChargeOrigin.Sale"/>, sin corrida, el mes de la venta como período) por el
 /// neto más impuestos de la línea. Lo pagado de contado en la venta se reparte entre los cargos por prioridad del servicio; el cargo cubierto
 /// queda pagado y avisa al sistema externo (si el aviso está encendido). Lo que falta va a la primera forma de pago a crédito: por Cartera si
@@ -41,17 +43,19 @@ public sealed class VentasDeServiciosDeVehiculo(
     IConsultaDeObligaciones? cartera = null) : IReferenciaDeLineaDeVenta
 {
     public const string Rotulo = "Placa o lateral";
+    public const string RotuloDeLaPlacaExterna = "Placa del vehículo externo";
 
     public async Task<IReadOnlyList<ProductoConReferencia>> ProductosQueLaPidenAsync(CancellationToken ct)
     {
         if (!await EncendidoAsync(ct)) return [];
         return await db.TransportServices.AsNoTracking().Where(s => s.IsActive)
-            .Select(s => new ProductoConReferencia(s.ProductPublicId, Rotulo)).ToListAsync(ct);
+            .Select(s => new ProductoConReferencia(s.ProductPublicId, Rotulo, RotuloDeLaPlacaExterna)).ToListAsync(ct);
     }
 
     public async Task<Result<ReferenciaDeLineaResuelta>> ResolverAsync(Guid productoPublicId, string texto, CancellationToken ct)
     {
-        var buscado = Placa.Normalizar(texto);
+        var (parte, complemento) = Partir(texto);
+        var buscado = Placa.Normalizar(parte);
         if (buscado.Length == 0) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.SinReferencia());
 
         var candidatos = await db.Vehicles.AsNoTracking()
@@ -59,9 +63,16 @@ public sealed class VentasDeServiciosDeVehiculo(
             .Select(v => new { v.Id, v.Plate, v.RadioCode, v.InternalNumber, v.OwnerPersonId, v.Status }).ToListAsync(ct);
         if (candidatos.Count == 0)
         {
-            return LateralExterno.Es(buscado)
-                ? Result.Success(new ReferenciaDeLineaResuelta(buscado, $"lateral {buscado} · fuera del parque"))
-                : Result.Failure<ReferenciaDeLineaResuelta>(Errores.NoExiste(texto.Trim()));
+            if (!LateralExterno.Es(buscado)) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.NoExiste(parte.Trim()));
+            if (complemento is null)
+                return Result.Success(new ReferenciaDeLineaResuelta(buscado, $"lateral {buscado} · fuera del parque", RotuloDeLaPlacaExterna));
+
+            var placa = Placa.Normalizar(complemento);
+            if (!Placa.EsValida(placa)) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.PlacaExternaInvalida(complemento.Trim()));
+            var delParque = await db.Vehicles.AsNoTracking().Where(v => v.Status != VehicleStatus.Retired && v.Plate == placa)
+                .Select(v => v.InternalNumber).FirstOrDefaultAsync(ct);
+            if (delParque is not null) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.PlacaDelParque(placa, delParque));
+            return Result.Success(new ReferenciaDeLineaResuelta(Guardada(buscado, placa), $"{placa} · lateral {buscado} · fuera del parque"));
         }
 
         // La placa manda: «ABC123» es la placa de uno aunque sea el lateral de otro. Entre lateral y número interno de vehículos distintos, ambiguo.
@@ -69,7 +80,9 @@ public sealed class VentasDeServiciosDeVehiculo(
             : candidatos.Where(v => v.RadioCode == buscado).ToList() is { Count: 1 } porLateral ? porLateral[0]
             : candidatos.Count == 1 ? candidatos[0]
             : null;
-        if (elegido is null) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.Ambigua(texto.Trim()));
+        if (elegido is null) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.Ambigua(parte.Trim()));
+        // Un vehículo del parque se conoce por su ficha: no lleva placa aparte.
+        if (complemento is not null) return Result.Failure<ReferenciaDeLineaResuelta>(Errores.DelParqueSinPlacaAparte(parte.Trim(), elegido.Plate));
 
         var dueño = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == elegido.OwnerPersonId).FirstOrDefaultAsync(ct);
         var etiqueta = string.Join(" · ", new[]
@@ -114,12 +127,14 @@ public sealed class VentasDeServiciosDeVehiculo(
         foreach (var l in lineas)
         {
             var vehiculo = vehiculos.FirstOrDefault(v => v.Plate == l.ItemReference);
-            // Sin vehículo del parque, el número digitado es el lateral de un vehículo externo.
-            if (vehiculo is null && !LateralExterno.Es(l.ItemReference!)) return Result.Failure<bool>(Errores.NoExiste(l.ItemReference!));
+            // Sin vehículo del parque, lo guardado es el lateral de un vehículo externo y su placa («lateral/placa»).
+            var (lateral, placaExterna) = Partir(l.ItemReference!);
+            if (vehiculo is null && !LateralExterno.Es(lateral)) return Result.Failure<bool>(Errores.NoExiste(l.ItemReference!));
             var servicio = servicios.First(s => s.ProductPublicId == l.ProductPublicId);
             var cargo = new ServiceCharge
             {
-                VehicleId = vehiculo?.Id, Vehicle = vehiculo, VehicleReference = vehiculo is null ? l.ItemReference : null,
+                VehicleId = vehiculo?.Id, Vehicle = vehiculo, VehicleReference = vehiculo is null ? lateral : null,
+                ExternalPlate = vehiculo is null && placaExterna is not null ? Placa.Normalizar(placaExterna) : null,
                 ServiceId = servicio.Id, Service = servicio, Period = periodo, Origin = ChargeOrigin.Sale,
                 OwnerPersonId = cliente ?? vehiculo?.OwnerPersonId, InvoicePublicId = factura.PublicId, InvoiceNumber = numero,
                 InvoiceLinePublicId = l.PublicId, Amount = l.Weight, Route = ChargeRoute.Cash, Status = ChargeStatus.Open, CreatedAt = ahora,
@@ -185,6 +200,18 @@ public sealed class VentasDeServiciosDeVehiculo(
         public static bool Es(string texto) => texto.Length is > 0 and <= LargoMaximo && texto.All(char.IsAsciiDigit);
     }
 
+    /// <summary>Lo digitado o guardado partido en la referencia y su complemento («618/ABC123»); sin separador, el complemento es nulo.</summary>
+    private static (string Parte, string? Complemento) Partir(string texto)
+    {
+        var i = texto.IndexOf(ReferenciaDeLinea.Separador);
+        if (i < 0) return (texto, null);
+        var complemento = texto[(i + 1)..].Trim();
+        return (texto[..i], complemento.Length == 0 ? null : complemento);
+    }
+
+    /// <summary>Lo que guarda la línea de un vehículo externo: el lateral y su placa.</summary>
+    private static string Guardada(string lateral, string placa) => $"{lateral}{ReferenciaDeLinea.Separador}{placa}";
+
     private async Task<bool> EncendidoAsync(CancellationToken ct)
     {
         if (modulos is null) return true;
@@ -198,6 +225,15 @@ public sealed class VentasDeServiciosDeVehiculo(
         public static Error NoExiste(string texto) => new ErrorConDatos("Transport.Sale.VehicleNotFound",
             $"No hay un vehículo vinculado con placa o lateral «{texto}». Si el vehículo no es de la cooperativa, digite su lateral (sólo números).",
             new { reference = texto });
+
+        public static Error PlacaExternaInvalida(string texto) => new ErrorConDatos("Transport.Sale.ExternalPlateInvalid",
+            $"«{texto}» no es una placa válida: de {Placa.LargoMinimo} a {Placa.LargoMaximo} letras o números.", new { plate = texto });
+
+        public static Error PlacaDelParque(string placa, string interno) => new ErrorConDatos("Transport.Sale.ExternalPlateInFleet",
+            $"La placa {placa} es del vehículo {interno} de la cooperativa: digite esa placa en vez del lateral.", new { plate = placa, internalNumber = interno });
+
+        public static Error DelParqueSinPlacaAparte(string texto, string placa) => new ErrorConDatos("Transport.Sale.FleetVehicleNoExternalPlate",
+            $"«{texto}» es el vehículo {placa} de la cooperativa: no lleva placa aparte.", new { reference = texto, plate = placa });
 
         public static Error Ambigua(string texto) => new ErrorConDatos("Transport.Sale.VehicleAmbiguous",
             $"«{texto}» es el lateral o el número interno de más de un vehículo: digite la placa.", new { reference = texto });

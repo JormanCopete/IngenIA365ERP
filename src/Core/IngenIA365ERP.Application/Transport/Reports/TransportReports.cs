@@ -207,7 +207,7 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
             filas.Select(c => new FilaExportable(
             [
                 c.InvoiceNumber, dian.GetValueOrDefault(c.InvoicePublicId, "No electrónica"), c.Vehicle?.InternalNumber,
-                c.Vehicle?.Plate ?? $"Externo, lateral {c.VehicleReference}", c.OwnerPerson?.TaxId, c.OwnerPerson is { } o ? NombreVisible.De(o) : null,
+                c.Vehicle?.Plate ?? (c.ExternalPlate is { } placaExterna ? $"Externo, {placaExterna} · lateral {c.VehicleReference}" : $"Externo, lateral {c.VehicleReference}"), c.OwnerPerson?.TaxId, c.OwnerPerson is { } o ? NombreVisible.De(o) : null,
                 c.Service?.Name, c.Period, c.Amount, c.Allocations.Where(a => !a.IsDeleted).Sum(a => a.Amount), Ruta(c.Route), Obligacion(c), EstadoDeCargo(c.Status),
                 c.PaidAt is { } pagado ? DateOnly.FromDateTime(pagado) : (DateOnly?)null, Revision(c.ReviewFlag),
             ])).ToList(),
@@ -288,7 +288,7 @@ public sealed class TransportReportQueryHandler(IApplicationDbContext db, IDateT
             orderby e.Id
             select new
             {
-                e.CreatedAt, Conector = c.Name, Interno = g != null ? g.Vehicle!.InternalNumber : null, Placa = g != null ? (g.Vehicle != null ? g.Vehicle.Plate : "Externo, lateral " + g.VehicleReference) : null,
+                e.CreatedAt, Conector = c.Name, Interno = g != null ? g.Vehicle!.InternalNumber : null, Placa = g != null ? (g.Vehicle != null ? g.Vehicle.Plate : (g.ExternalPlate != null ? "Externo, " + g.ExternalPlate + " · lateral " + g.VehicleReference : "Externo, lateral " + g.VehicleReference)) : null,
                 Servicio = g != null ? g.Service!.Name : null, Periodo = g != null ? g.Period : null, Factura = g != null ? g.InvoiceNumber : null,
                 Valor = g != null ? (decimal?)g.Amount : null, e.Status, e.Attempts, e.LastStatusCode, e.SentAt, e.ExternalId,
             }).ToListAsync(ct);

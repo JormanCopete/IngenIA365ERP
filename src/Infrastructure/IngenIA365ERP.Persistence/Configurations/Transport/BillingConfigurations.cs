@@ -78,6 +78,7 @@ public class ServiceChargeConfiguration : IEntityTypeConfiguration<ServiceCharge
         builder.Property(e => e.Period).HasMaxLength(6).IsFixedLength().IsRequired();
         builder.Property(e => e.InvoiceNumber).HasMaxLength(30).IsRequired();
         builder.Property(e => e.VehicleReference).HasMaxLength(20);
+        builder.Property(e => e.ExternalPlate).HasMaxLength(10);
         builder.Property(e => e.Amount).HasPrecision(18, 2);
         builder.HasOne(e => e.Vehicle).WithMany().HasForeignKey(e => e.VehicleId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Service).WithMany().HasForeignKey(e => e.ServiceId).OnDelete(DeleteBehavior.Restrict);
