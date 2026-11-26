@@ -69400,6 +69400,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<Guid>("ExternalId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ExternalPlate")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<Guid>("InvoiceLinePublicId")
                         .HasColumnType("uniqueidentifier");
 

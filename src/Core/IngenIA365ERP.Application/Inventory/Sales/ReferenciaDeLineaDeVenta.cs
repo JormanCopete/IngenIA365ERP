@@ -7,11 +7,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Sales;
 
-/// <summary>Lo que el puerto responde de una referencia: el valor canónico que se guarda en la línea y cómo se muestra. (nuevo)</summary>
-public sealed record ReferenciaDeLineaResuelta(string Valor, string Etiqueta);
+/// <summary>
+/// Lo que el puerto responde de una referencia: el valor canónico que se guarda en la línea y cómo se muestra. Con
+/// <paramref name="FaltaComplemento"/>, la referencia sirve pero pide un segundo dato (2026-11-26: el vehículo externo pide su placa además
+/// del lateral) y el valor todavía no se puede confirmar: se completa digitando «referencia/complemento» (<see cref="ReferenciaDeLinea.Separador"/>).
+/// (nuevo)
+/// </summary>
+public sealed record ReferenciaDeLineaResuelta(string Valor, string Etiqueta, string? FaltaComplemento = null);
 
-/// <summary>Un producto cuya línea de venta pide referencia y cómo se rotula el campo («Placa o lateral»). (nuevo)</summary>
-public sealed record ProductoConReferencia(Guid ProductPublicId, string Rotulo);
+/// <summary>
+/// Un producto cuya línea de venta pide referencia y cómo se rotula el campo («Placa o lateral»); <paramref name="RotuloDelComplemento"/> es
+/// el rótulo del segundo dato cuando la referencia lo pide («Placa del vehículo externo»). (nuevo)
+/// </summary>
+public sealed record ProductoConReferencia(Guid ProductPublicId, string Rotulo, string? RotuloDelComplemento = null);
 
 /// <summary>
 /// El puerto por el que otro módulo pide que la línea de venta de ciertos productos diga <b>qué</b> se vende (2026-11-18, feature 020, pedido
@@ -42,6 +50,12 @@ public static class ReferenciaDeLinea
         DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments, DocumentClass.PosEquivalentDocument, DocumentClass.NonElectronicSalesReceipt,
     ];
 
+    /// <summary>
+    /// Separa la referencia de su complemento en el valor guardado y en lo digitado («618/ABC123»): Comercial no sabe qué es cada parte, sólo
+    /// guarda lo que el puerto devuelve. (2026-11-26)
+    /// </summary>
+    public const char Separador = '/';
+
     /// <summary>¿La clase es una venta que confirma lo vendido (factura, documento POS, comprobante)?</summary>
     public static bool EsVenta(DocumentClass clase) => Ventas.Contains(clase);
 
@@ -68,6 +82,8 @@ public static class ReferenciaDeLinea
                 if (string.IsNullOrWhiteSpace(linea.ItemReference)) return ErroresDeReferenciaDeLinea.Required(linea.LineNumber, producto.Code, rotulo);
                 var resuelta = await puerto.ResolverAsync(producto.PublicId, linea.ItemReference, ct);
                 if (resuelta.IsFailure) return ErroresDeReferenciaDeLinea.Invalid(linea.LineNumber, producto.Code, resuelta.Error.Message);
+                if (resuelta.Value.FaltaComplemento is { } falta)
+                    return ErroresDeReferenciaDeLinea.ComplementRequired(linea.LineNumber, producto.Code, falta, resuelta.Value.Etiqueta);
                 linea.ItemReference = resuelta.Value.Valor;
             }
         }
@@ -80,6 +96,10 @@ public static class ErroresDeReferenciaDeLinea
 {
     public static Error Required(int lineNumber, string productCode, string rotulo) => new ErrorConDatos("Inventory.Line.ReferenceRequired",
         $"Línea {lineNumber} ({productCode}): falta {rotulo.ToLowerInvariant()}.", new { lineNumber, productCode, label = rotulo });
+
+    public static Error ComplementRequired(int lineNumber, string productCode, string rotulo, string referencia) => new ErrorConDatos(
+        "Inventory.Line.ReferenceComplementRequired",
+        $"Línea {lineNumber} ({productCode}): falta {rotulo.ToLowerInvariant()} ({referencia}).", new { lineNumber, productCode, label = rotulo });
 
     public static Error Invalid(int lineNumber, string productCode, string motivo) => new ErrorConDatos("Inventory.Line.ReferenceInvalid",
         $"Línea {lineNumber} ({productCode}): {motivo}", new { lineNumber, productCode });

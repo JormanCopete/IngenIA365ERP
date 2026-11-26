@@ -75,7 +75,7 @@ public class VentasDeServiciosDeVehiculoTests
 
         var piden = await Puerto().ProductosQueLaPidenAsync(CancellationToken.None);
 
-        piden.Should().ContainSingle().Which.Should().Be(new ProductoConReferencia(_radio, VentasDeServiciosDeVehiculo.Rotulo));
+        piden.Should().ContainSingle().Which.Should().Be(new ProductoConReferencia(_radio, VentasDeServiciosDeVehiculo.Rotulo, VentasDeServiciosDeVehiculo.RotuloDeLaPlacaExterna));
     }
 
     [Theory]
@@ -134,17 +134,59 @@ public class VentasDeServiciosDeVehiculoTests
         r.IsSuccess.Should().BeTrue();
         r.Value.Valor.Should().Be(guardado);
         r.Value.Etiqueta.Should().Contain("fuera del parque");
+        // 2026-11-26: el lateral solo no basta: el externo pide también su placa.
+        r.Value.FaltaComplemento.Should().Be(VentasDeServiciosDeVehiculo.RotuloDeLaPlacaExterna);
     }
 
-    [Fact]
-    public async Task El_cargo_de_un_vehiculo_externo_avisa_con_el_lateral_digitado()
+    /// <summary>2026-11-26 (pedido del dueño): el externo se vende con lateral y placa; la línea guarda «lateral/placa» normalizado.</summary>
+    [Theory]
+    [InlineData("618/wdk-637", "618/WDK637", "WDK637")]
+    [InlineData(" 7 / abc 12d ", "7/ABC12D", "ABC12D")]
+    [InlineData("303/RET111", "303/RET111", "RET111")] // la placa de un retirado ya no es del parque
+    public async Task El_lateral_externo_con_su_placa_queda_completo(string digitado, string guardado, string placa)
+    {
+        await SembrarAsync();
+
+        var r = await Puerto().ResolverAsync(_radio, digitado, CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Valor.Should().Be(guardado);
+        r.Value.FaltaComplemento.Should().BeNull();
+        r.Value.Etiqueta.Should().Contain(placa).And.Contain("fuera del parque");
+    }
+
+    [Theory]
+    [InlineData("618/AB", "Transport.Sale.ExternalPlateInvalid")]
+    [InlineData("618/ABC#12", "Transport.Sale.ExternalPlateInvalid")]
+    [InlineData("618/abc-123", "Transport.Sale.ExternalPlateInFleet")] // la placa es de un vehículo del parque
+    [InlineData("101/ZZZ999", "Transport.Sale.FleetVehicleNoExternalPlate")] // el lateral es de un vehículo del parque
+    [InlineData("ABC123/ZZZ999", "Transport.Sale.FleetVehicleNoExternalPlate")]
+    [InlineData("NOEXISTE/ZZZ999", "Transport.Sale.VehicleNotFound")]
+    public async Task La_placa_del_externo_se_valida(string digitado, string codigo)
+    {
+        await SembrarAsync();
+
+        var r = await Puerto().ResolverAsync(_radio, digitado, CancellationToken.None);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be(codigo);
+    }
+
+    /// <summary>
+    /// El aviso del externo lleva lateral y placa; el cargo externo anterior al 2026-11-26 (sin placa) sigue con la placa vacía, que
+    /// <c>DestinoConectores.Valores</c> llena con el lateral al enviar.
+    /// </summary>
+    [Theory]
+    [InlineData("WDK637", "WDK637")]
+    [InlineData(null, "")]
+    public async Task El_cargo_de_un_vehiculo_externo_avisa_con_el_lateral_y_la_placa(string? placaExterna, string placaAvisada)
     {
         _db.Branches.Add(new Branch { Name = "Principal" });
         var conector = new Connector { Code = "RADIO", Name = "Radio", IsEnabled = true, CurrentVersionNumber = 1 };
         conector.Versions.Add(new ConnectorVersion { Number = 1, BaseUrl = "https://proveedor.example.com", DefinitionJson = "{}", DefinitionSha256 = "x" });
         var cargo = new ServiceCharge
         {
-            VehicleReference = "618", Service = new TransportService { ProductCode = "RADIO", Name = "Radio", Priority = 1, Connector = conector },
+            VehicleReference = "618", ExternalPlate = placaExterna, Service = new TransportService { ProductCode = "RADIO", Name = "Radio", Priority = 1, Connector = conector },
             Period = "202611", Origin = ChargeOrigin.Sale, InvoicePublicId = Guid.NewGuid(), InvoiceNumber = "FV-1", InvoiceLinePublicId = Guid.NewGuid(),
             Amount = 40_000m, Route = ChargeRoute.Cash, Status = ChargeStatus.Paid,
         };
@@ -162,15 +204,50 @@ public class VentasDeServiciosDeVehiculoTests
 
         envio.Should().NotBeNull();
         var carga = _db.IntegrationMessages.Should().ContainSingle().Subject.PayloadJson;
-        carga.Should().Contain("\"vehiculo.radioMovil\":\"618\"").And.Contain("\"vehiculo.placa\":\"\"");
+        carga.Should().Contain("\"vehiculo.radioMovil\":\"618\"").And.Contain($"\"vehiculo.placa\":\"{placaAvisada}\"");
     }
 
     /// <summary>El POS (documento equivalente) valida y confirma por el mismo camino que la factura: el externo pasa y deja su cargo.</summary>
     [Theory]
-    [InlineData(DocumentClass.PosEquivalentDocument, "618", null, "618")]
+    [InlineData(DocumentClass.PosEquivalentDocument, "618/wdk637", "618/WDK637", "618")]
     [InlineData(DocumentClass.PosEquivalentDocument, "101", "ABC123", null)]
-    [InlineData(DocumentClass.SalesInvoice, "618", null, "618")]
-    public async Task La_venta_del_POS_y_de_la_factura_acepta_vehiculos_externos(DocumentClass clase, string digitado, string? placa, string? externo)
+    [InlineData(DocumentClass.SalesInvoice, "618/WDK637", "618/WDK637", "618")]
+    public async Task La_venta_del_POS_y_de_la_factura_acepta_vehiculos_externos(DocumentClass clase, string digitado, string guardado, string? externo)
+    {
+        var venta = await VentaAsync(clase, digitado);
+
+        var falta = await ReferenciaDeLinea.ValidarAsync(_db, [Puerto()], venta, CancellationToken.None);
+        falta.Should().BeNull();
+        venta.Lines.Single().ItemReference.Should().Be(guardado);
+        await _db.SaveChangesAsync();
+
+        var r = await Puerto().AlConfirmarVentaAsync(venta.PublicId, CancellationToken.None);
+        await _db.SaveChangesAsync();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var cargo = _db.ServiceCharges.Should().ContainSingle().Subject;
+        cargo.VehicleReference.Should().Be(externo);
+        cargo.ExternalPlate.Should().Be(externo is null ? null : "WDK637");
+        (cargo.VehicleId is null).Should().Be(externo is not null);
+        cargo.Status.Should().Be(ChargeStatus.Paid);
+    }
+
+    /// <summary>2026-11-26: el externo sin placa no se confirma, ni en el POS ni en la factura.</summary>
+    [Theory]
+    [InlineData(DocumentClass.PosEquivalentDocument)]
+    [InlineData(DocumentClass.SalesInvoice)]
+    public async Task La_venta_a_un_externo_sin_placa_no_se_confirma(DocumentClass clase)
+    {
+        var venta = await VentaAsync(clase, "618");
+
+        var falta = await ReferenciaDeLinea.ValidarAsync(_db, [Puerto()], venta, CancellationToken.None);
+
+        falta.Should().NotBeNull();
+        falta!.Code.Should().Be("Inventory.Line.ReferenceComplementRequired");
+        falta.Message.Should().Contain("placa del vehículo externo").And.Contain("lateral 618");
+    }
+
+    private async Task<InventoryDocument> VentaAsync(DocumentClass clase, string digitado)
     {
         await SembrarAsync();
         var producto = new Product { Code = "RADIO", Name = "Radio", CategoryId = 1, BaseUnitId = 1, PublicId = _radio };
@@ -189,19 +266,6 @@ public class VentasDeServiciosDeVehiculoTests
             DocumentId = venta.Id, LineNumber = 1, PaymentMeansId = 1, Amount = 40_000m, MeansCode = "EFECTIVO", MeansName = "Efectivo",
             MeansClass = Domain.Enums.Core.PaymentMeansClass.Cash, DianPaymentMeansCode = "10",
         });
-
-        var falta = await ReferenciaDeLinea.ValidarAsync(_db, [Puerto()], venta, CancellationToken.None);
-        falta.Should().BeNull();
-        venta.Lines.Single().ItemReference.Should().Be(placa ?? externo);
-        await _db.SaveChangesAsync();
-
-        var r = await Puerto().AlConfirmarVentaAsync(venta.PublicId, CancellationToken.None);
-        await _db.SaveChangesAsync();
-
-        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
-        var cargo = _db.ServiceCharges.Should().ContainSingle().Subject;
-        cargo.VehicleReference.Should().Be(externo);
-        (cargo.VehicleId is null).Should().Be(externo is not null);
-        cargo.Status.Should().Be(ChargeStatus.Paid);
+        return venta;
     }
 }

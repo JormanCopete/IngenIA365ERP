@@ -139,6 +139,12 @@ public class ServiceCharge : AuditableEntity
     /// también se venden a clientes externos). Es lo que se avisa al sistema externo como lateral; nulo cuando hay vehículo.
     /// </summary>
     public string? VehicleReference { get; set; }
+
+    /// <summary>
+    /// La placa del vehículo externo, digitada en la venta junto con el lateral (2026-11-26, pedido del dueño: el sistema externo recibe
+    /// lateral y placa). Normalizada; nula cuando hay vehículo y en los cargos externos anteriores a ese día (esos avisan el lateral como placa).
+    /// </summary>
+    public string? ExternalPlate { get; set; }
     public int ServiceId { get; set; }
     public TransportService? Service { get; set; }
 

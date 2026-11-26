@@ -200,7 +200,8 @@ public sealed class DestinoConectores(
     /// Las variables del mensaje con su tipo del catálogo (las fechas como fecha, los valores como número). Un vehículo sin placa —el externo,
     /// que sólo se conoce por el lateral— va con el lateral como placa (2026-11-25, pedido del dueño: el conector de la radio exige
     /// <c>hcplaca</c> y el envío quedaba «revisar» con «Faltan datos para el envío: vehiculo.placa»). Se aplica al enviar, así vale también para
-    /// los avisos emitidos antes, que se reintentan con sus mismas variables.
+    /// los avisos emitidos antes, que se reintentan con sus mismas variables. Desde el 2026-11-26 la venta al externo pide también su placa, así
+    /// que este respaldo sólo alcanza a los cargos externos anteriores.
     /// </summary>
     public static Dictionary<string, object?> Valores(IReadOnlyDictionary<string, string> variables)
     {

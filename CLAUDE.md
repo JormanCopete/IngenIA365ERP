@@ -1054,7 +1054,12 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     (`VentasDeServiciosDeVehiculo.LateralExterno`) es el lateral de un vehículo de fuera; el cargo nace con `VehicleId` nulo y
     `VehicleReference`, y avisa con ese lateral en `vehiculo.radioMovil`; la placa viaja vacía y al enviar **va el lateral como placa**
     (`DestinoConectores.Valores`, pedido del dueño: el conector de la radio exige `hcplaca`). Una placa fuera del parque se sigue rechazando.
-    Migración aditiva `VentaDeServicioAVehiculoExterno` (`VehicleId` y `OwnerPersonId` nulos).
+    Migración aditiva `VentaDeServicioAVehiculoExterno` (`VehicleId` y `OwnerPersonId` nulos). **Desde el 2026-11-26 el externo pide
+    también su placa** (pedido del dueño): el puerto `IReferenciaDeLineaDeVenta` admite un complemento genérico (`FaltaComplemento`,
+    `RotuloDelComplemento`, separador `ReferenciaDeLinea.Separador` = `/`) y Comercial no confirma una línea que lo pide
+    (`Inventory.Line.ReferenceComplementRequired`); la línea guarda `lateral/placa`, la placa no puede ser del parque, el cargo la lleva en
+    `ServiceCharge.ExternalPlate` y el aviso la manda en `vehiculo.placa` (el lateral como placa queda sólo para los cargos anteriores).
+    Migración aditiva `PlacaDelVehiculoExterno`.
   - **Suscripciones, lista y facturación** (2026-11-25, pedido del dueño, sin migración):
     - **La lista se filtra en un solo sitio**, `FiltroDeVehiculos`. Lo usan la lista paginada y el informe `vehiculos` que la exporta, así
       lo que se ve y lo que se descarga es lo mismo. La vinculación se filtra con `AfiliacionVigente.VigenteEn`, la misma regla que

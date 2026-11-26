@@ -154,9 +154,18 @@
                             {
                                 <div class="toolbar">
                                     <label>Línea @conReferencia.LineNumber · @conReferencia.Product.Name · placa o lateral
-                                        <input id="@($"pos-referencia-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="40" value="@conReferencia.ItemReference" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números). Sin él la venta no se cobra."
+                                        <input id="@($"pos-referencia-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="40" value="@ReferenciaConComplemento.Parte(conReferencia.ItemReference)" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números) y después su placa. Sin él la venta no se cobra."
                                                disabled="@(_modo != Modo.Vendiendo)" @onchange="@(e => ReferenciaDeLineaAsync(conReferencia, e.Value?.ToString()))" />
                                     </label>
+                                    @if (_faltaComplemento.ContainsKey(conReferencia.LinePublicId) || ReferenciaConComplemento.Complemento(conReferencia.ItemReference) is not null)
+                                    {
+                                        @* 2026-11-26: el vehículo externo pide también su placa; el sistema del proveedor recibe lateral y placa. *@
+                                        <label>@RotuloDelComplemento(conReferencia)
+                                            <input id="@($"pos-complemento-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="12" value="@ReferenciaConComplemento.Complemento(conReferencia.ItemReference)"
+                                                   data-ayuda="La placa del vehículo que no es de la cooperativa: se envía al sistema del proveedor con el lateral. Sin ella la venta no se cobra."
+                                                   disabled="@(_modo != Modo.Vendiendo)" @onchange="@(e => ComplementoDeLineaAsync(conReferencia, e.Value?.ToString()))" />
+                                        </label>
+                                    }
                                     @if (_etiquetasDeReferencia.TryGetValue(conReferencia.LinePublicId, out var etiqueta)) { <span class="texto-tenue">@etiqueta</span> }
                                 </div>
                             }
@@ -572,12 +581,20 @@
     private Dictionary<Guid, string> _conReferencia = [];
     private readonly Dictionary<Guid, string> _etiquetasDeReferencia = [];
 
+    /// <summary>2026-11-26: el rótulo del segundo dato por producto y las líneas a las que les falta (el vehículo externo, su placa).</summary>
+    private Dictionary<Guid, string> _rotulosDeComplemento = [];
+    private readonly Dictionary<Guid, string> _faltaComplemento = [];
+
+    private string RotuloDelComplemento(LineaDelPosDto linea) => _faltaComplemento.GetValueOrDefault(linea.LinePublicId)
+        ?? _rotulosDeComplemento.GetValueOrDefault(linea.Product.PublicId) ?? "Complemento";
+
     /// <summary>Resuelve la placa o el lateral de la línea; guarda la placa (la línea sale con ella) y muestra el vehículo.</summary>
     private async Task ReferenciaDeLineaAsync(LineaDelPosDto linea, string? texto)
     {
         if (string.IsNullOrWhiteSpace(texto))
         {
             _etiquetasDeReferencia.Remove(linea.LinePublicId);
+            _faltaComplemento.Remove(linea.LinePublicId);
             await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: ""));
             return;
         }
@@ -587,9 +604,39 @@
             await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el vehículo.");
             return;
         }
-        _etiquetasDeReferencia[linea.LinePublicId] = r.Value.Etiqueta;
+        AnotarResuelta(linea.LinePublicId, r.Value);
         await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: r.Value.Valor));
         await EnfocarLecturaAsync();
+    }
+
+    /// <summary>2026-11-26: la placa del vehículo externo; se resuelve con el lateral y la línea guarda las dos.</summary>
+    private async Task ComplementoDeLineaAsync(LineaDelPosDto linea, string? texto)
+    {
+        var parte = ReferenciaConComplemento.Parte(linea.ItemReference);
+        if (string.IsNullOrWhiteSpace(parte)) return;
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            _faltaComplemento[linea.LinePublicId] = RotuloDelComplemento(linea);
+            await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: parte));
+            await EnfocarLecturaAsync();
+            return;
+        }
+        var r = await Ventas.ResolverReferenciaAsync(linea.Product.PublicId, ReferenciaConComplemento.Unir(parte, texto.Trim()));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "La placa no sirve.");
+            return;
+        }
+        AnotarResuelta(linea.LinePublicId, r.Value);
+        await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: r.Value.Valor));
+        await EnfocarLecturaAsync();
+    }
+
+    private void AnotarResuelta(Guid linea, ReferenciaResueltaDto resuelta)
+    {
+        _etiquetasDeReferencia[linea] = resuelta.Etiqueta;
+        if (resuelta.FaltaComplemento is { } falta) _faltaComplemento[linea] = falta;
+        else _faltaComplemento.Remove(linea);
     }
 
     protected override async Task OnInitializedAsync()
@@ -613,6 +660,9 @@
         _puedeVerCotizaciones = await tPuedeVerCotizaciones;
         var conReferencia = await tConReferencia;
         _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
+        _rotulosDeComplemento = conReferencia.IsSuccess
+            ? (conReferencia.Value ?? []).Where(p => p.RotuloDelComplemento is not null).ToDictionary(p => p.ProductPublicId, p => p.RotuloDelComplemento!)
+            : [];
 
         var punto = await tPunto;
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
@@ -1442,14 +1492,18 @@
     {
         await Enfocar("pos-lectura");
         // El campo de la placa puede no estar pintado todavía (la línea acaba de llegar): se enfoca después del próximo render.
-        _referenciaPorEnfocar = ReferenciaQueFalta() is { } falta ? $"pos-referencia-{falta.LinePublicId:N}" : null;
+        _referenciaPorEnfocar = ReferenciaQueFalta() is { } falta
+            ? $"pos-{(string.IsNullOrEmpty(falta.ItemReference) ? "referencia" : "complemento")}-{falta.LinePublicId:N}"
+            : null;
         if (_referenciaPorEnfocar is not null) StateHasChanged();
     }
 
     private string? _referenciaPorEnfocar;
 
     private LineaDelPosDto? ReferenciaQueFalta() => _modo != Modo.Vendiendo ? null
-        : _venta?.Lines.Where(l => _conReferencia.ContainsKey(l.Product.PublicId) && string.IsNullOrEmpty(l.ItemReference)).OrderBy(l => l.LineNumber).FirstOrDefault();
+        : _venta?.Lines.Where(l => _conReferencia.ContainsKey(l.Product.PublicId)
+                                   && (string.IsNullOrEmpty(l.ItemReference) || _faltaComplemento.ContainsKey(l.LinePublicId)))
+            .OrderBy(l => l.LineNumber).FirstOrDefault();
 
     /// <summary>2026-11-12: el foco donde trabaja la caja: «Nueva venta» con la tirilla en pantalla; si no, el campo de lectura.</summary>
     private Task EnfocarSegunElModoAsync() => _modo == Modo.Entregada ? Enfocar("pos-nueva-venta") : EnfocarLecturaAsync();
