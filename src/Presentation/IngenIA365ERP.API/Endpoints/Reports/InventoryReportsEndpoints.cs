@@ -127,6 +127,12 @@ public class InventoryReportsEndpoints : ICarterModule
                 Enum.TryParse<DocumentStatus>(q["status"].ToString(), ignoreCase: true, out var estado) && Enum.IsDefined(estado) ? estado : null));
         group.MapVistaDeInventario(ReorderAlertsReportQueryHandler.Vista, (f, _) => new ReorderAlertsReportQuery(f));
 
+        // 2026-11-26 (pedido del dueño): el catálogo completo de productos con existencia, costo y precios, y los precios por lista,
+        // para exportarlos desde /inventario/productos y /ventas/listas-de-precios.
+        group.MapVistaDeInventario(ProductsCatalogReportQueryHandler.Vista, (f, _) => new ProductsCatalogReportQuery(f));
+        group.MapVistaDeInventario(PriceListsReportQueryHandler.Vista,
+            (f, q) => new PriceListsReportQuery(f, Guid.TryParse(q["priceList"].ToString(), out var lista) ? lista : null));
+
         // US7 (I2, T531): los mensajes a otros módulos, los lotes de contabilización y la conciliación con Contabilidad (ésta exige
         // además Inventory.Reconciliation.View, que la vista declara). status, trigger y el destino entran por nombre o número.
         group.MapVistaDeInventario(MessagesReportQueryHandler.Vista,

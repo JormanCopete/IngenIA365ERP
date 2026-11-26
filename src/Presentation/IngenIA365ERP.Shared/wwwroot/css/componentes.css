@@ -1164,6 +1164,11 @@ input[type="checkbox"], input[type="radio"] {
 /* 2026-11-23 (pedido del dueño): las ventanas transaccionales de Comercial (factura, cotización, pedido, remisión, notas, compras) usan el mismo
    marco del comprobante: encabezado compacto con «Más datos», las líneas con su propio desplazamiento y el pie fijo con totales y comandos. */
 .encabezado-comercial { margin-bottom: 0; }
+/* 2026-11-26: el encabezado del editor comercial en una franja: columnas más angostas, menos separación y el cliente en dos columnas
+   en vez de la fila entera; así la tabla de líneas gana alto. */
+.encabezado-compacto { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--gap-sm) var(--gap-md); }
+.encabezado-compacto > .campo-ancho { grid-column: span 2; }
+@media (max-width: 700px) { .encabezado-compacto > .campo-ancho { grid-column: 1 / -1; } }
 .mas-datos { border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-0); }
 .mas-datos > summary { cursor: pointer; padding: var(--pad-xs) var(--pad-md); font-size: var(--texto-sm); color: var(--texto-secundario); }
 .mas-datos[open] > summary { border-bottom: 1px solid var(--borde); }

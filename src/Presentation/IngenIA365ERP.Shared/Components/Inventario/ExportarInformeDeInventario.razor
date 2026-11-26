@@ -1,0 +1,40 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject InventarioClient Inventario
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+@* 2026-11-26 (pedido del dueño): un botón que descarga en Excel una vista del centro de informes de inventario (/api/reports/inventory/{vista})
+   desde la pantalla donde se trabaja: el catálogo completo de productos en /inventario/productos y los precios por lista en
+   /ventas/listas-de-precios. Exportar exige Inventory.Reports.Export (la ruta lo pide; aquí sólo se esconde el botón). *@
+<PermissionGate Required="Inventory.Reports.Export">
+    <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_descarga.Activa" title="@Ayuda" OnClick="@ExportarAsync">
+        @(_descarga.Activa ? "Exportando…" : Texto)
+    </SfButton>
+</PermissionGate>
+
+@code {
+    /// <summary>La vista del centro de informes (<c>products</c>, <c>price-lists</c>).</summary>
+    [Parameter, EditorRequired] public string Vista { get; set; } = string.Empty;
+
+    /// <summary>Los filtros, sin «?» (p. ej. <c>category=…</c> o <c>priceList=…</c>); se leen al pulsar.</summary>
+    [Parameter] public Func<string>? Filtros { get; set; }
+
+    [Parameter] public string Texto { get; set; } = "Exportar";
+
+    [Parameter] public string? Ayuda { get; set; }
+
+    private readonly EstadoDeCarga _descarga = new();
+
+    private async Task ExportarAsync()
+    {
+        using var carga = _descarga.Iniciar();
+        var r = await Inventario.DescargarInformeAsync(Vista, Filtros?.Invoke() ?? string.Empty, "xlsx");
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar.");
+            return;
+        }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}
