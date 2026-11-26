@@ -41,7 +41,7 @@ public sealed class AnularYVolverAFacturarTests(CentralIdentityApiFixture fx)
         version["allowsCommercialOrigin"] = true;
         version["interestTaxConcept"] = new { taxed = false, supportAttachmentPublicId = Guid.NewGuid() };
         version["amounts"] = new { min = 1m, max = 30_000_000m };
-        version["terms"] = new { minMonths = 0, maxMonths = 12 };
+        version["terms"] = new { minMonths = 1, maxMonths = 12 };
         version["periodicities"] = new[] { "Monthly", "SinglePayment" };
         version["amortization"] = new { systems = new[] { "LevelPayment", "Bullet" } };
         var linea = await LineasE2E.CrearExitoAsync(http, t, "ADMTRN", "Cuota de administración", version);
