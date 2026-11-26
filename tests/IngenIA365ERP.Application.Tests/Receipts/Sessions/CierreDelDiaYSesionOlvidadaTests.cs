@@ -177,4 +177,48 @@ public class CierreDelDiaYSesionOlvidadaTests
 
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoCorteDespuesDelCicloDeCartera);
     }
+
+    // ------------------------------------------------------------------------------------- 2026-11-26, reabrir el día --
+
+    private Task<IngenIA365ERP.Application.Common.Models.Result<DayCloseDto>> ReabrirDiaAsync(string motivo = "Faltó un recaudo") =>
+        _c.ReabrirDia().Handle(new ReopenCollectionPointDayCommand(_c.Punto.PublicId, EscenarioDeRecaudo.Hoy, motivo), default);
+
+    [Fact]
+    public async Task El_supervisor_reabre_el_dia_con_motivo_y_el_siguiente_cierre_es_la_version_2()
+    {
+        var sesion = await _c.AbrirAsync();
+        await _c.Contar().Handle(new RegisterClosingCountCommand(sesion.PublicId, [_c.EnBilletes(null, (_c.B50, 10))]), default);
+        _c.E.Como(_c.E.Supervisor);
+        (await ReabrirDiaAsync()).Error.Code.Should().Be(ErroresDeRecaudo.CodigoDiaNoCerrado, "el día todavía no se cerró");
+        var primero = await CerrarDiaAsync();
+        primero.IsSuccess.Should().BeTrue(primero.IsFailure ? primero.Error.Message : string.Empty);
+
+        var reabierto = await ReabrirDiaAsync();
+
+        reabierto.IsSuccess.Should().BeTrue(reabierto.IsFailure ? reabierto.Error.Message : string.Empty);
+        reabierto.Value.ReopenReason.Should().Be("Faltó un recaudo");
+        reabierto.Value.Version.Should().Be(1);
+        (await ReabrirDiaAsync()).Error.Code.Should().Be(ErroresDeRecaudo.CodigoDiaNoCerrado, "ya está reabierto");
+        (await _c.E.Db.CollectionPointDays.SingleAsync()).Status.Should().Be(CollectionPointDayStatus.Open);
+
+        _c.E.Como(_c.E.OtroCajero);
+        var otra = await _c.Abrir().Handle(new OpenCashSessionCommand(_c.C2.PublicId, CajaDePrueba.Billetes((_c.B50, 10))), default);
+        otra.IsSuccess.Should().BeTrue("reabierto, el día recibe sesiones otra vez");
+        await _c.Contar().Handle(new RegisterClosingCountCommand(otra.Value.PublicId, [_c.EnBilletes(null, (_c.B50, 10))]), default);
+        _c.E.Como(_c.E.Supervisor);
+        var segundo = await CerrarDiaAsync();
+
+        segundo.IsSuccess.Should().BeTrue(segundo.IsFailure ? segundo.Error.Message : string.Empty);
+        segundo.Value.Version.Should().Be(2);
+        segundo.Value.SessionCount.Should().Be(2);
+        segundo.Value.ReopenedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Reabrir_exige_motivo()
+    {
+        var v = await new ReopenCollectionPointDayCommandValidator().ValidateAsync(new ReopenCollectionPointDayCommand(_c.Punto.PublicId, EscenarioDeRecaudo.Hoy, " "));
+
+        v.IsValid.Should().BeFalse();
+    }
 }

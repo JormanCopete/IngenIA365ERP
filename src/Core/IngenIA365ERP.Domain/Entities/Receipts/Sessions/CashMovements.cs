@@ -98,6 +98,12 @@ public class DayClose : AuditableEntity, IHechoInmutable
 {
     public int CollectionPointDayId { get; set; }
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el día se puede reabrir con motivo (<see cref="DayCloseReopening"/>) y volver a cerrar; cada cierre es una versión
+    /// nueva (1, 2, …) y el vigente es el de mayor versión sin reapertura.
+    /// </summary>
+    public int Version { get; set; } = 1;
+
     public int SessionCount { get; set; }
 
     public int ReceiptCount { get; set; }
@@ -118,6 +124,21 @@ public class DayClose : AuditableEntity, IHechoInmutable
     public int? SupervisorDelegationId { get; set; }
 
     public string VerificationCode { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// <c>RCD_DayCloseReopenings</c>: la reapertura de un cierre del día (2026-11-26, pedido del dueño), con su motivo, quién y cuándo. El cierre no se
+/// modifica: queda como estaba y esta fila dice que dejó de regir. A lo sumo una por cierre. (nuevo)
+/// </summary>
+public class DayCloseReopening : AuditableEntity, IHechoInmutable
+{
+    public int DayCloseId { get; set; }
+
+    public string Reason { get; set; } = string.Empty;
+
+    public DateTime ReopenedAt { get; set; }
+
+    public int ReopenedByUserId { get; set; }
 }
 
 /// <summary><c>RCD_DayCloseLines</c> (H): los totales del día por medio. (nuevo)</summary>

@@ -216,6 +216,27 @@ internal sealed record FilaDeVenta(
     }
 }
 
+/// <summary>
+/// Los documentos de venta y devolución confirmados de unas sesiones de caja, cada uno con su sesión. Los del POS la llevan en el
+/// encabezado; los de oficina (factura de venta, nota), sólo en los pagos que se arquean en ella: si son varias, la menor. Es la
+/// única regla de «qué vendió esta caja»: la usan «Mi caja», «Cajas del día», el arqueo y el informe de ventas por sesión.
+/// </summary>
+internal static class VentasDeLasSesiones
+{
+    public static async Task<List<FilaDeVenta>> LeerAsync(IApplicationDbContext db, IReadOnlyCollection<int> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+        var porPago = await db.DocumentPayments.AsNoTracking()
+            .Where(x => x.CashSessionId != null && ids.Contains(x.CashSessionId.Value) && !x.IsDeleted)
+            .Select(x => new { x.DocumentId, Sesion = x.CashSessionId!.Value }).Distinct().ToListAsync(ct);
+        var docsPorPago = porPago.Select(x => x.DocumentId).Distinct().ToList();
+        return (await FilaDeVenta.LeerAsync(db.InventoryDocuments.AsNoTracking()
+                .Where(d => (d.CashSessionId != null && ids.Contains(d.CashSessionId.Value)) || docsPorPago.Contains(d.Id)), ct))
+            .Select(v => v.CashSessionId is int s && ids.Contains(s) ? v : v with { CashSessionId = porPago.Where(x => x.DocumentId == v.Id).Min(x => x.Sesion) })
+            .ToList();
+    }
+}
+
 // ------------------------------------------------------------------------------------------------ sales-by-session --
 
 /// <summary>
@@ -259,15 +280,7 @@ public sealed class SalesBySessionReportQueryHandler(
         var lista = await q.OrderBy(s => s.OperatingDate).ThenBy(s => s.Id)
             .Select(s => new { s.Id, s.PublicId, s.PointOfSaleId, s.CashRegisterId, s.CashierName, s.OperatingDate }).ToListAsync(ct);
         var ids = lista.Select(s => s.Id).ToList();
-        // Los documentos de la sesión: los del POS la llevan en el encabezado; los de oficina, en los pagos que se arquean en ella.
-        var porPago = await db.DocumentPayments.AsNoTracking()
-            .Where(x => x.CashSessionId != null && ids.Contains(x.CashSessionId.Value) && !x.IsDeleted)
-            .Select(x => new { x.DocumentId, Sesion = x.CashSessionId!.Value }).Distinct().ToListAsync(ct);
-        var docsPorPago = porPago.Select(x => x.DocumentId).Distinct().ToList();
-        var ventas = (await FilaDeVenta.LeerAsync(db.InventoryDocuments.AsNoTracking()
-                .Where(d => (d.CashSessionId != null && ids.Contains(d.CashSessionId.Value)) || docsPorPago.Contains(d.Id)), ct))
-            .Select(v => v.CashSessionId is not null ? v : v with { CashSessionId = porPago.Where(x => x.DocumentId == v.Id).Min(x => x.Sesion) })
-            .ToList();
+        var ventas = await VentasDeLasSesiones.LeerAsync(db, ids, ct);
         var puntos = await datos.PuntosAsync(lista.Select(s => s.PointOfSaleId), ct);
         var cajas = await datos.CajasAsync(lista.Select(s => s.CashRegisterId), ct);
         var clientes = porCliente ? await datos.ClientesAsync(ventas.Select(v => (v.Id, v.PersonId)).ToList(), ct) : [];

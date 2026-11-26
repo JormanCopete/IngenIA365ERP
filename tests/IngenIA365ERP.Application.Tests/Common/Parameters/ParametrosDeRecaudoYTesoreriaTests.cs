@@ -27,7 +27,7 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.RecaudoHoraDeCorte, "18:00", false },
         { P.ModuloRecaudo, P.CajaArqueoCiego, "true", false },
         { P.ModuloRecaudo, P.CajaBaseModo, "DailyBase", false },
-        { P.ModuloRecaudo, P.CajaTratamientoFaltante, "CashierReceivable", false },
+        { P.ModuloRecaudo, P.CajaTratamientoFaltante, "Expense", false },
         { P.ModuloRecaudo, P.CajaAdmiteCheque, "false", false },
         { P.ModuloRecaudo, P.CajaAdmiteChequeDeTercero, "true", false },
         { P.ModuloRecaudo, P.CajaFechaValorAnteriorMaxDias, "0", false },

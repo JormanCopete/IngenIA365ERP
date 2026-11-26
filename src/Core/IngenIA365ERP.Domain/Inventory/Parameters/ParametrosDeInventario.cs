@@ -146,9 +146,7 @@ public static class ParametrosDeInventario
     public const string ProductosUnidadBasePorDefecto = "Productos.UnidadBasePorDefecto";
 
     public const string CajaBaseModo = "Caja.BaseModo";
-    public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
-    public const string CajaUnaSesionPorCajero = "Caja.UnaSesionPorCajero";
     public const string CarteraCuentaPorCobrarRegistradaPor = "Cartera.CuentaPorCobrarRegistradaPor";
     public const string CarteraIntegracionHabilitadaDesde = "Cartera.IntegracionHabilitadaDesde";
     public const string CarteraPoliticaSinRespuesta = "Cartera.PoliticaSinRespuesta";
@@ -297,9 +295,9 @@ public static class ParametrosDeInventario
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),
-        Eleccion(Modulo, CajaTratamientoFaltante, "Tratamiento del faltante de arqueo.", ["Gasto", "CargoAlCajero"], "Gasto", I3, General, Punto),
         SiNo(Modulo, CajaArqueoCiego, "El cajero cuenta sin ver el saldo esperado.", false, I3, General, Punto),
-        SiNo(Modulo, CajaUnaSesionPorCajero, "Un cajero sólo puede tener una sesión de caja abierta.", true, I3),
+        // 2026-11-26: Caja.TratamientoFaltante y Caja.UnaSesionPorCajero son los de Recaudo (ParametrosDeRecaudoYTesoreria), comunes a las dos cajas,
+        // como Caja.ArqueoEstricto y Caja.SoloCajerosAsignados.
 
         // ---------------------------------------------------------------------------------- cartera --
         // Feature 013 (T0177, D16): el defecto pasa a «Cartera»; CreditoEnLaVenta.SelloAsync lo fuerza a «Contabilidad» mientras

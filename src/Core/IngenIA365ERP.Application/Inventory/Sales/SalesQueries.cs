@@ -288,7 +288,8 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         if (request.To is { } hasta) consulta = consulta.Where(d => d.OperationDate <= hasta);
         if (request.PointOfSale is { } punto) consulta = consulta.Where(d => db.PointsOfSale.Any(p => p.Id == d.PointOfSaleId && p.PublicId == punto));
         if (request.CashRegister is { } caja) consulta = consulta.Where(d => db.CashRegisters.Any(c => c.Id == d.CashRegisterId && c.PublicId == caja));
-        if (request.CashSession is { } sesion) consulta = consulta.Where(d => db.CashSessions.Any(s => s.Id == d.CashSessionId && s.PublicId == sesion));
+        if (request.CashSession is { } sesion) consulta = consulta.Where(d => db.CashSessions.Any(s => s.PublicId == sesion
+            && (s.Id == d.CashSessionId || db.DocumentPayments.Any(p => p.DocumentId == d.Id && p.CashSessionId == s.Id && !p.IsDeleted))));
         if (request.Person is { } persona) consulta = consulta.Where(d => db.People.Any(p => p.Id == d.CounterpartyPersonId && p.PublicId == persona));
         if (request.Salesperson is { } vendedor) consulta = consulta.Where(d => db.Salespeople.IgnoreQueryFilters().Any(s => s.Id == d.SalespersonId && s.PublicId == vendedor));
         if (request.Number is { } numero) consulta = consulta.Where(d => d.Number == numero);

@@ -183,7 +183,7 @@ public class LectorDeParametrosTests
     public void El_catalogo_tiene_las_claves_de_data_model_sin_repetir()
     {
         CatalogoDeParametros.Todas.Select(d => (d.Modulo, d.Clave)).Should().OnlyHaveUniqueItems();
-        ParametrosDeInventario.Definiciones.Should().HaveCount(56,
+        ParametrosDeInventario.Definiciones.Should().HaveCount(54, // 2026-11-26: menos Caja.TratamientoFaltante y Caja.UnaSesionPorCajero (rigen los de Recaudo)
             "41 de data-model §4.2 más Costeo.CambioExigeActa (I5, T842), el tipo y la bodega de la factura de los cargos de captación (feature 014, D51), Integracion.TopeDeIntentos (feature 023), Comercial.BusquedaDeProductos y Comercial.CondicionesDeLaCotizacion (2026-11-12), las tres de la codificación automática de productos (2026-11-12) Ventas.CentroDeCostoSinPuntoDeVenta (2026-11-13) y Compras.ToleranciaFrenteAlXml (2026-11-14) las dos de unidades del producto y Comercial.CotizacionExigeCliente (2026-11-15) y Contabilidad.CostoDeVenta (2026-11-18)");
         ParametrosTributarios.Definiciones.Should().HaveCount(6);
         ParametrosDeFacturacionElectronica.Definiciones.Should().HaveCount(13, "y Dian.TopeDeIntentos (feature 023) y Dian.CajaEmiteFactura (2026-11-13)");

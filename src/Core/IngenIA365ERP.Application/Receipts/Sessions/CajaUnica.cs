@@ -71,7 +71,7 @@ public sealed class RegisterPointOfSaleIntakeCommandHandler(
         foreach (var m in request.Means.Where(m => m.Expected > 0m))
         {
             var medio = sellados.Means.FirstOrDefault(x => x.PaymentMeansId == m.PaymentMeansId);
-            if (medio is null) continue; // un medio que Recaudo no recibe se quedó arqueado y cuadrado en el punto de venta
+            if (medio is null) continue; // PrepararCierreAsync ya rechazó un medio con valor que Recaudo no recibe
             var movimiento = new CashMovement
             {
                 DocumentTypeId = tipo.Id,
@@ -220,6 +220,11 @@ public sealed class CajaUnica(IApplicationDbContext db, ISender sender, Parametr
         if (vinculada is null || yaEntro) return Result.Success();
         if (vinculada.Open && vinculada.Means.FirstOrDefault(m => m.CountMethod != CashCountMethod.None && m.Expected < 0m) is { } negativo)
             return Result.Failure(ErroresDeRecaudo.PuntoDeVentaEnNegativo(negativo.Code, negativo.Expected));
+        // 2026-11-26: un medio del punto de venta que esta sesión no arquea no entraba a Recaudo y nadie lo contaba; se rechaza con qué hacer.
+        var sesion = await db.ReceiptsCashSessions.AsNoTracking().FirstAsync(s => s.PublicId == sesionDeRecaudo, ct);
+        var sellados = ValoresSelladosDeLaSesion.De(sesion);
+        if (vinculada.Means.FirstOrDefault(m => m.CountMethod != CashCountMethod.None && m.Expected > 0m && sellados.Medio(m.PaymentMeansId) is null) is { } ajeno)
+            return Result.Failure(ErroresDeRecaudo.PuntoDeVentaConMedioAjeno(ajeno.Code, ajeno.Expected));
 
         var comprobado = await comprobar(pendiente);
         if (comprobado.IsFailure) return comprobado;

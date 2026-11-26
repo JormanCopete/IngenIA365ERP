@@ -52,7 +52,8 @@ public sealed record CashSessionDto(
     int SalesCount,
     decimal SalesTotal,
     CashDocumentRefDto? DifferenceDocument,
-    Guid? LinkedSessionPublicId = null);
+    Guid? LinkedSessionPublicId = null,
+    decimal CreditSalesTotal = 0m);
 
 /// <summary>El resultado de abrir (§21.1): la sesión, el ingreso de base si lo hubo y los avisos. (nuevo)</summary>
 public sealed record OpenCashSessionResultDto(CashSessionDto Session, CashDocumentRefDto? BaseIncomeDocument, IReadOnlyList<AvisoDto> Warnings);

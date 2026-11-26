@@ -120,6 +120,21 @@ public class SesionDeCajaTests
     }
 
     [Fact]
+    public async Task Con_fondo_fijo_y_el_arqueo_sencillo_la_base_es_la_que_cuenta_el_cajero()
+    {
+        // 2026-11-26: como en el punto de venta, con Caja.ArqueoEstricto apagado la base contada vale.
+        var c = new CajaDePrueba(estricto: false);
+        c.C1.BaseMode = CashBoxBaseMode.FixedFund;
+        await c.E.Db.SaveChangesAsync();
+        c.E.Como(c.E.Cajera);
+
+        var r = await c.Abrir().Handle(new OpenCashSessionCommand(c.C1.PublicId, CajaDePrueba.Billetes((c.B50, 9))), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        (await c.E.Db.ReceiptsCashSessions.SingleAsync(x => x.PublicId == r.Value.PublicId)).OpeningBase.Should().Be(450_000m);
+    }
+
+    [Fact]
     public async Task Sin_sesion_la_cajera_no_tiene_sesion_actual_y_el_error_es_Session_Required()
     {
         _c.E.Como(_c.E.Cajera);

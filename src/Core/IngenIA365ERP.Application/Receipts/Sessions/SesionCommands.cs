@@ -115,7 +115,9 @@ public sealed class OpenCashSessionCommandHandler(
         }
         if (baseContada > 0m && efectivo is null)
             return Result.Failure<CashSessionDto>(ErroresDeRecaudo.MovimientoInvalido("El punto no ofrece efectivo: la sesión abre sin base."));
-        if (caja.BaseMode == CashBoxBaseMode.FixedFund && baseContada != caja.BaseAmount)
+        // 2026-11-26: como en el punto de venta, con el arqueo sencillo (Caja.ArqueoEstricto apagado) la base es lo que el cajero contó; con el
+        // estricto, el fondo fijo no admite otra base.
+        if (caja.BaseMode == CashBoxBaseMode.FixedFund && baseContada != caja.BaseAmount && await ArqueoEstricto.EsAsync(parametros, hoy, ct))
             return Result.Failure<CashSessionDto>(ErroresDeRecaudo.BaseDistintaDelFondo(caja.BaseAmount, baseContada));
 
         var tratamiento = await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.CajaTratamientoFaltante, hoy, ct) == nameof(CountTreatment.Expense)

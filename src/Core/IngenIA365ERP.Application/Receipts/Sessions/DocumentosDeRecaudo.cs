@@ -115,10 +115,10 @@ public sealed class GetDayCloseReportQueryHandler(IApplicationDbContext db, IAlc
     {
         var punto = await Setup.AlcanceDePuntos.PuntoVisibleAsync(db, alcance, request.CollectionPointPublicId, seguir: false, ct);
         if (punto is null) return Result.Failure<CierreDelDiaModel>(ErroresDeRecaudo.NoEncontrado("El punto de recaudo"));
-        var cierre = await (from c in db.ReceiptsDayCloses.AsNoTracking()
-                            join d in db.CollectionPointDays.AsNoTracking() on c.CollectionPointDayId equals d.Id
-                            where d.CollectionPointId == punto.Id && d.BusinessDate == request.BusinessDate
-                            select c).FirstOrDefaultAsync(ct);
+        // 2026-11-26: el cierre vigente (el día pudo reabrirse y volver a cerrarse).
+        var diaId = await db.CollectionPointDays.AsNoTracking().Where(d => d.CollectionPointId == punto.Id && d.BusinessDate == request.BusinessDate)
+            .Select(d => (int?)d.Id).FirstOrDefaultAsync(ct);
+        var cierre = diaId is int id ? await CierresDelDia.VigenteAsync(db, id, ct) : null;
         if (cierre is null) return Result.Failure<CierreDelDiaModel>(ErroresDeRecaudo.NoEncontrado("El cierre del día"));
         var dto = await CierresDelDia.DtoAsync(db, cierre, ct);
         return Result.Success(new CierreDelDiaModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct),

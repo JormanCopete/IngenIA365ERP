@@ -228,7 +228,15 @@
             var e = await Cliente.EsperadoAsync(s.PublicId);
             _esperado = e.IsSuccess ? e.Value : null;
             if (_esperado is { Hidden: false } esp)
-                _esperados = esp.Means.Select(m => (s.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Name ?? m.Code, m.Expected)).ToList();
+            {
+                // 2026-11-26, caja única: lo esperado suma lo del punto de venta (POS y facturas de oficina), igual que «Arquear y cerrar».
+                IReadOnlyList<CajaUnicaMedioDto> delPunto = _cajaUnica is { PosSessionOpen: true } caja ? caja.Means : [];
+                var propios = esp.Means.Select(m => (s.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Name ?? m.Code,
+                    m.Expected + (delPunto.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Expected ?? 0m))).ToList();
+                var soloDelPunto = delPunto.Where(x => x.Expected is > 0m && esp.Means.All(m => m.PaymentMeansPublicId != x.PaymentMeansPublicId))
+                    .Select(x => ($"{x.Code} (punto de venta)", x.Expected ?? 0m));
+                _esperados = [.. propios, .. soloDelPunto];
+            }
             _desde = s.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
             _hacia = s.Means.Skip(1).FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
         }

@@ -32,6 +32,7 @@ public static class ErroresDeCaja
     public const string MovementInvalidCode = "Inventory.CashMovement.Invalid";
     public const string DayCloseSessionsOpenCode = "Inventory.DayClose.SessionsOpen";
     public const string DayCloseAlreadyClosedCode = "Inventory.DayClose.AlreadyClosed";
+    public const string DayCloseDifferencesPendingCode = "Inventory.DayClose.DifferencesPending";
     public const string DayCloseNotFoundCode = "Inventory.DayClose.NotFound";
     public const string DayCloseNotClosedCode = "Inventory.DayClose.NotClosed";
 
@@ -124,6 +125,11 @@ public static class ErroresDeCaja
     /// <summary>Sesiones abiertas del punto con esa fecha (422, §21.4).</summary>
     public static Error DayCloseSessionsOpen(IReadOnlyList<SesionAbiertaDto> sessions) => new ErrorConDatos(DayCloseSessionsOpenCode,
         $"Hay {sessions.Count} sesión(es) abierta(s) en el punto con esa fecha: ciérrelas antes de cerrar el día.", new { sessions });
+
+    /// <summary>2026-11-26: diferencias de arqueo del día esperando aprobación (422), igual que en Recaudo. (nuevo)</summary>
+    public static Error DayCloseDifferencesPending(IReadOnlyList<string> documents) => new ErrorConDatos(DayCloseDifferencesPendingCode,
+        $"Hay {documents.Count} diferencia(s) de arqueo del día esperando aprobación ({string.Join(", ", documents)}): apruébelas o recházelas antes de cerrar el día.",
+        new { documents });
 
     /// <summary>El cierre del día no existe o está fuera del alcance (404). (nuevo)</summary>
     public static Error DayCloseNotFound() => new(DayCloseNotFoundCode, "El cierre del día no existe.");

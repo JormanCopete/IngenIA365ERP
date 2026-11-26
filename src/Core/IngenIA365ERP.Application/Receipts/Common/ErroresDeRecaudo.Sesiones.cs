@@ -109,6 +109,11 @@ public static partial class ErroresDeRecaudo
 
     public static Error DiaCerrado() => new(CodigoDiaCerrado, "El día del punto ya está cerrado.");
 
+    public const string CodigoDiaNoCerrado = "Receipts.Day.NotClosed";
+
+    /// <summary>2026-11-26: se pidió reabrir un día que no está cerrado (nunca se cerró o ya se reabrió). (nuevo)</summary>
+    public static Error DiaNoCerrado() => new(CodigoDiaNoCerrado, "El día del punto no está cerrado: no hay nada que reabrir.");
+
     public static Error DobleCustodia() => new(CodigoDobleCustodia,
         "Con doble custodia, el movimiento lleva un segundo custodio vigente de la bóveda, distinto de quien lo registra.");
 
@@ -152,5 +157,14 @@ public static partial class ErroresDeRecaudo
     public static Error PuntoDeVentaEnNegativo(string medio, decimal valor) => new ErrorConDatos(CodigoPuntoDeVentaEnNegativo,
         $"En la caja del punto de venta salió más {medio} del que entró ({Math.Abs(valor):N0}), por ejemplo por una devolución: registre en el punto de venta "
         + "un ingreso desde la caja fuerte por ese valor (Movimiento de caja) y vuelva a arquear.",
+        new { paymentMeans = medio, amount = valor });
+
+    public const string CodigoPuntoDeVentaConMedioAjeno = "Receipts.SingleSession.PointOfSaleForeignMeans";
+
+    /// <summary>2026-11-26: con la caja única, el punto de venta recibió un medio que esta caja de Recaudo no arquea; nadie lo contaría.</summary>
+    public static Error PuntoDeVentaConMedioAjeno(string medio, decimal valor) => new ErrorConDatos(CodigoPuntoDeVentaConMedioAjeno,
+        $"La caja del punto de venta recibió {valor:N0} en {medio}, un medio que esta caja de Recaudo no recibe, y con la caja única nadie lo contaría: "
+        + "agregue el medio al punto de Recaudo (Recaudo → Configuración) y abra una sesión nueva, o páselo a la caja fuerte desde el punto de venta "
+        + "(Movimiento de caja) antes de arquear.",
         new { paymentMeans = medio, amount = valor });
 }
