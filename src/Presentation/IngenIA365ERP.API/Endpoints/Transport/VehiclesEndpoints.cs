@@ -20,8 +20,10 @@ public sealed class VehiclesEndpoints : ICarterModule
     {
         var g = TransportGroup.Grupo(app, "/vehicles", "Transporte Vehículos");
 
-        g.MapGet("/", async (string? q, VehicleStatus? status, Guid? owner, int? page, int? pageSize, ISender s, CancellationToken ct) =>
-                await s.Send(new ListVehiclesQuery(q, status, owner, page ?? 1, pageSize ?? 50), ct))
+        // 2026-11-25: también por vinculación (affiliation) y por servicio (service + serviceFilter: Subscribed, NotSubscribed, None, Any).
+        g.MapGet("/", async (string? q, VehicleStatus? status, Guid? owner, int? page, int? pageSize, AffiliationClass? affiliation, Guid? service,
+                    VehicleServiceFilter? serviceFilter, ISender s, CancellationToken ct) =>
+                await s.Send(new ListVehiclesQuery(q, status, owner, page ?? 1, pageSize ?? 50, affiliation, service, serviceFilter), ct))
             .WithName("Transport_Vehicles_List").RequirePermission(TransportPermissions.VehiclesView);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetVehicleQuery(id), ct))

@@ -68,7 +68,14 @@ public sealed record VehicleListItemDto(
     AffiliationClass Affiliation,
     string? Brand,
     string? Line,
-    short? ModelYear);
+    short? ModelYear,
+    IReadOnlyList<VehicleServiceTagDto> Services);
+
+/// <summary>
+/// Un servicio del vehículo en el listado (2026-11-25): de una suscripción viva que no terminó antes de hoy. <c>Upcoming</c> = todavía no
+/// empieza; <c>AgreedPrice</c> = tiene precio pactado.
+/// </summary>
+public sealed record VehicleServiceTagDto(Guid ServicePublicId, string Name, bool AgreedPrice, DateOnly From, DateOnly? To, bool Upcoming);
 
 /// <summary>Un evento de la historia del vehículo.</summary>
 public sealed record VehicleEventDto(
@@ -118,9 +125,13 @@ public sealed record VehicleDocumentDto(
 public sealed record VehicleDriverDto(
     Guid DriverPublicId, Guid AssignmentPublicId, Guid PersonPublicId, string TaxId, string FullName, DateOnly From, DateOnly? To, bool IsPrimary, bool IsCurrent);
 
-/// <summary>Una suscripción del vehículo a un servicio, con su precio pactado vigente (US6).</summary>
+/// <summary>
+/// Una suscripción del vehículo a un servicio, con su precio pactado vigente (US6). <c>Billed</c> = tiene cargos de la facturación mensual
+/// no anulados en su vigencia; sin ellos se puede quitar o mover su inicio (2026-11-25).
+/// </summary>
 public sealed record VehicleSubscriptionDto(
-    Guid PublicId, Guid ServicePublicId, string ServiceName, string ProductCode, DateOnly From, DateOnly? To, decimal? AgreedPrice, bool IsCurrent);
+    Guid PublicId, Guid ServicePublicId, string ServiceName, string ProductCode, DateOnly From, DateOnly? To, decimal? AgreedPrice, bool IsCurrent,
+    string? Reason = null, bool Billed = false);
 
 /// <summary>Lo que devuelve el alta de un vehículo.</summary>
 public sealed record VehicleCreatedDto(Guid VehiclePublicId, Guid OwnerPersonPublicId);

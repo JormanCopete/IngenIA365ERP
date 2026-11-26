@@ -20,6 +20,10 @@ public sealed class BillingEndpoints : ICarterModule
         g.MapGet("/preview", async (string period, ISender s, CancellationToken ct) => await s.Send(new PreviewServiceBillingQuery(period), ct))
             .WithName("Transport_Billing_Preview").RequirePermission(TransportPermissions.BillingView);
 
+        // 2026-11-25: los avisos antes de facturar (período anterior al mes en curso, suscripciones que empezaron después del día 1).
+        g.MapGet("/check", async (string period, Guid? vehicle, ISender s, CancellationToken ct) => await s.Send(new CheckServiceBillingPeriodQuery(period, vehicle), ct))
+            .WithName("Transport_Billing_Check").RequirePermission(new AlgunPermiso(TransportPermissions.BillingView, TransportPermissions.BillingRun));
+
         g.MapPost("/single", async (IndividualRequest b, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RunSingleServiceBillingCommand(b.VehiclePublicId ?? Guid.Empty, b.Period ?? "", b.PaymentMode) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Transport_Billing_Single").ConClaveDeOperacion().RequirePermission(TransportPermissions.BillingRun);
