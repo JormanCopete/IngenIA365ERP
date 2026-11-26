@@ -1,6 +1,9 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.API.Reports;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Paging;
+using IngenIA365ERP.Application.Inventory.Reports;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
 using IngenIA365ERP.Application.Inventory.Pricing.Promotions;
@@ -267,6 +270,28 @@ public class SalesEndpoints : ICarterModule
             .WithName("Inventory_Sales_Documents_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
+
+        // 2026-11-25 (pedido del dueño): la lista filtrada, a Excel o PDF, con los mismos filtros. Trae al cliente: exige exportar informes de
+        // Inventario y sus datos personales, y queda en la auditoría como las demás exportaciones de Inventario.
+        group.MapGet("/export", async (
+                DocumentClass? @class, Guid? documentType, DocumentStatus? status, DateOnly? from, DateOnly? to, Guid? pointOfSale, Guid? cashRegister,
+                Guid? cashSession, Guid? person, Guid? salesperson, long? number, string? electronicStatus, bool? pendingDelivery,
+                bool? pendingValidation, string? validity, string? invoicing, string? customer, string? createdBy, Guid? paymentMeans, decimal? minTotal,
+                decimal? maxTotal, string? format, HttpContext http, ISender sender, InventoryAuditEmitter auditoria, CancellationToken ct) =>
+            {
+                var filtros = new ListSalesDocumentsQuery(@class, documentType, status, from, to, pointOfSale, cashRegister, cashSession, person,
+                    salesperson, number, electronicStatus, pendingDelivery, pendingValidation, 1, PageRequest.MaxPageSize, validity, invoicing, customer, createdBy,
+                    paymentMeans, minTotal, maxTotal);
+                var formato = string.IsNullOrWhiteSpace(format) ? "xlsx" : format;
+                var resultado = await sender.Send(new ExportSalesDocumentsQuery(filtros), ct);
+                if (resultado.IsSuccess && EntregaDeInformes.EsExportacion(formato) && EntregaDeInformes.EsFormatoValido(formato))
+                    await auditoria.EmitirExportacionAsync("sales-documents", filtros, EntregaDeInformes.Normalizar(formato), resultado.Value.Filas.Count, ct);
+                return await EntregaDeInformes.EntregarAsync(resultado, formato, "ventas", http);
+            })
+            .WithName("Inventory_Sales_Documents_Export")
+            .RequirePermission(Ver)
+            .RequirePermission(Reports.InventoryReportsRoutes.PermisoDeExportar)
+            .RequirePermission(Reports.InventoryReportsRoutes.PermisoDeDatosPersonales);
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetSalesDocumentQuery(id), ct))

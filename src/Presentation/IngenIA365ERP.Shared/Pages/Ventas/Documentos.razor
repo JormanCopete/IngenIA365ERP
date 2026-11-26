@@ -7,6 +7,7 @@
 @inject VentasClient Ventas
 @inject InventarioClient Inventario
 @inject MediosDePagoClient Medios
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
@@ -19,13 +20,20 @@
    2026-11-24 (pedido del dueño): los filtros en un panel (PanelDeFiltros). A la vista número, cliente (documento o nombre, en cualquier
    orden), fechas, clase y estado; en «Más filtros» tipo de documento, punto y caja, vendedor, medio de pago, usuario que lo hizo, estado
    ante la DIAN, valor desde y hasta, pendientes de entrega y crédito por validar. Los filtros quedan en la dirección: al volver de un
-   documento («Volver a las ventas» o «atrás») la lista sale como estaba. *@
+   documento («Volver a las ventas» o «atrás») la lista sale como estaba.
+   2026-11-25 (pedido del dueño): «Exportar a Excel» descarga la lista con los mismos filtros, sin página (permisos de exportar informes de
+   Inventario y de sus datos personales, porque trae al cliente). *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Documentos de venta</h3>
         <div class="toolbar">
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Reports.Export">
+                <PermissionGate Required="Inventory.Reports.ExportPersonalData">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_carga.Activa || _exportando.Activa)" OnClick="@ExportarAsync">Exportar a Excel</SfButton>
+                </PermissionGate>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Sales.Create">
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/ventas/facturas/nueva"))">Nueva factura</SfButton>
             </PermissionGate>
@@ -164,7 +172,7 @@
     private static readonly int[] ClasesDeLaLista =
         [.. TextosDeVentas.ClasesDeVenta.Concat(TextosDeVentas.ClasesDeNota).Concat(TextosDeVentas.ClasesDeNotaDebito).Distinct()];
 
-    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _carga = new(), _exportando = new();
     private List<ResumenDeVentaDto> _filas = [];
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<PuntoDeVentaDto> _puntos = [];
@@ -283,6 +291,24 @@
         return TraerAsync();
     }
 
+    /// <summary>La lista con los mismos filtros, a Excel (sin página).</summary>
+    private async Task ExportarAsync()
+    {
+        using var carga = _exportando.Iniciar();
+        var r = await Ventas.ExportarDocumentosAsync(Filtro());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private FiltroDeVentas Filtro() => new()
+    {
+        Class = _clase, Status = _estado, From = _desde, To = _hasta, Customer = FiltrosEnLaDireccion.Valor(_cliente), Number = _numero,
+        DocumentType = _tipo, PointOfSale = _punto, CashRegister = _caja, Salesperson = _vendedor, PaymentMeans = _medio,
+        CreatedBy = FiltrosEnLaDireccion.Valor(_usuario), ElectronicStatus = _dian, MinTotal = _valorDesde, MaxTotal = _valorHasta,
+        PendingDelivery = _pendientesDeEntrega ? true : null, PendingValidation = _creditoPorValidar ? true : null,
+        Page = _pagina, PageSize = TamanoDePagina,
+    };
+
     private async Task TraerAsync()
     {
         if (_valorDesde is { } minimo && _valorHasta is { } maximo && minimo > maximo)
@@ -291,14 +317,7 @@
             return;
         }
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
-        {
-            Class = _clase, Status = _estado, From = _desde, To = _hasta, Customer = FiltrosEnLaDireccion.Valor(_cliente), Number = _numero,
-            DocumentType = _tipo, PointOfSale = _punto, CashRegister = _caja, Salesperson = _vendedor, PaymentMeans = _medio,
-            CreatedBy = FiltrosEnLaDireccion.Valor(_usuario), ElectronicStatus = _dian, MinTotal = _valorDesde, MaxTotal = _valorHasta,
-            PendingDelivery = _pendientesDeEntrega ? true : null, PendingValidation = _creditoPorValidar ? true : null,
-            Page = _pagina, PageSize = TamanoDePagina,
-        });
+        var r = await Ventas.ListarDocumentosAsync(Filtro());
         if (!r.IsSuccess) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas."); return; }
         _filas = [.. r.Value!.Items];
         _total = r.Value.TotalCount;

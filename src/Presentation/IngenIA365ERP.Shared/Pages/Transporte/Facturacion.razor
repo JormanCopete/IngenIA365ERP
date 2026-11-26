@@ -2,7 +2,11 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Transporte
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Nomina
 @inject ServiciosDeTransporteClient Api
+@inject InformesDeRecaudoYTesoreriaClient InformesApi
+@inject DescargaDeArchivos Descargas
 @inject INotificationService Notification
 
 <PageTitle>Facturación de servicios - IngenIA365ERP</PageTitle>
@@ -12,7 +16,10 @@
    factura de Comercial por vehículo con una forma de pago por servicio. Lanzarla otra vez sólo factura lo que falte.
    2026-11-25 (pedido del dueño): «Continuar» retoma una corrida que quedó en cola o en curso (se cerró la pantalla), desde «Corridas
    anteriores» o al recibir Billing.RunInProgress; antes de facturar se revisa el período y, si es anterior al mes en curso o tiene
-   suscripciones que empezaron después del día 1, se pide confirmar (aviso, no bloqueo). *@
+   suscripciones que empezaron después del día 1, se pide confirmar (aviso, no bloqueo).
+   2026-11-25 (segundo pedido): «Anular» una corrida terminada emite por Comercial la nota de anulación total (o el documento contrario) de
+   cada factura abierta y sin pagos, por tandas, con motivo; después el período se vuelve a facturar. La vista previa y cada corrida se
+   exportan a Excel para validar la facturación. *@
 <PermissionGate Required="Transport.Billing.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -74,7 +81,13 @@
         }
         else if (_previa is not null)
         {
-            <p>@_previa.Vehicles vehículo(s) por facturar por @_previa.Total.ToString("N0"); @_previa.AlreadyBilled ya tenían su factura del período.</p>
+            <div class="toolbar">
+                <p>@_previa.Vehicles vehículo(s) por facturar por @_previa.Total.ToString("N0"); @_previa.AlreadyBilled ya tenían su factura del período.</p>
+                <PermissionGate Required="Transport.Vehicles.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_exportando.Activa"
+                              OnClick="@(() => ExportarAsync("facturacion-previa", $"period={_previa.Period}"))">Exportar a Excel</SfButton>
+                </PermissionGate>
+            </div>
             <table class="data-grid">
                 <thead><tr><th>Vehículo</th><th>Propietario</th><th>Servicios</th><th>Total</th></tr></thead>
                 <tbody>
@@ -110,12 +123,24 @@
                         <tr>
                             <td>@c.Period</td><td>@(c.Mode == 1 ? "En lote" : "Individual")</td><td>@c.StartedBy</td><td>@c.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@c.InvoicesCount</td><td>@c.TotalAmount.ToString("N0")</td><td>@c.OmittedCount</td>
-                            <td>@Estado(c.Status)@(c.SePuedeContinuar ? $" · faltan {c.Pending}" : "")</td>
+                            <td>@Estado(c.Status)@(c.SePuedeContinuar ? $" · faltan {c.Pending}" : "")@(c.VoidedInvoices > 0 ? $" · {c.VoidedInvoices} anulada(s)" : "")</td>
                             <td>
                                 @if (c.SePuedeContinuar)
                                 {
                                     <PermissionGate Required="Transport.Billing.Run">
                                         <SfButton CssClass="e-flat" Disabled="@_corriendo" OnClick="@(() => ContinuarAsync(c))">Continuar</SfButton>
+                                    </PermissionGate>
+                                }
+                                <PermissionGate Required="Transport.Vehicles.Export">
+                                    <SfButton CssClass="e-flat" IconCss="e-icons e-download" Disabled="@_exportando.Activa"
+                                              OnClick="@(() => ExportarAsync("facturacion", $"run={c.PublicId}"))">Exportar</SfButton>
+                                </PermissionGate>
+                                @if (c.SePuedeAnular)
+                                {
+                                    <PermissionGate Required="Transport.Billing.Run">
+                                        <PermissionGate Required="Inventory.Sales.Void">
+                                            <SfButton CssClass="e-flat" Disabled="@(_corriendo || _anulacion.Activa)" OnClick="@(() => AbrirAnular(c))">Anular</SfButton>
+                                        </PermissionGate>
                                     </PermissionGate>
                                 }
                             </td>
@@ -143,6 +168,64 @@
     </DialogTemplates>
 </SfDialog>
 
+<SfDialog @bind-Visible="_mostrarAnular" Header="Anular la corrida" Width="680px" IsModal="true" ShowCloseIcon="@(!_anulacion.Activa)">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_anulacion.Activa" Texto="Anulando facturas…">
+                @if (_porAnular is not null)
+                {
+                    @if (_resultado is null)
+                    {
+                        <div class="aviso aviso-alerta">
+                            <p>Se anularán las facturas de la corrida del período @_porAnular.Period que sigan abiertas y sin pagos
+                               (@(_porAnular.InvoicesCount - _porAnular.VoidedInvoices) por revisar). Una factura electrónica se corrige con su nota crédito de
+                               anulación total, que va a la DIAN y, si fue a crédito, ajusta la obligación en Cartera; un comprobante no electrónico se anula
+                               con su documento contrario. Lo pagado, abonado o avisado al sistema externo no se toca y se informa. Después puede volver a
+                               facturar el período.</p>
+                        </div>
+                        <div class="form-grid">
+                            <label class="campo campo-ancho">Motivo *
+                                <input class="e-input" @bind="_motivoAnulacion" @bind:event="oninput" maxlength="400" />
+                            </label>
+                        </div>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_anulacion.Activa || string.IsNullOrWhiteSpace(_motivoAnulacion))" OnClick="@AnularAsync">Anular la corrida</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnular = false)">Cancelar</SfButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="kpi-grid">
+                            <div class="kpi-card"><span class="kpi-label">Facturas anuladas</span><span class="kpi-value">@_resultado.Anuladas</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Cargos anulados</span><span class="kpi-value">@_resultado.Cargos</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Omitidas</span><span class="kpi-value">@_resultado.Omitidas.Count</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Por procesar</span><span class="kpi-value">@_resultado.Pendientes</span></div>
+                        </div>
+                        @if (_resultado.Omitidas.Count > 0)
+                        {
+                            <h4>Facturas que no se anularon</h4>
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Factura</th><th>Vehículo</th><th>Motivo</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var o in _resultado.Omitidas)
+                                        {
+                                            <tr><td>@o.InvoiceNumber</td><td>@o.Plate@(o.InternalNumber is { } n ? $" · N.º {n}" : "")</td><td>@o.Reason</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" Disabled="@_anulacion.Activa" OnClick="@(() => _mostrarAnular = false)">Cerrar</SfButton>
+                        </div>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 <SfDialog @bind-Visible="_mostrarContinuar" Header="Continuar la corrida" Width="560px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -166,14 +249,26 @@
     /// <summary>Una corrida que avanzó hace menos de esto puede estar corriendo en otra sesión: se pide confirmar antes de continuarla.</summary>
     private const int MinutosDeActividadReciente = 2;
 
-    private readonly EstadoDeCarga _carga = new(), _historia = new();
+    private readonly EstadoDeCarga _carga = new(), _historia = new(), _exportando = new(), _anulacion = new();
+    private bool _mostrarAnular;
+    private string? _motivoAnulacion;
+    private ResultadoDeAnulacion? _resultado;
+
+    /// <summary>Lo que va sumando la anulación de una corrida, tanda por tanda.</summary>
+    private sealed class ResultadoDeAnulacion
+    {
+        public int Anuladas { get; set; }
+        public int Cargos { get; set; }
+        public int Pendientes { get; set; }
+        public List<OmisionDeAnulacionDto> Omitidas { get; } = [];
+    }
     private ClaveDeOperacion _clave = new();
     private string _mes = DateTime.Today.ToString("yyyy-MM");
     private int _modo = 1;
     private bool _corriendo, _mostrarAviso, _mostrarContinuar;
     private VistaPreviaDeFacturacionDto? _previa;
     private RevisionDePeriodoDto? _revision;
-    private CorridaDeFacturacionDto? _corrida, _enCurso, _porContinuar;
+    private CorridaDeFacturacionDto? _corrida, _enCurso, _porContinuar, _porAnular;
     private List<CorridaDeFacturacionDto> _corridas = [];
 
     private string Periodo => _mes.Replace("-", "");
@@ -314,6 +409,61 @@
         }
         if (_corrida.Status is 3 or 4)
             await Notification.SuccessAsync($"Facturación terminada: {_corrida.InvoicesCount} factura(s) por {_corrida.TotalAmount:N0}.");
+    }
+
+    /// <summary>Exporta una vista de Transporte a Excel (la vista previa del período o el resultado de una corrida).</summary>
+    private async Task ExportarAsync(string vista, string query)
+    {
+        using var carga = _exportando.Iniciar();
+        var r = await InformesApi.DescargarAsync("transport", vista, query, "xlsx");
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private void AbrirAnular(CorridaDeFacturacionDto c)
+    {
+        _porAnular = c;
+        _motivoAnulacion = null;
+        _resultado = null;
+        _mostrarAnular = true;
+    }
+
+    /// <summary>
+    /// Anula la corrida por tandas: pide la siguiente mientras queden facturas por procesar y la anterior haya avanzado. Las que fallan no se
+    /// vuelven a intentar (van como «saltar»); las que no se anulan quedan en la lista con su motivo.
+    /// </summary>
+    private async Task AnularAsync()
+    {
+        if (_porAnular is null || string.IsNullOrWhiteSpace(_motivoAnulacion)) return;
+        var resultado = new ResultadoDeAnulacion();
+        var saltar = new HashSet<Guid>();
+        using (_anulacion.Iniciar())
+        {
+            for (var vuelta = 0; vuelta < 200; vuelta++)
+            {
+                var r = await Api.AnularCorridaAsync(_porAnular.PublicId, _motivoAnulacion.Trim(), saltar);
+                if (!r.IsSuccess || r.Value is null)
+                {
+                    await Notification.ErrorAsync(r.ErrorMessage ?? "La anulación se detuvo; puede volver a intentarlo.");
+                    break;
+                }
+                var t = r.Value;
+                resultado.Anuladas += t.VoidedInvoices;
+                resultado.Cargos += t.VoidedCharges;
+                resultado.Pendientes = t.Pending;
+                foreach (var o in t.Omitted)
+                {
+                    if (resultado.Omitidas.All(x => x.InvoicePublicId != o.InvoicePublicId)) resultado.Omitidas.Add(o);
+                    saltar.Add(o.InvoicePublicId);
+                }
+                _resultado = resultado;
+                StateHasChanged();
+                if (t.Pending == 0 || (t.VoidedInvoices == 0 && t.Omitted.Count == 0)) break;
+            }
+        }
+        _resultado = resultado;
+        await Notification.SuccessAsync($"Anulación terminada: {resultado.Anuladas} factura(s) anulada(s), {resultado.Omitidas.Count} omitida(s).");
+        await CargarCorridasAsync();
     }
 
     private static string UltimaActividad(CorridaDeFacturacionDto c) =>

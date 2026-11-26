@@ -10,8 +10,8 @@ namespace IngenIA365ERP.Application.Transport.Integration;
 
 /// <summary>
 /// Transporte como destino opcional de la bandeja (feature 020, R12; T157; contracts/mensajes.md §3 de la 020): <c>Destino = TRN</c>, el
-/// único consumidor de ese destino. Escucha <c>PagoAplicado</c>, <c>PagoReversado</c>, <c>ReciboEmitido</c>, <c>ReciboAnulado</c> y
-/// <c>DocumentoAnulado</c> v1 y los aplica con <see cref="ApplyChargeAllocationsCommand"/>; lo que no toca ningún cargo responde
+/// único consumidor de ese destino. Escucha <c>PagoAplicado</c>, <c>PagoReversado</c>, <c>ReciboEmitido</c>, <c>ReciboAnulado</c>,
+/// <c>DocumentoAnulado</c> y, desde el 2026-11-25, <c>NotaCreditoEmitida</c> v1 y los aplica con <see cref="ApplyChargeAllocationsCommand"/>; lo que no toca ningún cargo responde
 /// <c>AlreadyProcessed</c> sin escribir. Una unidad por trabajo, sin comprobantes. Nunca lanza: una excepción es <c>Retry</c>; un fallo
 /// del comando, <c>Rejected</c>. Corre por <c>IEjecutorEnCooperativa</c> con el actor «Proceso de integración».
 /// </summary>
@@ -19,7 +19,7 @@ public sealed class DestinoTransporte(ISender sender, ILogger<DestinoTransporte>
 {
     private static readonly HashSet<string> Tipos = new(StringComparer.Ordinal)
     {
-        PagoAplicadoV1.Type, PagoReversadoV1.Type, ReciboEmitidoV1.Type, ReciboAnuladoV1.Type, DocumentoAnuladoV1.Type,
+        PagoAplicadoV1.Type, PagoReversadoV1.Type, ReciboEmitidoV1.Type, ReciboAnuladoV1.Type, DocumentoAnuladoV1.Type, NotaCreditoEmitidaV1.Type,
     };
 
     public string Destino => IntegrationDestinations.Transport;
