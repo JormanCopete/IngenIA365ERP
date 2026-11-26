@@ -62,6 +62,12 @@ public sealed class ServiciosDeTransporteClient(HttpClient http, CentralAuthClie
     public Task<ResultadoDeInventario<CorridaDeFacturacionDto>> AvanzarCorridaAsync(Guid corrida, CancellationToken ct = default) =>
         EnviarAsync<CorridaDeFacturacionDto>(http, auth, HttpMethod.Post, $"/api/transport/billing/runs/{corrida}/next", null, null, ct);
 
+    /// <summary>Anula una tanda de las facturas abiertas y sin pagos de una corrida terminada (2026-11-25); <paramref name="saltar"/>, las que ya fallaron.</summary>
+    public Task<ResultadoDeInventario<AnulacionDeCorridaDto>> AnularCorridaAsync(Guid corrida, string motivo, IReadOnlyCollection<Guid> saltar, int tanda = 10,
+        CancellationToken ct = default) =>
+        EnviarAsync<AnulacionDeCorridaDto>(http, auth, HttpMethod.Post, $"/api/transport/billing/runs/{corrida}/void",
+            new { reason = motivo, batchSize = tanda, skip = saltar }, null, ct);
+
     public Task<ResultadoDeInventario<IReadOnlyList<CorridaDeFacturacionDto>>> CorridasAsync(string? periodo = null, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<CorridaDeFacturacionDto>>(http, auth, HttpMethod.Get, ConQuery("/api/transport/billing/runs", Query(("period", periodo))), null, null, ct);
 
@@ -109,11 +115,20 @@ public sealed record FacturaIndividualDto(Guid? InvoicePublicId, string? Invoice
     IReadOnlyList<Guid> Charges);
 
 public sealed record CorridaDeFacturacionDto(Guid PublicId, string Period, int Mode, int PaymentMode, int Status, DateTime? StartedAt, DateTime? FinishedAt, string StartedBy,
-    int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<OmisionDto> Omitted, int Pending, DateTime? LastActivityAt = null)
+    int InvoicesCount, decimal TotalAmount, int AlreadyBilledCount, int OmittedCount, IReadOnlyList<OmisionDto> Omitted, int Pending, DateTime? LastActivityAt = null,
+    int VoidedInvoices = 0)
 {
     /// <summary>Una corrida en lote que quedó en cola o en curso: se puede continuar.</summary>
     public bool SePuedeContinuar => Mode == 1 && Status is 1 or 2;
+
+    /// <summary>Una corrida terminada con facturas que todavía no se anularon: se puede anular (2026-11-25).</summary>
+    public bool SePuedeAnular => Status is 3 or 4 && InvoicesCount > VoidedInvoices;
 }
+
+public sealed record OmisionDeAnulacionDto(Guid InvoicePublicId, string InvoiceNumber, string Plate, string? InternalNumber, string Code, string Reason);
+
+/// <summary>Una tanda de la anulación de una corrida: facturas y cargos anulados, las que no se anulan y por qué, y cuántas faltan.</summary>
+public sealed record AnulacionDeCorridaDto(Guid RunPublicId, int VoidedInvoices, int VoidedCharges, IReadOnlyList<OmisionDeAnulacionDto> Omitted, int Pending);
 
 public sealed record InicioTardioDto(DateOnly From, int Subscriptions);
 
