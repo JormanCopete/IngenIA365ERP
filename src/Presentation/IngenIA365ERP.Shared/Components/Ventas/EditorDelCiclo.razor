@@ -105,7 +105,9 @@
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
         <div class="ventana-cuerpo">
             <div class="ventana-principal">
-                <div class="form-grid encabezado-comercial" data-zona-teclado data-siguiente="@($"#{IdProducto}")">
+                @* 2026-11-26 (pedido del dueño): el encabezado en una sola franja compacta (el cliente ocupa dos columnas, no la fila entera), para
+                   que las líneas tengan más alto y se vean más productos a la vez. *@
+                <div class="form-grid encabezado-comercial encabezado-compacto" data-zona-teclado data-siguiente="@($"#{IdProducto}")">
                     <label class="campo">Tipo *
                         <select class="e-input" disabled="@(_doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => { _tipo = Id(e.Value); MarcarCambio(); })"
                                 data-ayuda="El tipo de documento de la cooperativa.">
@@ -580,6 +582,8 @@
             _tipo = _tipos.FirstOrDefault()?.PublicId;
             if (Origenes is not { Count: > 0 }) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
             if (Documento is null && AgregaProductos) _enfocar = $"#{IdProducto}";
+            // 2026-11-26 (pedido del dueño): la cotización nueva propone vigencia hasta hoy; quien la hace la extiende si quiere.
+            if (Documento is null && ConVigencia) _vigencia ??= DateOnly.FromDateTime(DateTime.Today);
         }
         if (Documento is { } id && id != _cargado) await CargarAsync(id);
         else if (Documento is null && Origenes is { Count: > 0 } origenes && _doc is null)

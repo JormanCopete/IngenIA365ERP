@@ -22,6 +22,7 @@
             <a class="e-btn e-outline" href="/ventas/listas-de-precios">Volver a las listas</a>
             @if (_lista is not null)
             {
+                <ExportarInformeDeInventario Vista="price-lists" Filtros="@(() => $"priceList={Id}")" Ayuda="Todos los precios de esta lista, en Excel." />
                 <PermissionGate Required="Inventory.Prices.Manage">
                     <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@AbrirCabecera">Editar lista</SfButton>
                 </PermissionGate>
