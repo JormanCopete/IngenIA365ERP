@@ -177,4 +177,48 @@ public sealed class EditarSolicitudRadicadaTests : IAsyncLifetime
         r.IsFailure.Should().BeTrue();
         (await LeerAsync(s.PublicId)).EditableGroups.Should().BeEmpty();
     }
+
+    // 2026-11-25 (prueba a mano del dueño en COOFLOPAL): el historial anotó «Primer pago: — → 2026-12-28» sólo porque la simulación de la línea nueva
+    // llenó la fecha que el plan ya ponía solo.
+    [Fact]
+    public async Task La_fecha_que_la_simulacion_llena_al_primer_pago_no_queda_como_cambio()
+    {
+        var s = await _o.RadicadaAsync();
+        var laQueElPlanPone = FotoDeSolicitud.PrimerPagoSinFecha(_o.G.HoyLocal, s.Periodicity!.Value, null);
+
+        var r = await EditarAsync(s, _o.Solicitud() with { Purpose = "Educación", FirstDueDate = laQueElPlanPone });
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        (await LeerAsync(s.PublicId)).SubmittedEdits.Should().ContainSingle().Which.Changes.Select(c => c.Field).Should().Equal("Destino");
+    }
+
+    [Fact]
+    public async Task Una_fecha_de_primer_pago_distinta_de_la_del_plan_si_queda_como_cambio()
+    {
+        var s = await _o.RadicadaAsync();
+        var otra = FotoDeSolicitud.PrimerPagoSinFecha(_o.G.HoyLocal, s.Periodicity!.Value, null)!.Value.AddDays(5);
+
+        var r = await EditarAsync(s, _o.Solicitud() with { FirstDueDate = otra });
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        (await LeerAsync(s.PublicId)).SubmittedEdits.Should().ContainSingle().Which.Changes.Should().ContainSingle(c => c.Field == "Primer pago")
+            .Which.After.Should().Be(otra.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    // 2026-11-25 (prueba a mano del dueño): la solicitud de una línea que se cerró después no se editaba ni para el destino, y el error no decía qué hacer.
+    [Fact]
+    public async Task Con_la_linea_cerrada_el_error_dice_que_elija_otra_en_el_simulador()
+    {
+        var s = await _o.RadicadaAsync();
+        var linea = await _o.Db.CreditLines.SingleAsync(l => l.PublicId == _o.Linea.PublicId);
+        linea.Cerrar(CreditLineClosedReason.Manual, "Se reemplaza por otra", null, DateTime.UtcNow);
+        await _o.Db.SaveChangesAsync();
+        _o.Db.ChangeTracker.Clear();
+
+        var r = await EditarAsync(s, _o.Solicitud() with { Purpose = "Educación" });
+
+        r.Error.Code.Should().Be(ErroresDeOriginacion.CodigoLineaCerrada);
+        r.Error.Message.Should().Contain("cerrada a créditos nuevos (Se reemplaza por otra)").And.Contain("elija otra línea en el simulador");
+        (await LeerAsync(s.PublicId)).SubmittedEdits.Should().BeEmpty();
+    }
 }
