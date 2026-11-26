@@ -22,44 +22,70 @@ internal static class NombreVisible
 }
 
 /// <summary>
-/// Busca vehículos por placa, número interno, radio-móvil, documento o nombre del propietario y por estado (FR-012). Paginado.
+/// Busca vehículos por placa, número interno, radio-móvil, documento o nombre del propietario, por estado, por vinculación y por servicio
+/// (FR-012; los filtros los aplica <see cref="FiltroDeVehiculos"/>). Paginado en el servidor. Cada fila trae los servicios con suscripción
+/// viva que no terminó antes de hoy, con su marca de precio pactado (2026-11-25).
 /// </summary>
-public sealed record ListVehiclesQuery(string? Q = null, VehicleStatus? Status = null, Guid? OwnerPersonPublicId = null, int Page = 1, int PageSize = 50)
-    : IRequest<Result<PagedList<VehicleListItemDto>>>;
+public sealed record ListVehiclesQuery(string? Q = null, VehicleStatus? Status = null, Guid? OwnerPersonPublicId = null, int Page = 1, int PageSize = 50,
+        AffiliationClass? Affiliation = null, Guid? ServicePublicId = null, VehicleServiceFilter? ServiceFilter = null)
+    : IRequest<Result<PagedList<VehicleListItemDto>>>
+{
+    public FiltrosDeVehiculos Filtros => new(Q, Status, OwnerPersonPublicId, Affiliation, ServicePublicId, ServiceFilter);
+}
 
 public sealed class ListVehiclesQueryHandler(IApplicationDbContext db, IDateTimeService reloj)
     : IRequestHandler<ListVehiclesQuery, Result<PagedList<VehicleListItemDto>>>
 {
     public async Task<Result<PagedList<VehicleListItemDto>>> Handle(ListVehiclesQuery request, CancellationToken ct)
     {
-        var consulta = db.Vehicles.AsNoTracking();
-        if (request.Status is { } estado) consulta = consulta.Where(v => v.Status == estado);
-        if (request.OwnerPersonPublicId is { } dueño) consulta = consulta.Where(v => v.OwnerPerson!.PublicId == dueño);
-        if (!string.IsNullOrWhiteSpace(request.Q))
-        {
-            var texto = request.Q.Trim().ToUpperInvariant();
-            var placa = Placa.Normalizar(texto);
-            consulta = consulta.Where(v => v.Plate.Contains(placa) || v.InternalNumber == texto || v.RadioCode == texto
-                                           || v.OwnerPerson!.TaxId.StartsWith(texto)
-                                           || (v.OwnerPerson.FirstName + " " + v.OwnerPerson.LastName).ToUpper().Contains(texto)
-                                           || (v.OwnerPerson.BusinessName ?? "").ToUpper().Contains(texto));
-        }
+        var hoy = reloj.HoyLocal;
+        var consulta = FiltroDeVehiculos.Aplicar(db, db.Vehicles.AsNoTracking(), request.Filtros, hoy);
 
         var pagina = Math.Max(1, request.Page);
         var tamano = Math.Clamp(request.PageSize, 1, 500);
         var total = await consulta.CountAsync(ct);
         var filas = await consulta.OrderBy(v => v.InternalNumber).ThenBy(v => v.Plate)
             .Skip((pagina - 1) * tamano).Take(tamano)
-            .Select(v => new { v.PublicId, v.Plate, v.InternalNumber, v.RadioCode, v.Status, v.StatusSince, v.Line, v.ModelYear,
+            .Select(v => new { v.Id, v.PublicId, v.Plate, v.InternalNumber, v.RadioCode, v.Status, v.StatusSince, v.Line, v.ModelYear,
                 Marca = v.Brand == null ? null : v.Brand.Name, Dueño = v.OwnerPerson! })
             .ToListAsync(ct);
-        var clases = await AfiliacionVigente.DeVariasAsync(db, filas.Select(f => f.Dueño.Id).ToList(), reloj.HoyLocal, ct);
+        var clases = await AfiliacionVigente.DeVariasAsync(db, filas.Select(f => f.Dueño.Id).ToList(), hoy, ct);
+        var servicios = await ServiciosDelListado.DeAsync(db, filas.Select(f => f.Id).ToList(), hoy, ct);
         var items = filas.Select(f => new VehicleListItemDto(f.PublicId, f.Plate, f.InternalNumber, f.RadioCode, f.Status, f.StatusSince,
                 f.Dueño.PublicId, f.Dueño.TaxId, NombreVisible.De(f.Dueño), clases.GetValueOrDefault(f.Dueño.Id, AffiliationClass.External),
-                f.Marca, f.Line, f.ModelYear))
+                f.Marca, f.Line, f.ModelYear, servicios.GetValueOrDefault(f.Id, [])))
             .ToList();
         return Result.Success(new PagedList<VehicleListItemDto>(items, total, pagina, tamano));
     }
+}
+
+/// <summary>
+/// Los servicios que se muestran en el listado y en el informe de vehículos (2026-11-25): las suscripciones vivas que no terminaron antes de
+/// hoy, por prioridad del servicio; «pactado» si tiene un precio pactado vivo que no terminó.
+/// </summary>
+public static class ServiciosDelListado
+{
+    public static async Task<Dictionary<int, IReadOnlyList<VehicleServiceTagDto>>> DeAsync(IApplicationDbContext db, IReadOnlyCollection<int> vehiculos,
+        DateOnly hoy, CancellationToken ct)
+    {
+        if (vehiculos.Count == 0) return [];
+        var ids = vehiculos.Distinct().ToList();
+        var filas = await FiltroDeVehiculos.SuscripcionesNoTerminadas(db, hoy).Where(s => ids.Contains(s.VehicleId))
+            .Select(s => new
+            {
+                s.VehicleId, Servicio = s.Service!.PublicId, s.Service.Name, s.Service.Priority, s.From, s.To,
+                Pactado = s.Prices.Any(p => !p.IsDeleted && (p.To == null || p.To >= hoy)),
+            })
+            .ToListAsync(ct);
+        return filas.GroupBy(f => f.VehicleId).ToDictionary(g => g.Key, g => (IReadOnlyList<VehicleServiceTagDto>)g
+            .OrderBy(f => f.Priority).ThenBy(f => f.Name).ThenBy(f => f.From)
+            .Select(f => new VehicleServiceTagDto(f.Servicio, f.Name, f.Pactado, f.From, f.To, f.From > hoy))
+            .ToList());
+    }
+
+    /// <summary>El texto de un servicio en el informe: «RADIO (pactado)», «CADMON (desde 01/12/2026)».</summary>
+    public static string Texto(VehicleServiceTagDto s) =>
+        s.Name + (s.AgreedPrice ? " (pactado)" : "") + (s.Upcoming ? $" (desde {s.From:dd/MM/yyyy})" : "") + (s.To is { } h ? $" (hasta {h:dd/MM/yyyy})" : "");
 }
 
 /// <summary>La ficha completa del vehículo (contracts/api.md §3): ficha, propietario con su clase deducida, equipos e historia.</summary>

@@ -2,7 +2,12 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Transporte
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Nomina
 @inject VehiculosClient Api
+@inject ServiciosDeTransporteClient ServiciosApi
+@inject InformesDeRecaudoYTesoreriaClient InformesApi
+@inject DescargaDeArchivos Descargas
 @inject INotificationService Notification
 @inject NavigationManager Nav
 
@@ -10,25 +15,67 @@
 
 @* Feature 020 (US2, US3; FR-005 a FR-016, FR-025): el parque automotor de la cooperativa. Se busca por placa, número interno, radio-móvil o
    documento o nombre del propietario. «Nuevo» registra un vehículo con un propietario que ya existe; si la persona no existe, se crea
-   desde el diálogo único de persona. Las plantillas cargan y actualizan en lote con las mismas reglas. *@
+   desde el diálogo único de persona. Las plantillas cargan y actualizan en lote con las mismas reglas.
+   2026-11-25 (pedido del dueño): filtros por vinculación y por servicio («suscrito a», «no suscrito a», «sin ningún servicio», todos en el
+   servidor), columna de servicios con la marca de precio pactado, tamaño de página y exportar a Excel lo filtrado (el informe de vehículos con
+   los mismos filtros). *@
 <PermissionGate Required="Transport.Vehicles.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Vehículos</h3>
         <div class="toolbar">
-            <input class="e-input" placeholder="Placa, número interno, radio-móvil o propietario" @bind="_q" @bind:event="oninput" data-enter="propio" @onkeyup="@BuscarConEnter" />
-            <select class="e-input" @bind="_estado">
-                <option value="">Todos los estados</option>
-                <option value="1">Activos</option>
-                <option value="2">Inactivos</option>
-                <option value="3">Retirados</option>
-            </select>
-            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+            <PermissionGate Required="Transport.Vehicles.Export">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_carga.Activa || _exportando.Activa)" OnClick="@ExportarAsync">Exportar a Excel</SfButton>
+            </PermissionGate>
             <PermissionGate Required="Transport.Vehicles.Create">
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Abrir">Nuevo vehículo</SfButton>
             </PermissionGate>
         </div>
     </div>
+
+    <PanelDeFiltros HayFiltros="@HayFiltros" Limpiar="@LimpiarAsync">
+        <Principales>
+            <label class="campo campo-ancho">Buscar
+                <input class="e-input" placeholder="Placa, número interno, radio-móvil, documento o nombre del propietario" @bind="_filtros.Q" @bind:event="oninput"
+                       data-enter="propio" @onkeyup="@BuscarConEnter" />
+            </label>
+            <label class="campo">Estado
+                <select class="e-input" value="@(_filtros.Estado?.ToString() ?? "")" @onchange="@(e => { _filtros.Estado = Entero(e.Value); return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    <option value="1">Activos</option>
+                    <option value="2">Inactivos</option>
+                    <option value="3">Retirados</option>
+                </select>
+            </label>
+            <label class="campo">Vinculación
+                <select class="e-input" value="@(_filtros.Vinculacion?.ToString() ?? "")" @onchange="@(e => { _filtros.Vinculacion = Entero(e.Value); return BuscarAsync(); })">
+                    <option value="">Todas</option>
+                    <option value="1">Asociados</option>
+                    <option value="2">Externos</option>
+                </select>
+            </label>
+            <label class="campo">Servicio
+                <select class="e-input" value="@_servicio" @onchange="@(e => CambiarServicioAsync(e.Value?.ToString()))">
+                    <option value="">Cualquiera</option>
+                    <option value="@ConAlguno">Con algún servicio</option>
+                    <option value="@SinNinguno">Sin ningún servicio</option>
+                    @foreach (var s in _servicios) { <option value="@s.PublicId">@s.Name</option> }
+                </select>
+            </label>
+            @if (_filtros.Servicio is not null)
+            {
+                <label class="campo">Suscripción
+                    <select class="e-input" value="@_filtros.FiltroDeServicio" @onchange="@(e => { _filtros.FiltroDeServicio = e.Value?.ToString(); return BuscarAsync(); })">
+                        <option value="Subscribed">Suscritos</option>
+                        <option value="NotSubscribed">No suscritos</option>
+                    </select>
+                </label>
+            }
+            <div class="campo">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@BuscarAsync">Buscar</SfButton>
+            </div>
+        </Principales>
+    </PanelDeFiltros>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @if (_pagina is null || _pagina.Items.Count == 0)
@@ -37,10 +84,17 @@
         }
         else
         {
-            <p class="texto-tenue">@_pagina.TotalCount vehículo(s).</p>
+            <div class="toolbar">
+                <span class="texto-tenue">@Rango()</span>
+                <label class="campo">Por página
+                    <select class="e-input" value="@_tamano" @onchange="@(e => { _tamano = Entero(e.Value) ?? 50; return BuscarAsync(); })">
+                        @foreach (var t in Tamanos) { <option value="@t">@t</option> }
+                    </select>
+                </label>
+            </div>
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Placa</th><th>N.º interno</th><th>Radio-móvil</th><th>Estado</th><th>Propietario</th><th>Vinculación</th><th>Marca y línea</th><th>Modelo</th></tr></thead>
+                    <thead><tr><th>Placa</th><th>N.º interno</th><th>Radio-móvil</th><th>Estado</th><th>Propietario</th><th>Vinculación</th><th>Servicios</th><th>Marca y línea</th><th>Modelo</th></tr></thead>
                     <tbody>
                         @foreach (var v in _pagina.Items)
                         {
@@ -48,6 +102,19 @@
                                 <td><a class="enlace" href="@($"/transporte/vehiculos/{v.PublicId}")">@v.Plate</a></td><td>@v.InternalNumber</td><td>@v.RadioCode</td>
                                 <td>@TextosDeTransporte.Estado(v.Status) <span class="texto-tenue">desde @v.StatusSince.ToString("dd/MM/yyyy")</span></td>
                                 <td>@v.OwnerTaxId · @v.OwnerName</td><td>@TextosDeTransporte.Vinculacion(v.Affiliation)</td>
+                                <td>
+                                    @if (v.Services is { Count: > 0 } servicios)
+                                    {
+                                        @foreach (var s in servicios)
+                                        {
+                                            <span class="@(s.AgreedPrice ? "badge badge-ok" : "badge")" title="@TituloDeServicio(s)">@TextoDeServicio(s)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="texto-tenue">Ninguno</span>
+                                    }
+                                </td>
                                 <td>@v.Brand @v.Line</td><td>@v.ModelYear</td>
                             </tr>
                         }
@@ -56,9 +123,10 @@
             </div>
             <div class="toolbar">
                 <SfButton CssClass="e-flat" Disabled="@(_pagina.PageNumber <= 1 || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina.PageNumber - 1))">Anterior</SfButton>
-                <span>Página @_pagina.PageNumber</span>
-                <SfButton CssClass="e-flat" Disabled="@(_pagina.PageNumber * _pagina.PageSize >= _pagina.TotalCount || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina.PageNumber + 1))">Siguiente</SfButton>
+                <span>Página @_pagina.PageNumber de @Paginas</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina.PageNumber >= Paginas || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina.PageNumber + 1))">Siguiente</SfButton>
             </div>
+            <p class="texto-apoyo">Los servicios son las suscripciones que no han terminado; las que empiezan más adelante dicen «desde». En verde, con precio pactado.</p>
         }
     </IndicadorDeCarga>
 
@@ -110,22 +178,63 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private const string ConAlguno = "any", SinNinguno = "none";
+    private static readonly int[] Tamanos = [25, 50, 100, 200];
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _exportando = new();
     private ClaveDeOperacion _clave = new();
     private PaginaDeTransporteDto<VehiculoListadoDto>? _pagina;
-    private string? _q;
-    private string _estado = "";
-    private int _numero = 1;
+    private FiltrosDeVehiculosDto _filtros = new();
+    private List<ServicioDeTransporteDto> _servicios = [];
+    private string _servicio = "";
+    private int _numero = 1, _tamano = 50;
     private bool _mostrar, _crearPersona;
     private VehiculoEntradaDto _v = new();
     private PersonSearchPicker.PersonSearchItem? _propietario;
     private string? _documentoNuevo;
 
-    protected override Task OnInitializedAsync() => CargarAsync();
+    private bool HayFiltros => !string.IsNullOrWhiteSpace(_filtros.Q) || _filtros.Estado is not null || _filtros.Vinculacion is not null
+                               || _filtros.FiltroDeServicio is not null;
+
+    private int Paginas => _pagina is null || _pagina.PageSize == 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_pagina.TotalCount / (double)_pagina.PageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Los servicios para el filtro: quien no puede verlos no tiene el filtro por uno en particular (sigue «con alguno» y «sin ninguno»).
+        var s = await ServiciosApi.ServiciosAsync(incluirInactivos: true);
+        _servicios = s.IsSuccess ? [.. s.Value ?? []] : [];
+        await CargarAsync();
+    }
 
     private async Task BuscarConEnter(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") { _numero = 1; await CargarAsync(); }
+        if (e.Key == "Enter") await BuscarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _numero = 1;
+        return CargarAsync();
+    }
+
+    private Task CambiarServicioAsync(string? valor)
+    {
+        _servicio = valor ?? "";
+        (_filtros.Servicio, _filtros.FiltroDeServicio) = _servicio switch
+        {
+            ConAlguno => ((Guid?)null, "Any"),
+            SinNinguno => (null, "None"),
+            _ when Guid.TryParse(_servicio, out var id) => (id, _filtros.FiltroDeServicio is "NotSubscribed" ? "NotSubscribed" : "Subscribed"),
+            _ => (null, (string?)null),
+        };
+        return BuscarAsync();
+    }
+
+    private Task LimpiarAsync()
+    {
+        _filtros = new FiltrosDeVehiculosDto();
+        _servicio = "";
+        return BuscarAsync();
     }
 
     private async Task IrAAsync(int numero)
@@ -137,10 +246,32 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Api.ListarAsync(_q, int.TryParse(_estado, out var e) ? e : null, null, _numero);
+        var r = await Api.ListarAsync(_filtros, _numero, _tamano);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los vehículos."); return; }
         _pagina = r.Value;
     }
+
+    private async Task ExportarAsync()
+    {
+        using var carga = _exportando.Iniciar();
+        var r = await InformesApi.DescargarAsync("transport", "vehiculos", _filtros.ComoQuery(), "xlsx");
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private string Rango()
+    {
+        if (_pagina is null || _pagina.TotalCount == 0) return "0 vehículos.";
+        var desde = (_pagina.PageNumber - 1) * _pagina.PageSize + 1;
+        var hasta = desde + _pagina.Items.Count - 1;
+        return $"{desde:N0}–{hasta:N0} de {_pagina.TotalCount:N0} vehículo(s).";
+    }
+
+    private static string TextoDeServicio(ServicioDelListadoDto s) =>
+        s.Name + (s.AgreedPrice ? " · pactado" : "") + (s.Upcoming ? $" · desde {s.From:dd/MM}" : "");
+
+    private static string TituloDeServicio(ServicioDelListadoDto s) =>
+        $"Desde {s.From:dd/MM/yyyy}" + (s.To is { } h ? $" hasta {h:dd/MM/yyyy}" : ", sin fin") + (s.AgreedPrice ? "; con precio pactado" : "; precio del producto");
 
     private void Abrir()
     {
@@ -178,6 +309,8 @@
             Nav.NavigateTo($"/transporte/vehiculos/{r.Value.VehiclePublicId}");
         }
     }
+
+    private static int? Entero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
 
     private static DateOnly? Fecha(object? valor) => DateOnly.TryParse(valor?.ToString(), out var f) ? f : null;
 }

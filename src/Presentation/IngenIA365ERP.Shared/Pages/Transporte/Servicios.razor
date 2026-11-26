@@ -86,7 +86,9 @@
     <PermissionGate Required="Transport.Services.Manage">
         <div class="info-card">
             <h4>Suscripciones en lote</h4>
-            <p>Cada fila lleva la placa, el código del producto, la fecha de inicio y, si se pactó, el precio mensual con impuestos.</p>
+            <p>Cada fila lleva la placa, el código del producto, la fecha de inicio y, si se pactó, el precio mensual con impuestos.
+               Para <strong>terminar en lote</strong>, ponga la fecha «hasta» en la fila de una suscripción que ya existe (con «actualizar»): la
+               fecha «desde» sólo la identifica.</p>
             <ImportarPlantilla RutaBase="@ServiciosDeTransporteClient.RutaDeSuscripciones" ConDatos="false" PreguntaSiExiste="Si la suscripción ya existe"
                                PermisoDeDescarga="Transport.Services.View" PermisoDeImportacion="Transport.Services.Manage" />
         </div>

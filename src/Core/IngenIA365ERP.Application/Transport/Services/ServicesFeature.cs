@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Transport.Vehicles;
@@ -6,6 +7,7 @@ using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Enums.Transport;
+using IngenIA365ERP.Domain.Transport;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -165,8 +167,13 @@ public sealed class UpdateTransportServiceCommandHandler(IApplicationDbContext d
 /// <summary>
 /// Suscribir un vehículo a un servicio, terminar la suscripción y pactar su precio con vigencia (R9, T105; FR-029). Lo usan la pantalla, la API
 /// y la plantilla <c>transport.subscriptions</c>. <b>No guarda.</b>
+/// <para>
+/// 2026-11-25 (pedido del dueño): terminar con cualquier fecha desde el inicio (también mover el fin de una ya terminada), <b>quitar</b> una
+/// suscripción que no tiene cargos de la facturación mensual en su vigencia (baja lógica, con motivo) y <b>mover su inicio</b> con la misma
+/// condición. Lo facturado no se borra ni se mueve: se termina.
+/// </para>
 /// </summary>
-public sealed class SuscripcionDeServicio(IApplicationDbContext db, IDateTimeService reloj)
+public sealed class SuscripcionDeServicio(IApplicationDbContext db, IDateTimeService reloj, ICurrentUserService? usuario = null)
 {
     public async Task<Result<VehicleSubscription>> SuscribirAsync(Vehicle v, TransportService s, DateOnly desde, DateOnly? hasta, decimal? precio, string? motivo, CancellationToken ct)
     {
@@ -193,15 +200,114 @@ public sealed class SuscripcionDeServicio(IApplicationDbContext db, IDateTimeSer
         return Result.Success(suscripcion);
     }
 
+    /// <summary>
+    /// Termina la suscripción en <paramref name="hasta"/> (desde su inicio en adelante) o mueve el fin que ya tenía. Los precios pactados se
+    /// cierran en el nuevo fin; si el fin se alarga, el precio que cerraba con el fin anterior lo acompaña.
+    /// </summary>
     public Result Terminar(VehicleSubscription s, DateOnly hasta, string? motivo)
     {
-        if (hasta < s.From) return Result.Failure("Subscription.Dates", "La suscripción no puede terminar antes de empezar.");
+        if (hasta < s.From)
+            return Result.Failure("Subscription.Dates",
+                $"La suscripción empieza el {s.From:dd/MM/yyyy}: no puede terminar antes. Si no debió existir, quítela.");
+        var anterior = s.To;
         s.To = hasta;
-        if (!string.IsNullOrWhiteSpace(motivo)) s.Reason = motivo.Trim();
+        if (!string.IsNullOrWhiteSpace(motivo)) s.Reason = Recortar(motivo.Trim(), 500);
         foreach (var p in s.Prices.Where(x => !x.IsDeleted && (x.To is null || x.To > hasta)))
             p.To = hasta < p.From ? p.From : hasta;
+        if (anterior is { } fin && hasta > fin)
+            foreach (var p in s.Prices.Where(x => !x.IsDeleted && x.To == fin))
+                p.To = hasta;
         return Result.Success();
     }
+
+    /// <summary>
+    /// Los períodos (<c>aaaamm</c>) de la facturación mensual con cargos no anulados de este vehículo y servicio dentro de la vigencia de la
+    /// suscripción. Las ventas sueltas con la placa (<see cref="ChargeOrigin.Sale"/>) no cuentan: no nacen de la suscripción.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> PeriodosFacturadosAsync(VehicleSubscription s, CancellationToken ct)
+    {
+        var periodos = await PeriodosConCargosAsync(db, s.VehicleId, ct);
+        return periodos.Where(x => x.ServiceId == s.ServiceId && EnVigencia(x.Period, s.From, s.To)).Select(x => x.Period).OrderBy(x => x).ToList();
+    }
+
+    /// <summary>Los (servicio, período) con cargos no anulados de la facturación mensual de un vehículo.</summary>
+    internal static async Task<List<(int ServiceId, string Period)>> PeriodosConCargosAsync(IApplicationDbContext db, int vehiculo, CancellationToken ct) =>
+        (await db.ServiceCharges.AsNoTracking()
+            .Where(c => c.VehicleId == vehiculo && c.Origin == ChargeOrigin.Billing && c.Status != ChargeStatus.Voided && !c.IsDeleted)
+            .Select(c => new { c.ServiceId, c.Period }).Distinct().ToListAsync(ct))
+        .Select(x => (x.ServiceId, x.Period)).ToList();
+
+    /// <summary>¿El período <c>aaaamm</c> se cruza con la vigencia?</summary>
+    internal static bool EnVigencia(string periodo, DateOnly desde, DateOnly? hasta) =>
+        PeriodoDeServicio.TryParse(periodo, out var p) && p.Inicio <= (hasta ?? DateOnly.MaxValue) && p.Fin >= desde;
+
+    /// <summary>
+    /// Quita una suscripción que no tiene cargos de la facturación mensual en su vigencia (baja lógica con quién, cuándo y el motivo; sus
+    /// precios pactados también). Es la salida para la que no debió existir o todavía no empieza: «terminar» exige una fecha desde el inicio.
+    /// </summary>
+    public async Task<Result> QuitarAsync(VehicleSubscription s, string motivo, CancellationToken ct)
+    {
+        var facturados = await PeriodosFacturadosAsync(s, ct);
+        if (facturados.Count > 0)
+            return Result.Failure("Subscription.Billed",
+                $"La suscripción ya se facturó ({Periodos(facturados)}): no se puede quitar. Termínela en la fecha que corresponda.");
+        var ahora = reloj.UtcNow;
+        var quien = Recortar(usuario?.UserName ?? "system", 100);
+        s.IsDeleted = true;
+        s.DeletedAt = ahora;
+        s.DeletedBy = quien;
+        s.Reason = Recortar($"Quitada: {motivo.Trim()}" + (string.IsNullOrWhiteSpace(s.Reason) ? "" : $" · antes: {s.Reason}"), 500);
+        foreach (var p in s.Prices.Where(x => !x.IsDeleted))
+        {
+            p.IsDeleted = true;
+            p.DeletedAt = ahora;
+            p.DeletedBy = quien;
+        }
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Mueve el inicio de una suscripción sin cargos de la facturación mensual (2026-11-25). No se cruza con otra del mismo servicio ni pasa
+    /// de su fin. El primer precio pactado se mueve con el inicio; uno que quede entero antes del nuevo inicio se da de baja.
+    /// </summary>
+    public async Task<Result> CambiarInicioAsync(VehicleSubscription s, DateOnly desde, string motivo, CancellationToken ct)
+    {
+        if (desde == s.From) return Result.Success();
+        if (s.To is { } fin && desde > fin)
+            return Result.Failure("Subscription.Dates", $"La suscripción termina el {fin:dd/MM/yyyy}: no puede empezar después.");
+        var facturados = await PeriodosFacturadosAsync(s, ct);
+        if (facturados.Count > 0)
+            return Result.Failure("Subscription.Billed",
+                $"La suscripción ya se facturó ({Periodos(facturados)}): su inicio no se mueve. Termínela y suscriba de nuevo desde la fecha correcta.");
+        var otras = await db.VehicleSubscriptions.AsNoTracking()
+            .Where(x => x.VehicleId == s.VehicleId && x.ServiceId == s.ServiceId && x.Id != s.Id && !x.IsDeleted).ToListAsync(ct);
+        if (otras.Any(x => x.SeCruzaCon(desde, s.To)))
+            return Result.Failure("Subscription.Overlaps", "Con ese inicio se cruzaría con otra suscripción del mismo servicio.");
+
+        var anterior = s.From;
+        var ahora = reloj.UtcNow;
+        foreach (var p in s.Prices.Where(x => !x.IsDeleted).OrderBy(x => x.From).ToList())
+        {
+            if (p.To is { } h && h < desde)
+            {
+                p.IsDeleted = true;
+                p.DeletedAt = ahora;
+                p.DeletedBy = Recortar(usuario?.UserName ?? "system", 100);
+            }
+            else if (p.From < desde || p.From == anterior)
+            {
+                p.From = desde;
+            }
+        }
+        s.From = desde;
+        s.Reason = Recortar($"Inicio movido del {anterior:dd/MM/yyyy} al {desde:dd/MM/yyyy}: {motivo.Trim()}", 500);
+        return Result.Success();
+    }
+
+    private static string Periodos(IEnumerable<string> periodos) =>
+        string.Join(", ", periodos.Select(x => PeriodoDeServicio.TryParse(x, out var p) ? p.Texto() : x));
+
+    internal static string Recortar(string texto, int largo) => texto.Length <= largo ? texto : texto[..largo];
 
     /// <summary>Un precio pactado desde una fecha: cierra el vigente la víspera; no admite vigencias cruzadas (FR-029).</summary>
     public Result PonerPrecio(VehicleSubscription s, decimal precio, DateOnly desde)
@@ -245,16 +351,82 @@ public sealed class SubscribeVehicleCommandHandler(IApplicationDbContext db, Sus
     }
 }
 
-public sealed record EndSubscriptionCommand(Guid VehiclePublicId, Guid SubscriptionPublicId, DateOnly To, string? Reason) : IRequest<Result>;
+/// <summary>Termina una suscripción en la fecha que elija la persona (desde su inicio), con motivo (2026-11-25: antes la pantalla mandaba siempre hoy).</summary>
+public sealed record EndSubscriptionCommand(Guid VehiclePublicId, Guid SubscriptionPublicId, DateOnly To, string Reason) : IRequest<Result>, IConMotivo;
+
+public sealed class EndSubscriptionCommandValidator : AbstractValidator<EndSubscriptionCommand>
+{
+    public EndSubscriptionCommandValidator()
+    {
+        RuleFor(x => x.To).NotEqual(default(DateOnly)).WithMessage("Indique hasta cuándo.");
+        RuleFor(x => x.Reason).NotEmpty().WithMessage("Indique el motivo.").MaximumLength(400);
+    }
+}
 
 public sealed class EndSubscriptionCommandHandler(IApplicationDbContext db, SuscripcionDeServicio suscripciones) : IRequestHandler<EndSubscriptionCommand, Result>
 {
     public async Task<Result> Handle(EndSubscriptionCommand request, CancellationToken ct)
     {
-        var s = await db.VehicleSubscriptions.Include(x => x.Prices).Include(x => x.Vehicle)
-            .FirstOrDefaultAsync(x => x.PublicId == request.SubscriptionPublicId && x.Vehicle!.PublicId == request.VehiclePublicId, ct);
+        var s = await SuscripcionDelVehiculo.CargarAsync(db, request.VehiclePublicId, request.SubscriptionPublicId, ct);
         if (s is null) return Result.Failure("Subscription.NotFound", "No existe esa suscripción.");
         var r = suscripciones.Terminar(s, request.To, request.Reason);
+        if (r.IsFailure) return r;
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+internal static class SuscripcionDelVehiculo
+{
+    public static Task<VehicleSubscription?> CargarAsync(IApplicationDbContext db, Guid vehiculo, Guid suscripcion, CancellationToken ct) =>
+        db.VehicleSubscriptions.Include(x => x.Prices).Include(x => x.Vehicle)
+            .FirstOrDefaultAsync(x => x.PublicId == suscripcion && x.Vehicle!.PublicId == vehiculo && !x.IsDeleted, ct);
+}
+
+/// <summary>
+/// Quita una suscripción sin cargos de la facturación mensual en su vigencia (2026-11-25): la que todavía no empieza o nunca se facturó.
+/// Baja lógica con motivo; el comando queda en la auditoría con él (<see cref="IConMotivo"/>).
+/// </summary>
+public sealed record RemoveSubscriptionCommand(Guid VehiclePublicId, Guid SubscriptionPublicId, string Reason) : IRequest<Result>, IConMotivo;
+
+public sealed class RemoveSubscriptionCommandValidator : AbstractValidator<RemoveSubscriptionCommand>
+{
+    public RemoveSubscriptionCommandValidator() => RuleFor(x => x.Reason).NotEmpty().WithMessage("Indique el motivo.").MaximumLength(400);
+}
+
+public sealed class RemoveSubscriptionCommandHandler(IApplicationDbContext db, SuscripcionDeServicio suscripciones) : IRequestHandler<RemoveSubscriptionCommand, Result>
+{
+    public async Task<Result> Handle(RemoveSubscriptionCommand request, CancellationToken ct)
+    {
+        var s = await SuscripcionDelVehiculo.CargarAsync(db, request.VehiclePublicId, request.SubscriptionPublicId, ct);
+        if (s is null) return Result.Failure("Subscription.NotFound", "No existe esa suscripción.");
+        var r = await suscripciones.QuitarAsync(s, request.Reason, ct);
+        if (r.IsFailure) return r;
+        await db.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+/// <summary>Mueve el inicio de una suscripción sin cargos de la facturación mensual (2026-11-25), con motivo.</summary>
+public sealed record ChangeSubscriptionStartCommand(Guid VehiclePublicId, Guid SubscriptionPublicId, DateOnly From, string Reason) : IRequest<Result>, IConMotivo;
+
+public sealed class ChangeSubscriptionStartCommandValidator : AbstractValidator<ChangeSubscriptionStartCommand>
+{
+    public ChangeSubscriptionStartCommandValidator()
+    {
+        RuleFor(x => x.From).NotEqual(default(DateOnly)).WithMessage("Indique desde cuándo.");
+        RuleFor(x => x.Reason).NotEmpty().WithMessage("Indique el motivo.").MaximumLength(400);
+    }
+}
+
+public sealed class ChangeSubscriptionStartCommandHandler(IApplicationDbContext db, SuscripcionDeServicio suscripciones)
+    : IRequestHandler<ChangeSubscriptionStartCommand, Result>
+{
+    public async Task<Result> Handle(ChangeSubscriptionStartCommand request, CancellationToken ct)
+    {
+        var s = await SuscripcionDelVehiculo.CargarAsync(db, request.VehiclePublicId, request.SubscriptionPublicId, ct);
+        if (s is null) return Result.Failure("Subscription.NotFound", "No existe esa suscripción.");
+        var r = await suscripciones.CambiarInicioAsync(s, request.From, request.Reason, ct);
         if (r.IsFailure) return r;
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -344,13 +516,15 @@ public sealed class ServiciosEnLaFicha(IApplicationDbContext db, IDateTimeServic
     public async Task<VehicleDetailDto> CompletarAsync(VehicleDetailDto ficha, Vehicle vehiculo, CancellationToken ct)
     {
         var hoy = reloj.HoyLocal;
-        var subs = await db.VehicleSubscriptions.AsNoTracking().Where(s => s.VehicleId == vehiculo.Id).Include(s => s.Service).Include(s => s.Prices)
+        var subs = await db.VehicleSubscriptions.AsNoTracking().Where(s => s.VehicleId == vehiculo.Id && !s.IsDeleted).Include(s => s.Service).Include(s => s.Prices)
             .OrderBy(s => s.Service!.Priority).ThenByDescending(s => s.From).ToListAsync(ct);
+        var cargos = subs.Count == 0 ? [] : await SuscripcionDeServicio.PeriodosConCargosAsync(db, vehiculo.Id, ct);
         return ficha with
         {
             Subscriptions = subs.Select(s => new VehicleSubscriptionDto(s.PublicId, s.Service!.PublicId, s.Service.Name, s.Service.ProductCode, s.From, s.To,
-                s.Prices.Where(p => !p.IsDeleted && p.VigenteEn(hoy)).Select(p => (decimal?)p.Price).FirstOrDefault(),
-                s.From <= hoy && (s.To is null || s.To >= hoy))).ToList(),
+                s.Prices.Where(p => !p.IsDeleted && p.VigenteEn(s.From > hoy ? s.From : hoy)).Select(p => (decimal?)p.Price).FirstOrDefault(),
+                s.From <= hoy && (s.To is null || s.To >= hoy), s.Reason,
+                cargos.Any(c => c.ServiceId == s.ServiceId && SuscripcionDeServicio.EnVigencia(c.Period, s.From, s.To)))).ToList(),
         };
     }
 }
