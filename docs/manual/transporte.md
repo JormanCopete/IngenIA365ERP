@@ -208,10 +208,21 @@ propietario, y la línea guarda la placa. **Sin placa o lateral la venta no se c
 
 **Vehículos que no son de la cooperativa** (desde el 2026-11-25): los servicios también se venden a
 clientes externos. Si lo digitado no es de ningún vehículo del parque y es un **número de 1 a 10 dígitos**,
-se toma como el **lateral de un vehículo externo**: la línea muestra «lateral 618 · fuera del parque» y
-guarda ese número. El cargo nace sin vehículo y **el aviso al sistema externo sale con ese lateral**, que
-va también **como placa** (el número interno va vacío). Una placa que no está en el parque se rechaza: los externos se
-identifican sólo por el lateral. El lateral de un vehículo retirado cuenta como externo.
+se toma como el **lateral de un vehículo externo**, y desde el 2026-11-26 la línea **pide además su placa**:
+
+- en el **POS** aparece al lado el campo «Placa del vehículo externo» y el foco va a él;
+- en la **factura de oficina** aparece debajo del lateral, en la misma columna.
+
+**Sin la placa el externo no se cobra ni se confirma** («falta placa del vehículo externo»). La placa se
+escribe con o sin guion, de 5 a 10 letras o números; si es la placa de un vehículo del parque se rechaza
+(ese vehículo se vende por su placa, no como externo). La línea muestra «WDK637 · lateral 618 · fuera del
+parque» y guarda `618/WDK637`, que es lo que sale en la tirilla y en la factura. El cargo nace sin vehículo y
+**el aviso al sistema externo sale con el lateral y la placa** (el número interno va vacío). Una placa sola
+que no está en el parque se sigue rechazando: los externos se identifican por el lateral. El lateral de un
+vehículo retirado cuenta como externo.
+
+Los externos vendidos antes del 2026-11-26 no tienen placa: su aviso sale con el lateral también como
+placa.
 
 Al confirmar la venta nace un cargo por cada línea de servicio:
 
@@ -239,7 +250,7 @@ la línea. Los pagos parciales esperan.
 **Transporte › Envíos a sistemas externos** muestra cada aviso (pendiente, enviado, con aviso,
 reintentando, en espera, revisar, pago anulado, cerrado a mano), sus intentos con el código y un extracto
 de la respuesta, y permite **reintentar** o **cerrar a mano** con motivo. Los envíos de vehículos externos
-salen como «Externo, lateral …».
+salen como «Externo, WDK637 · lateral 618» (los anteriores al 2026-11-26, como «Externo, lateral 618»).
 
 **Cómo ver el registro de un envío** (el «log»), con el permiso `Transport.Notifications.View`:
 

@@ -68888,6 +68888,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<Guid>("ExternalId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExternalPlate")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<Guid>("InvoiceLinePublicId")
                         .HasColumnType("uuid");
 

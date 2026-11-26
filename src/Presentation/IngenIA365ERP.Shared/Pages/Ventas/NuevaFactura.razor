@@ -165,8 +165,15 @@
                                                     @if (_conReferencia.ContainsKey(l.ProductPublicId))
                                                     {
                                                         @* 2026-11-18 (feature 020): el vehículo del servicio; se resuelve al salir del campo y se guarda la placa. *@
-                                                        <input id="@($"linea-{indice}-referencia")" class="e-input" maxlength="40" placeholder="Placa o lateral" value="@l.Referencia" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números). Sin él la venta no se cobra."
+                                                        <input id="@($"linea-{indice}-referencia")" class="e-input" maxlength="40" placeholder="Placa o lateral" value="@ReferenciaConComplemento.Parte(l.Referencia)" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio; si el vehículo no es de la cooperativa, su lateral (sólo números) y después su placa. Sin él la venta no se cobra."
                                                                disabled="@DesdeRemisiones" @onchange="@(e => ResolverReferenciaAsync(l, e.Value?.ToString()))" />
+                                                        @if (l.FaltaComplemento is not null || ReferenciaConComplemento.Complemento(l.Referencia) is not null)
+                                                        {
+                                                            @* 2026-11-26: el vehículo externo pide también su placa; el sistema del proveedor recibe lateral y placa. *@
+                                                            <input id="@($"linea-{indice}-complemento")" class="e-input" maxlength="12" placeholder="@RotuloDelComplemento(l)" value="@ReferenciaConComplemento.Complemento(l.Referencia)"
+                                                                   data-ayuda="La placa del vehículo que no es de la cooperativa: se envía al sistema del proveedor con el lateral. Sin ella la venta no se confirma."
+                                                                   disabled="@DesdeRemisiones" @onchange="@(e => ResolverComplementoAsync(l, e.Value?.ToString()))" />
+                                                        }
                                                         @if (l.EtiquetaDeReferencia is { Length: > 0 } etiqueta) { <div class="texto-tenue">@etiqueta</div> }
                                                     }
                                                 </td>
@@ -380,6 +387,12 @@
     private Dictionary<Guid, string> _conReferencia = [];
     private bool HayLineasConReferencia => _lineas.Any(x => _conReferencia.ContainsKey(x.ProductPublicId));
 
+    /// <summary>2026-11-26: el rótulo del segundo dato por producto («Placa del vehículo externo»).</summary>
+    private Dictionary<Guid, string> _rotulosDeComplemento = [];
+
+    private string RotuloDelComplemento(LineaDelCiclo l) =>
+        l.FaltaComplemento ?? _rotulosDeComplemento.GetValueOrDefault(l.ProductPublicId) ?? "Complemento";
+
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
@@ -400,6 +413,9 @@
         _comandos = ArmarComandos();
         var conReferencia = await tConReferencia;
         _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
+        _rotulosDeComplemento = conReferencia.IsSuccess
+            ? (conReferencia.Value ?? []).Where(p => p.RotuloDelComplemento is not null).ToDictionary(p => p.ProductPublicId, p => p.RotuloDelComplemento!)
+            : [];
         var tipos = await tTipos;
         var remisiones = (Remisiones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
@@ -669,18 +685,42 @@
     {
         if (string.IsNullOrWhiteSpace(texto))
         {
-            CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia) = (null, null));
+            CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia, l.FaltaComplemento) = (null, null, null));
             return;
         }
         var r = await Ventas.ResolverReferenciaAsync(l.ProductPublicId, texto.Trim());
         if (!r.IsSuccess || r.Value is null)
         {
-            (l.Referencia, l.EtiquetaDeReferencia) = (texto.Trim().ToUpperInvariant(), null);
+            (l.Referencia, l.EtiquetaDeReferencia, l.FaltaComplemento) = (texto.Trim().ToUpperInvariant(), null, null);
             await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el vehículo.");
             MarcarCambio();
             return;
         }
-        CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia) = (r.Value.Valor, r.Value.Etiqueta));
+        CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia, l.FaltaComplemento) = (r.Value.Valor, r.Value.Etiqueta, r.Value.FaltaComplemento));
+        // 2026-11-26: el vehículo externo pide su placa: el foco va a ese campo.
+        if (r.Value.FaltaComplemento is not null && _lineas.IndexOf(l) is var indice and >= 0) _enfocar = $"#linea-{indice}-complemento";
+    }
+
+    /// <summary>
+    /// 2026-11-26: el segundo dato de la referencia (la placa del vehículo externo): se resuelve junto con la primera parte; vacío, vuelve a
+    /// faltar.
+    /// </summary>
+    private async Task ResolverComplementoAsync(LineaDelCiclo l, string? texto)
+    {
+        var parte = ReferenciaConComplemento.Parte(l.Referencia);
+        if (string.IsNullOrWhiteSpace(parte)) return;
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            CambiarLinea(() => (l.Referencia, l.FaltaComplemento) = (parte, RotuloDelComplemento(l)));
+            return;
+        }
+        var r = await Ventas.ResolverReferenciaAsync(l.ProductPublicId, ReferenciaConComplemento.Unir(parte, texto.Trim()));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "La placa no sirve.");
+            return;
+        }
+        CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia, l.FaltaComplemento) = (r.Value.Valor, r.Value.Etiqueta, r.Value.FaltaComplemento));
     }
 
     /// <summary>La pantalla cambió: cuenta el cambio y programa el guardado automático.</summary>
