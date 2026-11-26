@@ -1022,6 +1022,19 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     `VehicleReference`, y avisa con ese lateral en `vehiculo.radioMovil`; la placa viaja vacía y al enviar **va el lateral como placa**
     (`DestinoConectores.Valores`, pedido del dueño: el conector de la radio exige `hcplaca`). Una placa fuera del parque se sigue rechazando.
     Migración aditiva `VentaDeServicioAVehiculoExterno` (`VehicleId` y `OwnerPersonId` nulos).
+  - **Suscripciones, lista y facturación** (2026-11-25, pedido del dueño, sin migración):
+    - **La lista se filtra en un solo sitio**, `FiltroDeVehiculos`. Lo usan la lista paginada y el informe `vehiculos` que la exporta, así
+      lo que se ve y lo que se descarga es lo mismo. La vinculación se filtra con `AfiliacionVigente.VigenteEn`, la misma regla que
+      `Retirado` hecha expresión; una prueba fija que dicen lo mismo.
+    - **«Suscrito»** cuenta toda suscripción viva que no terminó antes de hoy, también la que empieza después.
+    - **Terminar** acepta cualquier fecha desde el inicio y pide motivo.
+    - **Quitar** (baja lógica, con motivo) y **mover el inicio** se permiten sólo sin cargos `Billing` no anulados en la vigencia
+      (`SuscripcionDeServicio.PeriodosFacturadosAsync`): lo facturado se termina. Las ventas sueltas con la placa no cuentan.
+    - **La plantilla termina**: el `hasta` de una fila sobre una suscripción existente la termina por `Terminar`.
+    - **Antes de facturar se avisa, no se bloquea** (`CheckServiceBillingPeriodQuery`, `GET /billing/check`): período anterior al mes en
+      curso o suscripciones por facturar que empezaron después del día 1. La pantalla pide confirmar.
+    - **La corrida interrumpida se continúa** con las mismas tandas (`/runs/{id}/next`). `lastActivityAt` hace pedir confirmación si avanzó
+      hace menos de dos minutos.
 
   Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
   `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,
