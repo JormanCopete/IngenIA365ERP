@@ -62,8 +62,12 @@ public static class ReglasDeSegregacion
     /// 2026-11-17: el par fijo <c>Radicar × Decidir</c> no rige (<c>Segregacion.QuienRadicaDecide</c>, sólo para las solicitudes de crédito: lo
     /// decide quien llama). Los demás pares fijos siguen.
     /// </param>
+    /// <param name="sinReglaFija">
+    /// 2026-11-26: la regla fija no rige en ningún par (<c>Segregacion.UnaPersonaHaceTodo</c>); los pares configurables activos siguen.
+    /// </param>
     public static ConflictoDeSegregacion? Evaluar(
-        ActoDeSegregacion acto, IEnumerable<IntervencionPrevia> previas, IEnumerable<ParIncompatible> pares, bool quienRadicaDecide = false)
+        ActoDeSegregacion acto, IEnumerable<IntervencionPrevia> previas, IEnumerable<ParIncompatible> pares, bool quienRadicaDecide = false,
+        bool sinReglaFija = false)
     {
         ArgumentNullException.ThrowIfNull(acto);
         ExigirAccion(acto.Accion);
@@ -78,7 +82,7 @@ public static class ReglasDeSegregacion
         {
             if (!MismoActor(acto, previa, out var porPersona)) continue;
 
-            var fija = ReglaFija.Any(p => p.Junta(acto.Accion, previa.Accion)
+            var fija = !sinReglaFija && ReglaFija.Any(p => p.Junta(acto.Accion, previa.Accion)
                 && !(quienRadicaDecide && p.Junta(AccionesDeSegregacion.Radicar, AccionesDeSegregacion.Decidir)));
             if (fija || activos.Any(p => p.Junta(acto.Accion, previa.Accion)))
                 return new ConflictoDeSegregacion(acto.Accion, previa.Accion, previa.En, previa.UsuarioId, porPersona, fija);

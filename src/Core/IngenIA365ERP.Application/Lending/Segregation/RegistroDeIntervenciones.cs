@@ -72,6 +72,7 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
 
         var pares = await ParesAsync(fecha, ct);
         var quienRadicaDecide = await QuienRadicaDecideAsync(expediente, accion, fecha, ct);
+        var unaPersonaHaceTodo = await SiNoAsync(ParametrosDeCartera.SegregacionUnaPersonaHaceTodo, fecha, ct);
         var previas = await db.CaseParticipations.AsNoTracking()
             .Where(c => c.CaseRootPublicId == expediente.PublicId)
             .ToListAsync(ct);
@@ -80,7 +81,7 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
         previas.AddRange(db.CaseParticipations.Local.Where(c => c.CaseRootPublicId == expediente.PublicId && !guardadas.Contains(c.PublicId)));
 
         var conflicto = ReglasDeSegregacion.Evaluar(
-            new ActoDeSegregacion(expediente.PublicId, accion, usuarioId, personaId), previas.Select(p => p.ComoPrevia()), pares, quienRadicaDecide);
+            new ActoDeSegregacion(expediente.PublicId, accion, usuarioId, personaId), previas.Select(p => p.ComoPrevia()), pares, quienRadicaDecide, unaPersonaHaceTodo);
         return conflicto is null
             ? Result.Success(new IntervencionVerificada(expediente, accion, usuarioId, personaId, fecha))
             : Result.Failure<IntervencionVerificada>(Conflicto(conflicto, EsSolicitudDeCredito(expediente)));
@@ -98,6 +99,13 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
     {
         if (!EsSolicitudDeCredito(expediente) || !string.Equals(accion, AccionesDeSegregacion.Decidir, StringComparison.Ordinal)) return false;
         var leido = await parametros.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.SegregacionQuienRadicaDecide, fecha, ct: ct);
+        return leido.IsSuccess && leido.Value.Como<bool>();
+    }
+
+    /// <summary>Un parámetro Sí/No de Cartera; ilegible es «No». (2026-11-26)</summary>
+    private async Task<bool> SiNoAsync(string clave, DateOnly fecha, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.Modulo, clave, fecha, ct: ct);
         return leido.IsSuccess && leido.Value.Como<bool>();
     }
 
@@ -142,7 +150,8 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
             ? solicitudDeCredito && c.Accion == AccionesDeSegregacion.Decidir
                 ? "Usted radicó esta solicitud y no puede decidirla: otra persona debe hacerlo. Si una sola persona atiende el crédito, active en "
                   + "Parámetros de Cartera el que permite a quien radica decidir su solicitud (Segregacion.QuienRadicaDecide)."
-                : "Usted radicó este expediente y no puede decidirlo ni votarlo. Otra persona debe hacerlo."
+                : "Usted radicó este expediente y no puede decidirlo, votarlo ni aplicarlo. Otra persona debe hacerlo. Si una sola persona "
+                  + "atiende todo el proceso, active en Parámetros de Cartera Segregacion.UnaPersonaHaceTodo."
             : "Usted ya intervino en este expediente con una acción incompatible con ésta. Otra persona debe hacerla.",
         new { action = c.Accion, previousAction = c.AccionPrevia, previousAt = c.InstantePrevio });
 

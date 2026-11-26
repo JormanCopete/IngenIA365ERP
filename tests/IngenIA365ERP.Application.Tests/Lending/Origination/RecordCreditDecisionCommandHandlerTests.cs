@@ -173,11 +173,27 @@ public sealed class RecordCreditDecisionCommandHandlerTests : IAsyncLifetime
         (await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve)).Error.Code.Should().Be("Lending.Segregation.Conflict");
     }
 
-    private async Task QuienRadicaDecideAsync()
+    private Task QuienRadicaDecideAsync() => SiAsync(Domain.Lending.Parameters.ParametrosDeCartera.SegregacionQuienRadicaDecide);
+
+    [Fact]
+    public async Task Con_UnaPersonaHaceTodo_quien_radico_decide_su_solicitud()
+    {
+        // 2026-11-26 (COOFLOPAL): una sola persona hace todo el proceso, sin QuienRadicaDecide.
+        var s = await _o.RadicadaAsync();
+        await SiAsync(Domain.Lending.Parameters.ParametrosDeCartera.SegregacionUnaPersonaHaceTodo);
+        _o.G.ActuarComo(_o.Asesora);
+        _o.G.Conceder("Lending.Applications.Read", "Lending.Decisions.Analyst");
+
+        var r = await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+    }
+
+    private async Task SiAsync(string clave)
     {
         _o.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
         {
-            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.SegregacionQuienRadicaDecide,
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = clave,
             ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.None, Value = "true", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
             CreatedBy = "test",
         });
