@@ -67,31 +67,27 @@ lo pida.
 
 ## C3 — Pantalla, operación y GitOps
 
-- [ ] T040 `/admin/facturacion-electronica`:
-  - selector de modo (Simulado / Conecta – pruebas / Conecta – real) que fija canal y ambiente;
-  - tenant de Conecta;
-  - extremo de la lista que publica la API (`GET /api/electronic-invoicing/channels`: códigos, extremos y si el
-    real está disponible en esta instalación);
-  - confirmación `PRODUCCION` con el permiso;
-  - resultado de «Verificar credencial»;
-  - `IndicadorDeCarga` por zona
-- [ ] T041 `FacturacionElectronicaClient` y DTOs de Shared; pruebas de Shared (textos y estados del modo)
-- [ ] T042 `crear-secreto-facturacion-electronica.ps1`: ejemplo para `CONECTA-PRUEBAS`/`CONECTA` (campos
-  `clientId,clientSecret[,webhookSecret]`), `PRODUCCION` también para el canal `CONECTA`
-- [ ] T043 `docs/operaciones/conecta-puesta-en-marcha.md`:
-  - crear el cliente API en Conecta;
-  - cargar el Secret;
-  - configurar el modo;
-  - asociar el prefijo;
-  - verificar;
-  - primera factura;
-  - paso a real con su lista de chequeo;
-  - cómo volver a Simulado
-- [ ] T044 `docs/manual/`: sección de modos en el manual de facturación electrónica
-- [ ] T045 GitOps (`ingenia365-gitops`, rama propia, sin push sin OK):
-  - componente `facturacion-electronica-credenciales` (volumen del Secret sin `subPath`, `optional: true`);
-  - variables por overlay (pruebas en DEV, QA y PDN; real sólo en PDN);
-  - revisión de la salida de red
+- [x] T040 `/admin/facturacion-electronica`:
+  - el selector de canal muestra el nombre de cada modo; un canal que exige ambiente lo fija;
+  - con Conecta, campos «Cooperativa en Conecta» y «Servicio» (las claves de `GET /settings` → `availableChannels[].endpoints`;
+    sin ruta nueva);
+  - para el modo real, aviso de validez legal y confirmación `PRODUCCION`; «Guardar» sólo con todo completo;
+  - la vigencia actual muestra servicio y cooperativa;
+  - el resultado de «Verificar credencial» ya mostraba los mensajes del canal;
+  - `IndicadorDeCarga` sin cambios
+- [x] T041 DTOs de Shared (`VigenciaDeEmisionDto`, `CanalDisponibleDto`, `ConfiguracionDeEmisionRequest`) y prueba del
+  cliente: manda cooperativa, servicio y confirmación, nunca URL ni secreto
+- [x] T042 Guion del Secret: ejemplos de `CONECTA-PRUEBAS` y `CONECTA`; `CONECTA` sólo con `-Ambiente pdn`, que ya
+  pedía `PRODUCCION`
+- [x] T043 `docs/operaciones/conecta-puesta-en-marcha.md` (índice de documentación actualizado)
+- [x] T044 Manual: sección «Los modos de IngenIA Conecta» y aviso inicial actualizado
+- [x] T045 GitOps, rama `erp/028-canal-conecta` de `ingenia365-gitops` (commit `c19373c`, **sin push**):
+  - componente `facturacion-electronica`;
+  - literales por overlay. Las secciones van con guion bajo (`CONECTA_PRUEBAS`), porque `envFrom` puede descartar
+    variables con guion; la API acepta los dos (`ElectronicInvoicingOptions.Canal`);
+  - `kubectl kustomize` de los tres overlays sin errores.
+
+  Queda pendiente revisar la salida de red en el clúster (no hay NetworkPolicy de salida en `workloads/erp`).
 
 ## C4 — Verificación final
 

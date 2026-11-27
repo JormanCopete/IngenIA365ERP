@@ -29,7 +29,14 @@
 #
 # Uso:
 #   .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente qa -Tenant <guid> -Canal SIMULADO -Campos token
-#   .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente pdn -Tenant <guid> -Canal PROVEEDOR -Campos tokenEmpresa,tokenPassword
+#   .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente qa  -Tenant <guid> -Canal CONECTA-PRUEBAS -Campos clientId,clientSecret
+#   .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente pdn -Tenant <guid> -Canal CONECTA-PRUEBAS -Campos clientId,clientSecret
+#   .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente pdn -Tenant <guid> -Canal CONECTA -Campos clientId,clientSecret
+#
+# Feature 028 (IngenIA Conecta): clientId y clientSecret son los de un cliente API de Conecta con rol Operator y
+# scopes documents:read y documents:write, creado por el administrador de la cooperativa en Conecta (el secreto se
+# muestra una sola vez: va directo a este guion). webhookSecret es opcional (entrega C5). El canal CONECTA (validez
+# legal) solo existe en produccion: en dev y qa el guion lo rechaza.
 #
 # Por STDIN (sin teclado; una linea por campo, en el orden de -Campos):
 #   Get-Content valores.txt | .\tools\scripts\crear-secreto-facturacion-electronica.ps1 -Ambiente dev -Tenant <guid> -Canal SIMULADO -Campos token -DesdeStdin
@@ -73,6 +80,10 @@ $destino = switch ($Ambiente) {
 Write-Host ""
 Write-Host ("  Credencial de facturacion electronica para {0} (Secret {1}, clave {2})" -f $destino.Nombre, $nombreSecreto, $clave) -ForegroundColor Cyan
 Write-Host ""
+
+if ($canalNormalizado -eq 'CONECTA' -and $Ambiente -ne 'pdn') {
+    throw "El canal CONECTA emite con validez legal: solo se carga en produccion. En $Ambiente use CONECTA-PRUEBAS."
+}
 
 if ($Ambiente -eq 'pdn') {
     if ($canalNormalizado -eq 'SIMULADO') { throw "El canal SIMULADO no se usa en produccion." }

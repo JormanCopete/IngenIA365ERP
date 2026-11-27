@@ -268,7 +268,7 @@ de integración corren **una vez al final**. Las unitarias y la compilación cor
    (`optional: true`, **sin `subPath`**) en `/secrets/facturacion-electronica/` del contenedor de la API, sólo
    lectura. Se incluye en los overlays de DEV, QA y PDN.
 2. Variables por overlay (no secretas):
-   - DEV y QA: `ElectronicInvoicing__Channels__CONECTA-PRUEBAS__Endpoints__QA=https://conecta-qa.ingenia365.com` y
+   - DEV y QA: `ElectronicInvoicing__Channels__CONECTA_PRUEBAS__Endpoints__QA=https://conecta-qa.ingenia365.com` y
      `…__Endpoints__PDN=https://conecta.ingenia365.com` (habilitación en PDN), **sin sección `CONECTA`**;
    - PDN: las de pruebas más
      `ElectronicInvoicing__Channels__CONECTA__Endpoints__PDN=https://conecta.ingenia365.com`.

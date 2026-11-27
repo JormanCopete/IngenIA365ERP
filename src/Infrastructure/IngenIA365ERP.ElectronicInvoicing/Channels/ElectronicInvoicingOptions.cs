@@ -26,9 +26,18 @@ public sealed class ElectronicInvoicingOptions
     /// <summary><c>ElectronicInvoicing:Processor</c>: el procesador de fondo (§6.4).</summary>
     public OpcionesDelProcesador Processor { get; set; } = new();
 
-    /// <summary>Las opciones de <paramref name="channelCode"/>, o las por defecto si no tiene sección.</summary>
+    /// <summary>
+    /// Las opciones de <paramref name="channelCode"/>, o las por defecto si no tiene sección. Feature 028: la sección también se encuentra con
+    /// <c>_</c> en lugar de <c>-</c> (<c>CONECTA_PRUEBAS</c>), porque una variable de entorno con guion puede no llegar por <c>envFrom</c>.
+    /// Ningún código de canal lleva <c>_</c>.
+    /// </summary>
     public OpcionesDeCanal Canal(string channelCode) =>
-        Channels.TryGetValue(channelCode, out var opciones) && opciones is not null ? opciones : new OpcionesDeCanal();
+        Channels.TryGetValue(channelCode, out var opciones) && opciones is not null ? opciones
+        : Channels.TryGetValue(channelCode.Replace('-', '_'), out var alterna) && alterna is not null ? alterna
+        : new OpcionesDeCanal();
+
+    /// <summary>El código de canal de una sección (<c>CONECTA_PRUEBAS</c> → <c>CONECTA-PRUEBAS</c>).</summary>
+    public static string CodigoDeSeccion(string seccion) => seccion.Replace('_', '-');
 }
 
 /// <summary>

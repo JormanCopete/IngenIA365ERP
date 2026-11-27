@@ -68,7 +68,7 @@ public static class DependencyInjection
         foreach (var (canal, opciones) in leidas.Channels)
         {
             if (string.Equals(canal, CanalSimulado.Codigo, StringComparison.OrdinalIgnoreCase)) continue;
-            AgregarClientesDelCanal(services, canal, opciones ?? new OpcionesDeCanal());
+            AgregarClientesDelCanal(services, ElectronicInvoicingOptions.CodigoDeSeccion(canal), opciones ?? new OpcionesDeCanal());
         }
 
         // IngenIA Conecta (feature 028).
