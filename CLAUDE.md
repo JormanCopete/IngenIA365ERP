@@ -478,6 +478,21 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `inventory.products-update` y el formulario (`/inventario/actualizacion-masiva`) terminan ahí; el formulario arma filas de la
   plantilla y corre por `EjecutorDeImportacion.EjecutarFilasAsync`, con la misma revisión, el mismo todo o nada y la misma auditoría.
   **Este repositorio es público**: `tools/implantacion/cooperativas/*/` lleva documentos y saldos y no se sube.
+- **Canal IngenIA Conecta (feature 028, `specs/028-canal-conecta/`)**: la facturación electrónica sale por Conecta,
+  la plataforma propia de facturación (repositorio hermano `Conecta365`, que este repositorio **no** modifica).
+  Por cooperativa hay tres modos:
+  - `SIMULADO`;
+  - `CONECTA-PRUEBAS`: sólo `Testing`, con el tenant de Conecta en `Habilitation`;
+  - `CONECTA`: sólo `Production`, sólo en un proceso de producción con la sección
+    `ElectronicInvoicing:Channels:CONECTA`, con el permiso `ElectronicInvoicing.Settings.ActivateProduction` y la
+    confirmación `PRODUCCION`.
+
+  El client id y el secret van **sólo** en el Secret `erp-fe-credenciales` (`{tenant}.{canal}.json`). La vigencia
+  guarda el tenant de Conecta y la **clave** de un extremo de la lista blanca de `appsettings`, nunca la URL, así el
+  secreto no viaja a un host leído de la base. El ERP sigue numerando. Conecta hoy exige `number = null`: hasta que
+  acepte el número del ERP (pedido D1, `pedido-a-conecta.md`), la verificación falla y la guardia bloquea. §15 de
+  `dian.md` se reescribió: el «servicio central» de la 010 se retiró y Conecta hace de software propio o de
+  proveedor.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
