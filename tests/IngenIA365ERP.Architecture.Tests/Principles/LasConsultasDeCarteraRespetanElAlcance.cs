@@ -349,6 +349,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // estados de cuenta de cada módulo (ListLoansQuery, ListDebtorMessagesQuery, ListCollectionActionsQuery, ...) y la liquidación de cada crédito.
         ["GetPersonStatementSectionQuery"] = "arma cada sección con las consultas de su módulo por ISender, que aplican el alcance de oficina y línea",
         ["SimulatePersonPayoffQuery"] = "sólo simula créditos de ListLoansQuery, que aplica el alcance, y cada uno por GetLoanSettlementQuery, que lo asegura",
+        // 2026-11-27 (feature 028, T014): los productos para recoger.
+        ["GetPayoffCandidatesQuery"] = "sólo liquida créditos de ListLoansQuery, que aplica el alcance, y asegura la línea del crédito nuevo con AsegurarAsync",
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",

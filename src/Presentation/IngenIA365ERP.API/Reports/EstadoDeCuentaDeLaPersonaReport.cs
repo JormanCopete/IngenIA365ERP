@@ -86,7 +86,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
 
     // ------------------------------------------------------------------------------------------------------------ hoja --
 
-    private static void Hoja(PageDescriptor page, bool apaisado, MembreteDto? m, Image? logotipo, string titulo, string subtitulo, DateTimeOffset generadoEn)
+    internal static void Hoja(PageDescriptor page, bool apaisado, MembreteDto? m, Image? logotipo, string titulo, string subtitulo, DateTimeOffset generadoEn)
     {
         page.Size(apaisado ? PageSizes.Letter.Landscape() : PageSizes.Letter);
         page.Margin(32);
@@ -124,7 +124,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
         });
     }
 
-    private static DocumentMetadata Metadatos(MembreteDto? m, string titulo, DateTimeOffset generadoEn) => new()
+    internal static DocumentMetadata Metadatos(MembreteDto? m, string titulo, DateTimeOffset generadoEn) => new()
     {
         Title = titulo,
         Author = m?.Cooperativa ?? MembreteDeCartera.CooperativaSinNombre,
@@ -137,7 +137,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
 
     // ------------------------------------------------------------------------------------------------------- bloques --
 
-    private static void DatosDeLaPersona(ColumnDescriptor col, PersonaDelEstadoDeCuentaDto p, string etiquetaDeFecha, DateOnly fecha)
+    internal static void DatosDeLaPersona(ColumnDescriptor col, PersonaDelEstadoDeCuentaDto p, string etiquetaDeFecha, DateOnly fecha)
     {
         col.Item().Border(0.5f).BorderColor(Colors.Grey.Lighten1).Padding(6).Table(table =>
         {
@@ -296,7 +296,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
                 .FontColor(Colors.Grey.Darken1);
     }
 
-    private static void Avisos(ColumnDescriptor col, IReadOnlyList<string> avisos)
+    internal static void Avisos(ColumnDescriptor col, IReadOnlyList<string> avisos)
     {
         if (avisos.Count == 0) return;
         col.Item().PaddingTop(10).Text("Avisos").SemiBold().FontSize(10);
@@ -306,7 +306,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
     // -------------------------------------------------------------------------------------------------------- piezas --
 
     /// <summary>El logotipo del data URI, o nulo si no hay o no es una imagen que el PDF pueda pintar (un logotipo malo no impide imprimir).</summary>
-    private static Image? Logotipo(string? dataUri)
+    internal static Image? Logotipo(string? dataUri)
     {
         if (string.IsNullOrWhiteSpace(dataUri)) return null;
         var coma = dataUri.IndexOf(',');
@@ -336,11 +336,11 @@ public static class EstadoDeCuentaDeLaPersonaReport
     /// <summary>Un valor en pesos sin símbolo: <c>1.234.567</c> o <c>1.234.567,89</c>.</summary>
     public static string Valor(decimal valor, bool decimales) => valor.ToString(decimales ? "N2" : "N0", Co);
 
-    private static string Fecha(DateOnly fecha) => fecha.ToString("dd/MM/yyyy", Co);
+    internal static string Fecha(DateOnly fecha) => fecha.ToString("dd/MM/yyyy", Co);
 
-    private static IContainer EncabezadoDeTabla(IContainer c, float letra) =>
+    internal static IContainer EncabezadoDeTabla(IContainer c, float letra) =>
         c.Background(Colors.Grey.Lighten3).Padding(3).DefaultTextStyle(x => x.SemiBold().FontSize(letra));
 
-    private static IContainer Celda(IContainer c, float letra) =>
+    internal static IContainer Celda(IContainer c, float letra) =>
         c.BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3).DefaultTextStyle(x => x.FontSize(letra));
 }

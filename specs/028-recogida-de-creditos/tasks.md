@@ -36,15 +36,15 @@ Rutas: `Dom` = `src/Core/IngenIA365ERP.Domain`, `App` = `src/Core/IngenIA365ERP.
 **Prueba independiente**: un asociado con dos créditos al día y uno en mora: la consulta devuelve los tres, el de mora no elegible; cambiar D
 cambia el valor y el neto.
 
-- [ ] T014 [US1] `GetPayoffCandidatesQuery` + validador (créditos como deudor en el alcance, admitidos según la línea del crédito nuevo, aviso de otra solicitud viva, resumen con neto, cuotas liberadas y capacidad después) en `App/Lending/Payoffs/GetPayoffCandidatesQuery.cs`; audita `Lending.Payoff.Viewed`
-- [ ] T015 [US1] DTO `PayoffCandidatesDto` en `App/Lending/Payoffs/PayoffDtos.cs`
-- [ ] T016 [US1] Ruta `POST /api/lending/payoffs/candidates` (`Lending.Payoffs.Read`) en `API/Endpoints/Lending/PayoffsEndpoints.cs`
-- [ ] T017 [P] [US1] PDF de la simulación de recogida con el membrete, reusando el generador de la simulación de cancelación, en `API/Reports/SimulacionDeRecogidaReport.cs` y su ruta `/payoffs/candidates/pdf`
-- [ ] T018 [P] [US1] Cliente y DTO en `Sh/Services/Cartera/RecogidasClient.cs` y `Sh/Services/Cartera/CarteraDtos.Recogidas.cs`
-- [ ] T019 [US1] Componente `ProductosParaRecoger.razor` (tabla con marcas, modo, valor parcial, desglose desplegable, avisos, fecha proyectada, neto, botón de PDF; `IndicadorDeCarga`) en `Sh/Components/Cartera/ProductosParaRecoger.razor`
-- [ ] T020 [US1] Integrar el componente en `Sh/Pages/Cartera/SolicitudNueva.razor` (paso 2, después del simulador; la fecha esperada de desembolso alimenta D)
-- [ ] T021 [P] [US1] Pruebas de la consulta (elegibilidad, alcance, admitidos de fábrica = sólo créditos, otra solicitud viva, neto ≤ 0) en `TA/Lending/Payoffs/GetPayoffCandidatesQueryTests.cs`
-- [ ] T022 [P] [US1] Pruebas de textos y DTO del cliente en `TS/Cartera/RecogidasTests.cs`
+- [X] T014 [US1] `GetPayoffCandidatesQuery` + validador (créditos como deudor en el alcance, admitidos según la línea del crédito nuevo, aviso de otra solicitud viva, resumen con neto, cuotas liberadas y capacidad después) en `App/Lending/Payoffs/GetPayoffCandidatesQuery.cs`; audita `Lending.Payoff.Viewed`
+- [X] T015 [US1] DTO `PayoffCandidatesDto` en `App/Lending/Payoffs/PayoffDtos.cs`
+- [X] T016 [US1] Ruta `POST /api/lending/payoffs/candidates` (`Lending.Payoffs.Read`) en `API/Endpoints/Lending/PayoffsEndpoints.cs`
+- [X] T017 [P] [US1] PDF de la simulación de recogida con el membrete, reusando el generador de la simulación de cancelación, en `API/Reports/SimulacionDeRecogidaReport.cs` y su ruta `/payoffs/candidates/pdf`
+- [X] T018 [P] [US1] Cliente y DTO en `Sh/Services/Cartera/RecogidasClient.cs` y `Sh/Services/Cartera/CarteraDtos.Recogidas.cs`
+- [X] T019 [US1] Componente `ProductosParaRecoger.razor` (tabla con marcas, modo, valor parcial, desglose desplegable, avisos, fecha proyectada, neto, botón de PDF; `IndicadorDeCarga`) en `Sh/Components/Cartera/ProductosParaRecoger.razor`
+- [X] T020 [US1] Integrar el componente en `Sh/Pages/Cartera/SolicitudNueva.razor` (paso 2, después del simulador; la fecha esperada de desembolso alimenta D)
+- [X] T021 [P] [US1] Pruebas de la consulta (elegibilidad, alcance, admitidos de fábrica = sólo créditos, otra solicitud viva, neto ≤ 0) en `TA/Lending/Payoffs/GetPayoffCandidatesQueryTests.cs`
+- [X] T022 [P] [US1] Pruebas de textos y DTO del cliente en `TS/Cartera/RecogidasTests.cs`
 
 ## Fase 4 — HU2: radicar, corregir y decidir (P1, E1)
 

@@ -1,0 +1,72 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* 2026-11-27 (pedido del dueño; feature 028, HU1, T019): el detalle desplegable de un producto en «Productos que recoge»: lo que cuesta recogerlo por
+   concepto (lo devuelto por proporcionales y el anticipo se descuentan), el modo de intereses con su explicación, la cuota causada y qué se hace con
+   ella, por qué no se puede recoger y los avisos. No consulta nada: pinta lo que trajo la consulta. *@
+<div class="form-grid">
+    <div class="campo">
+        <span class="etiqueta-campo">Lo que cuesta recogerlo</span>
+        <table class="data-grid">
+            <tbody>
+                @foreach (var (concepto, valor) in Conceptos())
+                {
+                    <tr><td>@concepto</td><td class="numero">@TextosDeRecogida.Pesos(valor)</td></tr>
+                }
+                <tr><th>Para recoger</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ToPayOff)</th></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="campo">
+        <span class="etiqueta-campo">Intereses</span>
+        <span>@TextosDeRecogida.ModoDeIntereses(Producto.InterestMode)</span>
+        @if (Producto.InterestModeExplanation is { } explicacion) { <span class="texto-tenue">@explicacion</span> }
+        @if (Producto.CurrentInstallment is { } c)
+        {
+            <span class="etiqueta-campo">Cuota causada</span>
+            <span>@TextoDeLaCuota(c)</span>
+            @if (c.Sent is { } enviada)
+            {
+                <span class="texto-alerta">@TextoDelEnvio(enviada)</span>
+            }
+        }
+        <span class="etiqueta-campo">Estado</span>
+        <span>@TextosDeRecogida.Estado(Producto.Status) · @TextosDeRecogida.Origen(Producto.Origin)</span>
+    </div>
+</div>
+@if (!Producto.Eligible && Producto.BlockMessage is { } motivo)
+{
+    <p class="aviso aviso-alerta">@motivo</p>
+}
+@if (Producto.InOtherApplication is not null)
+{
+    <p class="aviso aviso-alerta">@TextosDeRecogida.EnOtraSolicitud(Producto.InOtherApplication), que también lo recoge.</p>
+}
+@foreach (var aviso in Producto.Warnings.Where(a => Producto.InOtherApplication is null || !a.Contains("que también lo recoge", StringComparison.Ordinal)))
+{
+    <p class="aviso aviso-info">@aviso</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public ProductoParaRecogerDto Producto { get; set; } = null!;
+
+    private static string TextoDeLaCuota(CuotaCausadaDeRecogidaDto c) =>
+        $"Cuota {c.Number}{(c.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "")} por {TextosDeRecogida.Pesos(c.Amount)}: "
+        + $"{TextosDeRecogida.TratamientoDeCuota(c.Treatment).ToLowerInvariant()}.";
+
+    private static string TextoDelEnvio(CuotaEnviadaDto e) =>
+        "Ya se envió" + (e.Paymaster is { } pagaduria ? $" a la pagaduría {pagaduria}" : "") + (e.File is { } archivo ? $" en el archivo {archivo}" : "")
+        + (e.Period is { } periodo ? $" de {periodo}" : "") + ".";
+
+    /// <summary>Los conceptos con valor; lo que se descuenta va en negativo.</summary>
+    private IEnumerable<(string Concepto, decimal Valor)> Conceptos()
+    {
+        var d = Producto.Breakdown;
+        (string, decimal)[] todos =
+        [
+            ("Capital", d.Principal), ("Interés corriente", d.CurrentInterest), ("Interés devuelto por proporcionales", -d.InterestReturned),
+            ("Interés cobrado por proporcionales", d.InterestCharged), ("Interés de mora", d.DefaultInterest), ("Seguro", d.Insurance),
+            ("Administración", d.Administration), ("Otros cargos", d.OtherCharges), ("Anticipo a favor", -d.Advance), ("Saldo a favor", -d.CreditBalance),
+        ];
+        return todos.Where(c => c.Item2 != 0m);
+    }
+}

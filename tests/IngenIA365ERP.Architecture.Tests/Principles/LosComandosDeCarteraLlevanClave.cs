@@ -112,7 +112,9 @@ public class LosComandosDeCarteraLlevanClave
             // K5 (fase 21, bloque 3, T1008): validar el SICSES o el archivo de una central (api.md §18, «no guarda; sin clave»).
             "/validate\"",
             // 2026-11-16: la simulación de cancelación del estado de cuenta y su PDF (no escriben); su envío por correo sí lleva clave.
-            "\"/payoff-simulation\"", "\"/payoff-simulation/pdf\""];
+            "\"/payoff-simulation\"", "\"/payoff-simulation/pdf\"",
+            // 2026-11-27 (feature 028, T016, T017): los productos para recoger y su simulación en PDF (api.md §1: no escriben).
+            "\"/candidates\"", "\"/candidates/pdf\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así

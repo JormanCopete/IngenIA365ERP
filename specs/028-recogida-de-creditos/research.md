@@ -281,3 +281,24 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   ganan el parámetro opcional `recogida`; el puerto `IContratoDeObligaciones` no cambia. La simulación del contrato no lo lleva (no trae recibo).
 - **Sin condiciones selladas**: posición diaria o libro, como el motor; de la posición sale el desglose y lo que no desglose va en otros cargos, para que
   el total sea el de la posición. `CuotaCausadaDeRecogida` gana el vencimiento (opcional, no se guarda).
+
+### E-05 — Los productos para recoger (T014–T022, 2026-11-27)
+- **Qué se muestra y qué se recoge**: se listan los créditos del deudor vigentes, pendientes de giro y castigados (lo cancelado, anulado o novado no es
+  un producto vivo); sólo el vigente al día se puede recoger. Un crédito que no se pudo liquidar (una regla del motor, la usura del día) no tumba la
+  consulta: sale sin poder marcarse con `blockReason = NotSettled` y el mensaje del error. «No admitido» es `NotAdmitted`, con el código
+  `Lending.Payoff.ProductNotAdmitted`.
+- **La línea del crédito nuevo** se asegura con el alcance de líneas de quien consulta (fuera, el 404 de la línea); los créditos salen de `ListLoansQuery`,
+  que aplica el de oficina y línea. La consulta queda exceptuada en `LasConsultasDeCarteraRespetanElAlcance` con ese motivo, como la simulación de
+  cancelación. La lectura de `Recogida.ProductosAdmitidos` vive en `AdmisionDeRecogidaVigente` (la usará T024).
+- **«Otra solicitud que lo recoge»** cuenta las de estado borrador, radicada, en decisión, devuelta y aprobada; un borrador sin número sale como `""`
+  («otra solicitud en borrador»). Es un aviso: no impide marcarlo.
+- **Lo marcado**: un producto que no está entre los del deudor es `Lending.Payoff.NotOfApplicant`; uno que no se puede recoger o marcado en un modo que la
+  línea no admite no se cuenta y se avisa en el resumen; el parcial se topa en lo que cuesta recoger. En E1 el validador sólo admite `Kind = Loan`.
+  `capacityAfter` va nulo: la capacidad después de recoger la calcula la radicación (T025).
+- **El DTO gana** (además de api.md §1): `status`, `blockMessage`, `interestModeExplanation`, `selected`/`selectedMode`/`selectedAmount` por producto;
+  `selectedCount`, `newLoanAmount`, `newInstallment` y `netNotPositive` en el resumen; `person`, `newLoanLine` y, sólo para imprimir, `letterhead`.
+  `origin` es `LoanOrigin` (migrado = crédito) y `channel` es `RepaymentChannel`, nulo sin vínculo de forma de pago; los dos salen como número.
+- **La pantalla resume lo marcado sin volver a consultar** (`SeleccionDeRecogida.Resumir`, la misma regla del servidor): cada clic no vuelve a liquidar ni a
+  auditar `Lending.Payoff.Viewed`. «Simular» (o cambiar persona, línea o fecha de la simulación) vuelve a consultar.
+- **El PDF** (`/payoffs/candidates/pdf`) queda en la auditoría de exportaciones con la clave `payoff-candidates-simulation`. Reusa la hoja, los datos de la
+  persona y los avisos de `EstadoDeCuentaDeLaPersonaReport` (ahora `internal`).

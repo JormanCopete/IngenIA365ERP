@@ -94,18 +94,32 @@ public sealed class CapacidadDePago(IApplicationDbContext db, IValoresNacionales
             creditos = creditos.Intersect(deNomina).ToList();
         }
         if (creditos.Count == 0) return 0m;
+        return (await ProximaCuotaPorCreditoAsync(creditos, fecha, ct)).Values.Sum();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T014): la próxima cuota del plan vigente de cada uno de <paramref name="creditos"/> a <paramref name="fecha"/> —la primera
+    /// que vence ese día o después en la última versión de <c>LND_RepaymentScheduleVersions</c>—, por crédito: la misma que suma
+    /// <see cref="CuotasPropiasAsync"/>. Un crédito sin plan o sin cuota por vencer no aparece. La usa la recogida para decir qué cuotas libera. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyDictionary<int, decimal>> ProximaCuotaPorCreditoAsync(IReadOnlyCollection<int> creditos, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(creditos);
+        var ids = creditos.Distinct().ToArray();
+        if (ids.Length == 0) return new Dictionary<int, decimal>();
 
         var planes = await db.RepaymentScheduleVersions.AsNoTracking()
-            .Where(v => creditos.Contains(v.LoanId) && !v.IsDeleted)
+            .Where(v => ids.Contains(v.LoanId) && !v.IsDeleted)
             .Select(v => new { v.Id, v.LoanId, v.VersionNumber })
             .ToListAsync(ct);
-        var vigentes = planes.GroupBy(p => p.LoanId).Select(g => g.MaxBy(p => p.VersionNumber)!.Id).ToArray();
-        if (vigentes.Length == 0) return 0m;
+        var deCadaPlan = planes.GroupBy(p => p.LoanId).Select(g => g.MaxBy(p => p.VersionNumber)!).ToDictionary(p => p.Id, p => p.LoanId);
+        if (deCadaPlan.Count == 0) return new Dictionary<int, decimal>();
+        var vigentes = deCadaPlan.Keys.ToArray();
 
         var proximas = await db.RepaymentInstallments.AsNoTracking()
             .Where(c => vigentes.Contains(c.ScheduleVersionId) && c.DueDate >= fecha)
             .Select(c => new { c.ScheduleVersionId, c.DueDate, c.Total })
             .ToListAsync(ct);
-        return proximas.GroupBy(c => c.ScheduleVersionId).Sum(g => g.MinBy(c => c.DueDate)!.Total);
+        return proximas.GroupBy(c => c.ScheduleVersionId).ToDictionary(g => deCadaPlan[g.Key], g => g.MinBy(c => c.DueDate)!.Total);
     }
 }

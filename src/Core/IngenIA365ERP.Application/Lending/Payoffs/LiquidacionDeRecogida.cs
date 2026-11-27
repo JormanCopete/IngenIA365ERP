@@ -73,6 +73,29 @@ public static class ErroresDeRecogida
         LoanStatus.Novated => $"El crédito {numero} se novó: su saldo pasó a otro crédito.",
         _ => $"El crédito {numero} no está vigente: sólo se recoge un crédito activo.",
     });
+
+    // 2026-11-27 (feature 028, T014): los de la consulta de productos para recoger (api.md §1 y §2). (nuevo)
+
+    public const string CodigoNoEsDelSolicitante = "Lending.Payoff.NotOfApplicant";
+    public const string CodigoProductoNoAdmitido = "Lending.Payoff.ProductNotAdmitted";
+    public const string CodigoFechaPasada = "Lending.Payoff.DateInPast";
+
+    /// <summary>El motivo de un producto que la línea del crédito nuevo no admite recoger (<c>Recogida.ProductosAdmitidos</c>).</summary>
+    public const string MotivoNoAdmitido = "NotAdmitted";
+
+    /// <summary>El motivo de un crédito que no se pudo liquidar (una regla del motor o la usura del día sin publicar).</summary>
+    public const string MotivoSinLiquidar = "NotSettled";
+
+    public static Error NoEsDelSolicitante(string persona) => new(CodigoNoEsDelSolicitante,
+        $"Uno de los productos elegidos no es de {persona} como deudora: sólo se recogen sus propios productos.");
+
+    public static Error FechaPasada() => new(CodigoFechaPasada, "La fecha proyectada de desembolso es hoy o una fecha futura.");
+
+    public static BloqueoDeRecogida NoAdmitido(string numero) => new(CodigoProductoNoAdmitido, MotivoNoAdmitido,
+        $"La línea del crédito nuevo no admite recoger créditos (parámetro Recogida.ProductosAdmitidos): el crédito {numero} no se puede recoger con ella.");
+
+    public static BloqueoDeRecogida SinLiquidar(string numero, Error error) => new(error.Code, MotivoSinLiquidar,
+        $"El crédito {numero} no se pudo liquidar a la fecha: {error.Message}");
 }
 
 /// <summary>
