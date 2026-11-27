@@ -139,6 +139,14 @@ public sealed class GetUserByPublicIdQueryHandler
                 .Where(m => m.CentralUserId == persona && m.Status != Domain.Entities.Admin.MembershipStatus.Revoked)
                 .Select(m => m.TenantId).Distinct().CountAsync(ct) <= 1;
 
+        // Feature 027: si la cooperativa permite pases de ingreso, su duración máxima (la ficha muestra el botón sólo entonces).
+        var cooperativaPublica = await _admin.Tenants.AsNoTracking()
+            .Where(t => t.Id == cooperativaId).Select(t => t.PublicId).FirstOrDefaultAsync(ct);
+        var horasDelPase = await _admin.TenantMfaPolicies.AsNoTracking()
+            .Where(p => p.TenantId == cooperativaPublica && p.AllowLoginPass)
+            .Select(p => (int?)p.LoginPassMaxHours)
+            .FirstOrDefaultAsync(ct);
+
         var vinculada = fila.PersonId is { } personaId
             ? await _db.People.AsNoTracking()
                 .Where(p => p.Id == personaId && !p.IsDeleted)
@@ -155,6 +163,7 @@ public sealed class GetUserByPublicIdQueryHandler
                 : PersonFactory.NombreVisible(vinculada.FirstName, vinculada.OtherNames, vinculada.LastName, vinculada.SecondLastName, vinculada.BusinessName),
             PersonDocument = vinculada?.TaxId,
             PrintAlias = fila.PrintAlias,
+            LoginPassMaxHours = horasDelPase,
         });
     }
 }

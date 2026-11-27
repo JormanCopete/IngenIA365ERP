@@ -26,6 +26,14 @@ public sealed class SaasAdminModule : ICarterModule
         saasTenants.MapPost("/with-admin", RegisterWithAdminAsync)
             .WithName("Saas_RegisterTenantWithAdmin");
 
+        // Feature 027 (FR-020): pases de ingreso sin segundo factor desde la consola del maestro, también a administradores.
+        saasTenants.MapGet("/{tenantPublicId:guid}/login-passes", ListLoginPassesAsync)
+            .WithName("Saas_ListLoginPasses");
+        saasTenants.MapPost("/{tenantPublicId:guid}/login-passes", GrantLoginPassAsync)
+            .WithName("Saas_GrantLoginPass");
+        saasTenants.MapPost("/{tenantPublicId:guid}/login-passes/{passPublicId:guid}/void", VoidLoginPassAsync)
+            .WithName("Saas_VoidLoginPass");
+
         // Force MFA reset (recuperación operativa).
         var saasUsers = app.MapGroup("/api/saas/users")
             .WithTags("Identity / SaaS Admin")
@@ -117,4 +125,33 @@ public sealed class SaasAdminModule : ICarterModule
     }
 
     public sealed record ForceMfaResetBody(string Reason);
+
+    // ---------- Pases de ingreso (feature 027) ----------
+
+    private static async Task<object?> ListLoginPassesAsync(
+        Guid tenantPublicId, [FromQuery] Guid? centralUserId, HttpContext http, ISender sender, CancellationToken ct)
+    {
+        var guard = RequireMasterAdminAttribute.Check(http);
+        if (!guard.IsAllowed) return Result.Failure(guard.ErrorCode!, guard.Message!);
+        return await sender.Send(new Application.Identity.PasesDeIngreso.ListarPasesDeLaCooperativaQuery(tenantPublicId, centralUserId), ct);
+    }
+
+    private static async Task<object?> GrantLoginPassAsync(
+        Guid tenantPublicId, [FromBody] SaasGrantLoginPassBody body, HttpContext http, ISender sender, CancellationToken ct)
+    {
+        var guard = RequireMasterAdminAttribute.Check(http);
+        if (!guard.IsAllowed) return Result.Failure(guard.ErrorCode!, guard.Message!);
+        return await sender.Send(new Application.Identity.PasesDeIngreso.ConcederPaseDeIngresoComoMaestroCommand(
+            tenantPublicId, body.CentralUserId, body.Hours, body.Reason), ct);
+    }
+
+    private static async Task<object?> VoidLoginPassAsync(
+        Guid tenantPublicId, Guid passPublicId, [FromBody] VoidLoginPassBody body, HttpContext http, ISender sender, CancellationToken ct)
+    {
+        var guard = RequireMasterAdminAttribute.Check(http);
+        if (!guard.IsAllowed) return Result.Failure(guard.ErrorCode!, guard.Message!);
+        return await sender.Send(new Application.Identity.PasesDeIngreso.AnularPaseDeIngresoCommand(passPublicId, body.Reason), ct);
+    }
+
+    public sealed record SaasGrantLoginPassBody(Guid CentralUserId, int Hours, string? Reason);
 }

@@ -78,4 +78,8 @@ internal sealed class CurrentCentralUserContextAccessor(
             : MetodosMfa.Ninguno;
 
     public bool IsAuthenticated => CentralUserId.HasValue;
+
+    /// <summary>Feature 027: la cooperativa del pase de ingreso, si la sesión se abrió con uno.</summary>
+    public Guid? PaseDeIngresoCooperativa =>
+        Guid.TryParse(User?.FindFirst(ClaimsDelPaseDeIngreso.Cooperativa)?.Value, out var v) ? v : null;
 }

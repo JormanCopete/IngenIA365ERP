@@ -43,6 +43,8 @@ public interface IAdminDbContext
     DbSet<EmailChangeRequest> EmailChangeRequests { get; }
     DbSet<PlatformMfaPolicy> PlatformMfaPolicies { get; }
     DbSet<MfaRecoveryRequest> MfaRecoveryRequests { get; }
+    /// <summary>Feature 027: pases de ingreso sin segundo factor.</summary>
+    DbSet<LoginPass> LoginPasses { get; }
     DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts { get; }
 
     // --- Phase 4b (Profile & Recovery) ---

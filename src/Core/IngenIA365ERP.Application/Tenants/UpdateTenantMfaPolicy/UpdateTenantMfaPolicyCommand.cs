@@ -37,7 +37,9 @@ public sealed record UpdateTenantMfaPolicyCommand(
     bool IsRequired,
     IReadOnlyList<string>? MetodosAceptados = null,
     bool? PermitirRecuperacionPorCorreo = null,
-    int? HorasDeDemora = null
+    int? HorasDeDemora = null,
+    bool? PermitirPasesDeIngreso = null,
+    int? HorasMaximasDelPase = null
 ) : IRequest<Result<UpdateTenantMfaPolicyResult>>;
 
 /// <param name="MiembrosSinMetodoAceptado">

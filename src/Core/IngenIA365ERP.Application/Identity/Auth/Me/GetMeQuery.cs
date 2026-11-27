@@ -26,7 +26,10 @@ public sealed record MeResult(
     // y, por cooperativa, desde cuándo lo exige (sólo las que fijaron fecha).
     bool DocumentPending = false,
     string? DocumentUsername = null,
-    IReadOnlyList<DocumentRequiredFrom>? DocumentRequiredFrom = null);
+    IReadOnlyList<DocumentRequiredFrom>? DocumentRequiredFrom = null,
+
+    // Feature 027 (FR-017): si la sesión se abrió con un pase de ingreso, la cooperativa del pase (la pantalla muestra el aviso).
+    Guid? LoginPassTenantPublicId = null);
 
 /// <summary>Desde qué fecha una cooperativa exige el documento para entrar (feature 017, D-04).</summary>
 public sealed record DocumentRequiredFrom(Guid TenantId, DateOnly From);

@@ -186,16 +186,27 @@ public sealed class RefreshTokenCommandHandler(
         }
 
         // Emitir nuevos tokens — preservando la familyId del refresh anterior.
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId: user.Id,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            activeTenantId: session.ActiveTenantPublicId,
-            tenantAdmin: membershipAdmin,
-            mfaVerified: user.TwoFactorEnabled,
-            // Se arrastra el metodo de la sesion original: el refresh no vuelve a
-            // demostrar nada, solo prolonga lo que ya se demostro.
-            metodoMfa: session.MetodoMfa);
+        // Feature 027: una sesión abierta con un pase de ingreso sigue atada a su cooperativa en cada rotación.
+        var access = session.PaseDeIngresoCooperativa is { } pase
+            ? jwtIssuer.IssueAccessToken(
+                centralUserId: user.Id,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                activeTenantId: session.ActiveTenantPublicId,
+                tenantAdmin: membershipAdmin,
+                mfaVerified: user.TwoFactorEnabled,
+                metodoMfa: session.MetodoMfa,
+                paseDeIngresoCooperativa: pase)
+            : jwtIssuer.IssueAccessToken(
+                centralUserId: user.Id,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                activeTenantId: session.ActiveTenantPublicId,
+                tenantAdmin: membershipAdmin,
+                mfaVerified: user.TwoFactorEnabled,
+                // Se arrastra el metodo de la sesion original: el refresh no vuelve a
+                // demostrar nada, solo prolonga lo que ya se demostro.
+                metodoMfa: session.MetodoMfa);
 
         // El refresh nuevo hereda el tope: mismo vencimiento, TTL de lo que quede.
         // Antes iba un TTL fijo de doce horas y por eso la sesión se deslizaba.

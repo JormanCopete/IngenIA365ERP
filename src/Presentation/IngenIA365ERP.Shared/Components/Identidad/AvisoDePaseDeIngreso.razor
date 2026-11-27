@@ -1,0 +1,30 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+
+@*
+    Feature 027 (FR-017): aviso permanente mientras la sesión sea de un pase de ingreso sin segundo factor. No se cierra: dura lo que dura la
+    sesión, y recuerda que la app sigue inscrita y cómo configurarla de nuevo si se perdió.
+*@
+
+@if (_visible)
+{
+    <section class="aviso aviso-alerta" role="region" aria-label="Pase de ingreso temporal">
+        <p>
+            Entraste con un <strong>pase de ingreso temporal</strong>, sin el código de tu app. Tu app sigue inscrita: mañana entra con ella.
+            Si la perdiste, configura una nueva.
+        </p>
+        <div class="toolbar">
+            <a class="boton-secundario" href="/profile/mfa">Configurar mi segundo factor</a>
+        </div>
+    </section>
+}
+
+@code {
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var me = await AuthClient.GetMeAsync();
+        _visible = me?.LoginPassTenantPublicId is not null;
+    }
+}

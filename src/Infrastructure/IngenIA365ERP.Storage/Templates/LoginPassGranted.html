@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Tu pase de ingreso sin segundo factor</title>
+</head>
+<!-- Feature 027: el único lugar donde existe el enlace del pase en claro. Nunca se le muestra al administrador que lo concedió. -->
+<body style="font-family: Arial, Helvetica, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px;">Tienes un pase de ingreso para hoy</h1>
+
+  <p>
+    <strong>{{ConcedidoPor}}</strong> te autorizó a entrar a <strong>{{Cooperativa}}</strong> sin el código de tu app de autenticación
+    hasta el <strong>{{VenceEn}}</strong> (hora de Colombia).
+  </p>
+  <p>Motivo: {{Motivo}}</p>
+
+  <p style="margin: 24px 0;">
+    <a href="{{Enlace}}"
+       style="background-color: #1d4ed8; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 4px;
+              display: inline-block; font-size: 16px; font-weight: bold;">
+      Entrar con mi pase
+    </a>
+  </p>
+
+  <ul>
+    <li>Cada vez te pedirá tu usuario y tu contraseña; el pase sólo reemplaza el código de la app.</li>
+    <li>Si tu sesión se cierra, vuelve a abrir este mismo enlace mientras esté vigente.</li>
+    <li>Tu app sigue inscrita: cuando la tengas a mano, entra con ella como siempre y este pase dejará de servir.</li>
+    <li>En la app del celular puedes pegar este enlace en la pantalla del código, en «Tengo un pase de ingreso».</li>
+  </ul>
+
+  <p style="background-color: #fef2f2; border-left: 4px solid #b91c1c; padding: 12px 16px;">
+    <strong>No reenvíes este correo.</strong> Con este enlace y tu contraseña cualquiera entra a tu cuenta. Si no pediste el pase, avisa a tu
+    administrador.
+  </p>
+</body>
+</html>

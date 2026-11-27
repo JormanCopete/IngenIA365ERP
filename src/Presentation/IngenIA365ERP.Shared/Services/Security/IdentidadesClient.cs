@@ -20,6 +20,18 @@ public sealed class IdentidadesClient(HttpClient http)
     public Task<InvitationApiResult<CorreccionHecha>> CorregirAsync(Guid id, object cuerpo, CancellationToken ct = default) =>
         PostAsync<CorreccionHecha>($"/api/saas/identities/{id}/correct-document", cuerpo, ct);
 
+    // Feature 027 (FR-020): pases de ingreso sin segundo factor desde la consola del maestro.
+    public async Task<InvitationApiResult<List<PaseDeIngresoDelMaestro>>> PasesAsync(Guid cooperativa, Guid persona, CancellationToken ct = default) =>
+        await GetAsync<List<PaseDeIngresoDelMaestro>>($"/api/saas/tenants/{cooperativa}/login-passes?centralUserId={persona}", ct);
+
+    public Task<InvitationApiResult<PaseDeIngresoConcedido>> ConcederPaseAsync(Guid cooperativa, Guid persona, int horas, string motivo,
+        CancellationToken ct = default) =>
+        PostAsync<PaseDeIngresoConcedido>($"/api/saas/tenants/{cooperativa}/login-passes",
+            new { centralUserId = persona, hours = horas, reason = motivo }, ct);
+
+    public Task<InvitationApiResult<PaseDeIngresoDelMaestro>> AnularPaseAsync(Guid cooperativa, Guid pase, string motivo, CancellationToken ct = default) =>
+        PostAsync<PaseDeIngresoDelMaestro>($"/api/saas/tenants/{cooperativa}/login-passes/{pase}/void", new { reason = motivo }, ct);
+
     public Task<InvitationApiResult<CorreoCambiado>> CambiarCorreoAsync(Guid id, string correo, string motivo, CancellationToken ct = default) =>
         PostAsync<CorreoCambiado>($"/api/saas/identities/{id}/change-email", new { newEmail = correo, reason = motivo }, ct);
 
@@ -61,6 +73,12 @@ public sealed record IdentidadResumen(
     string Nombre, string Status, bool TwoFactorEnabled, bool IsGlobalMasterAdmin, List<MembresiaDeIdentidad> Memberships);
 
 public sealed record MembresiaDeIdentidad(Guid TenantId, string TenantName, string Status, bool IsTenantAdmin);
+
+/// <summary>Feature 027: un pase de ingreso visto desde la consola del maestro (nunca trae el enlace).</summary>
+public sealed record PaseDeIngresoDelMaestro(Guid PublicId, Guid TenantPublicId, string Status, DateTime GrantedAt, DateTime ExpiresAt,
+    string? GrantedByEmail, string Reason, int UseCount, DateTime? LastUsedAt, string? VoidReason);
+
+public sealed record PaseDeIngresoConcedido(PaseDeIngresoDelMaestro Pass, bool EmailSent);
 
 public sealed record IdentidadDetalle(IdentidadResumen Identidad, List<CambioDeDocumento> History, List<CasoDeIdentidad> Cases);
 
