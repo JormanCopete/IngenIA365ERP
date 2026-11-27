@@ -144,6 +144,47 @@ public sealed class CentralAuthClient : IDisposable
         }
     }
 
+    // ---------- Pase de ingreso (feature 027) ----------
+
+    /// <summary>
+    /// Feature 027: el pase de ingreso que trajo el enlace del correo (<c>/security/pase?t=</c>), en memoria hasta canjearlo en el desafío del
+    /// segundo factor. Como <see cref="ReturnUrl"/>, no se guarda en ningún almacenamiento del navegador.
+    /// </summary>
+    public string? PaseDeIngreso { get; set; }
+
+    /// <summary>Canjea un pase de ingreso en vez del código de la app. Va con el challenge token, como el verify.</summary>
+    public async Task<InvitationApiResult<LoginResponse>> UsarPaseDeIngresoAsync(string pase, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<LoginResponse>.Failure(
+                "Identity.NoChallengeToken",
+                "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/mfa/pass")
+            {
+                Content = JsonContent.Create(new { pass = pase }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
+            if (parsed.IsSuccess && parsed.Value is { } body)
+            {
+                PaseDeIngreso = null;
+                await RouteLoginResponseAsync(body);
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<LoginResponse>.NetworkError(ex.Message);
+        }
+    }
+
     // ---------- Ingreso con passkey ----------
 
     /// <summary>
@@ -677,7 +718,9 @@ public sealed record MeResponse(
     // cada cooperativa (null = nunca).
     bool DocumentPending = false,
     string? DocumentUsername = null,
-    IReadOnlyList<MeDocumentRequiredFrom>? DocumentRequiredFrom = null);
+    IReadOnlyList<MeDocumentRequiredFrom>? DocumentRequiredFrom = null,
+    // Feature 027: la cooperativa del pase de ingreso si la sesión entró con uno (muestra el aviso).
+    Guid? LoginPassTenantPublicId = null);
 
 public sealed record MeDocumentRequiredFrom(Guid TenantId, DateOnly From);
 

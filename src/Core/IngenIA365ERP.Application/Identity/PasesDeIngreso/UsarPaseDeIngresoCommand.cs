@@ -111,20 +111,22 @@ public sealed class UsarPaseDeIngresoCommandHandler(
         return await admin.LoginPasses.FirstOrDefaultAsync(p => p.TokenHash == huella, ct);
     }
 
-    /// <summary>Acepta el valor de <c>t</c> o el enlace completo (lo que se pega en MAUI).</summary>
+    /// <summary>Acepta el pase solo o el enlace completo del correo (lo que se pega en MAUI), con el pase en <c>pase=</c>.</summary>
     public static string? ExtraerToken(string? valor)
     {
         var texto = valor?.Trim();
         if (string.IsNullOrEmpty(texto)) return null;
-        var i = texto.IndexOf("t=", StringComparison.Ordinal);
-        if (i >= 0 && (i == 0 || texto[i - 1] is '?' or '&'))
+        foreach (var clave in new[] { "?pase=", "&pase=" })
         {
-            texto = texto[(i + 2)..];
+            var i = texto.IndexOf(clave, StringComparison.Ordinal);
+            if (i < 0) continue;
+            texto = texto[(i + clave.Length)..];
             var fin = texto.IndexOf('&');
             if (fin >= 0) texto = texto[..fin];
             texto = Uri.UnescapeDataString(texto);
+            break;
         }
-        return texto.Length is >= 16 and <= 200 ? texto : null;
+        return texto.Length is >= 16 and <= 200 && !texto.Contains('/') && !texto.Contains('?') ? texto : null;
     }
 
     private async Task<string?> MotivoParaAnularAsync(LoginPass pase, CentralUser usuario, CancellationToken ct)

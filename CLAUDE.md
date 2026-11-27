@@ -207,6 +207,16 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   exige ser maestro, o sea sólo puede rescatarse a sí mismo— así que existe
   `Mfa:PlataformaSinRestriccion`: puesto a `true` ignora la política guardada y
   acepta todos los métodos. Es el rescate; se escribió antes que la política.
+- **Pase de ingreso sin segundo factor (feature 027, 2026-11-26, rama `027-pase-ingreso-sin-mfa`, sin merge)**: para quien hoy no tiene su
+  app. Un administrador (`Security.Users.GrantMfaBypass`) lo concede con motivo desde la ficha del usuario; el maestro, desde Identidades, también
+  a administradores (entre administradores no se dan). Enlace **sólo al correo** del usuario (`/security/login?pase=`), huella en
+  `ADM_LoginPasses`, reutilizable hasta 12 h (`ADM_TenantMfaPolicies.AllowLoginPass`, **apagado de fábrica**, y `LoginPassMaxHours`). Reemplaza
+  **sólo el código**: se canjea en el desafío (`POST /api/auth/mfa/pass`) tras la contraseña, por `EmisorDeSesionTrasSegundoFactor.EmitirConPaseAsync`,
+  que sella `Ninguno` y **ata la sesión a la cooperativa del pase** (claim `login_pass_tenant`, `CentralRefreshSession.PaseDeIngresoCooperativa`;
+  `SwitchTenant` responde `Identity.LoginPass.TenantLocked`). No borra autenticadores ni cancela recuperaciones; entrar con el segundo factor
+  anula los pases vivos (`CanceladorDeRecuperacionesAlEntrar`). Sello de seguridad distinto, cuenta inactiva, sin membresía u opción apagada lo
+  anulan al canjear. Topes 5 por persona en 7 días y 20 por cooperativa al día (`ReglasDelPaseDeIngreso`). Correos por `IAvisosDelPaseDeIngreso`
+  (al usuario, a los demás administradores y en cada uso). Migración aditiva `PasesDeIngreso` (admin). Receta: `docs/manual/pase-de-ingreso.md`.
 - **Cifrado**: el llavero de DataProtection vive en `ADM_DataProtectionKeys`, no
   en el proceso. Cifra los secretos TOTP **y la clave de cada adjunto**. Antes de
   desplegarlo hay que **decidir**, no ejecutar un procedimiento: si no hay adjuntos

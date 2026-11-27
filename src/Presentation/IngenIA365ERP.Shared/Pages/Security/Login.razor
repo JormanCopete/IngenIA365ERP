@@ -79,6 +79,13 @@
             {
                 <p class="aviso aviso-info" role="status">@_motivoDeVuelta</p>
             }
+            @if (!string.IsNullOrEmpty(AuthClient.PaseDeIngreso) || !string.IsNullOrWhiteSpace(Pase))
+            {
+                @* Feature 027: llegó desde el enlace del pase de ingreso. *@
+                <p class="aviso aviso-info" role="status">
+                    Vas a entrar con un <strong>pase de ingreso</strong>: escribe tu usuario y tu contraseña. No se te pedirá el código de tu app.
+                </p>
+            }
 
     <p class="login-olvide">
                 <NavLink href="/auth/forgot-password">¿Olvidaste tu contraseña?</NavLink>
@@ -151,6 +158,10 @@
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>Feature 027: el pase de ingreso del enlace del correo; se canjea en el desafío del segundo factor.</summary>
+    [SupplyParameterFromQuery(Name = "pase")]
+    public string? Pase { get; set; }
+
     /// <summary>Por qué se volvió al login, cuando fue el sistema y no la persona.</summary>
     private string? _motivoDeVuelta;
 
@@ -171,6 +182,11 @@
             null => null,
             _ => "Tu sesión terminó. Volvé a entrar para continuar.",
         };
+
+        if (!string.IsNullOrWhiteSpace(Pase))
+        {
+            AuthClient.PaseDeIngreso = Pase.Trim();
+        }
 
         if (!string.IsNullOrWhiteSpace(ReturnUrl))
         {

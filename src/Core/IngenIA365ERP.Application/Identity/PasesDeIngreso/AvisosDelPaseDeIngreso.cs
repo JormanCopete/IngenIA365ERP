@@ -31,8 +31,8 @@ internal sealed class AvisosDelPaseDeIngreso(
     IOptions<IdentityEmailOptions> opciones,
     ILogger<AvisosDelPaseDeIngreso> logger) : IAvisosDelPaseDeIngreso
 {
-    /// <summary>La ruta de la pantalla que recibe el enlace (<c>PaseDeIngreso.razor</c>).</summary>
-    public const string RutaDelEnlace = "/security/pase";
+    /// <summary>El enlace lleva al login con el pase en <c>?pase=</c>; el login lo guarda y el desafío del segundo factor lo canjea.</summary>
+    public const string RutaDelEnlace = "/security/login";
 
     public async Task EnviarPaseAsync(string destino, string cooperativa, string token, DateTime venceEn, string concedidoPor,
         string motivo, CancellationToken ct)
@@ -79,7 +79,7 @@ internal sealed class AvisosDelPaseDeIngreso(
     }
 
     private string Enlace(string token) =>
-        $"{opciones.Value.BaseUrl.TrimEnd('/')}{RutaDelEnlace}?t={Uri.EscapeDataString(token)}";
+        $"{opciones.Value.BaseUrl.TrimEnd('/')}{RutaDelEnlace}?pase={Uri.EscapeDataString(token)}";
 
     /// <summary>El renderizador de plantillas no escapa: todo texto libre (el motivo lo escribe una persona) se escapa aquí.</summary>
     private static string Texto(string valor) => WebUtility.HtmlEncode(valor);
