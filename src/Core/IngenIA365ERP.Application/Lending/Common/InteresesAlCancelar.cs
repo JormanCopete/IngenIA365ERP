@@ -106,6 +106,16 @@ public sealed class InteresesAlCancelar(ReglasDeParametrosDeCartera parametros, 
     public Task<bool> PeriodoCalendarioAsync(DateOnly fecha, int lineaId, CancellationToken ct) =>
         PeriodoDeLaCuota.CalendarioAsync(parametros, fecha, lineaId, ct);
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la fracción del interés de una cuota anticipada que la cooperativa descuenta en caja
+    /// (<c>Pagos.DescuentoPorPagoAnticipado</c>, la de la línea con caída al general); ilegible o fuera de 0..1 = sin descuento. (nuevo)
+    /// </summary>
+    public async Task<decimal> DescuentoPorPagoAnticipadoAsync(DateOnly fecha, int lineaId, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.PagosDescuentoPorPagoAnticipado, fecha, null, ParameterScopeKind.CreditLine, lineaId, ct);
+        return leido.IsSuccess && leido.Value.Valor is decimal fraccion && fraccion is > 0m and <= 1m ? fraccion : 0m;
+    }
+
     /// <summary>El tope legal del prepago del crédito con el SMMLV y <c>PREPAGO_TOPE_SMMLV</c> a la fecha del desembolso; nulo si falta algo.</summary>
     private async Task<ResultadoDeTopeDePrepago?> TopeAsync(Loan credito, CancellationToken ct)
     {

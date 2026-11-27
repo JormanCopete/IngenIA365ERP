@@ -31,7 +31,7 @@ public static class RecibosDeCaja
         var aplicaciones = (await db.ReceiptApplications.AsNoTracking().Where(a => a.ReceiptId == r.Id).OrderBy(a => a.Ordinal).ToListAsync(ct))
             .Select(a => new AplicacionDelReciboDto(a.PublicId, a.Ordinal, a.Target, masked ? Enmascarar(a.ProductNumber) : a.ProductNumber, a.Amount, a.LoanModality,
                 a.AccountModality, a.PrepaymentChoice, a.AdvanceNoticeAccepted, a.MiscConceptId is { } c ? conceptos.GetValueOrDefault(c) : null,
-                a.ModuleVoucherNumber, a.FinalityUntil, a.Status, masked ? null : a.ModuleVoucherPublicId)).ToList();
+                a.ModuleVoucherNumber, a.FinalityUntil, a.Status, masked ? null : a.ModuleVoucherPublicId) { AdvanceDiscount = a.AdvanceDiscount }).ToList();
         var medios = await (from m in db.ReceiptMeans.AsNoTracking()
                             join p in db.PaymentMeans.AsNoTracking().IgnoreQueryFilters() on m.PaymentMeansId equals p.Id
                             where m.ReceiptId == r.Id
@@ -108,6 +108,9 @@ public sealed record LineaDelReciboModel(int Ordinal, string Description, string
     /// <summary>2026-11-17 (pedido del dueño): qué pagó de cada rubro o período y cómo quedó el producto, de la simulación confirmada; nulo si no la hay.</summary>
     public DesgloseDelPagoDto? Breakdown { get; init; }
 
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado que asumió la cooperativa en esta línea; nulo sin descuento. (nuevo)</summary>
+    public decimal? AdvanceDiscount { get; init; }
+
     /// <summary>La modalidad del pago a un crédito, en palabras (la cuota, lo vencido, la cancelación…).</summary>
     public string? Modality { get; init; }
 }
@@ -147,6 +150,12 @@ public sealed record ReciboModel(
 {
     /// <summary>2026-11-17: el documento del pagador (enmascarado si es un tercero).</summary>
     public string? PayerTaxId { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento por pago anticipado que asumió la cooperativa: lo aplicado a los productos (<see cref="TotalApplied"/>) menos
+    /// esto es lo que pagó la persona. Cero sin descuento. (nuevo)
+    /// </summary>
+    public decimal TotalDiscount { get; init; }
 }
 
 /// <summary><c>GET /api/receipts/receipts/{id}/document?format=thermal|letter&amp;copy=</c> (<c>Receipts.Receipt.View</c>): el modelo del documento. (nuevo)</summary>
@@ -188,6 +197,7 @@ public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAl
         {
             Breakdown = a.Ordinal >= 1 && a.Ordinal <= itemsDeLaOperacion.Count ? itemsDeLaOperacion[a.Ordinal - 1].Breakdown : null,
             Modality = a.Target == ApplicationTarget.Loan ? Modalidad(a.LoanModality) : null,
+            AdvanceDiscount = a.AdvanceDiscount,
         }).ToList();
         var nombresDeMedios = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(p => medios.Select(m => m.PaymentMeansId).Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
@@ -202,7 +212,10 @@ public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAl
             : await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == r.PayerPersonId).Select(p => p.TaxId).FirstOrDefaultAsync(ct);
         return new ReciboModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), formato, copia, r.Number, r.VerificationCode,
             oficina, punto, caja, cajero, r.ValueDate, r.RegisteredAt, dto.PayerName, efectua, r.PayerIsThirdParty, r.Status == ReceiptState.Voided, r.TotalApplied,
-            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento) { PayerTaxId = documento };
+            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento)
+        {
+            PayerTaxId = documento, TotalDiscount = dto.Applications.Sum(a => a.AdvanceDiscount ?? 0m),
+        };
     }
 
     /// <summary>La modalidad de un pago a crédito en palabras (<c>ModalidadDePago</c>).</summary>

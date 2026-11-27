@@ -59,7 +59,8 @@ public sealed record ItemPedidoDto(
     Guid? ItemId = null,
     ApplicationTarget? PendingTarget = null,
     Guid? LoadObligationPublicId = null,
-    string? ProductReference = null);
+    string? ProductReference = null,
+    bool ApplyAdvanceDiscount = false);
 
 /// <summary>Una alternativa del abono extraordinario (reducir plazo o cuota) con su nuevo plan.</summary>
 public sealed record AlternativaDeAbonoDto(EleccionDeAbono? Choice, decimal AppliedAmount, PlanResumidoDto? NewPlan);
@@ -94,6 +95,18 @@ public sealed record ItemDeCajaDto(
 {
     /// <summary>2026-11-17 (pedido del dueño): qué paga de cada rubro o período y cómo queda el producto (<see cref="DesgloseDelPago"/>); nulo sin simulación.</summary>
     public DesgloseDelPagoDto? Breakdown { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado que la cooperativa asume en este ítem (<see cref="DescuentoPorPagoAnticipado"/>):
+    /// el asociado paga <see cref="Amount"/> menos esto y Cartera recibe <see cref="Amount"/> completo. Cero sin descuento. (nuevo)
+    /// </summary>
+    public decimal AdvanceDiscount { get; init; }
+
+    /// <summary>2026-11-26: la fracción del interés de la cuota con que se calculó el descuento; nula sin descuento. (nuevo)</summary>
+    public decimal? AdvanceDiscountFraction { get; init; }
+
+    /// <summary>2026-11-26: lo que el asociado paga por el ítem en medios: el valor menos el descuento. (nuevo)</summary>
+    public decimal AmountToPay => Amount - AdvanceDiscount;
 }
 
 /// <summary>Un medio de la operación. Feature 022 (T033): <see cref="Last4"/>, los cuatro últimos dígitos de una tarjeta (opcional).</summary>
@@ -146,7 +159,11 @@ public sealed record CashOperationDto(
 /// </summary>
 public sealed record AplicacionDelReciboDto(Guid PublicId, int Ordinal, ApplicationTarget Target, string? ProductNumber, decimal Amount, int? LoanModality,
     int? AccountModality, int? Choice, bool AdvanceNoticeAccepted, string? MiscConceptCode, string? ModuleVoucherNumber, DateOnly? FinalityUntil,
-    ApplicationState Status, Guid? ModuleVoucherPublicId = null);
+    ApplicationState Status, Guid? ModuleVoucherPublicId = null)
+{
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado que asumió la cooperativa; nulo sin descuento. (nuevo)</summary>
+    public decimal? AdvanceDiscount { get; init; }
+}
 
 /// <summary>Un medio del recibo.</summary>
 public sealed record MedioDelReciboDto(Guid PublicId, string MeansCode, decimal Amount, string? Reference, ReceiptMeansState Status);

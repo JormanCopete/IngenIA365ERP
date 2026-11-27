@@ -230,6 +230,15 @@ public class ReceiptApplication : AuditableEntityLong, IHechoInmutable
 
     public decimal Amount { get; set; }
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado que la cooperativa asumió en esta aplicación —el asociado pagó
+    /// <see cref="Amount"/> menos esto y el módulo recibió <see cref="Amount"/> completo—; nulo sin descuento. (nuevo)
+    /// </summary>
+    public decimal? AdvanceDiscount { get; set; }
+
+    /// <summary>2026-11-26: la fracción del interés de la cuota con que se calculó (<c>Pagos.DescuentoPorPagoAnticipado</c> a la fecha valor). (nuevo)</summary>
+    public decimal? AdvanceDiscountFraction { get; set; }
+
     [EscrituraUnica] public Guid? ModuleVoucherPublicId { get; set; }
 
     [EscrituraUnica] public string? ModuleVoucherNumber { get; set; }

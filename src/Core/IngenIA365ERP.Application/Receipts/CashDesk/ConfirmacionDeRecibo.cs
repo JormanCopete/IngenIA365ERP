@@ -204,9 +204,21 @@ public sealed class ConfirmacionDeRecibo(
         // pasos—, con el mismo rechazo por ítem que al guardar los ítems.
         var titularDeLaOperacion = await db.People.AsNoTracking().Where(p => p.Id == (operacion.BeneficiaryPersonId ?? operacion.PayerPersonId))
             .Select(p => p.PublicId).FirstAsync(ct);
-        var deLaRegla = await new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad).EvaluarAsync(
+        var reglas = new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad);
+        var deLaRegla = await reglas.EvaluarAsync(
             await PoliticaDeCaja.LeerAsync(parametros, operacion.ValueDate, ct), titularDeLaOperacion, operacion.ValueDate, items.Select(ItemDeLaRegla.De).ToList(), ct);
         if (deLaRegla.Count > 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado(deLaRegla.Select(r => r.Dato).ToList()));
+        // 2026-11-26 (pedido del dueño): el descuento por pago anticipado se vuelve a calcular; si cambió (otra fracción, otra cuota), se simula otra vez.
+        foreach (var i in items.Where(i => i.AdvanceDiscount > 0m))
+        {
+            var (descuento, _) = await reglas.DescuentoAsync(i.ProductPublicId!.Value, i.InstallmentNumber!.Value, operacion.ValueDate, ct);
+            if (descuento != i.AdvanceDiscount)
+                return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado([new
+                {
+                    itemId = i.ItemId, code = ErroresDeRecaudo.CodigoDescuentoCambiado,
+                    message = $"El descuento por pago anticipado de la cuota {i.InstallmentNumber} cambió de {i.AdvanceDiscount:N2} a {descuento:N2}: vuelva a simular.",
+                }]));
+        }
         var imputacion = OperacionesDeCaja.Imputar(items, medios, sellados, OrdenDeImputacion.InmediatosPrimeroChequeAlFinal, OperacionesDeCaja.Imputacion(operacion));
         if (imputacion.IsFailure) return Result.Failure<ReceiptDto>(imputacion.Error);
         var porcionesPedidas = OperacionesDeCaja.Porciones(imputacion.Value);
@@ -389,6 +401,8 @@ public sealed class ConfirmacionDeRecibo(
                 AdvanceNoticeAccepted = i.AdvanceNoticeAccepted,
                 MiscConceptId = i.MiscConceptPublicId is { } mc ? idsDeConceptos.GetValueOrDefault(mc) : null,
                 CrossDocumentReference = i.CrossDocument, InvoicePublicId = i.InvoicePublicId, Amount = i.Amount,
+                // 2026-11-26 (pedido del dueño): el descuento por pago anticipado que asume la cooperativa (el asociado pagó Amount menos esto).
+                AdvanceDiscount = i.AdvanceDiscount > 0m ? i.AdvanceDiscount : null, AdvanceDiscountFraction = i.AdvanceDiscount > 0m ? i.AdvanceDiscountFraction : null,
             };
             db.ReceiptApplications.Add(fila);
             filasDeItems[i.ItemId] = fila;
@@ -442,8 +456,13 @@ public sealed class ConfirmacionDeRecibo(
         var deCreditos = porciones.Where(p => p.Item.Target == ApplicationTarget.Loan).OrderBy(p => filasDeItems[p.Item.ItemId].Ordinal).ToList();
         if (deCreditos.Count > 0)
         {
+            // 2026-11-26 (pedido del dueño): la última porción de un ítem con descuento por pago anticipado lleva también el descuento, así Cartera recibe la
+            // cuota completa en un solo pago y no se entera del descuento.
+            var ultimas = deCreditos.GroupBy(p => p.Item.ItemId).Select(g => g.Last().Fila).ToHashSet();
+            decimal AlModulo((ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio) p) =>
+                p.Fila.Amount + (p.Item.AdvanceDiscount > 0m && ultimas.Contains(p.Fila) ? p.Item.AdvanceDiscount : 0m);
             PagoAAplicar Pago((ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio) p, string? simulacion) => new(p.Fila.IdempotencyKey,
-                p.Item.ProductPublicId!.Value, p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, ClavesDeRecaudo.ClaseDelContrato(p.Fila.MeansClass),
+                p.Item.ProductPublicId!.Value, p.Item.LoanModality!.Value, AlModulo(p), operacion.ValueDate, ClavesDeRecaudo.ClaseDelContrato(p.Fila.MeansClass),
                 pagadorPublicId, Referencia(p.Medio), p.Item.Choice, p.Item.InstallmentNumber, simulacion);
             var respuestasDeCreditos = new List<RespuestaDelContratoDto<ComprobanteDeAplicacionDto>?>(deCreditos.Count);
             // 2026-11-26 (pedido del dueño): la segunda porción y las siguientes de un mismo crédito (lo vencido y después la cuota anticipada) también se
@@ -470,7 +489,7 @@ public sealed class ConfirmacionDeRecibo(
                     if (resimular[k])
                     {
                         var sim = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, p.Item.ProductPublicId!.Value,
-                            p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, p.Item.Choice, p.Item.InstallmentNumber), ct);
+                            p.Item.LoanModality!.Value, AlModulo(p), operacion.ValueDate, p.Item.Choice, p.Item.InstallmentNumber), ct);
                         if (sim.Result == ResultadoDelContrato.Rejected || sim.Value is null)
                         {
                             respuestasDeCreditos.Add(new RespuestaDelContratoDto<ComprobanteDeAplicacionDto>(ResultadoDelContrato.Rejected, sim.Code, sim.Message,

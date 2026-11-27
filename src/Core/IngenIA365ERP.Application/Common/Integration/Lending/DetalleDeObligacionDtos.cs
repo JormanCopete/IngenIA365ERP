@@ -45,6 +45,12 @@ public sealed record DetalleDeObligacionDto(
     /// <see cref="DueToday"/> con el ciclo de la cuota. Nulo se lee como <c>DueToday</c>. (nuevo)
     /// </summary>
     public decimal? DueWithoutPeriodInProgress { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la fracción del interés de una cuota anticipada que la cooperativa descuenta en caja para la línea
+    /// (<c>Pagos.DescuentoPorPagoAnticipado</c>); cero sin descuento. La aplica Recaudo: Cartera recibe la cuota completa. (nuevo)
+    /// </summary>
+    public decimal AdvanceDiscountFraction { get; init; }
 }
 
 /// <summary>Un saldo de la obligación por concepto: el concepto (<c>ConceptoDeObligacion</c> por nombre), su nombre en español y el valor. (nuevo)</summary>
@@ -85,4 +91,10 @@ public sealed record CuotaDeObligacionDto(
     /// <see cref="ValueToAnticipate"/> menos esto. Cero en las demás. (nuevo)
     /// </summary>
     public decimal DueInPeriod { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la cuota es la del período en curso (la próxima que vence o, por período calendario, la del tramo en curso): su período
+    /// ya empezó y no lleva descuento por pago anticipado. (nuevo)
+    /// </summary>
+    public bool InCurrentPeriod { get; init; }
 }

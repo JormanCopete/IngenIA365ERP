@@ -52,6 +52,12 @@ public static partial class ErroresDeRecaudo
     public const string CodigoModalidadNoAdmitida = "Receipts.Receipt.ModalityNotAdmitted";
     public const string CodigoObligacionBloqueada = "Receipts.Receipt.ObligationBlocked";
 
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado que pidió el cajero no se admite para ese ítem (con el motivo). (nuevo)</summary>
+    public const string CodigoDescuentoNoAdmitido = "Receipts.Receipt.AdvanceDiscountNotAllowed";
+
+    /// <summary>2026-11-26: el descuento por pago anticipado cambió entre la simulación y la confirmación: hay que volver a simular. (nuevo)</summary>
+    public const string CodigoDescuentoCambiado = "Receipts.Receipt.AdvanceDiscountChanged";
+
     /// <summary>2026-11-16: el detalle de una obligación no está disponible (Cartera sin activar o la obligación no se puede leer). (nuevo)</summary>
     public const string CodigoDetalleNoDisponible = "Receipts.Payables.ObligationDetailUnavailable";
 

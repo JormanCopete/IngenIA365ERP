@@ -90,6 +90,12 @@ public static class RolesDeRecaudo
     public const string CuentasPorCobrarComerciales = "CuentasPorCobrarComerciales";
     public const string GmfGasto = "GmfGasto";
     public const string GmfPorPagar = "GmfPorPagar";
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado que asume la cooperativa (débito en el recibo; la cuenta la elige la
+    /// contadora: un fondo, un gasto o el ingreso por intereses al débito).
+    /// </summary>
+    public const string DescuentoPorPagoAnticipado = "DescuentoPorPagoAnticipado";
 }
 
 /// <summary>

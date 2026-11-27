@@ -310,6 +310,17 @@ public sealed class AplicacionDePagos(
         return intereses is not null && !estado.EnUvr && await intereses.PeriodoCalendarioAsync(fecha, credito.CreditLineId, ct);
     }
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la fracción del interés de una cuota anticipada que la cooperativa descuenta en caja para la línea de
+    /// <paramref name="credito"/> a <paramref name="fecha"/> (<c>Pagos.DescuentoPorPagoAnticipado</c>). Cero en UVR o en un programa sin el servicio. (nuevo)
+    /// </summary>
+    public async Task<decimal> DescuentoPorPagoAnticipadoAsync(Loan credito, EstadoDelCredito estado, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        return intereses is null || estado.EnUvr ? 0m : await intereses.DescuentoPorPagoAnticipadoAsync(fecha, credito.CreditLineId, ct);
+    }
+
     /// <summary>Aplica un pago (ver la clase). El crédito y su control ya están bloqueados por quien llama.</summary>
     public async Task<Result<PagoAplicado>> AplicarAsync(PagoEnCurso p, CancellationToken ct)
     {

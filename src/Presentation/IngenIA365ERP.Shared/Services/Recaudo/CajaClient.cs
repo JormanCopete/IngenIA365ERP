@@ -70,6 +70,15 @@ public sealed record CuotaDeObligacionDto(int Number, DateOnly DueDate, string S
     /// exigible, anticiparla cuesta <see cref="ValueToAnticipate"/> menos esto.
     /// </summary>
     public decimal DueInPeriod { get; init; }
+
+    /// <summary>2026-11-26 (pedido del dueño): es la cuota del período en curso (su período ya empezó: no lleva descuento por pago anticipado).</summary>
+    public bool InCurrentPeriod { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la cuota admite el descuento por pago anticipado si se anticipa completa: por vencer, de un período que no ha empezado y
+    /// sin anticipo previo (lo mismo que exige el servidor).
+    /// </summary>
+    public bool AdmiteDescuentoPorAnticipo => Status == "Upcoming" && !InCurrentPeriod && AdvanceApplied == 0m && ValueToAnticipate > 0m;
 }
 
 /// <summary>Un saldo de la obligación por concepto (capital, interés corriente, mora, seguro, cargos, anticipo…).</summary>
@@ -89,6 +98,9 @@ public sealed record DetalleDeObligacionDto(Guid ObligationPublicId, string Numb
 
     /// <summary>2026-11-26: lo vencido (o que vence hoy): la mora para las reglas de la caja.</summary>
     public decimal Vencido => DueWithoutPeriodInProgress ?? DueToday;
+
+    /// <summary>2026-11-26 (pedido del dueño): la fracción del interés de una cuota anticipada que la cooperativa descuenta en caja; cero sin descuento.</summary>
+    public decimal AdvanceDiscountFraction { get; init; }
 }
 
 public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations, int LendingStatus = 2);
@@ -116,7 +128,13 @@ public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,
     bool AdvanceNoticeAccepted = false, Guid? MiscConceptPublicId = null, string? CrossDocument = null, Guid? InvoicePublicId = null, Guid? ItemId = null,
-    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null);
+    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null, bool ApplyAdvanceDiscount = false);
+
+/// <summary>
+/// 2026-11-26 (pedido del dueño): las cuotas que el asociado quiere anticipar, elegidas en el detalle de la obligación, y si el cajero aplica el descuento por
+/// pago anticipado a las que lo admiten.
+/// </summary>
+public sealed record AnticipoElegido(IReadOnlyList<CuotaDeObligacionDto> Cuotas, bool ConDescuento);
 
 public sealed record AlternativaDeAbonoDto(int? Choice, decimal AppliedAmount, JsonElement? NewPlan);
 
@@ -132,6 +150,12 @@ public sealed record ItemDeCajaDto(Guid ItemId, int Target, decimal Amount, Guid
 {
     /// <summary>2026-11-17: qué paga de cada rubro o período y cómo queda el producto, según la simulación del módulo.</summary>
     public DesgloseDelPagoDto? Breakdown { get; init; }
+
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado que asume la cooperativa en este ítem; el asociado paga el valor menos esto.</summary>
+    public decimal AdvanceDiscount { get; init; }
+
+    /// <summary>2026-11-26: la fracción del interés con que se calculó el descuento.</summary>
+    public decimal? AdvanceDiscountFraction { get; init; }
 }
 
 /// <summary>2026-11-17: lo que un pago abona a un rubro (capital, interés corriente, interés de mora, seguro…).</summary>
@@ -177,13 +201,21 @@ public sealed record CrearOperacionRequest(Guid SessionPublicId, Guid PayerPerso
     DateOnly? ValueDate, string? BackdateReason, Guid? BackdateSupportAttachmentPublicId);
 
 public sealed record AplicacionDelReciboDto(Guid PublicId, int Ordinal, int Target, string? ProductNumber, decimal Amount, int? LoanModality, int? AccountModality,
-    int? Choice, bool AdvanceNoticeAccepted, string? MiscConceptCode, string? ModuleVoucherNumber, DateOnly? FinalityUntil, int Status);
+    int? Choice, bool AdvanceNoticeAccepted, string? MiscConceptCode, string? ModuleVoucherNumber, DateOnly? FinalityUntil, int Status)
+{
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado que asumió la cooperativa; nulo sin descuento.</summary>
+    public decimal? AdvanceDiscount { get; init; }
+}
 
 public sealed record MedioDelReciboDto(Guid PublicId, string MeansCode, decimal Amount, string? Reference, int Status);
 
 public sealed record ReciboDto(Guid PublicId, string Number, int Status, int Channel, DateOnly ValueDate, DateTime RegisteredAt, Guid PayerPersonPublicId,
     string PayerName, Guid? DeliveredByPersonPublicId, bool PayerIsThirdParty, bool Masked, decimal TotalApplied, decimal TotalMeans, decimal ChangeGiven,
-    string VerificationCode, IReadOnlyList<AplicacionDelReciboDto> Applications, IReadOnlyList<MedioDelReciboDto> Means);
+    string VerificationCode, IReadOnlyList<AplicacionDelReciboDto> Applications, IReadOnlyList<MedioDelReciboDto> Means)
+{
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado del recibo; lo pagado es lo aplicado menos esto.</summary>
+    public decimal TotalDiscount => Applications.Sum(a => a.AdvanceDiscount ?? 0m);
+}
 
 /// <summary>
 /// Cliente tipado de la caja de Recaudo (feature 015, US3, T0120; contracts/api.md §4): lo que la persona puede pagar, la operación de caja y su
