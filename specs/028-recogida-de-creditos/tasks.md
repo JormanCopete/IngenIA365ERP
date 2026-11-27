@@ -119,6 +119,7 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 - [ ] T063 [US4] Migración `CuotaDejadaALaPagaduria` (`LND_PayrollDeductionResults.LoanClosedAtResult`, columnas `LeftInstallment*` en `LND_DisbursementPayoffs`) en los dos motores; configuraciones en `Pers/Configurations/Lending/Payroll/` y `Payoffs/`; paridad
 - [ ] T064 [US4] `CuotaEnviadaDelCredito` (R6) en `App/Lending/Payroll/CuotaEnviadaDelCredito.cs`, con pruebas en `TA/Lending/Payroll/CuotaEnviadaDelCreditoTests.cs`
+- [ ] T064a [US4] Puerto de sólo lectura `IDescuentosDeNominaParaCartera` en `App/Common/Integration/Payroll/` e implementación en `App/Payroll/Integration/` (novedad `LoanDeduction` del período abierto, `PAY_PayrollLoanDeductions` en borrador o aprobada, por obligación); `CuotaEnviadaDelCredito` lo usa para la nómina propia; regla de arquitectura de métodos del puerto; pruebas en `TA/Payroll/Integration/DescuentosDeNominaParaCarteraTests.cs`
 - [ ] T065 [US4] `ObligacionListadaDto.SentInstallment` y `admitsPayoffExceptCurrentInstallment` en `App/Common/Integration/Lending/ContratoDeObligacionesDtos.cs` y `App/Lending/Integration/ContratoDeObligacionesDeCartera.cs`
 - [ ] T066 [US4] `LiquidacionDeRecogida` con `Recogida.CuotaCausada` (y `Preguntar` con la elección guardada en la solicitud) y la cuota enviada; la recogida aplica `PayoffExceptCurrentInstallment`; filas `LeftInstallment*`
 - [ ] T067 [US4] `ConsumoDeLibranza` con crédito no activo: `LoanClosedAtResult`, sin no descontado ni aviso al deudor, en `App/Lending/Payroll/Results/ConsumoDeLibranza.cs`

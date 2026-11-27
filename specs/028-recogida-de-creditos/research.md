@@ -102,6 +102,16 @@ período en curso; Cartera no lee tablas `PAY_`), con pagaduría, convenio, arch
 `LiquidacionDeRecogida`, la caja (por `IContratoDeObligaciones.ListarAsync`, campo nuevo `SentInstallment` en `ObligacionListadaDto`) y la
 pantalla del crédito.
 **Por qué**: hoy no existe consulta por crédito (sólo por convenio y período).
+**Nómina propia (2026-11-27, pedido de la sesión coordinadora tras el conteo de producción: COOFLOPAL no tiene convenios ni archivos de
+pagaduría, sí 2 créditos por nómina propia)**: la cuota también está «enviada» cuando la nómina ya tiene un descuento de cartera vivo para el
+crédito. Como Cartera no puede depender de Nómina, Nómina publica un puerto de sólo lectura
+`IDescuentosDeNominaParaCartera` (`Application/Common/Integration/Payroll`, un método: por obligaciones y fecha, la novedad
+`LoanDeduction` activa del período abierto, la fila `PAY_PayrollLoanDeductions` de una corrida en borrador o aprobada, con período, corrida,
+estado y valor), implementado en `Application/Payroll`. Estados: `OwnPayrollGenerated` (novedad en período abierto), `OwnPayrollCalculated`
+(corrida en borrador), `OwnPayrollApproved` (aplicada: la cuota ya está pagada y no se recoge). Con «Incluir», la corrida en borrador que
+después se aprueba baja ese descuento a cero con aviso (comportamiento de hoy, sin doble cobro), y la pantalla lo explica; con «Excluir», la
+cuota queda en el crédito viejo y la nómina la paga exacta al aprobar. `SentInstallmentState.OwnPayroll` se detalla con esos tres estados
+(valor nuevo del enum o campo aparte, a decidir en la tarea).
 
 ### R7 — Créditos cerrados en la libranza (H1)
 **Decisión**:
