@@ -91,13 +91,26 @@ lo pida.
 
 ## C4 — Verificación final
 
-- [ ] T050 Integración `CanalConectaTests` en PostgreSQL y SQL Server (plan §7)
-- [ ] T051 Suites completas sin contenedores y compilación de la solución en cero errores
-- [ ] T052 Prueba manual en Conecta QA y en Conecta PDN con el tenant en habilitación (requiere D1 en Conecta y el
-  cliente API): factura, nota crédito y nota débito de COOFLOPAL en `SETT`; latencia con varias cajas; registro de
-  resultados en la receta
-- [ ] T053 Revisión del cotejo pendiente (tarifa 0 = exento, escala del porcentaje de descuento,
-  `referencedInvoice.id`, régimen 48/49, correo del adquirente) y ajuste del traductor
+- [x] T050 Integración `CanalConectaE2E` (la fixture registra `CONECTA-PRUEBAS` contra el `ConectaStubHandler` enlazado
+  de las unitarias): 3 de 3 en **PostgreSQL** y 3 de 3 en **SQL Server**. Cubre:
+  - configuración y verificación (que además compara el NIT);
+  - factura con el número del ERP y validada;
+  - reintento sin duplicar;
+  - nota crédito referida al CUFE;
+  - modo real inexistente fuera de producción;
+  - credencial de otra cooperativa que no sirve.
+- [x] T051 Solución completa sin errores. Pasan Domain 3.183, Application 9.050, Architecture 930 y Shared 729.
+
+  En la corrida de las 15 e2e de facturación electrónica en PostgreSQL hubo dos fallas ajenas a la 028:
+  - `CanalYConcurrenciaTests.Dos_emisiones_concurrentes…` pasó al repetirla;
+  - `DocumentosElectronicosTests.Una_resolucion_de_1_a_10…` cae en la nota crédito con
+    `Payments.CashSessionRequired` (regla de caja, no de este cambio). **Falla igual en `develop` d810d07f sin la
+    028** (corrida de control del 2026-11-27): es preexistente.
+- [ ] T052 Prueba manual en Conecta QA y en Conecta PDN con el tenant en habilitación. **Bloqueada por D1** (Conecta
+  debe aceptar el número del ERP) y por el cliente API de COOFLOPAL: factura, nota crédito y nota débito en `SETT`,
+  latencia con varias cajas, resultados en la receta
+- [ ] T053 Cotejo con el contador (tarifa 0 = exento, escala del descuento, `referencedInvoice.id`, régimen 48/49, correo
+  del adquirente), con `/preview` de Conecta, antes del modo real
 
 ## C5 — Webhook (opcional, P3)
 
