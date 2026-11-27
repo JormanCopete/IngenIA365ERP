@@ -84,6 +84,19 @@ public sealed partial class EmisionDeRecaudo
                     TargetNature = Naturaleza(aplicacion.Target, aplicacion.ProductPublicId is { } prod ? naturalezas.GetValueOrDefault(prod) : null),
                 }));
         }
+        // 2026-11-26 (pedido del dueño): el descuento por pago anticipado que asume la cooperativa: débito a su rol y crédito al puente, así el módulo recibe la
+        // cuota completa (la porción en medios más el descuento) y no se entera del descuento.
+        foreach (var aplicacion in aplicaciones.Where(a => a.AdvanceDiscount is > 0m))
+        {
+            var dim = recibo.CashBoxId is { } caja ? await DimensionesDeCajaAsync(caja, null, ct) : await DimensionesDeOficinaAsync(recibo.BranchId, ct);
+            lineas.Add(Linea(RolesDeRecaudo.DescuentoPorPagoAnticipado, RolesDeRecaudo.Debito, aplicacion.AdvanceDiscount!.Value, dim,
+                publicos.GetValueOrDefault(aplicacion.BeneficiaryPersonId), recibo.Number));
+            lineas.Add(Linea(RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.Credito, aplicacion.AdvanceDiscount.Value, dim with
+            {
+                TargetModule = ModulosDeOrigen.Cartera,
+                TargetNature = Naturaleza(aplicacion.Target, aplicacion.ProductPublicId is { } prod ? naturalezas.GetValueOrDefault(prod) : null),
+            }));
+        }
         var contenido = new ReciboEmitidoV1
         {
             ReceiptPublicId = recibo.PublicId,

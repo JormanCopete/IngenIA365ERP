@@ -445,6 +445,27 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task El_detalle_informa_el_descuento_por_pago_anticipado_de_la_linea_y_cual_cuota_es_la_del_periodo_en_curso()
+    {
+        // 2026-11-26 (pedido del dueño): la caja de Recaudo aplica el descuento; Cartera sólo informa la fracción de la línea y la cuota del período en curso.
+        var hoy = _p.G.HoyLocal;
+        var sinDescuento = (await _p.Contrato().DetalleAsync(new SolicitudDeDetalle(PagosDePrueba.Prueba, _p.Credito.PublicId, hoy), default)).Value!;
+        sinDescuento.AdvanceDiscountFraction.Should().Be(0m, "de fábrica no hay descuento");
+        sinDescuento.Installments.Where(q => q.InCurrentPeriod).Select(q => q.Number).Should().Equal([1], "la próxima que vence es la del período en curso");
+
+        _p.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.PagosDescuentoPorPagoAnticipado,
+            Value = "0.2222222222", ValidFrom = hoy.AddDays(-1), Reason = "prueba", CreatedBy = "test",
+            ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.CreditLine, ScopeId = _p.Credito.CreditLineId,
+        });
+        await _p.Db.SaveChangesAsync();
+
+        var conDescuento = (await _p.Contrato().DetalleAsync(new SolicitudDeDetalle(PagosDePrueba.Prueba, _p.Credito.PublicId, hoy), default)).Value!;
+        conDescuento.AdvanceDiscountFraction.Should().Be(0.2222222222m, "la de la línea");
+    }
+
+    [Fact]
     public async Task Un_pago_mayor_que_el_total_cancela_y_el_excedente_vuelve_al_recaudador()
     {
         var c = await _p.AplicadoAsync(_p.Pago(ModalidadDePago.FullPayoff, 3_100_000m));

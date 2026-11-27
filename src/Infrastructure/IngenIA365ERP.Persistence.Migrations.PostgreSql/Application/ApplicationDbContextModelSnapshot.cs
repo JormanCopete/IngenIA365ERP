@@ -63607,6 +63607,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("AccountModality")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("AdvanceDiscount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("AdvanceDiscountFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
                     b.Property<bool>("AdvanceNoticeAccepted")
                         .HasColumnType("boolean");
 

@@ -64143,6 +64143,14 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("AccountModality")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("AdvanceDiscount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AdvanceDiscountFraction")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
                     b.Property<bool>("AdvanceNoticeAccepted")
                         .HasColumnType("bit");
 

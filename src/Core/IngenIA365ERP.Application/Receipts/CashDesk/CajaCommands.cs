@@ -280,9 +280,10 @@ public sealed class UpdateCashOperationItemsCommandHandler(
         // Cada ítem con su identificador desde ahora: las reglas de la caja lo nombran en su rechazo.
         var pedidos = request.Items.Select(p => p with { ItemId = p.ItemId ?? Guid.NewGuid() }).ToList();
         var politica = await PoliticaDeCaja.LeerAsync(parametros, operacion.ValueDate, ct);
-        var porLaRegla = (await new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad).EvaluarAsync(politica, titularPorDefecto, operacion.ValueDate,
+        var reglas = new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad);
+        var porLaRegla = (await reglas.EvaluarAsync(politica, titularPorDefecto, operacion.ValueDate,
                 pedidos.Select(p => new ItemDeLaRegla(p.ItemId!.Value, p.Target, p.Amount, p.ProductPublicId, p.BeneficiaryPersonPublicId ?? titularPorDefecto,
-                    p.LoanModality, p.InstallmentNumber, p.CrossDocument, p.PendingTarget)).ToList(), ct))
+                    p.LoanModality, p.InstallmentNumber, p.CrossDocument, p.PendingTarget, p.ApplyAdvanceDiscount)).ToList(), ct))
             .ToDictionary(r => r.ItemId);
 
         var items = new List<ItemDeCajaDto>();
@@ -307,9 +308,16 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                     var s = r.Value;
                     var alternativas = s.Alternatives.Select(a => new AlternativaDeAbonoDto(a.Choice, a.AppliedAmount, a.NewPlan)).ToList();
                     var anticipadoSinCapital = pedido.LoanModality == ModalidadDePago.Advance && s.Distribution.All(d => d.Concept != ConceptoDeObligacion.Principal);
+                    // 2026-11-26 (pedido del dueño): el descuento por pago anticipado que pidió el cajero (las reglas ya lo admitieron).
+                    var (descuento, fraccion) = pedido.ApplyAdvanceDiscount && pedido.InstallmentNumber is { } cuotaConDescuento
+                        ? await reglas.DescuentoAsync(pedido.ProductPublicId.Value, cuotaConDescuento, operacion.ValueDate, ct)
+                        : (0m, 0m);
                     items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, pedido.ProductPublicId, null, titular, pedido.LoanModality, null, pedido.Choice,
                         pedido.InstallmentNumber, null, pedido.AdvanceNoticeAccepted, null, null, null, s.SimulationId, s.AppliedAmount, s.Surplus,
-                        anticipadoSinCapital, false, alternativas, AvisosDelContratoDeObligaciones.Textos(s.Notices)) { Breakdown = DesgloseDelPago.DeCredito(s) });
+                        anticipadoSinCapital, false, alternativas, AvisosDelContratoDeObligaciones.Textos(s.Notices))
+                    {
+                        Breakdown = DesgloseDelPago.DeCredito(s), AdvanceDiscount = descuento, AdvanceDiscountFraction = descuento > 0m ? fraccion : null,
+                    });
                     break;
                 }
                 case ApplicationTarget.Account:

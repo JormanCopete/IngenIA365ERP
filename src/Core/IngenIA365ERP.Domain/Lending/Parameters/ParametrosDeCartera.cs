@@ -75,6 +75,13 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string PagosPrelacionDeRubros = "Pagos.PrelacionDeRubros";
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la fracción del interés de una cuota anticipada que la cooperativa descuenta en caja (0 = sin descuento, el defecto;
+    /// 0,2222 = 22,22 %), por empresa y por línea. La lee la caja de Recaudo por el detalle de la obligación: el descuento lo asume la cooperativa y Cartera
+    /// recibe la cuota completa, así que no cambia el libro, la causación ni el estado de cuenta del crédito. (nuevo)
+    /// </summary>
+    public const string PagosDescuentoPorPagoAnticipado = "Pagos.DescuentoPorPagoAnticipado";
+
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
 
@@ -692,6 +699,15 @@ public static class ParametrosDeCartera
             + "corrió del período causado. No («CuotaCompleta»): cobra completo el interés de la cuota en curso (por período calendario, el del tramo "
             + "causado). Dentro del tope legal del prepago sin penalidad y en vivienda siempre se devuelven.",
             [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
+        // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado en caja, por empresa y por línea.
+        NumeroDecimal(Modulo, PagosDescuentoPorPagoAnticipado,
+            "Fracción del interés de cada cuota anticipada que la cooperativa descuenta en caja, de 0 a 1 (0,2222 = 22,22 %; 0 = sin descuento). Se ofrece "
+            + "sólo por cuotas completas de períodos que no han empezado y con el crédito al día después del recibo; el cajero decide si lo aplica. La "
+            + "cuota entra completa a Cartera: el descuento lo asume la cooperativa en la cuenta del rol «Descuento por pago anticipado» de Recaudo.",
+            "0", K1, General, Linea) with
+        {
+            Minimo = 0m, Maximo = 1m,
+        },
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         Texto(PagosPrelacionDeRubros,
             "Orden en que un pago cubre los rubros de los créditos, separados por coma: Seguro, Administracion, Interes (mora y corriente), "

@@ -151,12 +151,19 @@ public static class DocumentosDeRecaudoReport
                         if (b.CreditBalance > 0m) Renglon(col, "Queda como saldo a favor", b.CreditBalance, ancho, chica);
                         if (Queda(b) is { } queda) col.Item().PaddingLeft(8).Text(queda).Italic().FontSize(chica);
                     }
+                    // 2026-11-26 (pedido del dueño): el descuento por pago anticipado lo asume la cooperativa; el producto recibió la línea completa.
+                    if (l.AdvanceDiscount is > 0m and var descuento) Renglon(col, "Descuento por pago anticipado (lo asume la cooperativa)", -descuento, ancho, chica);
                     if (l.ModuleVoucher is not null) col.Item().PaddingLeft(8).Text($"Comprobante {l.ModuleVoucher}").FontSize(chica);
                     if (l.NoticeAccepted) col.Item().PaddingLeft(8).Text("Aceptó el aviso del pago anticipado").FontSize(chica);
                     if (l.FinalityUntil is { } f) col.Item().PaddingLeft(8).Text($"En firme desde {f:dd/MM/yyyy}").FontSize(chica);
                 }
                 col.Item().PaddingTop(2).LineHorizontal(0.5f);
-                col.Item().Row(r => { r.RelativeItem().Text("TOTAL PAGADO").Bold(); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.TotalApplied)).Bold(); });
+                if (m.TotalDiscount > 0m)
+                {
+                    col.Item().Row(r => { r.RelativeItem().Text("Total aplicado"); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.TotalApplied)); });
+                    col.Item().Row(r => { r.RelativeItem().Text("Descuento por pago anticipado"); r.ConstantItem(ancho).AlignRight().Text(Pesos(-m.TotalDiscount)); });
+                }
+                col.Item().Row(r => { r.RelativeItem().Text("TOTAL PAGADO").Bold(); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.TotalApplied - m.TotalDiscount)).Bold(); });
 
                 // --- cómo pagó ---
                 col.Item().PaddingTop(4).Text("FORMAS DE PAGO").Bold();
