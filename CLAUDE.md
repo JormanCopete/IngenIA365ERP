@@ -1252,14 +1252,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/027-pase-ingreso-sin-mfa/plan.md](specs/027-pase-ingreso-sin-mfa/plan.md)
+[specs/028-recogida-de-creditos/plan.md](specs/028-recogida-de-creditos/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/027-pase-ingreso-sin-mfa/spec.md)
-- [research.md](specs/027-pase-ingreso-sin-mfa/research.md)
-- [data-model.md](specs/027-pase-ingreso-sin-mfa/data-model.md)
-- [quickstart.md](specs/027-pase-ingreso-sin-mfa/quickstart.md)
-- [contracts/](specs/027-pase-ingreso-sin-mfa/contracts/)
+- [spec.md](specs/028-recogida-de-creditos/spec.md)
+- [research.md](specs/028-recogida-de-creditos/research.md)
+- [data-model.md](specs/028-recogida-de-creditos/data-model.md)
+- [quickstart.md](specs/028-recogida-de-creditos/quickstart.md)
+- [contracts/](specs/028-recogida-de-creditos/contracts/)
 
-The 027 builds on central identity (003/017): a cooperativa admin grants a reusable, emailed login pass (12 h max) that replaces only
-the second-factor code after the normal password login, seals the session as method None and locks it to the granting cooperativa.
+The 028 builds on Lending origination and disbursement (013), deposits (014), Receipts (015) and accrual (024/025): a new loan pays off
+("recoge") the debtor's other loans and, if parametrized, contributions, savings and commercial receivables in its disbursement, with a
+saved projection, recalculation and differences before confirming, and the installment already sent to the paymaster handled everywhere.
 <!-- SPECKIT END -->
