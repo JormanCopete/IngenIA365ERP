@@ -62,6 +62,16 @@
                                     Para cancelar a la fecha valor: @TextosDeOriginacion.Pesos(r.ToPayOff) · días de mora: @r.DaysPastDue
                                     @if (r.InterestMode is { } modo) { <span> · @TextosDeRecogida.ModoDeIntereses(modo)</span> }
                                 </p>
+                                @* 2026-11-27 (feature 028, T051): el interés de lo de ahora, renglón a renglón con los días que cuenta el servidor; lo reconocido
+                                   que se libera va aparte porque no cambia lo que se recoge. *@
+                                @foreach (var renglon in r.InterestExplanation.Where(x => !x.EsInformativo))
+                                {
+                                    <p class="texto-apoyo">@renglon.Text</p>
+                                }
+                                @foreach (var liberado in r.InterestExplanation.Where(x => x.EsInformativo))
+                                {
+                                    <p class="aviso aviso-info">@liberado.Text</p>
+                                }
                                 @if (r.CurrentInstallment is { } cuota)
                                 {
                                     <p class="texto-apoyo">

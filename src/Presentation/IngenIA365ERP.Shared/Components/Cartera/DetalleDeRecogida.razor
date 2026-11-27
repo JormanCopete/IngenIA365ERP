@@ -19,7 +19,15 @@
     <div class="campo">
         <span class="etiqueta-campo">Intereses</span>
         <span>@TextosDeRecogida.ModoDeIntereses(Producto.InterestMode)</span>
-        @if (Producto.InterestModeExplanation is { } explicacion) { <span class="texto-tenue">@explicacion</span> }
+        @* 2026-11-27 (feature 028, T051): el interés renglón a renglón, con los días que cuenta el servidor; el proporcional por la ley ya dice su motivo. *@
+        @foreach (var renglon in Producto.InterestExplanation.Where(r => !r.EsInformativo))
+        {
+            <span class="texto-apoyo">@renglon.Text</span>
+        }
+        @if (Producto.InterestModeExplanation is { } explicacion && !Producto.InterestExplanation.Any(r => r.Kind == "Proportional"))
+        {
+            <span class="texto-tenue">@explicacion</span>
+        }
         @if (Producto.CurrentInstallment is { } c)
         {
             <span class="etiqueta-campo">Cuota causada</span>
@@ -33,6 +41,10 @@
         <span>@TextosDeRecogida.Estado(Producto.Status) · @TextosDeRecogida.Origen(Producto.Origin)</span>
     </div>
 </div>
+@foreach (var liberado in Producto.InterestExplanation.Where(r => r.EsInformativo))
+{
+    <p class="aviso aviso-info">@liberado.Text</p>
+}
 @if (!Producto.Eligible && Producto.BlockMessage is { } motivo)
 {
     <p class="aviso aviso-alerta">@motivo</p>

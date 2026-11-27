@@ -94,7 +94,22 @@ public sealed record LoanDto(
     /// excepción, cuándo. Nula si el crédito nunca tuvo la marca.
     /// </summary>
     public LoanValidationFailureDto? ValidationFailure { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T054; FR-029): los créditos nuevos cuyo desembolso recogió a éste («Recogido por el crédito … el …»), del más antiguo al más
+    /// nuevo; un vínculo reversado (el crédito nuevo se anuló antes del giro) va marcado. Vacío si nadie lo recogió. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LoanPayoffLinkDto> PaidOffBy { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T054; FR-029): lo que recogió el desembolso de este crédito («Recogió: …»). Vacío si no recogió nada. (nuevo)</summary>
+    public IReadOnlyList<LoanPayoffLinkDto> PaidOff { get; init; } = [];
 }
+
+/// <summary>
+/// 2026-11-27 (feature 028, T054): un vínculo de recogida visto desde un crédito: el otro lado —el crédito nuevo que lo recogió, o el producto que éste
+/// recogió—, la fecha valor del desembolso, el modo (<c>Total</c>, <c>Partial</c>…), lo aplicado y si se reversó. (nuevo)
+/// </summary>
+public sealed record LoanPayoffLinkDto(string Kind, Guid? LoanPublicId, string Number, DateOnly Date, string Mode, decimal Applied, bool Reversed);
 
 /// <summary>La validación fallida de la obligación de una venta (T0603): código, motivo y la confirmación por excepción si la hubo. (nuevo)</summary>
 public sealed record LoanValidationFailureDto(string Code, string? Reason, DateTime? ConfirmedByExceptionAt);
@@ -194,6 +209,9 @@ public sealed record LoanTransactionDto(
 
     /// <summary>2026-11-26 (pedido del dueño): el recibo del recaudador de la operación que dejó la fila (un pago, un anticipo); nulo sin recibo. (nuevo)</summary>
     public string? ReceiptNumber { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T054; FR-029): lo que la fila dice además de su clase, como «Recogido con el crédito …»; nulo si nada. (nuevo)</summary>
+    public string? Description { get; init; }
 }
 
 /// <summary>El crédito en el alcance de quien consulta (404 genérico con <c>Lending.Access.OutOfScope</c> si no). (nuevo)</summary>

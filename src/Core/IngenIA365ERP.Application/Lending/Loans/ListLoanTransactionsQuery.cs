@@ -54,6 +54,8 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
         var reversadas = await db.LoanTransactions.AsNoTracking().Where(t => originales.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.PublicId, ct);
         var espejos = await db.LoanTransactions.AsNoTracking().Where(t => t.ReversesTransactionId != null && ids.Contains(t.ReversesTransactionId.Value))
             .ToDictionaryAsync(t => t.ReversesTransactionId!.Value, t => t.PublicId, ct);
+        // 2026-11-27 (feature 028, T054; FR-029): el pago con que el desembolso de otro crédito lo recogió.
+        var recogidas = await Payoffs.VinculosDeRecogida.DeLosPagosAsync(db, operaciones, ct);
 
         var items = filas.Select(t => new LoanTransactionDto(t.PublicId, t.Kind.ToString(), t.Concept.ToString(), t.InstallmentNumber, t.Amount, t.ValueDate,
             t.AccountingDate, t.RegisteredAt,
@@ -67,6 +69,9 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
             UvrValue = t.UvrValue,
             // 2026-11-26 (pedido del dueño): el recibo con que entró, para saber de qué pago es cada anticipo.
             ReceiptNumber = t.OperationId is { } conRecibo && deOperacion.TryGetValue(conRecibo, out var deRecibo) ? deRecibo.ReceiptNumber : null,
+            Description = t.OperationId is { } pago && recogidas.TryGetValue(pago, out var recogida)
+                ? Payoffs.TextosDeVinculosDeRecogida.RecogidoCon(recogida)
+                : null,
         }).ToList();
         return Result.Success(new PagedResult<LoanTransactionDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }

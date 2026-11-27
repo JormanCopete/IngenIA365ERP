@@ -95,6 +95,22 @@ public sealed record PayoffCandidateDto(
 
     /// <summary>Lo que se recoge de él según lo marcado: todo en un total, el valor pedido en un parcial (topado en <see cref="ToPayOff"/>).</summary>
     public decimal? SelectedAmount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T051): el interés explicado renglón a renglón, con los días de la reconstrucción. (nuevo)</summary>
+    public IReadOnlyList<PayoffInterestLineDto> InterestExplanation { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado que se libera; informativo, no cambia <see cref="ToPayOff"/>. (nuevo)</summary>
+    public decimal RecognizedReleased { get; init; }
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, T051; HU5): un renglón de la explicación del interés de una recogida: su clase (<c>Accrued</c>, <c>FullInstallment</c>,
+/// <c>Proportional</c>, <c>Returned</c>, <c>RecognizedReleased</c>), la cuota, los días, el valor y el texto. (nuevo)
+/// </summary>
+public sealed record PayoffInterestLineDto(string Kind, int? Installment, int? Days, decimal Amount, string Text)
+{
+    public static IReadOnlyList<PayoffInterestLineDto> De(IEnumerable<RenglonDeIntereses> renglones) =>
+        renglones.Select(r => new PayoffInterestLineDto(r.Clase, r.Cuota, r.Dias, r.Valor, r.Texto)).ToList();
 }
 
 /// <summary>Lo que queda de la capacidad de pago después de recoger (api.md §1 <c>capacityAfter</c>). Lo calcula la radicación (T025); aquí va nulo. (nuevo)</summary>

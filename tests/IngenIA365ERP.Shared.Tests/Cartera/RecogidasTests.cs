@@ -260,4 +260,54 @@ public class RecogidasTests
         TextosDeRecogida.Pesos(1_234_567m).Should().Contain("1.234.567");
         TextosDeRecogida.Pesos((decimal?)null).Should().Be("—");
     }
+
+    // ----------------------------------------------------------------------------------- T051 y T054: intereses y vínculos --
+
+    [Fact]
+    public void La_explicacion_del_interes_llega_del_servidor_y_lo_reconocido_que_se_libera_es_informativo()
+    {
+        var json = """
+            { "kind": "Returned", "installment": 1, "days": 10, "amount": 12345.67,
+              "text": "Se devuelve el interés de 10 días no corridos de la cuota 1 ($12.345,67): ..." }
+            """;
+        var renglon = JsonSerializer.Deserialize<RenglonDeInteresesDto>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        (renglon.Kind, renglon.Installment, renglon.Days, renglon.Amount).Should().Be(("Returned", (int?)1, (int?)10, 12_345.67m));
+        renglon.EsInformativo.Should().BeFalse();
+        (renglon with { Kind = RenglonDeInteresesDto.ClaseReconocidoQueSeLibera }).EsInformativo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Lo_que_proyecto_la_solicitud_se_explica_desde_su_desglose_sin_inventar_dias()
+    {
+        var desglose = new DesgloseDeRecogidaDto(1_000_000m, 20_000m, 5_000m, 7_000m, 0m, 0m, 0m, 0m, 0m, 0m);
+
+        var textos = TextosDeRecogida.InteresesDelDesglose(desglose, "CuotaCompleta");
+
+        textos.Should().HaveCount(3);
+        textos[0].Should().StartWith("Se cobra el interés causado hasta la fecha proyectada");
+        textos[1].Should().StartWith("Se cobra el interés completo de la cuota en curso").And.Contain("7.000");
+        textos[2].Should().StartWith("Se devuelve el interés ya causado").And.Contain("5.000");
+        textos.Should().NotContain(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"\d+ días"),
+            "la solicitud no guarda los días: los da la vista previa del desembolso");
+        TextosDeRecogida.InteresesDelDesglose(new DesgloseDeRecogidaDto(1_000m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m), "Corrido")
+            .Should().ContainSingle().Which.Should().Contain("corrido");
+    }
+
+    [Fact]
+    public void Los_vinculos_de_recogida_dicen_quien_recogio_y_que_recogio()
+    {
+        var por = new VinculoDeRecogidaDto("Loan", Credito, "CR-000045", new DateOnly(2026, 11, 28), "Total", 5_098_456.78m, false);
+        por.RecogidoPor.Should().Be("Recogido por el crédito CR-000045 el 28/11/2026");
+        (por with { Reversed = true }).RecogidoPor.Should().EndWith("(reversado al anular el crédito nuevo)");
+        por.Recogido.Should().StartWith("crédito CR-000045 (total, ").And.Contain("5.098.457").And.EndWith("el 28/11/2026)");
+        (por with { Mode = "Partial" }).Recogido.Should().Contain("(parcial, ");
+        (por with { Kind = "Account", Mode = "Deposit" }).Recogido.Should().StartWith("cuenta CR-000045 (abono, ");
+
+        var json = """{ "publicId": "33333333-4444-5555-6666-777777777777", "paidOffBy": [ { "kind": "Loan", "loanPublicId": null, "number": "CR-9", "date": "2026-11-28", "mode": "Total", "applied": 10, "reversed": false } ] }""";
+        using var doc = JsonDocument.Parse(json);
+        var vinculos = JsonSerializer.Deserialize<IReadOnlyList<VinculoDeRecogidaDto>>(doc.RootElement.GetProperty("paidOffBy").GetRawText(),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        vinculos.Should().ContainSingle().Which.RecogidoPor.Should().Be("Recogido por el crédito CR-9 el 28/11/2026");
+    }
 }

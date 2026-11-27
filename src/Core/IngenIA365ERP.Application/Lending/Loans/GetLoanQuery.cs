@@ -55,6 +55,9 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
             DenominationUnit = condiciones.DenominationUnit.ToString(),
             MonthlyRate = Engine.CargadorDeReconstruccion.TasaMensualSellada(condiciones),
         };
+        // 2026-11-27 (feature 028, T054; FR-029): quién lo recogió y qué recogió.
+        var recogidoPor = await Payoffs.VinculosDeRecogida.DeLosRecogidosAsync(db, [c.Id], ct);
+        var recogio = await Payoffs.VinculosDeRecogida.DeLosNuevosAsync(db, [c.Id], ct);
         return Result.Success(new LoanDto(
             c.PublicId, c.Number, c.Status.ToString(), c.Origin.ToString(), personas[c.DebtorPersonId], codeudores.Select(p => personas[p]).ToList(),
             oficinas[c.BranchId], lineas[c.CreditLineId], pactadas?.ModalityCode ?? string.Empty, pactadas?.SubsegmentCode, terminos,
@@ -65,6 +68,10 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
             garantias, pagare, bloqueos, c.SourceInvoiceNumber)
         {
             ValidationFailure = c.ValidationFailureCode is { } codigo ? new LoanValidationFailureDto(codigo, c.ValidationFailureReason, c.ConfirmedByExceptionAt) : null,
+            PaidOffBy = recogidoPor.Select(v => new LoanPayoffLinkDto(nameof(PayoffProductKind.Loan), v.CreditoNuevoPublicId, v.CreditoNuevoNumero, v.Fecha,
+                v.Modo.ToString(), v.Aplicado, v.Reversada)).ToList(),
+            PaidOff = recogio.Select(v => new LoanPayoffLinkDto(v.Clase.ToString(), v.RecogidoPublicId, v.NumeroDelProducto, v.Fecha, v.Modo.ToString(),
+                v.Aplicado, v.Reversada)).ToList(),
         });
     }
 }

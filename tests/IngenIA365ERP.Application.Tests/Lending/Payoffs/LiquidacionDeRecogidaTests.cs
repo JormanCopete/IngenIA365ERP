@@ -161,13 +161,14 @@ public class LiquidacionDeRecogidaTests
             l.Desglose.InteresDevuelto.Should().Be(l.Desglose.InteresCorriente).And.BePositive();
             l.Desglose.InteresCobradoPorProporcionales.Should().Be(0m);
             l.ValorARecoger.Should().Be(3_000_000m);
-            l.Avisos.Should().Contain(a => a.Contains("período calendario"));
+            // T051: lo devuelto va, con sus días, en la explicación del interés (ya no en los avisos).
+            l.ExplicacionDelInteres.Should().Contain(r => r.Clase == ClasesDeRenglonDeInteres.Devuelto && r.Texto.Contains("período calendario"));
         }
         else if (esperado == ParametrosDeCartera.InteresesDeLaCuotaCompleta)
         {
             l.Desglose.InteresCobradoPorProporcionales.Should().Be(porCausar);
             l.ValorARecoger.Should().Be(corrido + porCausar);
-            l.Avisos.Should().Contain(a => a.Contains("interés completo de la cuota 1"));
+            l.ExplicacionDelInteres.Should().Contain(r => r.Clase == ClasesDeRenglonDeInteres.CuotaCompleta && r.Texto.Contains("interés completo de la cuota 1"));
         }
         else
         {

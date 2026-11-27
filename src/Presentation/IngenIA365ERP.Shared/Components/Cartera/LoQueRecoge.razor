@@ -56,6 +56,11 @@
                                         </tbody>
                                     </table>
                                     @if (p.InterestMode is { } modo) { <p class="texto-tenue">@TextosDeRecogida.ModoDeIntereses(modo)</p> }
+                                    @* 2026-11-27 (feature 028, T051): el interés proyectado en palabras; los días los da la vista previa del desembolso. *@
+                                    @foreach (var texto in TextosDeRecogida.InteresesDelDesglose(p.Breakdown, p.InterestMode))
+                                    {
+                                        <p class="texto-apoyo">@texto</p>
+                                    }
                                 </td>
                             </tr>
                         }

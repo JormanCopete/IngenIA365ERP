@@ -41,7 +41,12 @@ Respuesta `PayoffCandidatesDto`:
       "toPayOffExcludingCurrentInstallment": 4811056.78,
       "inOtherApplication": null,                                    // número de otra solicitud viva que lo recoge
       "fingerprint": "sha256:…",
-      "warnings": ["…"]
+      "warnings": ["…"],
+      "interestExplanation": [                                       // E-10: el interés renglón a renglón, con los días de la reconstrucción
+        { "kind": "Accrued|FullInstallment|Proportional|Returned|RecognizedReleased", "installment": 7, "days": 10, "amount": 104000,
+          "text": "Se cobra el interés de 10 días de la cuota 7 hasta la fecha del desembolso (del 21/11/2026 al 30/11/2026): $104.000." }
+      ],
+      "recognizedReleased": 0                                       // lo reconocido y no causado que se libera (informativo)
     }
   ],
   "summary": { "selectedTotal": 5123456.78, "netToDisburse": 2876543.22, "releasedInstallments": 303683.06,
@@ -108,10 +113,13 @@ Errores nuevos: `Lending.Payoff.MustMatchApplication`, `Lending.Payoff.Differenc
 
 ## 5. Informe
 
-`GET /api/reports/lending/payoffs?from=&to=&office=&line=&advisor=&productKind=&format=json|xlsx|pdf` — `Lending.Reports.View` / `.Export`,
+`GET /api/reports/lending/payoffs?from=&to=&branch=&line=&advisor=&productKind=Loan|Account|CommercialReceivable&format=json|xlsx|pdf|docx` (E-10: `branch`, el filtro común) — `Lending.Reports.View` / `.Export`,
 más `Lending.Loans.Read` (datos del deudor) y `Lending.Reports.ExportPersonalData` al exportar, como las demás vistas con datos personales.
 Columnas: fecha, crédito nuevo, solicitud, deudor, oficina, línea, producto, tipo, modo, proyectado, aplicado, diferencia, causa, cuota dejada,
-interés devuelto/cobrado, asesor, decisor, quien desembolsó.
+interés devuelto/cobrado, asesor, decisor, quien desembolsó, estado (aplicada, reversada u omitida); oculta `_credito` (el crédito nuevo).
+
+`GET /api/lending/loans/{id}` gana `paidOffBy[]` («Recogido por el crédito … el …») y `paidOff[]` («Recogió: …»): `{ kind, loanPublicId, number, date, mode,
+applied, reversed }`; `GET /loans/{id}/transactions` gana `description` («Recogido con el crédito …») en las filas del pago de la recogida (E-10).
 
 ## 6. Recaudo (E2 y E4)
 

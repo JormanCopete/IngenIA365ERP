@@ -1,3 +1,5 @@
+using IngenIA365ERP.Application.Lending.Payoffs;
+
 namespace IngenIA365ERP.Application.Lending.Disbursements;
 
 // Feature 013, US3 (T0441; api.md §6 y §9): lo que responden el desembolso, su vista previa, las órdenes de giro, las garantías y el pagaré.
@@ -135,6 +137,15 @@ public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Numb
 
     /// <summary>Lo que hay que saber de este producto (la diferencia y su causa, que se omite, que queda con saldo). (nuevo)</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T051): el interés de lo de ahora explicado renglón a renglón, con los días de la reconstrucción a la fecha valor; vacío en un
+    /// omitido o sin reconstrucción. (nuevo)
+    /// </summary>
+    public IReadOnlyList<PayoffInterestLineDto> InterestExplanation { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado que se libera; informativo. (nuevo)</summary>
+    public decimal RecognizedReleased { get; init; }
 }
 
 /// <summary>

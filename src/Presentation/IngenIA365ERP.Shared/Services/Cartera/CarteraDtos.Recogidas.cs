@@ -82,7 +82,26 @@ public sealed record ProductoParaRecogerDto(
     public int? SelectedMode { get; init; }
     public decimal? SelectedAmount { get; init; }
 
+    /// <summary>2026-11-27 (feature 028, T051): el interés explicado renglón a renglón, con los días que dice el servidor.</summary>
+    public IReadOnlyList<RenglonDeInteresesDto> InterestExplanation { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado que se libera (informativo).</summary>
+    public decimal RecognizedReleased { get; init; }
+
     public bool AdmiteParcial => AdmittedModes.Contains(TextosDeRecogida.ModoParcial);
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, T051; HU5): un renglón de la explicación del interés de una recogida: su clase (<c>Accrued</c>, <c>FullInstallment</c>,
+/// <c>Proportional</c>, <c>Returned</c>, <c>RecognizedReleased</c>), la cuota, los días, el valor y el texto. Los días los cuenta el servidor con la
+/// reconstrucción: la pantalla no los calcula. (nuevo)
+/// </summary>
+public sealed record RenglonDeInteresesDto(string Kind, int? Installment, int? Days, decimal Amount, string Text)
+{
+    public const string ClaseReconocidoQueSeLibera = "RecognizedReleased";
+
+    /// <summary>Lo reconocido que se libera no cambia lo que se recoge: se muestra aparte.</summary>
+    public bool EsInformativo => Kind == ClaseReconocidoQueSeLibera;
 }
 
 public sealed record CapacidadDespuesDeRecogerDto(decimal Available, bool Declared);
@@ -317,6 +336,24 @@ public static class TextosDeRecogida
             ("Administración", d.Administration), ("Otros cargos", d.OtherCharges), ("Anticipo a favor", -d.Advance), ("Saldo a favor", -d.CreditBalance),
         ];
         return todos.Where(c => c.Item2 != 0m).ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T051): el interés de lo que proyectó la solicitud, en palabras, desde su desglose (la solicitud no guarda los días: los da
+    /// la vista previa del desembolso, que vuelve a liquidar): lo cobrado por la cuota completa y lo devuelto por período calendario.
+    /// </summary>
+    public static IReadOnlyList<string> InteresesDelDesglose(DesgloseDeRecogidaDto d, string? modo)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        var textos = new List<string>();
+        if (d.CurrentInterest != 0m)
+            textos.Add($"Se cobra el interés causado hasta la fecha proyectada de desembolso: {Pesos(d.CurrentInterest)}.");
+        if (d.InterestCharged != 0m)
+            textos.Add($"Se cobra el interés completo de la cuota en curso: también el de los días que faltan hasta su vencimiento, {Pesos(d.InterestCharged)}.");
+        if (d.InterestReturned != 0m)
+            textos.Add($"Se devuelve el interés ya causado de cuotas cuyo período no ha empezado (período calendario): {Pesos(d.InterestReturned)}.");
+        if (textos.Count == 0 && modo is "Corrido") textos.Add("Se cobra el interés corrido hasta la fecha proyectada de desembolso.");
+        return textos;
     }
 
     /// <summary>Un valor en pesos sin centavos: <c>$ 1.234.567</c>.</summary>

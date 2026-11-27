@@ -96,13 +96,13 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 ## Fase 7 — HU5 e HU8: intereses proporcionales e informe (P2, E1)
 
 - [X] T050 [US5] La recogida aplica el modo de `ModoAlRecogerAsync` sellado en la decisión del pago (`FullPayoff` con el modo) en `App/Lending/Disbursements/RecogidaEnElDesembolso.cs` y `App/Lending/Payments/AplicacionDePagos.cs`
-- [ ] T051 [US5] Explicación en el desglose («interés devuelto: N días», «se cobra el proporcional por el tope del prepago») en `LiquidacionDeRecogida` y en `ProductosParaRecoger.razor`
-- [ ] T052 [P] [US5] Pruebas de los escenarios de HU5 (1–3) en `TA/Lending/Payoffs/InteresesProporcionalesTests.cs`
-- [ ] T053 [US8] Vista `payoffs` (`TablaExportable`, filtros período, oficina, línea, asesor, producto; datos personales) en `App/Lending/Reports/Vistas/PayoffsReportQuery.cs` y su registro en el catálogo de vistas de Cartera
-- [ ] T054 [US8] «Recogido por el crédito …» y «recogió …» en el detalle del crédito (`App/Lending/Loans/` DTO y `Sh/Pages/Cartera/CreditoDetalle.razor`) y en el estado de cuenta (`App/Lending/PersonStatement/SeccionesDelEstadoDeCuenta.cs`)
-- [ ] T055 [US8] La vista en `/cartera/informes` (`Sh/Pages/Cartera/Informes.razor`) y su tarjeta
-- [ ] T056 [P] [US8] Pruebas de la vista en `TA/Lending/Reports/PayoffsReportQueryTests.cs`
-- [ ] T057 Puerta de E1: build `-m:1` sin errores; Domain, Application, Architecture y Shared verdes; commit de la entrega
+- [X] T051 [US5] Explicación en el desglose («interés devuelto: N días», «se cobra el proporcional por el tope del prepago») en `LiquidacionDeRecogida` y en `ProductosParaRecoger.razor`
+- [X] T052 [P] [US5] Pruebas de los escenarios de HU5 (1–3) en `TA/Lending/Payoffs/InteresesProporcionalesTests.cs`
+- [X] T053 [US8] Vista `payoffs` (`TablaExportable`, filtros período, oficina, línea, asesor, producto; datos personales) en `App/Lending/Reports/Vistas/PayoffsReportQuery.cs` y su registro en el catálogo de vistas de Cartera
+- [X] T054 [US8] «Recogido por el crédito …» y «recogió …» en el detalle del crédito (`App/Lending/Loans/` DTO y `Sh/Pages/Cartera/CreditoDetalle.razor`) y en el estado de cuenta (`App/Lending/PersonStatement/SeccionesDelEstadoDeCuenta.cs`)
+- [X] T055 [US8] La vista en `/cartera/informes` (`Sh/Pages/Cartera/Informes.razor`) y su tarjeta
+- [X] T056 [P] [US8] Pruebas de la vista en `TA/Lending/Reports/PayoffsReportQueryTests.cs`
+- [X] T057 Puerta de E1: build `-m:1` sin errores; Domain, Application, Architecture y Shared verdes; commit de la entrega
 
 ## Fase 8 — HU4 (motor): todo menos la cuota causada (P1, E2) — riesgo principal
 

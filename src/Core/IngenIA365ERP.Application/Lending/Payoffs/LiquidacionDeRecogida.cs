@@ -9,6 +9,8 @@ using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
+using IngenIA365ERP.Domain.Lending.DayCount;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Payoffs;
@@ -222,6 +224,18 @@ public sealed record LiquidacionDeCreditoRecogido
 
     public IReadOnlyList<string> Avisos { get; init; } = [];
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T051; HU5): el interés de la recogida explicado renglón a renglón —lo corrido hasta D, la cuota completa, el proporcional por
+    /// la ley, lo devuelto por período calendario y lo reconocido que se libera—, con los días de la reconstrucción. Vacío sin reconstrucción. (nuevo)
+    /// </summary>
+    public IReadOnlyList<RenglonDeIntereses> ExplicacionDelInteres { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado a D que la recogida libera. Es informativo: no es deuda del asociado
+    /// y no cambia <see cref="ValorARecoger"/>. (nuevo)
+    /// </summary>
+    public decimal ReconocidoQueSeLibera { get; init; }
+
     public FuenteDeLaLiquidacion Fuente { get; init; } = FuenteDeLaLiquidacion.Reconstruccion;
 
     public bool Recogible => Bloqueos.Count == 0;
@@ -320,12 +334,9 @@ public sealed class LiquidacionDeRecogida(
         var avisos = new List<string>();
         var explicacion = Explicacion(proporcionales, modo);
         if (explicacion is not null) avisos.Add(explicacion);
-        if (cobrado.Count > 0 && cobrado[0].Cuota is { } enCurso && estado.Plan?.Cuotas.FirstOrDefault(c => c.Numero == enCurso) is { } cuotaEnCurso)
-            avisos.Add($"Para recoger se cobra el interés completo de la cuota {enCurso} (vence el {cuotaEnCurso.Vencimiento:dd/MM/yyyy}): "
-                + $"{Pesos(desglose.InteresCobradoPorProporcionales)} que todavía no se ha causado.");
-        if (devuelto.Count > 0)
-            avisos.Add($"Por período calendario no se cobra el interés ya causado de {Cuotas(devuelto)}, cuyo período no ha empezado: "
-                + $"{Pesos(desglose.InteresDevuelto)}.");
+        // 2026-11-27 (feature 028, T051): lo cobrado por la cuota completa y lo devuelto por período calendario ya no van en los avisos: van, con sus días,
+        // en la explicación del interés.
+        var (renglones, liberado) = ExplicacionDeInteresesDeRecogida.Explicar(estado, modo, calendario, cobrado, devuelto);
         if (estado.SaldoAFavor > 0m)
             avisos.Add($"El crédito tiene un saldo a favor de {Pesos(estado.SaldoAFavor)} que la recogida no descuenta: queda a favor del deudor y se "
                 + "resuelve aparte.");
@@ -351,7 +362,8 @@ public sealed class LiquidacionDeRecogida(
             PeriodoCalendario = calendario, DiasDeMora = estado.AlturaDeMora.Dias,
             Bloqueos = Bloqueos(credito, insolvencia, estado.AlturaDeMora.Dias, valor),
             CuotaCausada = CuotaCausada(estado, calendario), SaldoAFavorSinDescontar = Math.Max(0m, estado.SaldoAFavor),
-            Huella = huella, Avisos = avisos, Fuente = FuenteDeLaLiquidacion.Reconstruccion,
+            Huella = huella, Avisos = avisos, ExplicacionDelInteres = renglones, ReconocidoQueSeLibera = liberado,
+            Fuente = FuenteDeLaLiquidacion.Reconstruccion,
         };
     }
 
@@ -479,11 +491,138 @@ public sealed class LiquidacionDeRecogida(
             _ => null,
         };
 
-    private static string Cuotas(IReadOnlyList<LineaDeDistribucion> lineas)
+    private static string Pesos(decimal valor) => "$" + valor.ToString("#,##0.##", Colombia);
+}
+
+/// <summary>Las clases de un renglón de la explicación del interés de una recogida (feature 028, T051; api.md §1 <c>interestExplanation[].kind</c>). (nuevo)</summary>
+public static class ClasesDeRenglonDeInteres
+{
+    /// <summary>Se cobra el interés causado de la cuota en curso hasta D.</summary>
+    public const string Corrido = "Accrued";
+
+    /// <summary>Se cobra además el interés de los días que faltan de la cuota en curso: la cuota completa.</summary>
+    public const string CuotaCompleta = "FullInstallment";
+
+    /// <summary>Se pidió la cuota completa y la ley obliga a cobrar sólo el proporcional (vivienda, tope del prepago).</summary>
+    public const string Proporcional = "Proportional";
+
+    /// <summary>Por período calendario se devuelve lo ya causado de una cuota cuyo período no ha empezado.</summary>
+    public const string Devuelto = "Returned";
+
+    /// <summary>Lo reconocido al inicio del ciclo y no causado a D: se libera, no es deuda (informativo).</summary>
+    public const string ReconocidoQueSeLibera = "RecognizedReleased";
+}
+
+/// <summary>
+/// Un renglón de la explicación del interés de una recogida (feature 028, T051; HU5): qué se cobra o se devuelve, de qué cuota, cuántos días —los de la
+/// convención del plan, entre las fechas de la reconstrucción— y cuánto, con su texto para la persona. (nuevo)
+/// </summary>
+public sealed record RenglonDeIntereses(string Clase, int? Cuota, int? Dias, decimal Valor, string Texto);
+
+/// <summary>
+/// La explicación del interés de una recogida (feature 028, T051; HU5, FR-024), renglón a renglón, a partir del estado reconstruido a D y de lo que la
+/// liquidación ya decidió —el modo de intereses, el período calendario, lo que cobra la cuota completa y lo que se devuelve—: no recalcula ningún valor, sólo
+/// los explica con los días del plan (<see cref="ContadorDeDias"/> con la convención sellada; el período de una cuota va de su <c>Desde</c> excluido a su
+/// vencimiento incluido). Lo reconocido al inicio del ciclo y no causado se informa aparte y no cambia lo que se recoge. Un crédito en UVR no se explica aquí:
+/// va con el corrido y su aviso. Puro. (nuevo)
+/// </summary>
+public static class ExplicacionDeInteresesDeRecogida
+{
+    private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
+
+    /// <summary>Los renglones y lo reconocido que se libera.</summary>
+    /// <param name="estado">El estado reconstruido a D.</param>
+    /// <param name="modo">El modo de intereses de la recogida, con su motivo legal si lo hay.</param>
+    /// <param name="periodoCalendario">La línea causa por período calendario a D.</param>
+    /// <param name="cobrado">Lo que agrega la cuota completa (<see cref="AplicadorDePagos.InteresDeLaCuotaCompleta"/>); vacío con el corrido.</param>
+    /// <param name="devuelto">Lo causado de las cuotas cuyo período no ha empezado (<see cref="AplicadorDePagos.InteresSinTramo"/>).</param>
+    public static (IReadOnlyList<RenglonDeIntereses> Renglones, decimal ReconocidoQueSeLibera) Explicar(EstadoDelCredito estado,
+        ModoDeInteresesAlCancelar modo, bool periodoCalendario, IReadOnlyList<LineaDeDistribucion> cobrado, IReadOnlyList<LineaDeDistribucion> devuelto)
     {
-        var numeros = lineas.Select(l => l.Cuota).OfType<int>().Distinct().Order().ToList();
-        return numeros.Count == 1 ? $"la cuota {numeros[0]}" : $"las cuotas {string.Join(", ", numeros)}";
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(modo);
+        var renglones = new List<RenglonDeIntereses>();
+        if (estado.Plan is not { } plan || estado.EnUvr) return (renglones, 0m);
+        var d = estado.Fecha;
+        var cuotas = plan.Cuotas.GroupBy(c => c.Numero).ToDictionary(g => g.Key, g => g.First());
+        int Dias(DateOnly desde, DateOnly hasta) => hasta <= desde ? 0 : ContadorDeDias.Dias(plan.Entrada.Convencion, desde, hasta);
+
+        var devueltas = devuelto.Select(l => l.Cuota).OfType<int>().ToHashSet();
+        var enCurso = plan.Cuotas.Where(c => c.Vencimiento > d).OrderBy(c => c.Vencimiento).FirstOrDefault();
+
+        // La cuota en curso: lo corrido hasta D y, si se cobra completa, los días que le faltan; o el proporcional por la ley.
+        if (enCurso is not null && !devueltas.Contains(enCurso.Numero))
+        {
+            var n = enCurso.Numero;
+            var corrido = estado.Saldo(LoanConcept.CurrentInterest, n) + estado.Saldo(LoanConcept.CurrentInterestInSuspense, n);
+            var diasCorridos = Dias(enCurso.Desde, d);
+            if (corrido > 0m && diasCorridos > 0)
+                renglones.Add(new(ClasesDeRenglonDeInteres.Corrido, n, diasCorridos, corrido,
+                    $"Se cobra el interés de {DiasEnTexto(diasCorridos)} de la cuota {n} hasta la fecha del desembolso (del "
+                    + $"{enCurso.Desde.AddDays(1):dd/MM/yyyy} al {d:dd/MM/yyyy}): {Pesos(corrido)}."));
+        }
+        foreach (var g in cobrado.Where(l => l.Cuota is not null).GroupBy(l => l.Cuota!.Value).OrderBy(g => g.Key))
+        {
+            var valor = g.Sum(l => l.Monto);
+            if (valor <= 0m || !cuotas.TryGetValue(g.Key, out var q)) continue;
+            var faltan = Dias(d, q.Vencimiento);
+            renglones.Add(new(ClasesDeRenglonDeInteres.CuotaCompleta, g.Key, faltan, valor,
+                $"Se cobra el interés completo de la cuota {g.Key}: también los {DiasEnTexto(faltan)} que faltan hasta su vencimiento, el "
+                + $"{q.Vencimiento:dd/MM/yyyy}, que todavía no se han causado: {Pesos(valor)}."));
+        }
+        if (modo.Motivo is { } motivo && RazonLegal(motivo) is { } razon)
+        {
+            // Lo que la cuota completa habría cobrado y la ley no deja cobrar.
+            var noCobrado = AplicadorDePagos.InteresDeLaCuotaCompleta(estado, periodoCalendario);
+            var valor = noCobrado.Sum(l => l.Monto);
+            var cuota = noCobrado.Select(l => l.Cuota).OfType<int>().FirstOrDefault();
+            var faltan = cuotas.TryGetValue(cuota, out var q) ? Dias(d, q.Vencimiento) : (int?)null;
+            renglones.Add(new(ClasesDeRenglonDeInteres.Proporcional, valor > 0m ? cuota : null, valor > 0m ? faltan : null, valor,
+                valor > 0m && faltan is { } dias
+                    ? $"Se cobra el proporcional: {razon}. No se cobran los {DiasEnTexto(dias)} que faltan de la cuota {cuota} ({Pesos(valor)})."
+                    : $"Se cobra el proporcional: {razon}."));
+        }
+
+        // Lo devuelto por período calendario: lo causado de una cuota cuyo período no ha empezado.
+        foreach (var g in devuelto.Where(l => l.Cuota is not null).GroupBy(l => l.Cuota!.Value).OrderBy(g => g.Key))
+        {
+            var valor = g.Sum(l => l.Monto);
+            if (valor <= 0m || !cuotas.TryGetValue(g.Key, out var q)) continue;
+            var dias = Dias(q.Desde, d);
+            var empieza = PeriodoDeCausacion.TramoQueContiene(q.Vencimiento, plan.Entrada.Periodicidad).Desde;
+            renglones.Add(new(ClasesDeRenglonDeInteres.Devuelto, g.Key, dias, valor,
+                $"Se devuelve el interés de {DiasEnTexto(dias)} no corridos de la cuota {g.Key} ({Pesos(valor)}): ya estaba causado, pero la cuota vence el "
+                + $"{q.Vencimiento:dd/MM/yyyy} y su período no empieza hasta el {empieza:dd/MM/yyyy} (período calendario)."));
+        }
+
+        // Lo reconocido al inicio del ciclo y no causado a D: se libera (el interés de una cuota cobrada completa no, porque la cuota completa lo consume).
+        var completas = cobrado.Select(l => l.Cuota).OfType<int>().ToHashSet();
+        var liberado = 0m;
+        foreach (var g in estado.Reconocidos.Where(r => r.Pendiente > 0m && !(r.Rubro == LoanConcept.CurrentInterest && completas.Contains(r.Cuota)))
+                     .GroupBy(r => r.Cuota).OrderBy(g => g.Key))
+        {
+            var valor = g.Sum(r => r.Pendiente);
+            liberado += valor;
+            var dias = cuotas.TryGetValue(g.Key, out var q) ? Dias(d, q.Vencimiento) : (int?)null;
+            renglones.Add(new(ClasesDeRenglonDeInteres.ReconocidoQueSeLibera, g.Key, dias, valor,
+                $"Reconocido que se libera: {Pesos(valor)} de la cuota {g.Key} que se reconoció al inicio del ciclo y no se ha causado"
+                + (dias is { } n && q is not null ? $" ({DiasEnTexto(n)}, hasta el {q.Vencimiento:dd/MM/yyyy})" : string.Empty)
+                + ". No es deuda del asociado: no cambia lo que se recoge."));
+        }
+        return (renglones, liberado);
     }
+
+    /// <summary>Por qué la ley obliga al proporcional aunque se pidió la cuota completa; nula si el motivo no es legal.</summary>
+    public static string? RazonLegal(string motivo) => motivo switch
+    {
+        InteresesAlCancelar.MotivoVivienda => "el crédito es de vivienda y se prepaga sin penalidad (Ley 546 de 1999)",
+        InteresesAlCancelar.MotivoDentroDelTope => "el crédito está dentro del tope legal del prepago sin penalidad (Ley 1555 de 2012)",
+        InteresesAlCancelar.MotivoTopeDesconocido =>
+            "faltan el salario mínimo o el tope del prepago a la fecha del desembolso para saber si el crédito está fuera del tope legal",
+        _ => null,
+    };
+
+    private static string DiasEnTexto(int dias) => dias == 1 ? "1 día" : $"{dias} días";
 
     private static string Pesos(decimal valor) => "$" + valor.ToString("#,##0.##", Colombia);
 }

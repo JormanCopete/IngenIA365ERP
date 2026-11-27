@@ -215,6 +215,7 @@ public sealed class GetPayoffCandidatesQueryHandler(
             l.Intereses.Motivo, cuotaCausada, null, otraSolicitud, l.Huella, avisos)
         {
             Status = credito.Status, BlockMessage = bloqueoDelCredito?.Mensaje, InterestModeExplanation = l.ExplicacionDeIntereses,
+            InterestExplanation = PayoffInterestLineDto.De(l.ExplicacionDelInteres), RecognizedReleased = l.ReconocidoQueSeLibera,
         };
     }
 

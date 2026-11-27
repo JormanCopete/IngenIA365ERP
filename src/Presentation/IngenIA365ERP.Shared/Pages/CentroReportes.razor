@@ -112,6 +112,15 @@
                     <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=usury")'>Generar</SfButton>
                 </div>
             </div>
+            @* 2026-11-27 (feature 028, HU8, T055): las recogidas de los desembolsos. *@
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Recogidas</h5>
+                    <p>Los productos que recogieron los desembolsos del período: proyectado, aplicado, diferencia y su causa, y quién vendió, decidió y desembolsó.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/cartera/informes?vista=payoffs")'>Generar</SfButton>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -42,8 +42,12 @@ public static class SimulacionDeRecogidaReport
                             + $"{HoraLocal(s.RecordedAsOf, generadoEn.Offset).ToString("dd/MM/yyyy HH:mm", Co)}, sin los pagos ni los movimientos que ocurran después. Es una "
                             + "simulación: al desembolsar se vuelve a calcular y puede cambiar.")
                         .FontSize(8).Italic();
+                    // 2026-11-27 (feature 028, T051): el interés de cada producto renglón a renglón, con sus días (el proporcional por la ley ya dice su motivo).
                     Avisos(col, filas.SelectMany(p => p.Warnings.Select(a => $"{p.Number}: {a}"))
-                        .Concat(filas.Where(p => p.InterestModeExplanation is not null).Select(p => $"{p.Number}: {p.InterestModeExplanation}"))
+                        .Concat(filas.SelectMany(p => p.InterestExplanation.Select(r => $"{p.Number}: {r.Text}")))
+                        .Concat(filas.Where(p => p.InterestModeExplanation is not null
+                                                 && !p.InterestExplanation.Any(r => r.Kind == ClasesDeRenglonDeInteres.Proporcional))
+                            .Select(p => $"{p.Number}: {p.InterestModeExplanation}"))
                         .Concat(filas.Where(p => !p.Eligible && p.BlockMessage is not null).Select(p => $"{p.Number}: {p.BlockMessage}"))
                         .Concat(s.Summary.Warnings)
                         .Distinct().ToList());

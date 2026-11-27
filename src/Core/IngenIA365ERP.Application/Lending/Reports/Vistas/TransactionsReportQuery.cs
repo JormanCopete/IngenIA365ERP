@@ -108,6 +108,8 @@ public sealed class TransactionsReportQueryHandler(IApplicationDbContext db, IAl
             : (await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id)).Select(o => new { o.Id, o.Number, o.PublicId, o.ReceiptNumber })
                     .ToListAsync(ct))
                 .ToDictionary(o => o.Id, o => (o.Number, o.PublicId, (string?)o.ReceiptNumber));
+        // 2026-11-27 (feature 028, T054; FR-029): el pago con que el desembolso de otro crédito lo recogió lo dice junto al recibo.
+        var recogidas = await Payoffs.VinculosDeRecogida.DeLosPagosAsync(db, operaciones, ct);
 
         var filas = leidas.Select(x =>
         {
@@ -118,7 +120,8 @@ public sealed class TransactionsReportQueryHandler(IApplicationDbContext db, IAl
             [
                 t.ValueDate, t.AccountingDate, registro.ToString("yyyy-MM-dd HH:mm"), x.Number, TextosDeInformesDeCartera.Transaccion(t.Kind),
                 TextosDeInformesDeCartera.Concepto(t.Concept), t.InstallmentNumber, t.Amount, operacion?.Numero ?? string.Empty,
-                operacion?.Recibo ?? string.Empty, t.MessagePublicId?.ToString() ?? string.Empty, x.LoanPublicId.ToString(), operacion?.PublicId.ToString(), t.MessagePublicId?.ToString(),
+                Recibo(operacion?.Recibo, t.OperationId is { } pago && recogidas.TryGetValue(pago, out var recogida) ? recogida : null),
+                t.MessagePublicId?.ToString() ?? string.Empty, x.LoanPublicId.ToString(), operacion?.PublicId.ToString(), t.MessagePublicId?.ToString(),
             ]);
         }).ToList();
         var porFecha = clase.Value switch { PorFechaContable => "fecha contable", PorRegistro => "fecha de registro", _ => "fecha valor" };
@@ -129,4 +132,11 @@ public sealed class TransactionsReportQueryHandler(IApplicationDbContext db, IAl
             "Valor con el signo del libro: positivo aumenta el saldo del concepto, negativo lo disminuye. El registro va en hora de Colombia.",
         ]));
     }
+
+    /// <summary>El recibo de la operación y, si es la recogida por el desembolso de otro crédito, con cuál (feature 028, T054).</summary>
+    private static string Recibo(string? recibo, Payoffs.VinculoDeRecogida? recogida) => recogida is null
+        ? recibo ?? string.Empty
+        : string.IsNullOrWhiteSpace(recibo)
+            ? Payoffs.TextosDeVinculosDeRecogida.RecogidoCon(recogida)
+            : $"{recibo} · {Payoffs.TextosDeVinculosDeRecogida.RecogidoCon(recogida)}";
 }

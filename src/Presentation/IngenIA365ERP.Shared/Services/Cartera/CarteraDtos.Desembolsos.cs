@@ -68,6 +68,12 @@ public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, deci
     public string? InterestMode { get; init; }
     public CuotaCausadaDelDesembolsoDto? CurrentInstallment { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T051): el interés de lo de ahora explicado renglón a renglón (vacío en un omitido o un abono).</summary>
+    public IReadOnlyList<RenglonDeInteresesDto> InterestExplanation { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado que se libera (informativo).</summary>
+    public decimal RecognizedReleased { get; init; }
 }
 
 /// <summary>2026-11-27 (feature 028): la cuota causada del crédito recogido y qué se hace con ella (<c>Include</c>; <c>Left</c> llega con E2). (nuevo)</summary>

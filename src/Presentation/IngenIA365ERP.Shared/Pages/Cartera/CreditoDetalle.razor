@@ -140,6 +140,21 @@
                     {
                         <p><strong>Bloqueos del deudor:</strong> @string.Join(", ", c.Blocks.Select(b => $"{TextosDeCreditos.CausaDeBloqueo(b.Kind)} desde {TextosDeCreditos.Fecha(b.Since)}{(b.Automatic ? " (automático)" : "")}"))</p>
                     }
+                    @* 2026-11-27 (feature 028, T054; FR-029): quién lo recogió con su desembolso y qué recogió éste. *@
+                    @foreach (var por in c.PaidOffBy)
+                    {
+                        <p>
+                            <strong>@por.RecogidoPor</strong>
+                            @if (por.LoanPublicId is { } nuevo && nuevo != Guid.Empty)
+                            {
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/creditos/{nuevo}"))">Ver el crédito @por.Number</SfButton>
+                            }
+                        </p>
+                    }
+                    @if (c.PaidOff.Count > 0)
+                    {
+                        <p><strong>Recogió:</strong> @string.Join("; ", c.PaidOff.Select(r => r.Recogido))</p>
+                    }
                     @if (c.Links.Application is { } solicitud)
                     {
                         <p><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/solicitudes/{solicitud}"))">Ver la solicitud</SfButton></p>
@@ -399,7 +414,7 @@
                     <tbody>
                         @foreach (var f in _libro)
                         {
-                            <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")</td>
+                            <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")@(f.Description is { } d ? $" · {d}" : "")</td>
                                 <td>@TextosDeCreditos.Concepto(f.Concept)</td><td class="numero">@(f.Installment?.ToString() ?? "—")</td>
                                 <td class="numero">@TextosDeCreditos.Pesos(f.Amount)</td>
                                 @if (LibroEnUvr) { <td class="numero">@TextosDeCreditos.Uvr(f.UvrAmount)</td><td class="numero">@TextosDeCreditos.ValorDeUvr(f.UvrValue)</td> }

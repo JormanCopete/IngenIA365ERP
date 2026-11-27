@@ -440,3 +440,32 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - Casos dorados: `01` actualizado (7.700.000 y el puente 2.300.000 en la misma cuenta, una línea por crédito), `68` (dos recogidas en dos sucursales,
   giro a tercero, puente con tercero y cruce; trae `recibos` y `esperadoEnUnComprobante`, que corre `DesembolsoConSusRecogidasTests`) y `69` (el DRV
   de 68). `escenario.json` gana la cuenta 24959503.
+
+### E-10 — Intereses explicados, informe de recogidas y vínculos en el detalle (T051–T057, 2026-11-27)
+- **T051, la explicación es una lista, no avisos**: `LiquidacionDeCreditoRecogido` gana `ExplicacionDelInteres` (renglones `RenglonDeIntereses`: clase,
+  cuota, días, valor y texto) y `ReconocidoQueSeLibera`; las arma `ExplicacionDeInteresesDeRecogida.Explicar` (pura) con el estado reconstruido a D y lo que
+  la liquidación ya decidió: no recalcula valores. Clases (`ClasesDeRenglonDeInteres`): `Accrued` (el corrido de la cuota en curso, de su `Desde` excluido a
+  D), `FullInstallment` (los días que faltan hasta el vencimiento), `Proportional` (el motivo legal y lo que la cuota completa habría cobrado), `Returned`
+  (por período calendario, lo causado de una cuota cuyo período no empieza: días de su `Desde` a D) y `RecognizedReleased` (lo reconocido al inicio del
+  ciclo y no causado a D; informativo, no cambia el valor; el interés reconocido de una cuota cobrada completa no se libera). **Los días los cuenta
+  `ContadorDeDias` con la convención sellada del plan** entre fechas del plan: la pantalla no los calcula. Los dos avisos que la liquidación ponía para la
+  cuota completa y lo devuelto **salen de `Avisos`** (los reemplazan los renglones; `LiquidacionDeRecogidaTests` se ajustó). En UVR o sin reconstrucción no hay
+  renglones. Viajan como `interestExplanation[]` y `recognizedReleased` en los productos para recoger (§1) y en la vista previa del desembolso (§3; vacíos
+  en un omitido o un abono a capital), y en el PDF de la simulación. «Lo que recoge» de la solicitud no guarda días: explica desde su desglose
+  (`TextosDeRecogida.InteresesDelDesglose`).
+- **T053, filtros**: la vista usa los filtros comunes del centro de informes (`branch`, no `office` como decía api.md §5; `line` y `advisor` son los del
+  crédito nuevo, por `AmbitoDeInformeDeCartera`) más el propio `productKind` (`Loan`, `Account`, `CommercialReceivable`, sin distinguir mayúsculas; otro valor
+  es `Lending.Report.FilterInvalid`). Lista también las **omitidas** (el producto ya estaba cancelado), además de vivas y reversadas, marcadas en «Estado»
+  y resaltadas; los totales no cuentan las reversadas. «Con proyección» es la huella de la fila proyectada (`ProjectionSha256`) y, sin fila, la regla de
+  E-07. El interés devuelto y cobrado de lo de ahora es lo proyectado más `DifferenceDetail` (vacío sin proyección). «Cuota causada» dice el tratamiento
+  (`Incluida` en E1); los valores de la cuota dejada llegan con E2. El decisor es el usuario de la decisión de aprobación (o la persona, si decidió un
+  órgano); quien desembolsó, el actor de la operación. La pantalla `/cartera/informes` no tiene control para el asesor (como colocación): viaja por el enlace.
+- **T054, un solo lector de los vínculos**: `Lending/Payoffs/VinculosDeRecogida` (recogidos, nuevos y por pago) une las filas `LND_DisbursementPayoffs` con
+  los pagos `CAR` de la clave de la recogida sin fila (los desembolsos de antes de la 028), sin contar dos veces el pago que tiene fila (misma clave); un
+  pago `CAR` con otra gramática (el cruce del retiro) no es una recogida. `LoanDto` gana `paidOffBy[]` y `paidOff[]` (`LoanPayoffLinkDto`); el libro del
+  crédito (`LoanTransactionDto.Description`) dice «Recogido con el crédito …» en las filas del pago, y el informe `transactions` lo agrega al recibo. El
+  estado de cuenta de la persona lo muestra en F8 (movimientos), que es donde aparecen los pagos; `SeccionesDelEstadoDeCuenta` no lista movimientos y no
+  cambió.
+- **T057, puerta de E1 (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.239, Application 9.127, Architecture 931 y Shared 774, todas
+  verdes. La única que falló fue `LasConsultasDeCarteraRespetanElAlcance` por la vista nueva: se agregó `PayoffsReportQuery.cs` a su lista de consultas con
+  alcance (lo aplica `AmbitoDeInformeDeCartera`).

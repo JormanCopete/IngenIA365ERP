@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Payoffs;
@@ -96,6 +97,11 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
                 ? new DisbursementPayoffInstallmentDto(c.Numero, c.Vencimiento, c.Valor, nameof(InstallmentTreatment.Include), null)
                 : null,
             Warnings = x.Avisos,
+            // 2026-11-27 (feature 028, T051): el interés explicado sólo en una cancelación (un abono va a capital y no lo cobra así).
+            InterestExplanation = x.Omitida || !x.Total || x.Liquidacion.Detalle is not { } explicada
+                ? []
+                : PayoffInterestLineDto.De(explicada.ExplicacionDelInteres),
+            RecognizedReleased = x.Omitida || !x.Total ? 0m : x.Liquidacion.Detalle?.ReconocidoQueSeLibera ?? 0m,
         };
     }
 
