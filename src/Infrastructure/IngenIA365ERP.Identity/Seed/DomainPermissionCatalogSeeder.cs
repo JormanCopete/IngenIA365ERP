@@ -58,6 +58,8 @@ public static class DomainPermissionCatalogSeeder
         ("Security.Users",         "Unlock",         "Desbloquear usuario tras lockout"),
         // Feature 017 (US6): corregir o actualizar el documento de quien sólo está en esta cooperativa.
         ("Security.Users",         "CorrectDocument", "Corregir o actualizar el documento de identidad de un usuario"),
+        // Feature 027: conceder, reenviar y anular pases de ingreso sin segundo factor. CompanyAdmin lo recibe por "*".
+        ("Security.Users",         "GrantMfaBypass", "Permitir el ingreso sin segundo factor por una jornada (pase de ingreso)"),
 
         // Security — Roles
         ("Security.Roles",         "View",     "Ver roles disponibles"),

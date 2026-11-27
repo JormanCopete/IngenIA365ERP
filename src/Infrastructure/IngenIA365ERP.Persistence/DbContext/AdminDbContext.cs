@@ -86,6 +86,7 @@ public class AdminDbContext
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
     public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
     public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
+    public DbSet<LoginPass> LoginPasses => Set<LoginPass>();
 
     // --- Identidad con documento (feature 017) ---
     public DbSet<TenantIdentityPolicy> TenantIdentityPolicies => Set<TenantIdentityPolicy>();
@@ -169,6 +170,9 @@ public class AdminDbContext
         // que una tabla de una sola fila acabe con dos, ni el filtro de borrado
         // lógico: la política se leía aunque estuviera borrada.
         modelBuilder.ApplyConfiguration(new PlatformMfaPolicyConfiguration());
+
+        // Feature 027: pases de ingreso sin segundo factor.
+        modelBuilder.ApplyConfiguration(new LoginPassConfiguration());
 
         // Preferencias de interfaz por usuario. Este contexto NO usa
         // ApplyConfigurationsFromAssembly, así que una configuration que no se

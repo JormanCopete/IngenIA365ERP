@@ -283,6 +283,73 @@
                     Enviar enlace de recuperación
                 </button>
             </section>
+
+            @* Feature 027: pase de ingreso sin segundo factor, sólo si la cooperativa lo permite. *@
+            <PermissionGate Required="Security.Users.GrantMfaBypass">
+                @if (_usuario.LoginPassMaxHours is int maximo)
+                {
+                    <section class="tarjeta">
+                        <h3>Permitir ingreso sin segundo factor</h3>
+                        <p class="texto-apoyo">
+                            Para quien hoy no tiene a mano su app ni sus códigos. A la persona le llega un enlace al correo; con él y su contraseña
+                            entra sin el código de la app hasta que venza, aunque se le cierre la sesión. Su app sigue inscrita. Los demás
+                            administradores reciben un aviso. Si la persona es administradora, el pase lo da el administrador maestro.
+                        </p>
+                        <IndicadorDeCarga Cargando="@_cargaPases.Activa">
+                            <div class="rejilla-campos">
+                                <label>Duración
+                                    <select @bind="_horasDelPase">
+                                        @for (var h = maximo; h >= 1; h--)
+                                        {
+                                            var horas = h;
+                                            <option value="@horas">@horas @(horas == 1 ? "hora" : "horas")</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label>Motivo <input @bind="_motivoDelPase" maxlength="500" placeholder="Por ejemplo: dejó el celular en casa" /></label>
+                            </div>
+                            <div class="toolbar">
+                                <button class="boton-principal" type="button" disabled="@(_cargaPases.Activa || !MotivoSuficiente)"
+                                        @onclick="ConcederPaseAsync">
+                                    Permitir ingreso sin segundo factor
+                                </button>
+                            </div>
+
+                            @if (_pases.Count > 0)
+                            {
+                                <table class="data-grid">
+                                    <thead>
+                                        <tr><th>Estado</th><th>Concedido</th><th>Vence</th><th>Por</th><th>Motivo</th><th>Usos</th><th></th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pase in _pases)
+                                        {
+                                            <tr>
+                                                <td>@EstadoDelPase(pase)</td>
+                                                <td>@HoraLocal(pase.GrantedAt)</td>
+                                                <td>@HoraLocal(pase.ExpiresAt)</td>
+                                                <td>@pase.GrantedByEmail</td>
+                                                <td>@pase.Reason</td>
+                                                <td>@pase.UseCount@(pase.LastUsedAt is { } u ? $" (último {HoraLocal(u)})" : "")</td>
+                                                <td>
+                                                    @if (pase.Status == "Active")
+                                                    {
+                                                        <button type="button" disabled="@_cargaPases.Activa"
+                                                                @onclick="() => ReenviarPaseAsync(pase)">Reenviar</button>
+                                                        <button type="button" disabled="@(_cargaPases.Activa || !MotivoSuficiente)"
+                                                                title="Escriba el motivo de la anulación en «Motivo»" @onclick="() => AnularPaseAsync(pase)">Anular</button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                <p class="texto-apoyo">Para anular, escriba el motivo en «Motivo» y pulse «Anular».</p>
+                            }
+                        </IndicadorDeCarga>
+                    </section>
+                }
+            </PermissionGate>
         }
     </IndicadorDeCarga>
 
@@ -325,6 +392,8 @@
         {
             _usuario = await Http.GetFromJsonAsync<Detalle>($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
             _sobrenombre = _usuario?.PrintAlias;
+            _horasDelPase = _usuario?.LoginPassMaxHours ?? 12;
+            if (_usuario?.LoginPassMaxHours is not null) await CargarPasesAsync();
         }
         catch (HttpRequestException ex)
         {
@@ -462,6 +531,101 @@
         else Avisar(await ErrorAsync(resp), error: true);
     }
 
+    // ---------- Pases de ingreso (feature 027) ----------
+
+    private readonly EstadoDeCarga _cargaPases = new();
+    private List<PaseDeIngreso> _pases = new();
+    private int _horasDelPase = 12;
+    private string? _motivoDelPase;
+
+    private bool MotivoSuficiente => (_motivoDelPase?.Trim().Length ?? 0) >= 10;
+
+    private async Task CargarPasesAsync()
+    {
+        using var carga = _cargaPases.Iniciar();
+        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/login-passes");
+        // Sin el permiso la ruta responde 404 y la tarjeta no se muestra (PermissionGate): no hay nada que avisar.
+        _pases = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<List<PaseDeIngreso>>() ?? new() : new();
+    }
+
+    private async Task ConcederPaseAsync()
+    {
+        using (_cargaPases.Iniciar())
+        {
+            var resp = await Http.PostAsJsonAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/login-passes",
+                new { hours = _horasDelPase, reason = _motivoDelPase });
+            if (!resp.IsSuccessStatusCode)
+            {
+                Avisar(await ErrorAsync(resp), error: true);
+                return;
+            }
+            var r = await resp.Content.ReadFromJsonAsync<PaseConcedido>();
+            if (r is null || !r.EmailSent)
+                Avisar("El pase quedó concedido, pero el correo no se pudo enviar. Reenvíelo o anúlelo.", error: true);
+            else
+                Avisar($"Se envió el pase de ingreso a {_usuario?.Email}. Vence el {HoraLocal(r.Pass.ExpiresAt)}.", error: false);
+            _motivoDelPase = null;
+        }
+        await CargarPasesAsync();
+    }
+
+    private async Task ReenviarPaseAsync(PaseDeIngreso pase)
+    {
+        using (_cargaPases.Iniciar())
+        {
+            var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/login-passes/{pase.PublicId}/resend", null);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Avisar(await ErrorAsync(resp), error: true);
+                return;
+            }
+            var r = await resp.Content.ReadFromJsonAsync<PaseConcedido>();
+            if (r is null || !r.EmailSent) Avisar("El correo no se pudo enviar.", error: true);
+            else Avisar("Se reenvió el pase con un enlace nuevo; el anterior ya no sirve.", error: false);
+        }
+        await CargarPasesAsync();
+    }
+
+    private async Task AnularPaseAsync(PaseDeIngreso pase)
+    {
+        using (_cargaPases.Iniciar())
+        {
+            var resp = await Http.PostAsJsonAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/login-passes/{pase.PublicId}/void",
+                new { reason = _motivoDelPase });
+            if (!resp.IsSuccessStatusCode)
+            {
+                Avisar(await ErrorAsync(resp), error: true);
+                return;
+            }
+            Avisar("Pase anulado: el enlace ya no sirve.", error: false);
+            _motivoDelPase = null;
+        }
+        await CargarPasesAsync();
+    }
+
+    private static string EstadoDelPase(PaseDeIngreso p) => p.Status switch
+    {
+        "Active" => "Vigente",
+        "Expired" => "Vencido",
+        _ => p.VoidReason switch
+        {
+            "reemplazado" => "Reemplazado",
+            "entro-con-segundo-factor" => "Entró con su app",
+            "opcion-apagada" => "Opción apagada",
+            "cambio-de-credenciales" => "Cambió su clave",
+            _ => "Anulado",
+        },
+    };
+
+    /// <summary>Hora de Colombia (UTC−5 todo el año).</summary>
+    private static string HoraLocal(DateTime utc) =>
+        DateTime.SpecifyKind(utc, DateTimeKind.Utc).AddHours(-5)
+            .ToString("dd/MM/yyyy hh:mm tt", System.Globalization.CultureInfo.GetCultureInfo("es-CO"));
+
+    private sealed record PaseDeIngreso(Guid PublicId, string Status, DateTime GrantedAt, DateTime ExpiresAt, string? GrantedByEmail,
+        string Reason, int UseCount, DateTime? LastUsedAt, string? VoidReason);
+    private sealed record PaseConcedido(PaseDeIngreso Pass, bool EmailSent);
+
     private static async Task<string> ErrorAsync(HttpResponseMessage resp)
     {
         try
@@ -483,7 +647,7 @@
 
     private sealed record Detalle(Guid PublicId, string Username, string? Email, string? DocumentUsername, bool CanCorrectDocument,
         IReadOnlyList<Oficina> Branches, int? PersonId = null, Guid? PersonPublicId = null, string? PersonName = null, string? PersonDocument = null,
-        string? PrintAlias = null);
+        string? PrintAlias = null, int? LoginPassMaxHours = null);
 
     private string? _sobrenombre;
     private readonly EstadoDeCarga _guardandoSobrenombre = new();

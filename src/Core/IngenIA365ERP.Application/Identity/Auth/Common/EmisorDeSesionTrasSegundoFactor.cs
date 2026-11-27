@@ -34,6 +34,13 @@ public interface IEmisorDeSesionTrasSegundoFactor
         MetodosMfa metodoDemostrado,
         int? codigosDeRecuperacionRestantes,
         CancellationToken ct);
+
+    /// <summary>
+    /// Feature 027: la sesión tras canjear un pase de ingreso. Sella <c>Ninguno</c> (el pase no demuestra ningún método, como el código de
+    /// respaldo), sólo mira la cooperativa del pase y deja la sesión atada a ella. No cancela recuperaciones ni gasta pases: eso lo hace sólo
+    /// el segundo factor de verdad.
+    /// </summary>
+    Task<Result<LoginResult>> EmitirConPaseAsync(CentralUser user, Guid cooperativaDelPase, CancellationToken ct);
 }
 
 public sealed class EmisorDeSesionTrasSegundoFactor(
@@ -183,6 +190,43 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
             RecoveryCodesRemaining: codigosDeRecuperacionRestantes));
     }
 
+    public async Task<Result<LoginResult>> EmitirConPaseAsync(CentralUser user, Guid cooperativaDelPase, CancellationToken ct)
+    {
+        var activas = (await memberships.GetActiveMembershipsAsync(user.Id, ct))
+            .Where(m => m.TenantId == cooperativaDelPase)
+            .ToList();
+
+        if (activas.Count == 0)
+        {
+            return Result.Success(new LoginResult(
+                Challenge: LoginChallenges.NoActiveMembership,
+                CentralUserId: user.Id,
+                Email: user.Email,
+                IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                Message: "No tienes acceso a la cooperativa del pase."));
+        }
+
+        // Con el documento exigido y sin registrar no se entra con el pase: el desafío del documento termina en una sesión normal, que
+        // ya no estaría atada a la cooperativa del pase. Se registra entrando con la app.
+        if (await exigenciaDeDocumento.EvaluarAsync(user, activas.Select(m => m.TenantId), ct)
+            == Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+        {
+            return Result.Failure<LoginResult>(
+                "Identity.LoginPass.DocumentRequired",
+                "Tu cooperativa exige registrar tu documento de identidad y eso no se puede hacer con un pase de ingreso. Entra con tu app.");
+        }
+
+        // Una cooperativa que restringe métodos no admite «Ninguno»: igual que con el código de respaldo, manda a inscribir.
+        if (!Admite(activas[0], MetodosMfa.Ninguno))
+        {
+            return PedirInscripcion(user, activas);
+        }
+
+        return await EmitirOperativaAsync(
+            user, activas[0], autoSeleccionada: true, MetodosMfa.Ninguno, codigosRestantes: null, ct,
+            paseDeIngresoCooperativa: cooperativaDelPase);
+    }
+
     /// <summary>
     /// Sesión del maestro global. El token sale con <c>active_tenant_id=null</c> y
     /// <c>is_global_master_admin=true</c>, igual que el del login; la diferencia es
@@ -317,16 +361,27 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
         bool autoSeleccionada,
         MetodosMfa metodoDemostrado,
         int? codigosRestantes,
-        CancellationToken ct)
+        CancellationToken ct,
+        Guid? paseDeIngresoCooperativa = null)
     {
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId: user.Id,
-            email: user.Email,
-            isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
-            activeTenantId: membresia.TenantId,
-            tenantAdmin: membresia.IsTenantAdmin,
-            mfaVerified: true,
-            metodoMfa: metodoDemostrado);
+        var access = paseDeIngresoCooperativa is { } pase
+            ? jwtIssuer.IssueAccessToken(
+                centralUserId: user.Id,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                activeTenantId: membresia.TenantId,
+                tenantAdmin: membresia.IsTenantAdmin,
+                mfaVerified: true,
+                metodoMfa: metodoDemostrado,
+                paseDeIngresoCooperativa: pase)
+            : jwtIssuer.IssueAccessToken(
+                centralUserId: user.Id,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                activeTenantId: membresia.TenantId,
+                tenantAdmin: membresia.IsTenantAdmin,
+                mfaVerified: true,
+                metodoMfa: metodoDemostrado);
 
         var refresh = jwtIssuer.IssueRefreshToken();
         await refreshStore.StoreAsync(
@@ -339,7 +394,8 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
                 IpAddress: null,
                 UserAgent: null,
                 ReplacedByTokenHashHex: null,
-                SecurityStamp: user.SecurityStamp),
+                SecurityStamp: user.SecurityStamp,
+                PaseDeIngresoCooperativa: paseDeIngresoCooperativa),
             ttl: RefreshTokenTtl,
             ct: ct);
 

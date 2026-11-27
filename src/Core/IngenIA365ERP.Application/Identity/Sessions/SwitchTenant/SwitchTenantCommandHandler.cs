@@ -42,6 +42,13 @@ public sealed class SwitchTenantCommandHandler(
             return Result.Failure<SwitchTenantResult>(
                 "Identity.Unauthenticated", "Usuario no encontrado.");
 
+        // Feature 027 (FR-009): la sesión abierta con un pase de ingreso no sale de la cooperativa que lo concedió.
+        var pase = currentUser.PaseDeIngresoCooperativa;
+        if (pase is { } coopDelPase && coopDelPase != request.TenantPublicId)
+            return Result.Failure<SwitchTenantResult>(
+                "Identity.LoginPass.TenantLocked",
+                "Entraste con un pase de ingreso de otra cooperativa. Para entrar a ésta usa tu app de autenticación.");
+
         var active = await memberships.GetActiveMembershipsAsync(centralUserId, ct);
         var target = active.FirstOrDefault(m => m.TenantId == request.TenantPublicId);
         if (target is null)
@@ -80,15 +87,20 @@ public sealed class SwitchTenantCommandHandler(
         }
 
         var now = clock.UtcNow;
-        var access = jwtIssuer.IssueAccessToken(
-            centralUserId, user.Email, user.IsGlobalMasterAdmin,
-            target.TenantId, target.IsTenantAdmin, user.TwoFactorEnabled,
-            metodoDemostrado);
+        var access = pase is { } atada
+            ? jwtIssuer.IssueAccessToken(
+                centralUserId, user.Email, user.IsGlobalMasterAdmin,
+                target.TenantId, target.IsTenantAdmin, user.TwoFactorEnabled,
+                metodoDemostrado, atada)
+            : jwtIssuer.IssueAccessToken(
+                centralUserId, user.Email, user.IsGlobalMasterAdmin,
+                target.TenantId, target.IsTenantAdmin, user.TwoFactorEnabled,
+                metodoDemostrado);
         var refresh = jwtIssuer.IssueRefreshToken();
         var familyId = Guid.NewGuid();
         await refreshStore.StoreAsync(refresh.HashHex, new CentralRefreshSession(
             centralUserId, target.TenantId, familyId, now, null, null, null,
-            user.SecurityStamp, metodoDemostrado),
+            user.SecurityStamp, metodoDemostrado, PaseDeIngresoCooperativa: pase),
             RefreshTokenTtl, ct);
 
         await EmitAuditAsync(centralUserId, user.Email, fromTenantId, target.TenantId, now, ct);

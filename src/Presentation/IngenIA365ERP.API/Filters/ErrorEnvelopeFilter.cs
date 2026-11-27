@@ -101,6 +101,11 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // el default, que es justo el defecto que se corrigió arriba para el
             // TOTP — repetido en el método nuevo.
             "Identity.WebAuthnInvalido" => StatusCodes.Status401Unauthorized,
+            // Feature 027: un pase de ingreso que no sirve es un segundo factor que no autentica; la sesión del pase atada a su
+            // cooperativa, una acción prohibida por política.
+            "Identity.LoginPass.Invalid" => StatusCodes.Status401Unauthorized,
+            "Identity.LoginPass.TenantLocked" => StatusCodes.Status403Forbidden,
+            "Identity.LoginPass.DocumentRequired" => StatusCodes.Status403Forbidden,
 
             // Incluye Reused: una violación de familia es un token que ya no
             // autentica, no una entidad no procesable.

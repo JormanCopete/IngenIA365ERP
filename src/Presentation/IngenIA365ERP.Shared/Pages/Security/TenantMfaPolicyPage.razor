@@ -92,6 +92,40 @@
         }
     }
 
+    @if (!_cargando && _politica is not null)
+    {
+        @* Feature 027: pases de ingreso sin segundo factor. *@
+        <div class="info-card" style="margin-top: var(--pad-lg);">
+            <h2>Pases de ingreso sin segundo factor</h2>
+            <p class="texto-apoyo">
+                Permite que un administrador deje entrar por una jornada, sin el código de su app, a quien hoy no la tiene a mano. El pase le llega
+                a la persona al correo, pide siempre su contraseña, no borra su app y sólo sirve en esta cooperativa. Los demás administradores
+                reciben un aviso. A un administrador sólo se lo da el administrador maestro.
+            </p>
+            <label class="campo-check">
+                <input type="checkbox" @bind="_permitePases" disabled="@_ocupado" />
+                Permitir pases de ingreso sin segundo factor
+            </label>
+            <label>
+                Duración máxima del pase
+                <select @bind="_horasDelPase" disabled="@_ocupado">
+                    @for (var h = 12; h >= 1; h--)
+                    {
+                        var horas = h;
+                        <option value="@horas">@horas @(horas == 1 ? "hora" : "horas")</option>
+                    }
+                </select>
+            </label>
+            @if (_politica.PermitirPasesDeIngreso && !_permitePases)
+            {
+                <div class="aviso aviso-alerta" role="alert">Al apagarlo se anulan los pases vigentes de la cooperativa.</div>
+            }
+            <div class="toolbar">
+                <button class="boton boton-principal" disabled="@_ocupado" @onclick="GuardarPasesAsync">Guardar pases de ingreso</button>
+            </div>
+        </div>
+    }
+
     @* El número que evita el incidente del lunes: cuánta gente queda teniendo que
        inscribir algo. Se muestra después de guardar, con su propio aviso. *@
     @if (_afectados > 0)
@@ -129,6 +163,32 @@
 
     private bool HayAlgunMetodo => _aceptaTotp || _aceptaWebAuthn;
 
+    private bool _permitePases;
+    private int _horasDelPase = 12;
+
+    /// <summary>Feature 027: guarda sólo los pases de ingreso; la exigencia va tal cual estaba y los métodos no se tocan.</summary>
+    private async Task GuardarPasesAsync()
+    {
+        if (_ocupado || _politica is null) return;
+        _ocupado = true;
+        _aviso = null;
+        _error = null;
+        try
+        {
+            var r = await Client.SetPasesDeIngresoAsync(TenantPublicId, _politica.IsRequired, _permitePases, _horasDelPase);
+            if (!r.IsSuccess)
+            {
+                _error = r.ErrorMessage ?? "No se pudo guardar.";
+                return;
+            }
+            _aviso = _permitePases
+                ? $"Pases de ingreso permitidos, de hasta {_horasDelPase} horas."
+                : "Pases de ingreso apagados. Los vigentes quedaron anulados.";
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
     protected override async Task OnInitializedAsync() => await CargarAsync();
 
     private async Task CargarAsync()
@@ -152,6 +212,8 @@
             var metodos = r.Value?.MetodosAceptados;
             _aceptaTotp = metodos is null || metodos.Contains(TiposDeCredencialMfa.Totp);
             _aceptaWebAuthn = metodos is null || metodos.Contains(TiposDeCredencialMfa.WebAuthn);
+            _permitePases = r.Value?.PermitirPasesDeIngreso == true;
+            _horasDelPase = r.Value?.HorasMaximasDelPase is >= 1 and <= 12 ? r.Value.HorasMaximasDelPase : 12;
         }
         finally { _cargando = false; }
     }
