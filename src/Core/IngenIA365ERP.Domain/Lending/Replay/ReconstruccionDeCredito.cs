@@ -115,6 +115,25 @@ public sealed class ContextoDeReconstruccion
         Version++;
     }
 
+    private readonly Dictionary<int, DateOnly> _congeladas = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T060): las cuotas que dejó una cancelación salvo la cuota causada, con la fecha valor del pago: desde el día siguiente su
+    /// capital no causa interés corriente mientras la cuota no esté vencida (ya lleva el del período completo, D13-A). Vencida e impaga, causa mora como
+    /// cualquiera. (nuevo)
+    /// </summary>
+    public IReadOnlyDictionary<int, DateOnly> CuotasCongeladas => _congeladas;
+
+    /// <summary>2026-11-27 (feature 028, R4, T060): congela la cuota <paramref name="cuota"/> desde el día siguiente a <paramref name="fecha"/>. (nuevo)</summary>
+    public void Congelar(int cuota, DateOnly fecha)
+    {
+        _congeladas[cuota] = fecha;
+        Version++;
+    }
+
+    /// <summary>2026-11-27 (feature 028, R4, T060): ¿la cuota está congelada el día <paramref name="dia"/>? (nuevo)</summary>
+    public bool Congelada(int cuota, DateOnly dia) => _congeladas.TryGetValue(cuota, out var desde) && dia > desde;
+
     /// <summary>Un hecho del libro (desembolso, saldo inicial; desde US5, pagos y reversos).</summary>
     public void AgregarFila(MovimientoDeLibro fila) => _filas.Add(fila ?? throw new ArgumentNullException(nameof(fila)));
 
@@ -200,6 +219,9 @@ public sealed class ContextoDeReconstruccion
     /// regeneró. El excedente no entra (D5). 2026-11-16: una cancelación con la cuota completa causa primero, en la fecha valor, el interés de la cuota
     /// en curso que faltaba (<see cref="DistribucionDePago.InteresPorCausar"/>, filas <see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>):
     /// las líneas ya lo cubren y el crédito queda en cero.
+    /// 2026-11-27 (feature 028, R4, T060): la cancelación salvo la cuota causada causa también en la fecha valor el interés del período que le faltaba a la
+    /// cuota que deja (<see cref="DistribucionDePago.InteresDeLaCuotaDejada"/>, filas <see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>), que
+    /// queda debiéndose; corta el plan después de ella sin tocarla y la congela (<see cref="Congelar"/>).
     /// </summary>
     public void AsentarPago(EntradaDeOperacion operacion, DistribucionDePago distribucion)
     {
@@ -207,6 +229,8 @@ public sealed class ContextoDeReconstruccion
         ArgumentNullException.ThrowIfNull(distribucion);
         var v = operacion.FechaValor;
         foreach (var i in distribucion.InteresPorCausar)
+            Mover(v, LoanTransactionKind.UnaccruedInstallmentInterest, i.Concepto, i.Cuota, i.Monto, operacion.Id);
+        foreach (var i in distribucion.InteresDeLaCuotaDejada)
             Mover(v, LoanTransactionKind.UnaccruedInstallmentInterest, i.Concepto, i.Cuota, i.Monto, operacion.Id);
         // 2026-11-24 (feature 025, fase 5, D3): por período calendario, la cancelación devuelve el interés causado de las cuotas cuyo tramo no ha empezado
         // (RecognitionRelease de la operación que canceló, el mecanismo de devolución de la 024): no se cobra y el crédito queda en cero.
@@ -225,12 +249,34 @@ public sealed class ContextoDeReconstruccion
             Mover(v, LoanTransactionKind.AdvanceReceived, LoanConcept.Advance, distribucion.CuotaDelAnticipo, distribucion.Anticipo, operacion.Id);
         if (distribucion.SaldoAFavor > 0m)
             Mover(v, LoanTransactionKind.CreditBalanceRecognized, LoanConcept.CreditBalance, null, distribucion.SaldoAFavor, operacion.Id);
-        if (distribucion.PlanNuevo is { } plan)
+        if (distribucion.CuotaDejada is { } dejada)
+        {
+            // 2026-11-27 (feature 028, R4): la cuota dejada conserva su capital pendiente (lo movido en ella por pagos anteriores sigue); sólo las cuotas que
+            // salen del plan, ya pagadas a capital, quedan sin lo movido.
+            if (distribucion.PlanNuevo is { } cortado)
+            {
+                RetirarDelPlan(Plan!, cortado);
+                CambiarPlan(cortado);
+            }
+            Congelar(dejada, v);
+        }
+        else if (distribucion.PlanNuevo is { } plan)
         {
             ConsolidarCapitalDesde(Plan!, v);
             CambiarPlan(plan);
         }
         _pagos[operacion.Id] = distribucion;
+    }
+
+    /// <summary>2026-11-27 (feature 028, R4): deja en cero lo movido en el capital de las cuotas del plan anterior que el nuevo ya no tiene. (nuevo)</summary>
+    private void RetirarDelPlan(PlanDePagos anterior, PlanDePagos nuevo)
+    {
+        var quedan = nuevo.Cuotas.Select(c => c.Numero).ToHashSet();
+        foreach (var c in anterior.Cuotas.Where(c => !quedan.Contains(c.Numero)))
+        {
+            var ajuste = SaldoFueraDeCausacion(LoanConcept.Principal, c.Numero);
+            if (ajuste != 0m) SumarSaldo(LoanConcept.Principal, c.Numero, -ajuste);
+        }
     }
 
     /// <summary>Asienta el anticipo aplicado a una cuota en su vencimiento (FR-074, D6): filas <c>AdvanceApplied</c>, sin operación (M10).</summary>
@@ -302,6 +348,13 @@ public sealed class ContextoDeReconstruccion
 /// él (<see cref="ContextoDeReconstruccion.PrelacionCon"/>); el anticipo que cubre una cuota al vencer usa el último sellado por un pago ya aplicado
 /// (<see cref="ContextoDeReconstruccion.PrelacionDelAnticipo"/>). Lo que no lo trae se reparte con la prelación de la línea, como siempre: el parámetro
 /// admite vigencias con fecha pasada, así que leerlo al reconstruir cambiaría pagos ya aplicados.
+/// </para>
+///
+/// <para>
+/// 2026-11-27 (feature 028, R4, T060): la cancelación salvo la cuota causada (<see cref="PaymentModality.PayoffExceptCurrentInstallment"/>) deja la cuota del
+/// período tal como se envió: el pago le causa en su fecha valor el interés del período que le faltaba, corta el plan después de ella y la <b>congela</b>
+/// (<see cref="ContextoDeReconstruccion.Congelar"/>): desde el día siguiente su capital no entra en la base de la corriente mientras no esté vencida; vencida
+/// e impaga, causa mora como cualquiera. El reverso del pago lo saca de la reconstrucción y con él el corte y la congelación.
 /// </para>
 /// </summary>
 public static class ReconstruccionDeCredito
@@ -1052,8 +1105,10 @@ public static class ReconstruccionDeCredito
                 foreach (var q in cuotas)
                     if (q.Vencimiento >= d) { delPeriodo = q.Numero; break; }
                 var noVencido = 0m;
+                // 2026-11-27 (feature 028, R4, T060): la cuota que dejó una cancelación salvo la cuota causada ya lleva el interés del período completo: su
+                // capital no causa interés corriente mientras no esté vencida.
                 for (var i = 0; i < cuotas.Count; i++)
-                    if (!ev.Vencidas[i]) noVencido += _ctx.CapitalPendiente(cuotas[i]);
+                    if (!ev.Vencidas[i] && !_ctx.Congelada(cuotas[i].Numero, d)) noVencido += _ctx.CapitalPendiente(cuotas[i]);
                 if (noVencido > 0m)
                     salida[new ClaveDeCausacion(corriente, delPeriodo)] = new VentanaDeseada(
                         new ParametrosDeVentana(noVencido, tasa.TasaDiariaCorriente, periodo), tasa.CorrienteEA, tasa.TopeDiarioCorriente, tasa.CorrienteTopada, suspendida);

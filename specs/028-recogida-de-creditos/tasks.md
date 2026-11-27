@@ -109,11 +109,11 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 **Objetivo**: el motor puro cancela todo salvo la cuota causada, que queda tal como se envió y congelada.
 **Prueba independiente**: casos dorados que cierran al peso cuando la cuota dejada se paga después.
 
-- [ ] T058 [US4] `ModalidadDePago.PayoffExceptCurrentInstallment = 8` en `App/Common/Integration/Lending/EnumsDelContratoDeCartera.cs`; admitida para `CAR` y `Receipts` en `App/Lending/Payments/ClasesDeMedioDeRecaudo.cs` y el validador del contrato
-- [ ] T059 [US4] Rama `CancelacionSalvoCuota(n)` en `Dom/Lending/Payments/AplicadorDePagos.cs`: cubre todo menos los conceptos de `n`, abona a capital las posteriores, completa el interés del período en `n` si falta (D13-A) y la marca congelada en la decisión
-- [ ] T060 [US4] La reconstrucción respeta la cuota congelada (no causa más interés en `n` hasta su vencimiento) en `Dom/Lending/Replay/ReconstruccionDeCredito.cs` y `EntradaDeReconstruccion.cs`
-- [ ] T061 [P] [US4] Casos dorados: causación diaria, al inicio del ciclo, período calendario, con anticipo, con seguro y administración, cuota `n` parcialmente pagada, pago de `n` después (cierra al peso), en `TD/Lending/Payments/Casos/` y `TD/Lending/Payments/CancelacionSalvoCuotaTests.cs`
-- [ ] T062 [US4] Créditos en UVR: la modalidad no se ofrece (siempre total con explicación) en `LiquidacionDeRecogida`
+- [X] T058 [US4] `ModalidadDePago.PayoffExceptCurrentInstallment = 8` en `App/Common/Integration/Lending/EnumsDelContratoDeCartera.cs`; admitida para `CAR` y `Receipts` en `App/Lending/Payments/ClasesDeMedioDeRecaudo.cs` y el validador del contrato
+- [X] T059 [US4] Rama `CancelacionSalvoCuota(n)` en `Dom/Lending/Payments/AplicadorDePagos.cs`: cubre todo menos los conceptos de `n`, abona a capital las posteriores, completa el interés del período en `n` si falta (D13-A) y la marca congelada en la decisión
+- [X] T060 [US4] La reconstrucción respeta la cuota congelada (no causa más interés en `n` hasta su vencimiento) en `Dom/Lending/Replay/ReconstruccionDeCredito.cs` y `EntradaDeReconstruccion.cs`
+- [X] T061 [P] [US4] Casos dorados: causación diaria, al inicio del ciclo, período calendario, con anticipo, con seguro y administración, cuota `n` parcialmente pagada, pago de `n` después (cierra al peso), en `TD/Lending/Payments/Casos/` y `TD/Lending/Payments/CancelacionSalvoCuotaTests.cs`
+- [X] T062 [US4] Créditos en UVR: la modalidad no se ofrece (siempre total con explicación) en `LiquidacionDeRecogida`
 
 ## Fase 9 — HU4: cuota enviada, libranza, giro posterior y caja (P1, E2)
 

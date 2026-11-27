@@ -136,6 +136,13 @@ public sealed class HuellaDeCartera
                 .Lista("interesNoCobrado", Ordenadas(d.InteresNoCobrado),
                     (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
                 .Canonico();
+        // 2026-11-27 (feature 028, R4): la cuota que deja la cancelación salvo la cuota causada y el interés del período que se causa en ella, sólo si la hay.
+        if (d.CuotaDejada is { } dejada)
+            canonico += "|" + new HuellaDeCartera()
+                .Entero("cuotaDejada", dejada)
+                .Lista("interesDeLaCuotaDejada", Ordenadas(d.InteresDeLaCuotaDejada),
+                    (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
+                .Canonico();
         return DeTexto($"{rulesVersion}|{canonico}");
     }
 

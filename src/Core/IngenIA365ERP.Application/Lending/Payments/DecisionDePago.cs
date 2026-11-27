@@ -90,11 +90,27 @@ public sealed record DecisionDePago
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AccrualPeriod { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): en la cancelación salvo la cuota causada que dejó la cuota (<see cref="Installment"/>), la regla con que la dejó
+    /// (<c>TalComoSeEnvio</c>, D13-A: con el interés del período completo). Nulo en todo lo demás (también si terminó siendo total). Constancia: la
+    /// reconstrucción deja la cuota de <see cref="Installment"/> con la única regla que hay. Sin columna nueva. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LeftInstallmentRule { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): el interés del período que la cancelación salvo la cuota causada causó en la cuota que dejó (cero si ya estaba causado).
+    /// Constancia, como <see cref="Applied"/>: la reconstrucción lo vuelve a proyectar con la usura congelada a la fecha valor, como la cuota completa. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? LeftInstallmentInterest { get; init; }
+
     public string Serializar() => JsonSerializer.Serialize(this, Json);
 
     /// <summary>
     /// El contenido que lee la reconstrucción: valor tomado, modalidad, elección, cuota y, desde el 2026-11-16, si cobra la cuota completa y el orden de
-    /// rubros sellado; desde el 2026-11-24, si se repartió por período calendario.
+    /// rubros sellado; desde el 2026-11-24, si se repartió por período calendario. 2026-11-27 (feature 028): en la cancelación salvo la cuota causada, la cuota
+    /// es la que dejó.
     /// </summary>
     public ContenidoDePago Contenido() =>
         new(Enum.Parse<PaymentModality>(Modality), Applied)

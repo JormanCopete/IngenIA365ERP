@@ -50,6 +50,12 @@ public enum ModalidadDePago
     ExtraordinaryPrincipal = 5,
     SpecificInstallment = 6,
     FreeAmount = 7,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T058; FR-019): todo menos la cuota causada, que queda tal como se envió (D13-A). Sólo la admiten la recogida
+    /// (<c>OwnLoanPayoff</c>) y Recaudo (<c>Receipts</c>); los demás recaudadores reciben <c>Lending.Payment.ModalityNotAllowed</c>. (nuevo)
+    /// </summary>
+    PayoffExceptCurrentInstallment = 8,
 }
 
 /// <summary>Elección del deudor en un abono extraordinario (equivale a <c>PrepaymentChoice</c>). (nuevo)</summary>

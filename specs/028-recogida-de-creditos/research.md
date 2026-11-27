@@ -469,3 +469,45 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - **T057, puerta de E1 (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.239, Application 9.127, Architecture 931 y Shared 774, todas
   verdes. La única que falló fue `LasConsultasDeCarteraRespetanElAlcance` por la vista nueva: se agregó `PayoffsReportQuery.cs` a su lista de consultas con
   alcance (lo aplica `AmbitoDeInformeDeCartera`).
+
+### E-11 — Todo menos la cuota causada en el motor (T058–T062, 2026-11-27)
+- **La cuota que se deja es siempre la del período en curso** (`AplicadorDePagos.CuotaCausada`): la primera que vence después de la fecha valor y cuyo período ya
+  empezó; por período calendario, además, con su tramo empezado. Una cuota pedida (`SolicitudDeDistribucion.Cuota`, la que sella la decisión) sólo vale si es
+  esa misma. Sin cuota en curso (la fecha es un vencimiento, la gracia, un tramo sin empezar) o con otra pedida, la modalidad es la cancelación total con el
+  aviso `Lending.Payment.NoInstallmentToLeave`. Una cuota **ya vencida** (descontada y pendiente de giro) no se deja: la cubre la recogida y lo que gire la
+  pagaduría sigue `Recogida.GiroPosteriorDeCreditoRecogido` (fase 9).
+- **Lo que paga**: todo lo cobrable salvo las cubetas cuya cuota de orden es la dejada (también la parte de la gracia repartida que se le atribuye), con la
+  prelación y el modo de intereses de la cancelación para las demás (la cuota completa nunca se cobra de la dejada; por período calendario se devuelve lo
+  de un tramo sin empezar). El capital de las cuotas siguientes se paga **por cuota**, como en la cancelación (no como abono sin cuota).
+- **El plan** se corta con `GeneradorDePlan.CortarDespuesDe` (no con `Regenerar`/reducir plazo, que recalcularía la cuota dejada): quedan las cuotas hasta la
+  dejada tal como estaban; la entrada queda con Σ capital de esas. La reconstrucción conserva lo movido en el capital de la cuota dejada y deja en cero lo de
+  las que salen (`RetirarDelPlan`). Como sólo salen cuotas cuyo período no ha empezado, no tenían nada causado.
+- **El interés del período que falta** es la proyección de la cuota completa (`InteresPorCausarDeLaCuotaEnCurso`) de esa cuota; se causa en la fecha valor con
+  filas `UnaccruedInstallmentInterest` (el mismo mecanismo de la cuota completa: viaja en el acompañante `AjusteDeCausacionPorFechaValor` y consume lo
+  reconocido al inicio del ciclo) pero **no lo cubre el pago**: queda debiéndose (`DistribucionDePago.InteresDeLaCuotaDejada`).
+- **La congelación** (`ContextoDeReconstruccion.Congelar`): desde el día siguiente, mientras la cuota no esté vencida (hasta su fecha exigible, art. 829), su
+  capital no entra en la base de la corriente. Vencida e impaga causa mora como cualquiera. El seguro y la administración de la cuota **siguen causándose
+  como dice el plan** hasta su vencimiento (no se adelantan): por eso `ValorParaCancelarSalvoCuota.QuedaEnLaCuota` suma el seguro y la administración del
+  plan, no los causados a la fecha.
+- **El anticipo**: se usa primero el de las cuotas que salen, después el general, el de la cuota dejada y el de las anteriores; así la cuota queda debiéndose
+  completa y su canal la cierra al peso. Lo que sobre del de las cuotas que salen pasa al anticipo general (en la distribución, como anticipo usado de esa
+  cuota y anticipo recibido sin cuota).
+- **Fondos que no alcanzan lo demás**: cancelación parcial sobre todo menos la cuota (sella la cuota pedida), sin cortar el plan ni congelar nada.
+- **La decisión** sella la cuota en `Installment` (aunque la haya decidido el aplicador), `LeftInstallmentRule = TalComoSeEnvio` (D13-A) y
+  `LeftInstallmentInterest`, estos dos como constancia: la reconstrucción vuelve a proyectar el interés con la usura congelada a la fecha valor, como la cuota
+  completa. El comprobante repetido lleva el aviso `Lending.Payment.CurrentInstallmentLeft`.
+- **T062 se amplió a toda vivienda** (en UVR o con las reglas de vivienda en pesos): dejar la cuota con el interés del período sobre todo el saldo cobraría
+  interés del capital que se prepaga, y la Ley 546 de 1999 no admite penalidad por prepago. Se aplica como cancelación total con el aviso
+  `Lending.Payment.HousingPaidOffInFull`, también dentro de la reconstrucción en UVR (lo detecta la versión de reglas). `LiquidacionDeCreditoRecogido` gana
+  `AdmiteDejarLaCuota`, `RecogidoCompletoPorque` y `TratamientoEfectivo` (pedir «Excluir» a uno que no lo admite es «Incluir»); sin reconstrucción tampoco se
+  admite. **Confirmar con el dueño** la vivienda en pesos.
+- **T058**: la admisión por recaudador vive en `ClasesDeMedioDeRecaudo.AdmiteModalidad`/`ValidarModalidad` (sólo `OwnLoanPayoff` y `Receipts`; también se
+  rechaza `Test`) y la revisan `AplicacionDePagos.AplicarAsync` y la simulación del contrato (también en los pagos anteriores del recibo) con
+  `Lending.Payment.ModalityNotAllowed`. El validador admite simular sin valor (como la cancelación total) y una cuota pedida mayor que cero. El listado y el
+  detalle del contrato **no la anuncian todavía** en `AdmittedModalities` (la caja la ofrecerá con `Pagos.CuotaEnviadaAlCancelar`, fase 9). La modalidad cuenta
+  como cancelación para el modo de intereses, el sello de la cuota completa y el tope legal del prepago (`AplicacionDePagos.PuedeCancelar`). Sin migración:
+  `LND_LoanOperations.PaymentModality` es entero. `TextosDePagos` de Shared (pantallas) no se tocó: es de la fase 9.
+- Casos dorados a mano en `Domain.Tests/Lending/Payments/Casos/` (01 causación diaria con pago tardío, reverso, otra cuota pedida y fondos insuficientes; 02 al
+  inicio del ciclo; 03 período calendario con tramo en curso, sin tramo y cuota parcialmente pagada; 04 anticipo general, de la cuota dejada y de una cuota
+  que sale; 05 seguro y administración), con `CancelacionSalvoCuotaTests` (simular = aplicar, valor sin aplicar, cierre al peso, causar día a día = reconstruir,
+  vivienda) y `CancelacionSalvoCuotaEnElContratoTests` (Application).

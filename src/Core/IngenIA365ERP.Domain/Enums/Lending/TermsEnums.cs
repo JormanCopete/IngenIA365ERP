@@ -61,6 +61,12 @@ public enum PaymentModality
     ExtraordinaryPrincipal = 5,
     SpecificInstallment = 6,
     FreeAmount = 7,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T058; FR-019): todo menos la cuota causada —la del período en curso—, que queda en el crédito tal como se envió (D13-A)
+    /// para que la pague su canal de siempre; las cuotas posteriores se pagan a capital y salen del plan. La admiten la recogida y la caja. (nuevo)
+    /// </summary>
+    PayoffExceptCurrentInstallment = 8,
 }
 
 /// <summary>Elección del deudor ante un abono extraordinario a capital (FR-075, D24).</summary>

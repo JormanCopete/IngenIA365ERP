@@ -54,6 +54,15 @@ public static class ErroresDeRecogida
     public const string MotivoSinSaldo = "NoBalance";
     public const string MotivoNoActivo = "NotActive";
 
+    /// <summary>2026-11-27 (feature 028, T062): por qué un crédito de vivienda se recoge completo aunque se pida dejar la cuota causada. (nuevo)</summary>
+    public const string MotivoViviendaCompleta =
+        "Un crédito de vivienda (en UVR o en pesos) se recoge completo: dejar la cuota causada con el interés del período sobre todo el saldo cobraría "
+        + "interés del capital que se prepaga, y la Ley 546 de 1999 no admite penalidad por prepago.";
+
+    /// <summary>2026-11-27 (feature 028, T062): por qué un crédito sin condiciones selladas se recoge completo. (nuevo)</summary>
+    public const string MotivoSinReconstruccionCompleta =
+        "El crédito no tiene condiciones selladas: se recoge completo, con la cuota causada.";
+
     public static BloqueoDeRecogida EnMora(string numero, int dias) => new(CodigoRequiereReestructuracion, MotivoEnMora,
         $"El crédito {numero} tiene {dias} {(dias == 1 ? "día" : "días")} de mora: recogerlo es una reestructuración. Tramítela en Novedades como una "
         + "refinanciación que lo recoge.");
@@ -238,13 +247,30 @@ public sealed record LiquidacionDeCreditoRecogido
 
     public FuenteDeLaLiquidacion Fuente { get; init; } = FuenteDeLaLiquidacion.Reconstruccion;
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T062): ¿se le puede dejar la cuota causada («todo menos la cuota causada», <c>Recogida.CuotaCausada = Excluir</c>)? No a un
+    /// crédito de vivienda —en UVR o en pesos—, que se recoge completo (<see cref="RecogidoCompletoPorque"/>), ni a uno sin reconstrucción. De fábrica
+    /// (<c>Incluir</c>) no se mira. (nuevo)
+    /// </summary>
+    public bool AdmiteDejarLaCuota { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T062): por qué se recoge completo aunque se pida dejar la cuota causada; nulo si se puede dejar. (nuevo)</summary>
+    public string? RecogidoCompletoPorque { get; init; }
+
     public bool Recogible => Bloqueos.Count == 0;
 
     public BloqueoDeRecogida? Bloqueo => Bloqueos.Count == 0 ? null : Bloqueos[0];
 
-    /// <summary>Lo que guarda la solicitud (<c>LND_CreditApplicationPayoffs</c>) con el tratamiento de la cuota causada ya resuelto (en E1, incluirla).</summary>
+    /// <summary>
+    /// Lo que guarda la solicitud (<c>LND_CreditApplicationPayoffs</c>) con el tratamiento de la cuota causada ya resuelto (en E1, incluirla). 2026-11-27
+    /// (feature 028, T062): pedir que se excluya a un crédito que no lo admite (<see cref="AdmiteDejarLaCuota"/>) es incluirla: se recoge completo.
+    /// </summary>
     public ProyeccionDeRecogida Proyeccion(InstallmentTreatment tratamiento = InstallmentTreatment.Include) =>
-        new(Fecha, InformacionHasta, Desglose, Huella, Intereses.Efectivo, tratamiento, CuotaCausada);
+        new(Fecha, InformacionHasta, Desglose, Huella, Intereses.Efectivo, TratamientoEfectivo(tratamiento), CuotaCausada);
+
+    /// <summary>2026-11-27 (feature 028, T062): el tratamiento que rige: excluir sólo si se admite dejar la cuota; si no, incluirla. (nuevo)</summary>
+    public InstallmentTreatment TratamientoEfectivo(InstallmentTreatment pedido) =>
+        pedido == InstallmentTreatment.Exclude && !AdmiteDejarLaCuota ? InstallmentTreatment.Include : pedido;
 }
 
 /// <summary>
@@ -364,6 +390,9 @@ public sealed class LiquidacionDeRecogida(
             CuotaCausada = CuotaCausada(estado, calendario), SaldoAFavorSinDescontar = Math.Max(0m, estado.SaldoAFavor),
             Huella = huella, Avisos = avisos, ExplicacionDelInteres = renglones, ReconocidoQueSeLibera = liberado,
             Fuente = FuenteDeLaLiquidacion.Reconstruccion,
+            // 2026-11-27 (feature 028, T062): un crédito de vivienda se recoge completo (el motor aplica así la cancelación salvo cuota, con su aviso).
+            AdmiteDejarLaCuota = !SeRecogeCompleto(estado),
+            RecogidoCompletoPorque = SeRecogeCompleto(estado) ? ErroresDeRecogida.MotivoViviendaCompleta : null,
         };
     }
 
@@ -450,7 +479,21 @@ public sealed class LiquidacionDeRecogida(
             ValorARecoger = valor, Desglose = desglose, Intereses = ModoDeInteresesAlCancelar.Corrido, Proporcionales = proporcionales,
             DiasDeMora = dias, Bloqueos = Bloqueos(credito, insolvencia, dias, valor), SaldoAFavorSinDescontar = Math.Max(0m, posicion?.CreditBalance ?? 0m),
             Huella = "sha256:" + HuellaDeCartera.DeTexto(huella), Avisos = avisos, Fuente = fuente,
+            // 2026-11-27 (feature 028, T062): sin reconstrucción el contrato no tiene con qué dejar la cuota: se recoge completo.
+            AdmiteDejarLaCuota = false,
+            RecogidoCompletoPorque = ErroresDeRecogida.MotivoSinReconstruccionCompleta,
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T062): ¿se recoge completo aunque se pida dejar la cuota causada? Un crédito de vivienda —en UVR o con las reglas de vivienda en
+    /// pesos—: dejar la cuota con el interés del período sobre todo el saldo cobraría interés del capital que se prepaga (Ley 546 de 1999, sin penalidad).
+    /// La misma regla que el motor (<see cref="AplicadorDePagos.AvisoViviendaSeCancelaCompleto"/>). (nuevo)
+    /// </summary>
+    public static bool SeRecogeCompleto(EstadoDelCredito estado)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.EnUvr || VersionesDeReglas.EsDeVivienda(estado.RulesVersion);
     }
 
     /// <summary>Lo que impide recogerlo, en este orden: castigado o no activo, insolvencia que negocia, mora (reestructuración) y sin saldo.</summary>

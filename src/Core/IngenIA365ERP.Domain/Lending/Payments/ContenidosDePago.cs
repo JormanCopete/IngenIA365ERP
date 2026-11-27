@@ -14,6 +14,10 @@ public sealed record ContenidoDePago(PaymentModality Modalidad, decimal Valor)
 {
     public PrepaymentChoice? Eleccion { get; init; }
 
+    /// <summary>
+    /// La cuota específica. 2026-11-27 (feature 028, R4, T059): en <see cref="PaymentModality.PayoffExceptCurrentInstallment"/>, la cuota causada que el pago
+    /// dejó, sellada en su decisión (<c>Installment</c>): la reconstrucción deja esa misma o, si ya no es la del período en curso, cancela todo.
+    /// </summary>
     public int? Cuota { get; init; }
 
     /// <summary>

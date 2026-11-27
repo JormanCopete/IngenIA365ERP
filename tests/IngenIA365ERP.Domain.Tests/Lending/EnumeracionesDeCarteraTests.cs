@@ -74,7 +74,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(GraceKind)] = [("None", 0), ("Principal", 1), ("Total", 2)],
         [typeof(GraceInterestTreatment)] = [("FirstInstallment", 1), ("Distributed", 2)],
         [typeof(PaymentModality)] = [("FullPayoff", 1), ("PastDue", 2), ("CycleInstallment", 3), ("Advance", 4), ("ExtraordinaryPrincipal", 5),
-            ("SpecificInstallment", 6), ("FreeAmount", 7)],
+            ("SpecificInstallment", 6), ("FreeAmount", 7), ("PayoffExceptCurrentInstallment", 8)],
         [typeof(PrepaymentChoice)] = [("ReduceTerm", 1), ("ReduceInstallment", 2)],
         [typeof(AllocationOrder)] = [("OldestInstallmentFirst", 1), ("ConceptFirst", 2)],
         [typeof(RoundingMoment)] = [("PerConcept", 1), ("PerInstallment", 2), ("PerTotal", 3)],

@@ -404,6 +404,35 @@ public static class GeneradorDePlan
         };
     }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): el plan que deja la cancelación salvo la cuota causada: las cuotas hasta <paramref name="ultima"/> (la que se deja)
+    /// <b>tal como estaban</b> —capital, interés, seguros, tramos— y sin las siguientes, que el pago canceló a capital (reducir plazo). No se regenera nada: la
+    /// cuota que queda es la que se envió. El monto de la entrada pasa a ser Σ capital de las que quedan. Si no hay cuotas después, el mismo plan. Pura. (nuevo)
+    /// </summary>
+    /// <param name="anterior">El plan vigente.</param>
+    /// <param name="ultima">El número de la última cuota que queda.</param>
+    /// <param name="fecha">La fecha valor del pago (sólo para la explicación).</param>
+    public static PlanDePagos CortarDespuesDe(PlanDePagos anterior, int ultima, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(anterior);
+        var quedan = anterior.Cuotas.Where(c => c.Numero <= ultima).ToList();
+        if (quedan.Count == anterior.Cuotas.Count) return anterior;
+        if (quedan.Count == 0)
+            throw new ArgumentOutOfRangeException(nameof(ultima), ultima, "La cuota que se deja tiene que ser del plan.");
+        var salen = anterior.Cuotas.Count - quedan.Count;
+        var explicacion = new ExplicacionDeCartera().Agregar(anterior.Explicacion)
+            .Linea($"El {ExplicacionDeCartera.Fecha(fecha)} el pago dejó la cuota {ultima.ToString(Inv)} tal como estaba y canceló a capital las "
+                + $"{salen.ToString(Inv)} siguientes, que salen del plan.");
+        return anterior with
+        {
+            Entrada = anterior.Entrada with { Monto = quedan.Sum(c => c.Capital) },
+            Cuotas = quedan,
+            ResiduoDeLaUltimaCuota = 0m,
+            Explicacion = explicacion,
+            PrimeraCuotaRegenerada = ultima,
+        };
+    }
+
     /// <summary>Las condiciones de una novedad no alcanzan para regenerar el plan (K3).</summary>
     public const string CodigoNovedadInvalida = "Lending.Novelty.InvalidTerms";
 

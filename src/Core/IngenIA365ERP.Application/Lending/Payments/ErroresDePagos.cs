@@ -136,6 +136,13 @@ public static class ErroresDePagos
     public static Error DestinoAjeno() => new(CodigoDestinoAjeno,
         "El saldo a favor sólo se aplica a otra obligación del mismo deudor.");
 
+    /// <summary>2026-11-27 (feature 028, T058): la modalidad no la admite esa clase de recaudador (la cancelación salvo la cuota causada). (nuevo)</summary>
+    public static Error ModalidadNoAdmitidaPara(ModalidadDePago modalidad, ClaseDeRecaudador recaudador) => new ErrorConDatos(CodigoModalidadNoAdmitida,
+        modalidad == ModalidadDePago.PayoffExceptCurrentInstallment
+            ? "Cancelar todo menos la cuota causada sólo lo admiten la recogida al desembolsar y la caja de Recaudo: aplique una cancelación total."
+            : $"El recaudador de clase {recaudador} no admite la modalidad {modalidad}.",
+        new { modality = modalidad.ToString(), collectorClass = recaudador.ToString() });
+
     public static Error ResolucionNoAdmitida() => new ErrorConDatos(CodigoModalidadNoAdmitida,
         "Sólo un saldo a favor que nació de un abono sin preferencia se aplica como abono a capital.", new { form = nameof(FormaDeResolucion.ApplyAsExtraordinaryPrincipal) });
 

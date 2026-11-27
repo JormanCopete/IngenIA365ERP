@@ -100,6 +100,9 @@ public sealed class SolicitudDeAplicacionValidator : AbstractValidator<Solicitud
             p.RuleFor(i => i.Receipt.Number).NotEmpty().MaximumLength(40).When(i => i.Receipt is not null).WithErrorCode("ReceiptNumber");
             p.RuleFor(i => i.InstallmentNumber).NotNull().GreaterThan(0).When(i => i.Modality == ModalidadDePago.SpecificInstallment)
                 .WithErrorCode("InstallmentNumber").WithMessage("El pago a una cuota específica indica la cuota.");
+            // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada puede decir qué cuota deja (la del período en curso).
+            p.RuleFor(i => i.InstallmentNumber).GreaterThan(0).When(i => i.Modality == ModalidadDePago.PayoffExceptCurrentInstallment && i.InstallmentNumber is not null)
+                .WithErrorCode("InstallmentNumber").WithMessage("La cuota que se deja es una cuota del plan.");
             p.RuleFor(i => i.Choice).Null().When(i => i.Modality != ModalidadDePago.ExtraordinaryPrincipal)
                 .WithErrorCode("Choice").WithMessage("La elección sólo va en un abono extraordinario.");
             p.RuleFor(i => i.Choice).IsInEnum().When(i => i.Choice is not null).WithErrorCode("Choice");
@@ -187,8 +190,10 @@ public sealed class SolicitudDeSimulacionValidator : AbstractValidator<Solicitud
         RuleFor(x => x.ObligationPublicId).NotEmpty().When(x => x.PaymentIdempotencyKeyToReverse is null).WithErrorCode("ObligationPublicId");
         RuleFor(x => x.Modality).IsInEnum().WithErrorCode("Modality");
         RuleFor(x => x.Amount).GreaterThanOrEqualTo(0m).WithErrorCode("Amount");
+        // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, como la total, se simula sin valor (cuesta lo que cueste).
         RuleFor(x => x.Amount).GreaterThan(0m).When(x => x.PaymentIdempotencyKeyToReverse is null
-                                                         && x.Modality is not (ModalidadDePago.FullPayoff or ModalidadDePago.PastDue))
+                                                         && x.Modality is not (ModalidadDePago.FullPayoff or ModalidadDePago.PastDue
+                                                             or ModalidadDePago.PayoffExceptCurrentInstallment))
             .WithErrorCode("Amount").WithMessage("El valor del pago es mayor que cero.");
         RuleFor(x => x.ValueDate).NotEqual(default(DateOnly)).When(x => x.PaymentIdempotencyKeyToReverse is null).WithErrorCode("ValueDate");
         RuleFor(x => x.InstallmentNumber).NotNull().GreaterThan(0).When(x => x.Modality == ModalidadDePago.SpecificInstallment
@@ -203,7 +208,8 @@ public sealed class SolicitudDeSimulacionValidator : AbstractValidator<Solicitud
         RuleForEach(x => x.Previous).ChildRules(p =>
         {
             p.RuleFor(x => x.Modality).IsInEnum().WithErrorCode("Previous.Modality");
-            p.RuleFor(x => x.Amount).GreaterThan(0m).When(x => x.Modality is not (ModalidadDePago.FullPayoff or ModalidadDePago.PastDue))
+            p.RuleFor(x => x.Amount).GreaterThan(0m).When(x => x.Modality is not (ModalidadDePago.FullPayoff or ModalidadDePago.PastDue
+                                                                         or ModalidadDePago.PayoffExceptCurrentInstallment))
                 .WithErrorCode("Previous.Amount").WithMessage("El valor de cada pago anterior es mayor que cero.");
             p.RuleFor(x => x.Amount).GreaterThanOrEqualTo(0m).WithErrorCode("Previous.Amount");
             p.RuleFor(x => x.InstallmentNumber).NotNull().GreaterThan(0).When(x => x.Modality == ModalidadDePago.SpecificInstallment)

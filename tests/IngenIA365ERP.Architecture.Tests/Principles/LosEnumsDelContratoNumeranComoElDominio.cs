@@ -123,7 +123,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
     public void Los_enums_del_contrato_de_obligaciones_llevan_los_numeros_de_data_model()
     {
         static Dictionary<string, int> Valores<T>() where T : struct, Enum => Enum.GetValues<T>().ToDictionary(v => v.ToString(), v => Convert.ToInt32(v));
-        Assert.Equal(new Dictionary<string, int> { ["FullPayoff"] = 1, ["PastDue"] = 2, ["CycleInstallment"] = 3, ["Advance"] = 4, ["ExtraordinaryPrincipal"] = 5, ["SpecificInstallment"] = 6, ["FreeAmount"] = 7 },
+        Assert.Equal(new Dictionary<string, int> { ["FullPayoff"] = 1, ["PastDue"] = 2, ["CycleInstallment"] = 3, ["Advance"] = 4, ["ExtraordinaryPrincipal"] = 5, ["SpecificInstallment"] = 6, ["FreeAmount"] = 7,
+                ["PayoffExceptCurrentInstallment"] = 8 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.ModalidadDePago>());
         Assert.Equal(new Dictionary<string, int> { ["DeductionCap"] = 1, ["InsufficientNet"] = 2, ["Termination"] = 3, ["Leave"] = 4, ["Disability"] = 5, ["DeductionPriority"] = 6, ["Other"] = 99 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>());

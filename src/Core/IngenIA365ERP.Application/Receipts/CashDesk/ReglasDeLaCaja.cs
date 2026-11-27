@@ -428,6 +428,7 @@ public sealed class ReglasDeLaCaja(
         ModalidadDePago.ExtraordinaryPrincipal => "abono extraordinario a capital",
         ModalidadDePago.SpecificInstallment => "cuota específica",
         ModalidadDePago.FreeAmount => "valor libre",
+        ModalidadDePago.PayoffExceptCurrentInstallment => "todo menos la cuota causada",
         _ => m.ToString(),
     };
 }

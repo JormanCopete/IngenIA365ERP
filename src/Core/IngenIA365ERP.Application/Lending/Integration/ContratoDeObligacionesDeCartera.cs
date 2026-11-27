@@ -161,8 +161,13 @@ public sealed class ContratoDeObligacionesDeCartera(
     /// dominio ya admite (<c>AplicadorDePagos.Problema</c> sólo la bloquea con exigibles anteriores)—.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada no se anuncia todavía: la ofrecen la recogida y, con la fase 9, la caja según
+    /// <c>Pagos.CuotaEnviadaAlCancelar</c>; el contrato la admite al simular y aplicar para esos recaudadores.
+    /// </remarks>
     private static List<ModalidadDePago> Admitidas(Loan credito, CreditoCargado cargado, EstadoDelCredito estado) =>
         Enum.GetValues<ModalidadDePago>()
+            .Where(m => m != ModalidadDePago.PayoffExceptCurrentInstallment)
             .Where(m => m != ModalidadDePago.SpecificInstallment || cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden
                 || ComprobantesDePago.Exigible(estado) <= 0m)
             .Where(m => m != ModalidadDePago.Advance || credito.Status != LoanStatus.WrittenOff)
@@ -287,6 +292,9 @@ public sealed class ContratoDeObligacionesDeCartera(
                 return Rechazo<SimulacionDePagoDto>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
             if (await fechas.ValidarAsync(solicitud.Collector.Class, solicitud.ValueDate, solicitud.Amount, ct) is { } fecha)
                 return Rechazo<SimulacionDePagoDto>(fecha);
+            // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, sólo la recogida y Recaudo (también en los pagos anteriores del recibo).
+            foreach (var m in (solicitud.Previous ?? []).Select(x => x.Modality).Prepend(solicitud.Modality))
+                if (ClasesDeMedioDeRecaudo.ValidarModalidad(solicitud.Collector.Class, m) is { } noAdmitida) return Rechazo<SimulacionDePagoDto>(noAdmitida);
             // 2026-11-26 (pedido del dueño): sobre lo que dejan los pagos anteriores del mismo recibo a esta obligación, en su orden.
             var previos = (solicitud.Previous ?? []).Select(x => new PagoPrevioDeDistribucion(ComprobantesDePago.Modalidad(x.Modality), x.Amount,
                 ComprobantesDePago.Eleccion(x.Choice), x.InstallmentNumber)).ToList();
