@@ -208,6 +208,21 @@ public class CobroMultipleTests
     }
 
     [Fact]
+    public void El_descuento_por_pago_anticipado_que_llega_con_la_simulacion_baja_el_efectivo_propuesto()
+    {
+        // 2026-11-27 (COOFLOPAL, CR-000010): la caja fijaba el cobro con la cuota completa antes de simular y la simulación traía el descuento
+        // sin volver a fijarlo: el diálogo de medios pedía 303.683,06 en vez de 272.761,06. La pantalla vuelve a fijar el total tras simular.
+        var cobro = new CobroMultiple(303683.06m);
+        cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true));
+
+        cobro.CambiarAPagar(303683.06m - 30922m);
+
+        cobro.Pagos.Single().Monto.Should().Be(272761.06m);
+        cobro.Vueltas.Should().Be(0m);
+        cobro.Problema().Should().BeNull();
+    }
+
+    [Fact]
     public void El_efectivo_recibido_que_alcanza_se_conserva_y_da_las_vueltas_nuevas()
     {
         var cobro = new CobroMultiple(43000m);
