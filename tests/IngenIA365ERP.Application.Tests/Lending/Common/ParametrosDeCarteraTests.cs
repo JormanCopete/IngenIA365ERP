@@ -26,6 +26,14 @@ public class ParametrosDeCarteraTests
         { "Pagos.InteresesAlPagarAntesDelVencimiento", "Corrido", [N, L], EntregaDeCartera.K1 },
         // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado en caja, por empresa y por línea (0 = sin descuento).
         { "Pagos.DescuentoPorPagoAnticipado", "0", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-27 (feature 028): la recogida de créditos y productos en el desembolso; cada defecto es lo de siempre.
+        { "Pagos.CuotaEnviadaAlCancelar", "Incluir", [N, L], EntregaDeCartera.K1 },
+        { "Recogida.CuotaCausada", "Incluir", [N, L], EntregaDeCartera.K1 },
+        { "Recogida.InteresesProporcionales", "ComoAlCancelar", [N, L], EntregaDeCartera.K1 },
+        { "Recogida.ProductosAdmitidos", "Creditos:Total,Parcial", [N, L], EntregaDeCartera.K1 },
+        { "Recogida.AlDesembolsar", "Recalcular", [N, L], EntregaDeCartera.K1 },
+        { "Recogida.ToleranciaDeDiferencia", "", [N], EntregaDeCartera.K1 },
+        { "Recogida.GiroPosteriorDeCreditoRecogido", "SaldoDeLaPagaduria", [N], EntregaDeCartera.K1 },
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         { "Pagos.PrelacionDeRubros", "Seguro,Administracion,Interes,CuotasExtras,Capital", [N], EntregaDeCartera.K1 },
         { "Mora.ToleranciaDeSaldoVencido", "0", [N, L], EntregaDeCartera.K1 },

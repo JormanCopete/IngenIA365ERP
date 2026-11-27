@@ -159,6 +159,13 @@ public class EnumeracionesDeCarteraTests
         [typeof(BulkChargeSource)] = [("Filters", 1), ("File", 2)],
         [typeof(BulkChargeChannelMode)] = [("Fixed", 1), ("FromAssociate", 2)],
         [typeof(BulkChargeCounterpart)] = [("Debtor", 1), ("Person", 2)],
+        // 2026-11-27 (feature 028): la recogida de créditos y productos en el desembolso.
+        [typeof(PayoffProductKind)] = [("Loan", 1), ("Account", 2), ("CommercialReceivable", 3)],
+        [typeof(PayoffMode)] = [("Total", 1), ("Partial", 2), ("Installments", 3), ("Deposit", 4)],
+        [typeof(InstallmentTreatment)] = [("Include", 1), ("Exclude", 2)],
+        [typeof(PayoffDifferenceCause)] = [("None", 0), ("Payments", 1), ("Accrual", 2), ("Arrears", 4), ("CurrentInstallment", 8), ("Parameters", 16),
+            ("ProductClosed", 32), ("Other", 64)],
+        [typeof(SentInstallmentState)] = [("None", 0), ("SentWithoutResponse", 1), ("DeductedPendingTransfer", 2), ("NotDeducted", 3), ("OwnPayroll", 4)],
         [typeof(LendingProcessRunStatus)] = [("Requested", 0), ("Running", 1), ("Completed", 2), ("CompletedWithErrors", 3), ("Failed", 4)],
         [typeof(AccountingFactPartSource)] = [("DailyCycleBatch", 1), ("LoanCatchUp", 2), ("NationalValueCorrectionBatch", 3), ("MonthlyClose", 4),
             ("CloseReopening", 5), ("AccountCatchUp", 6), ("PeriodRecognition", 7), ("CutoverRecalculation", 8)],

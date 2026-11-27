@@ -82,6 +82,92 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string PagosDescuentoPorPagoAnticipado = "Pagos.DescuentoPorPagoAnticipado";
 
+    /// <summary>
+    /// 2026-11-27 (pedido del dueño; feature 028, D4): si una cancelación en caja cobra la cuota ya enviada a la pagaduría o a la nómina propia:
+    /// <see cref="CuotaIncluir"/> (de fábrica, lo de siempre: la cancela entera), <see cref="CuotaExcluir"/> (propone cancelar todo menos esa cuota,
+    /// que queda tal como se envió) o <see cref="CuotaPreguntar"/> (el cajero elige). La caja siempre avisa que la cuota está enviada. Por empresa y por
+    /// línea del crédito que se cancela. (nuevo)
+    /// </summary>
+    public const string PagosCuotaEnviadaAlCancelar = "Pagos.CuotaEnviadaAlCancelar";
+
+    // --------------------------------------------------------------------- recogida de créditos y productos (feature 028) --
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU4, D1 y D2): qué se recoge de la cuota causada del crédito recogido: <see cref="CuotaIncluir"/> (de fábrica, lo de
+    /// siempre: todo, incluida la cuota causada), <see cref="CuotaExcluir"/> (todo menos la cuota causada, que queda tal como se envió) o
+    /// <see cref="CuotaPreguntar"/> (el asesor elige por crédito). Se lee con la línea del <b>crédito que se recoge</b>. (nuevo)
+    /// </summary>
+    public const string RecogidaCuotaCausada = "Recogida.CuotaCausada";
+
+    /// <summary>Los valores de <see cref="RecogidaCuotaCausada"/> y de <see cref="PagosCuotaEnviadaAlCancelar"/>.</summary>
+    public const string CuotaIncluir = "Incluir";
+
+    /// <inheritdoc cref="CuotaIncluir"/>
+    public const string CuotaExcluir = "Excluir";
+
+    /// <inheritdoc cref="CuotaIncluir"/>
+    public const string CuotaPreguntar = "Preguntar";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU5): cómo se cobra el interés del crédito recogido a la fecha del desembolso: <see cref="ProporcionalesComoAlCancelar"/>
+    /// (de fábrica, lo de siempre: lo que diga <see cref="PagosInteresesAlPagarAntesDelVencimiento"/>), <see cref="ProporcionalesSi"/> (se devuelve o
+    /// se cobra el proporcional a la fecha: «Corrido») o <see cref="ProporcionalesNo"/> (se cobra completo el interés de la cuota en curso:
+    /// «CuotaCompleta»). En vivienda y dentro del tope legal del prepago siempre el proporcional. Se lee con la línea del crédito que se recoge. (nuevo)
+    /// </summary>
+    public const string RecogidaInteresesProporcionales = "Recogida.InteresesProporcionales";
+
+    /// <summary>Los valores de <see cref="RecogidaInteresesProporcionales"/>.</summary>
+    public const string ProporcionalesComoAlCancelar = "ComoAlCancelar";
+
+    /// <inheritdoc cref="ProporcionalesComoAlCancelar"/>
+    public const string ProporcionalesSi = "Si";
+
+    /// <inheritdoc cref="ProporcionalesComoAlCancelar"/>
+    public const string ProporcionalesNo = "No";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU6 e HU7): qué productos y de qué forma recoge un crédito nuevo, como texto <c>Producto:modo,modo;Producto:modo</c>
+    /// (<see cref="Payoffs.ProductosAdmitidos"/>). De fábrica, sólo créditos, total o parcial (lo de siempre). Se lee con la línea del <b>crédito
+    /// nuevo</b>. (nuevo)
+    /// </summary>
+    public const string RecogidaProductosAdmitidos = "Recogida.ProductosAdmitidos";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU3, D5): si el desembolso aplica lo de ahora (<see cref="AlDesembolsarRecalcular"/>, de fábrica) o lo proyectado en la
+    /// solicitud (<see cref="AlDesembolsarMantenerLoProyectado"/>, topado en lo que cancela: el producto puede quedar con saldo). Se lee con la línea
+    /// del crédito nuevo. (nuevo)
+    /// </summary>
+    public const string RecogidaAlDesembolsar = "Recogida.AlDesembolsar";
+
+    /// <summary>Los valores de <see cref="RecogidaAlDesembolsar"/>.</summary>
+    public const string AlDesembolsarRecalcular = "Recalcular";
+
+    /// <inheritdoc cref="AlDesembolsarRecalcular"/>
+    public const string AlDesembolsarMantenerLoProyectado = "MantenerLoProyectado";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU3, D6): la diferencia, en pesos, entre lo proyectado y lo de ahora desde la cual el desembolso se bloquea y pide
+    /// devolver la solicitud (<c>Lending.Payoff.DifferenceAboveTolerance</c>). Vacía de fábrica: nunca bloquea, sólo se avisa y se reconoce. Sólo
+    /// general. (nuevo)
+    /// </summary>
+    public const string RecogidaToleranciaDeDiferencia = "Recogida.ToleranciaDeDiferencia";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU4, D3): qué se hace con lo que la pagaduría gira después por un crédito ya recogido:
+    /// <see cref="GiroPosteriorSaldoDeLaPagaduria"/> (de fábrica, lo de siempre: queda como saldo de la pagaduría), <see cref="GiroPosteriorAlCreditoNuevo"/>
+    /// (se aplica al crédito que lo recogió) o <see cref="GiroPosteriorAFavorDelAsociado"/> (queda como saldo a favor de la persona). Sólo general. (nuevo)
+    /// </summary>
+    public const string RecogidaGiroPosteriorDeCreditoRecogido = "Recogida.GiroPosteriorDeCreditoRecogido";
+
+    /// <summary>Los valores de <see cref="RecogidaGiroPosteriorDeCreditoRecogido"/>.</summary>
+    public const string GiroPosteriorSaldoDeLaPagaduria = "SaldoDeLaPagaduria";
+
+    /// <inheritdoc cref="GiroPosteriorSaldoDeLaPagaduria"/>
+    public const string GiroPosteriorAlCreditoNuevo = "AlCreditoNuevo";
+
+    /// <inheritdoc cref="GiroPosteriorSaldoDeLaPagaduria"/>
+    public const string GiroPosteriorAFavorDelAsociado = "AFavorDelAsociado";
+
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
 
@@ -708,6 +794,47 @@ public static class ParametrosDeCartera
         {
             Minimo = 0m, Maximo = 1m,
         },
+        // 2026-11-27 (feature 028, D4): la cuota ya enviada a la pagaduría en una cancelación en caja, por empresa y por línea.
+        Eleccion(Modulo, PagosCuotaEnviadaAlCancelar,
+            "¿Una cancelación en caja cobra la cuota ya enviada a la pagaduría o a la nómina propia? «Incluir»: la cancela entera, como siempre. "
+            + "«Excluir»: propone cancelar todo menos esa cuota, que queda tal como se envió y la paga la pagaduría. «Preguntar»: el cajero elige. "
+            + "La caja siempre avisa que la cuota está enviada.",
+            [CuotaIncluir, CuotaExcluir, CuotaPreguntar], CuotaIncluir, K1, General, Linea),
+        // 2026-11-27 (feature 028): la recogida de créditos y productos en el desembolso.
+        Eleccion(Modulo, RecogidaCuotaCausada,
+            "¿Qué se recoge de la cuota causada del crédito que se recoge? «Incluir»: todo, incluida la cuota causada, como siempre. «Excluir»: todo "
+            + "menos la cuota causada, que queda tal como se envió a la pagaduría o a la nómina y se paga por su canal. «Preguntar»: el asesor elige "
+            + "por crédito. Rige la línea del crédito que se recoge.",
+            [CuotaIncluir, CuotaExcluir, CuotaPreguntar], CuotaIncluir, K1, General, Linea),
+        Eleccion(Modulo, RecogidaInteresesProporcionales,
+            "¿Se cobran o devuelven los intereses proporcionales a la fecha de la recogida? «ComoAlCancelar»: lo que diga «¿Devuelve los días no "
+            + "corridos al cancelar?», como siempre. «Si»: se devuelve el interés ya causado de los días que faltan, o se cobra el de los días que no "
+            + "se han causado. «No»: se cobra completo el interés de la cuota en curso. En vivienda y dentro del tope legal del prepago siempre se "
+            + "cobra el proporcional. Rige la línea del crédito que se recoge.",
+            [ProporcionalesComoAlCancelar, ProporcionalesSi, ProporcionalesNo], ProporcionalesComoAlCancelar, K1, General, Linea),
+        Texto(RecogidaProductosAdmitidos,
+            "Qué productos y de qué forma recoge un crédito nuevo, como «Producto:modo,modo;Producto:modo». Productos y modos: Creditos (Total, "
+            + "Parcial), Aportes (Cuotas, Abono), AhorroALaVista (Abono), AhorroPermanente (Abono), AhorroContractual (Cuotas) y "
+            + "FacturasComerciales (Total, Parcial). De fábrica, sólo créditos, total o parcial. Rige la línea del crédito nuevo.",
+            Payoffs.ProductosAdmitidos.Defecto, K1, patron: Payoffs.ProductosAdmitidos.Patron)
+            with { AmbitosAdmitidos = [General, Linea] },
+        Eleccion(Modulo, RecogidaAlDesembolsar,
+            "Al desembolsar, ¿se recoge lo de ahora o lo proyectado en la solicitud? «Recalcular»: lo de ahora, como siempre; la pantalla muestra la "
+            + "diferencia con lo proyectado. «MantenerLoProyectado»: lo proyectado, topado en lo que cancela; si no alcanza, el producto queda con el "
+            + "saldo que falta. Rige la línea del crédito nuevo.",
+            [AlDesembolsarRecalcular, AlDesembolsarMantenerLoProyectado], AlDesembolsarRecalcular, K1, General, Linea),
+        NumeroDecimal(Modulo, RecogidaToleranciaDeDiferencia,
+            "Diferencia, en pesos, entre lo proyectado en la solicitud y lo que se recoge al desembolsar desde la cual el desembolso se bloquea y pide "
+            + "devolver la solicitud para corregirla. Vacía: nunca bloquea; la diferencia sólo se avisa y quien desembolsa la reconoce.",
+            "", K1, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+        },
+        Eleccion(Modulo, RecogidaGiroPosteriorDeCreditoRecogido,
+            "¿Qué se hace con lo que la pagaduría gira después por un crédito que ya se recogió? «SaldoDeLaPagaduria»: queda como saldo de la "
+            + "pagaduría, como siempre. «AlCreditoNuevo»: se aplica al crédito que lo recogió. «AFavorDelAsociado»: queda como saldo a favor del "
+            + "asociado.",
+            [GiroPosteriorSaldoDeLaPagaduria, GiroPosteriorAlCreditoNuevo, GiroPosteriorAFavorDelAsociado], GiroPosteriorSaldoDeLaPagaduria, K1, General),
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         Texto(PagosPrelacionDeRubros,
             "Orden en que un pago cubre los rubros de los créditos, separados por coma: Seguro, Administracion, Interes (mora y corriente), "

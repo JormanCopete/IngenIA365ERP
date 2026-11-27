@@ -223,3 +223,29 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - D11 A: `Contabilidad.RecogidaEnUnComprobante` (clave `Accounting.LendingDisbursementWithPayoffsInOneVoucher`), defecto no.
 - D12 A: las garantías del crédito recogido se liberan al girar el crédito nuevo.
 - D13 A: la cuota que se deja queda tal como se envió, con el interés del período completo.
+
+## 4. Enmiendas
+
+### E-01 — Esquema de las recogidas (T005–T007, 2026-11-27)
+- **Tres únicos en vez de uno** en `LND_CreditApplicationPayoffs`: `(CreditApplicationId, LoanId)`, `(CreditApplicationId, AccountId)` y
+  `(CreditApplicationId, CommercialReceivableReference)`, cada uno filtrado a su identificador no nulo y a las vivas. Por qué: el único de data-model
+  sobre cinco columnas que admiten nulos no cuida nada en PostgreSQL (ve distintos los nulos). Un CHECK por tabla (`CK_…_Product`) exige el
+  identificador de la clase y sólo ése.
+- **Operaciones en `bigint`**: `DisbursementOperationId`, `PaymentOperationId` y `AccountOperationId` son `long`, porque `LND_LoanOperations` y
+  `LND_MemberAccountOperations` lo son (data-model decía `int`). `AccountOperationId` lleva FK a `LND_MemberAccountOperations`.
+- **Claves**: `IdempotencyKey` de 150 (el largo de `LND_LoanOperations.IdempotencyKey`, no 120), única entre las vivas; `ReversalKey` de 160.
+- `InterestMode` admite nulo (fila sin proyección); `ProjectionSha256` va vacía en esas filas y lleva «sha256:» + 64 en las demás (71).
+- La copia de `PayoffRequest` va como SQL a mano en el `Up` de los dos motores (no hizo falta una tarea del DbMigrator): `Order` = la posición en el
+  JSON, un crédito repetido entra una vez y uno que no existe no entra.
+
+### E-02 — `PayoffInput` (T013, 2026-11-27)
+- `Mode` e `InstallmentTreatment` son los enums `PayoffMode` e `InstallmentTreatment` (el JSON los acepta por nombre o por número), no texto;
+  `ProductPublicId` admite nulo porque la factura se nombra por `Reference`.
+- «Las dos listas a la vez» es que las dos traigan al menos un elemento. `RecogidasPedidas.Unificar` lo devuelve como `Result` con el código
+  `Request.BodyInvalid`, y `ErrorEnvelopeFilter` lo saca con 400, como el cuerpo ilegible. Un modo viejo que no sea `Full` ni `Partial` también es
+  `Request.BodyInvalid` (el validador de hoy ya los rechazaba).
+
+### E-03 — Causas del comparador de desgloses (T008, 2026-11-27)
+- Además de «capital menor → pagos», un anticipo o un saldo a favor mayor también es `Payments` (sólo entra por un pago).
+- «Causación» abarca todo lo que se causa con los días —interés corriente, devuelto o cobrado por proporcionales, seguro y administración—
+  cuando el capital no cambió; con el capital menor, esos cambios los explica el pago.

@@ -47375,6 +47375,321 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("LND_ScreeningResults", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CommercialReceivableReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("CreditApplicationId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("CurrentInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("CurrentInstallmentNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("InstallmentTreatment")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InterestMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("LoanId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PayrollDeductionFileId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProductNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<decimal>("ProjectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ProjectedBreakdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("ProjectedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ProjectionSha256")
+                        .IsRequired()
+                        .HasMaxLength(71)
+                        .HasColumnType("character varying(71)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RecordedAsOf")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("RequestedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("SentInstallmentState")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("IX_LND_CreditApplicationPayoffs_AccountId");
+
+                    b.HasIndex("LoanId")
+                        .HasDatabaseName("IX_LND_CreditApplicationPayoffs_LoanId");
+
+                    b.HasIndex("PayrollDeductionFileId")
+                        .HasDatabaseName("IX_LND_CreditApplicationPayoffs_PayrollDeductionFileId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditApplicationPayoffs_PublicId");
+
+                    b.HasIndex("CreditApplicationId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditApplicationPayoffs_Application_Account")
+                        .HasFilter("\"AccountId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+
+                    b.HasIndex("CreditApplicationId", "CommercialReceivableReference")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditApplicationPayoffs_Application_Receivable")
+                        .HasFilter("\"CommercialReceivableReference\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+
+                    b.HasIndex("CreditApplicationId", "LoanId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_CreditApplicationPayoffs_Application_Loan")
+                        .HasFilter("\"LoanId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+
+                    b.ToTable("LND_CreditApplicationPayoffs", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_CreditApplicationPayoffs_Product", "(\"ProductKind\" = 1 AND \"LoanId\" IS NOT NULL AND \"AccountId\" IS NULL AND \"CommercialReceivableReference\" IS NULL) OR (\"ProductKind\" = 2 AND \"LoanId\" IS NULL AND \"AccountId\" IS NOT NULL AND \"CommercialReceivableReference\" IS NULL) OR (\"ProductKind\" = 3 AND \"LoanId\" IS NULL AND \"AccountId\" IS NULL AND \"CommercialReceivableReference\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payoffs.DisbursementPayoff", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("AccountOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CommercialReceivableReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("CreditApplicationPayoffId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("CurrentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("Difference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("DifferenceCause")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DifferenceDetail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("DisbursementOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int?>("InstallmentTreatment")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InterestMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("LoanId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Omitted")
+                        .HasColumnType("boolean");
+
+                    b.Property<long?>("PaymentOperationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ProductKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProductNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<decimal>("ProjectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReceiptPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReversalKey")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_AccountId");
+
+                    b.HasIndex("AccountOperationId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_AccountOperationId");
+
+                    b.HasIndex("CreditApplicationPayoffId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_CreditApplicationPayoffId");
+
+                    b.HasIndex("DisbursementOperationId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_DisbursementOperationId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DisbursementPayoffs_IdempotencyKey")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("LoanId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_LoanId");
+
+                    b.HasIndex("PaymentOperationId")
+                        .HasDatabaseName("IX_LND_DisbursementPayoffs_PaymentOperationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_DisbursementPayoffs_PublicId");
+
+                    b.ToTable("LND_DisbursementPayoffs", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_DisbursementPayoffs_Product", "(\"ProductKind\" = 1 AND \"LoanId\" IS NOT NULL AND \"AccountId\" IS NULL AND \"CommercialReceivableReference\" IS NULL) OR (\"ProductKind\" = 2 AND \"LoanId\" IS NULL AND \"AccountId\" IS NOT NULL AND \"CommercialReceivableReference\" IS NULL) OR (\"ProductKind\" = 3 AND \"LoanId\" IS NULL AND \"AccountId\" IS NULL AND \"CommercialReceivableReference\" IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink", b =>
                 {
                     b.Property<int>("Id")
@@ -82498,6 +82813,74 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .WithMany()
                         .HasForeignKey("ReleasedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_CreditApplicationPayoffs_Account");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Origination.CreditApplication", null)
+                        .WithMany()
+                        .HasForeignKey("CreditApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_CreditApplicationPayoffs_Application");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_CreditApplicationPayoffs_Loan");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile", null)
+                        .WithMany()
+                        .HasForeignKey("PayrollDeductionFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_CreditApplicationPayoffs_PayrollDeductionFile");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payoffs.DisbursementPayoff", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.MemberAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_Account");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.MemberAccountOperation", null)
+                        .WithMany()
+                        .HasForeignKey("AccountOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_AccountOperation");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff", null)
+                        .WithMany()
+                        .HasForeignKey("CreditApplicationPayoffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_ApplicationPayoff");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Operations.LoanOperation", null)
+                        .WithMany()
+                        .HasForeignKey("DisbursementOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_DisbursementOperation");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_Loan");
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Operations.LoanOperation", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LND_DisbursementPayoffs_PaymentOperation");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink", b =>

@@ -13,22 +13,22 @@ Rutas: `Dom` = `src/Core/IngenIA365ERP.Domain`, `App` = `src/Core/IngenIA365ERP.
 
 ## Fase 1 — Preparación (E1)
 
-- [ ] T001 Enums `PayoffProductKind`, `PayoffMode`, `InstallmentTreatment`, `PayoffDifferenceCause` (banderas) y `SentInstallmentState` en `Dom/Enums/Lending/PayoffEnums.cs`
-- [ ] T002 [P] Siete parámetros de Cartera (R15) con sus defectos de hoy y sus textos de pantalla en `Dom/Lending/Parameters/ParametrosDeCartera.cs` (`Recogida.CuotaCausada`, `Recogida.InteresesProporcionales`, `Recogida.ProductosAdmitidos` con patrón, `Recogida.AlDesembolsar`, `Recogida.ToleranciaDeDiferencia`, `Recogida.GiroPosteriorDeCreditoRecogido`, `Pagos.CuotaEnviadaAlCancelar`)
-- [ ] T003 [P] Lector puro de `Recogida.ProductosAdmitidos` (`Producto:modo,modo;…` → mapa) en `Dom/Lending/Payoffs/ProductosAdmitidos.cs`, con casos en `TD/Lending/Payoffs/ProductosAdmitidosTests.cs`
-- [ ] T004 [P] Pruebas de que los defectos de los siete parámetros reproducen lo de hoy en `TA/Lending/Payoffs/ParametrosDeRecogidaTests.cs`
+- [X] T001 Enums `PayoffProductKind`, `PayoffMode`, `InstallmentTreatment`, `PayoffDifferenceCause` (banderas) y `SentInstallmentState` en `Dom/Enums/Lending/PayoffEnums.cs`
+- [X] T002 [P] Siete parámetros de Cartera (R15) con sus defectos de hoy y sus textos de pantalla en `Dom/Lending/Parameters/ParametrosDeCartera.cs` (`Recogida.CuotaCausada`, `Recogida.InteresesProporcionales`, `Recogida.ProductosAdmitidos` con patrón, `Recogida.AlDesembolsar`, `Recogida.ToleranciaDeDiferencia`, `Recogida.GiroPosteriorDeCreditoRecogido`, `Pagos.CuotaEnviadaAlCancelar`)
+- [X] T003 [P] Lector puro de `Recogida.ProductosAdmitidos` (`Producto:modo,modo;…` → mapa) en `Dom/Lending/Payoffs/ProductosAdmitidos.cs`, con casos en `TD/Lending/Payoffs/ProductosAdmitidosTests.cs`
+- [X] T004 [P] Pruebas de que los defectos de los siete parámetros reproducen lo de hoy en `TA/Lending/Payoffs/ParametrosDeRecogidaTests.cs`
 
 ## Fase 2 — Fundamentos (bloquea todo)
 
-- [ ] T005 Entidades `CreditApplicationPayoff` y `DisbursementPayoff` (data-model) en `Dom/Entities/Lending/Payoffs/`
-- [ ] T006 Configuraciones `CreditApplicationPayoffConfiguration` y `DisbursementPayoffConfiguration` (`ComoEntidadDeCartera`, índice único filtrado de la proyectada, índice por `LoanId`) en `Pers/Configurations/Lending/Payoffs/`; `DbSet` en `App/Common/Interfaces/IApplicationDbContext*.cs` y el contexto
-- [ ] T007 Migración `RecogidaDeCreditos` en los dos motores con `tools/scripts/add-migration.ps1 -Name RecogidaDeCreditos -Context Application` (fechada después de `EsquemaBase`), con el SQL que copia `LND_CreditApplications.PayoffRequest` a filas `Loan`; `tools/scripts/check-migration-parity.ps1`
-- [ ] T008 Comparador puro de desgloses `DiferenciaDeRecogida` (por concepto, con la causa) en `Dom/Lending/Payoffs/DiferenciaDeRecogida.cs`, con casos en `TD/Lending/Payoffs/DiferenciaDeRecogidaTests.cs`
+- [X] T005 Entidades `CreditApplicationPayoff` y `DisbursementPayoff` (data-model) en `Dom/Entities/Lending/Payoffs/`
+- [X] T006 Configuraciones `CreditApplicationPayoffConfiguration` y `DisbursementPayoffConfiguration` (`ComoEntidadDeCartera`, índice único filtrado de la proyectada, índice por `LoanId`) en `Pers/Configurations/Lending/Payoffs/`; `DbSet` en `App/Common/Interfaces/IApplicationDbContext*.cs` y el contexto
+- [X] T007 Migración `RecogidaDeCreditos` en los dos motores con `tools/scripts/add-migration.ps1 -Name RecogidaDeCreditos -Context Application` (fechada después de `EsquemaBase`), con el SQL que copia `LND_CreditApplications.PayoffRequest` a filas `Loan`; `tools/scripts/check-migration-parity.ps1`
+- [X] T008 Comparador puro de desgloses `DiferenciaDeRecogida` (por concepto, con la causa) en `Dom/Lending/Payoffs/DiferenciaDeRecogida.cs`, con casos en `TD/Lending/Payoffs/DiferenciaDeRecogidaTests.cs`
 - [ ] T009 `InteresesAlCancelar.ModoAlRecogerAsync` (R5: `ComoAlCancelar`/`Si`/`No`, excepciones legales) en `App/Lending/Common/InteresesAlCancelar.cs`
 - [ ] T010 `LiquidacionDeRecogida` (R3): reconstrucción a (D, R), modo de intereses, desglose, bloqueos (mora, castigo, insolvencia, sin saldo), huella; reemplaza `MotorDeCreditoEnDesembolso.LiquidarAsync` en `App/Lending/Payoffs/LiquidacionDeRecogida.cs` y `App/Lending/Disbursements/IMotorDeCreditoEnDesembolso.cs`; registro en `App/DependencyInjection.cs`
 - [ ] T011 [P] Pruebas de `LiquidacionDeRecogida`: tres modos de intereses × causación diaria, al inicio del ciclo y por período calendario; vivienda; tope del prepago; anticipo y saldo a favor, en `TA/Lending/Payoffs/LiquidacionDeRecogidaTests.cs`
 - [ ] T012 [P] Regla de arquitectura `LaRecogidaSeLiquidaEnUnSoloSitio` en `TR/Principles/LaRecogidaSeLiquidaEnUnSoloSitio.cs`
-- [ ] T013 `PayoffInput` (R1) y la traducción de `ownLoanPayoffs` en `App/Lending/Payoffs/PayoffInput.cs`; ambos cuerpos a la vez → `Request.BodyInvalid`
+- [X] T013 `PayoffInput` (R1) y la traducción de `ownLoanPayoffs` en `App/Lending/Payoffs/PayoffInput.cs`; ambos cuerpos a la vez → `Request.BodyInvalid`
 
 ## Fase 3 — HU1: ver los productos y simular al vender (P1, E1) 🎯
 
