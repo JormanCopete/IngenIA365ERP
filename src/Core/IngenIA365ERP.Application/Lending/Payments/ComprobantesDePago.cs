@@ -103,9 +103,14 @@ public static class ComprobantesDePago
     /// plan, los otros cargos del libro, lo que todavía debe, lo anticipado y lo que cuesta anticiparla (<see cref="AplicadorDePagos.ValorParaAnticipar"/>, lo
     /// mismo que toma la cuota específica). Puro. (nuevo)
     /// </summary>
-    public static IReadOnlyList<CuotaDeObligacionDto> Cuotas(EstadoDelCredito e)
+    /// <remarks>
+    /// 2026-11-26 (pedido del dueño): con <paramref name="periodoCalendario"/>, cada cuota del tramo en curso dice cuánto de ella ya es exigible
+    /// (<see cref="CuotaDeObligacionDto.DueInPeriod"/>: lo causado que no es capital, lo mismo que <see cref="Exigible"/> suma de ella).
+    /// </remarks>
+    public static IReadOnlyList<CuotaDeObligacionDto> Cuotas(EstadoDelCredito e, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(e);
+        var delTramo = periodoCalendario && e.Plan is not null ? AplicadorDePagos.CuotasDelTramoEnCurso(e.Plan, e.Fecha) : new HashSet<int>();
         var salida = new List<CuotaDeObligacionDto>();
         foreach (var c in e.Plan?.Cuotas ?? [])
         {
@@ -132,10 +137,18 @@ public static class ComprobantesDePago
                 c.Capital + c.Interes + c.Seguro + c.Administracion + otros, debe, anticipado, paraAnticipar)
             {
                 Administration = c.Administracion, Recognized = e.ReconocidoPendiente(c.Numero),
+                DueInPeriod = delTramo.Contains(c.Numero) ? ExigibleDelTramo(e, c.Numero) : 0m,
             });
         }
         return salida;
     }
+
+    /// <summary>
+    /// 2026-11-26: lo exigible de la cuota <paramref name="numero"/> del tramo en curso por período calendario: lo cobrable que no es capital (lo mismo que
+    /// <see cref="Exigible"/> suma de ella). (nuevo)
+    /// </summary>
+    private static decimal ExigibleDelTramo(EstadoDelCredito e, int numero) =>
+        e.Saldos.Where(s => s.Cuota == numero && s.Concepto != LoanConcept.Principal && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor);
 
     /// <summary>2026-11-16: los saldos por concepto distintos de cero, con su nombre en español, en el orden del enum. (nuevo)</summary>
     public static IReadOnlyList<SaldoPorConceptoDto> SaldosPorConcepto(EstadoDelCredito e)

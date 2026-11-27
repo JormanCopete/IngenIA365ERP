@@ -17,7 +17,8 @@ public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Co
 /// Lo que una persona puede pagar: sus obligaciones, sus cuentas, lo exigible de aportes y ahorros, y los conceptos varios (FR-037). 2026-11-16 (pedido del dueño):
 /// con las reglas de la caja vigentes —la prelación por clase (<see cref="PriorityClasses"/>; vacía = libre), si con algo exigible sólo se paga lo exigible
 /// (<see cref="OverdueOnlyDue"/>) y si sin nada exigible se paga al menos una cuota (<see cref="MinimumOneInstallment"/>)— para que la pantalla las aplique antes
-/// de que el servidor las rechace.
+/// de que el servidor las rechace. 2026-11-26 (pedido del dueño): <see cref="OverdueAllowsAdvance"/> (<c>Caja.ConMoraPermiteAnticipar</c>), con mora el mismo
+/// recibo paga lo vencido y además anticipa o abona.
 /// </summary>
 public sealed record LoQuePuedePagarDto(
     Guid PersonPublicId,
@@ -33,7 +34,8 @@ public sealed record LoQuePuedePagarDto(
     bool OverdueOnlyDue = true,
     bool MinimumOneInstallment = true,
     bool PreselectDueOnSelect = false,
-    IReadOnlyList<CreditBalances.AnticipoDisponibleDto>? Advances = null);
+    IReadOnlyList<CreditBalances.AnticipoDisponibleDto>? Advances = null,
+    bool OverdueAllowsAdvance = false);
 
 /// <summary>
 /// Lo que el cajero elige pagar. Feature 015, R1 (T0363; FR-046): con <c>Target = PendingApplication</c>, <see cref="PendingTarget"/> dice a qué módulo irá (<c>Loan</c>

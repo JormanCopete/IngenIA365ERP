@@ -63,6 +63,14 @@ public sealed record ObligacionListadaDto(
     /// la cuota del ciclo es la del período y la caja la precarga como exigible (F4). Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
     /// </summary>
     public decimal RecognizedPending { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo exigible <b>sin</b> lo causado de la cuota del período calendario en curso —las cuotas vencidas o que vencen hoy y los
+    /// cargos sin cuota—: la mora para las reglas de la caja. Con el ciclo de la cuota es igual a <see cref="ObligacionListadaDto.DueToday"/>; por período
+    /// calendario, <c>DueToday</c> suma además el interés ya causado del mes, que no es mora. Nulo —un doble de pruebas o un contrato anterior— se lee como
+    /// <c>DueToday</c>. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
+    /// </summary>
+    public decimal? DueWithoutPeriodInProgress { get; init; }
 }
 
 // ------------------------------------------------------------------------------------------------------ simular (§3.6) --
@@ -76,7 +84,18 @@ public sealed record SolicitudDeSimulacion(
     DateOnly ValueDate,
     EleccionDeAbono? Choice = null,
     int? InstallmentNumber = null,
-    string? PaymentIdempotencyKeyToReverse = null);
+    string? PaymentIdempotencyKeyToReverse = null)
+{
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): los pagos que van <b>antes</b> en el mismo recibo a la misma obligación, en su orden. Cartera los reparte uno tras otro
+    /// sobre el estado, sin escribir, y simula éste sobre lo que dejan —lo mismo que hace al aplicar el lote, en orden, en una transacción—: así lo vencido y una
+    /// cuota anticipada en el mismo recibo se simulan juntos. Vacío, como siempre. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
+    /// </summary>
+    public IReadOnlyList<PagoPrevioDeSimulacion> Previous { get; init; } = [];
+}
+
+/// <summary>2026-11-26: un pago anterior del mismo recibo a la misma obligación, para simular el siguiente sobre lo que deja. (nuevo)</summary>
+public sealed record PagoPrevioDeSimulacion(ModalidadDePago Modality, decimal Amount, EleccionDeAbono? Choice = null, int? InstallmentNumber = null);
 
 /// <summary>La simulación: distribución, saldos después y plan nuevo. (nuevo)</summary>
 public sealed record SimulacionDePagoDto(

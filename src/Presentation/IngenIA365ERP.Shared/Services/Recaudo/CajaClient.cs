@@ -31,6 +31,18 @@ public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number
     public bool ConExigible => DueToday > 0m;
 
     /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo exigible sin el interés ya causado de la cuota del período calendario en curso: la mora para las reglas de la caja.
+    /// Nulo (una API anterior) se lee como <see cref="DueToday"/>.
+    /// </summary>
+    public decimal? DueWithoutPeriodInProgress { get; init; }
+
+    /// <summary>2026-11-26: lo vencido (o que vence hoy): la mora para las reglas de la caja.</summary>
+    public decimal Vencido => DueWithoutPeriodInProgress ?? DueToday;
+
+    /// <summary>2026-11-26: tiene cuotas vencidas o que vencen hoy (el interés causado del mes en curso no cuenta).</summary>
+    public bool ConVencido => Vencido > 0m;
+
+    /// <summary>
     /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo: la cuota del período se
     /// ofrece completa (la cuota del ciclo) y sin el aviso del anticipo.
     /// </summary>
@@ -52,6 +64,12 @@ public sealed record CuotaDeObligacionDto(int Number, DateOnly DueDate, string S
 
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota.</summary>
     public decimal Recognized { get; init; }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo que de esta cuota por vencer ya es exigible (lo causado del período calendario en curso). Si el recibo paga antes lo
+    /// exigible, anticiparla cuesta <see cref="ValueToAnticipate"/> menos esto.
+    /// </summary>
+    public decimal DueInPeriod { get; init; }
 }
 
 /// <summary>Un saldo de la obligación por concepto (capital, interés corriente, mora, seguro, cargos, anticipo…).</summary>
@@ -65,6 +83,12 @@ public sealed record DetalleDeObligacionDto(Guid ObligationPublicId, string Numb
 {
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo.</summary>
     public decimal RecognizedPending { get; init; }
+
+    /// <summary>2026-11-26 (pedido del dueño): lo exigible sin el interés ya causado del período calendario en curso; nulo se lee como <see cref="DueToday"/>.</summary>
+    public decimal? DueWithoutPeriodInProgress { get; init; }
+
+    /// <summary>2026-11-26: lo vencido (o que vence hoy): la mora para las reglas de la caja.</summary>
+    public decimal Vencido => DueWithoutPeriodInProgress ?? DueToday;
 }
 
 public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations, int LendingStatus = 2);
@@ -87,7 +111,7 @@ public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Inst
 public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, string? TaxId, bool IsAssociate, ListadoPagableDto? Obligations,
     CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices,
     IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true, bool PreselectDueOnSelect = false,
-    IReadOnlyList<AnticipoDisponibleDto>? Advances = null);
+    IReadOnlyList<AnticipoDisponibleDto>? Advances = null, bool OverdueAllowsAdvance = false);
 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,

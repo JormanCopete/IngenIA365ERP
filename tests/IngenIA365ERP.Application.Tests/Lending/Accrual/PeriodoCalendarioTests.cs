@@ -139,4 +139,18 @@ public class PeriodoCalendarioTests : IAsyncLifetime
         ComprobantesDePago.CuotaDelCiclo(estado, periodoCalendario: true).Should().Be(ComprobantesDePago.CuotaDelCiclo(estado),
             "la cuota del período es la misma: el monto de la cuota no cambia");
     }
+
+    [Fact]
+    public void El_5_el_causado_del_tramo_no_es_mora_y_el_detalle_dice_cuanto_de_la_cuota_ya_es_exigible()
+    {
+        // 2026-11-26 (pedido del dueño): la caja mira lo vencido (Exigible sin el tramo en curso) y, si el recibo paga antes lo exigible, anticipar la cuota del
+        // período cuesta su valor menos lo que de ella ya es exigible.
+        var estado = Estado(new DateOnly(2026, 11, 5), cuota1Pagada: false, cuotaEnCurso: 1, causado: 20_000m);
+
+        var conCalendario = ComprobantesDePago.Cuotas(estado, periodoCalendario: true);
+        conCalendario.Single(q => q.Number == 1).DueInPeriod.Should().Be(20_000m);
+        conCalendario.Where(q => q.Number > 1).Should().OnlyContain(q => q.DueInPeriod == 0m, "sus tramos no han empezado");
+        ComprobantesDePago.Cuotas(estado).Should().OnlyContain(q => q.DueInPeriod == 0m, "por el ciclo de la cuota nada de una cuota por vencer es exigible");
+        ComprobantesDePago.Exigible(estado).Should().Be(0m, "nada vencido: no hay mora");
+    }
 }

@@ -285,6 +285,139 @@ public sealed class ReglasDeLaCajaTests
         await _k.Obligaciones.DidNotReceive().AplicarAsync(Arg.Any<SolicitudDeAplicacion>(), Arg.Any<CancellationToken>());
     }
 
+    // ------------------------------------------- 2026-11-26: período calendario y lo vencido con anticipo en el mismo recibo --
+
+    /// <summary>Por período calendario: 18.000 exigibles del período (el interés ya causado de la cuota del mes) y nada vencido.</summary>
+    private static ObligacionListadaDto AlDiaConInteresDelMes(Guid id) => Obligacion(id, "CR-A", exigible: 18_000m) with { DueWithoutPeriodInProgress = 0m };
+
+    [Fact]
+    public async Task Por_periodo_calendario_el_interes_ya_causado_del_mes_no_es_mora()
+    {
+        ConObligaciones(AlDiaConInteresDelMes(_k.CreditoA));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.CycleInstallment, 118_000m))).IsSuccess.Should().BeTrue("la cuota del período, completa");
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3))).IsSuccess.Should().BeTrue("sin nada vencido se anticipa");
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.ExtraordinaryPrincipal, 300_000m, eleccion: EleccionDeAbono.ReduceTerm))).IsSuccess
+            .Should().BeTrue("ni se abona a capital");
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.CycleInstallment, 18_000m)))
+            .Should().Contain(ErroresDeRecaudo.CodigoMenosDeUnaCuota, "sin nada vencido la cuota del ciclo va completa, no sólo su interés");
+    }
+
+    [Fact]
+    public async Task Por_periodo_calendario_F4_trae_la_cuota_del_periodo_completa_y_no_solo_su_interes()
+    {
+        ConObligaciones(AlDiaConInteresDelMes(_k.CreditoA));
+        var op = await OperacionAsync();
+
+        var r = await new PreselectPayablesCommandHandler(_k.C.E.Db, _k.C.E.Alcance, _k.Obligaciones, _k.Cuentas, contabilidad: _contabilidad,
+                parametros: _k.C.E.Parametros)
+            .Handle(new PreselectPayablesCommand(op) { OperationKey = Guid.NewGuid() }, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        var item = r.Value.Items.Should().ContainSingle(i => i.ProductPublicId == _k.CreditoA).Subject;
+        item.LoanModality.Should().Be(ModalidadDePago.CycleInstallment);
+        item.Amount.Should().Be(118_000m);
+    }
+
+    [Fact]
+    public async Task Con_mora_y_sin_el_permiso_no_se_anticipa_aunque_lo_vencido_vaya_antes()
+    {
+        ConObligaciones(Obligacion(_k.CreditoA, "CR-A", exigible: 120_000m));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 120_000m),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .Should().Contain(ErroresDeRecaudo.CodigoSoloLoExigible);
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.Advance, 500_000m))).Should().Contain(ErroresDeRecaudo.CodigoSoloLoExigible);
+    }
+
+    [Fact]
+    public async Task Con_mora_y_el_permiso_se_paga_lo_vencido_y_ademas_se_anticipa_o_se_abona()
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar, "true");
+        ConObligaciones(Obligacion(_k.CreditoA, "CR-A", exigible: 120_000m));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.Advance, 500_000m))).IsSuccess.Should().BeTrue("el anticipo cubre primero lo exigible");
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.ExtraordinaryPrincipal, 500_000m, eleccion: EleccionDeAbono.ReduceInstallment))).IsSuccess
+            .Should().BeTrue("el abono a capital también");
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.CycleInstallment, 220_000m))).IsSuccess.Should().BeTrue("y la cuota del ciclo");
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .Should().Contain(ErroresDeRecaudo.CodigoSoloLoExigible).And.Contain("Lo exigible", "una cuota futura sola dejaría lo vencido sin pagar");
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 50_000m),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .Should().Contain(ErroresDeRecaudo.CodigoSoloLoExigible, "50.000 no cubren los 120.000 vencidos");
+
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 120_000m),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 100_000m, cuota: 2),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .IsSuccess.Should().BeTrue("lo vencido va antes en el mismo recibo");
+    }
+
+    [Fact]
+    public async Task La_cuota_especifica_que_la_linea_no_deja_fuera_de_orden_entra_detras_de_lo_vencido()
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar, "true");
+        ConObligaciones(Obligacion(_k.CreditoA, "CR-A", exigible: 120_000m, admitidas: [.. Todas.Where(m => m != ModalidadDePago.SpecificInstallment)]));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+
+        Rechazos(await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .Should().Contain(ErroresDeRecaudo.CodigoModalidadNoAdmitida).And.Contain("Lo exigible");
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 120_000m),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .IsSuccess.Should().BeTrue("Cartera la simula sobre lo que deja lo vencido");
+    }
+
+    [Fact]
+    public async Task El_segundo_item_de_un_credito_se_simula_sobre_lo_que_deja_el_primero()
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar, "true");
+        ConObligaciones(Obligacion(_k.CreditoA, "CR-A", exigible: 120_000m), Obligacion(_k.CreditoB, "CR-B", exigible: 0m));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 120_000m), Credito(_k.CreditoB, ModalidadDePago.FreeAmount, 10_000m),
+                Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3)))
+            .IsSuccess.Should().BeTrue();
+
+        await _k.Obligaciones.Received(1).SimularAsync(Arg.Is<SolicitudDeSimulacion>(s => s.ObligationPublicId == _k.CreditoA
+            && s.Modality == ModalidadDePago.SpecificInstallment && s.Previous.Count == 1 && s.Previous[0].Modality == ModalidadDePago.PastDue
+            && s.Previous[0].Amount == 120_000m), Arg.Any<CancellationToken>());
+        await _k.Obligaciones.Received(1).SimularAsync(Arg.Is<SolicitudDeSimulacion>(s => s.ObligationPublicId == _k.CreditoA
+            && s.Modality == ModalidadDePago.PastDue && s.Previous.Count == 0), Arg.Any<CancellationToken>());
+        await _k.Obligaciones.Received(1).SimularAsync(Arg.Is<SolicitudDeSimulacion>(s => s.ObligationPublicId == _k.CreditoB && s.Previous.Count == 0),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Al_confirmar_el_segundo_item_de_un_credito_se_simula_y_aplica_despues_del_primero()
+    {
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar, "true");
+        ConObligaciones(Obligacion(_k.CreditoA, "CR-A", exigible: 120_000m));
+        ConDetalle(_k.CreditoA);
+        var op = await OperacionAsync();
+        (await GuardarAsync(op, Credito(_k.CreditoA, ModalidadDePago.PastDue, 120_000m),
+            Credito(_k.CreditoA, ModalidadDePago.SpecificInstallment, 98_500m, cuota: 3))).IsSuccess.Should().BeTrue();
+        (await _k.Medios().Handle(new UpdateCashOperationMeansCommand(op, [_k.Efectivo(218_500m)]), default)).IsSuccess.Should().BeTrue();
+        _k.Obligaciones.ClearReceivedCalls();
+
+        var r = await _k.Confirmacion().ConfirmarAsync(op, Guid.NewGuid(), null, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        var aplicados = _k.Obligaciones.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IContratoDeObligaciones.AplicarAsync))
+            .Select(c => (SolicitudDeAplicacion)c.GetArguments()[0]!).ToList();
+        aplicados.Should().HaveCount(2, "uno por uno, en orden");
+        aplicados[0].Payments.Single().Modality.Should().Be(ModalidadDePago.PastDue);
+        aplicados[1].Payments.Single().Modality.Should().Be(ModalidadDePago.SpecificInstallment);
+        await _k.Obligaciones.Received(1).SimularAsync(Arg.Is<SolicitudDeSimulacion>(s => s.Modality == ModalidadDePago.SpecificInstallment
+            && s.Previous.Count == 0), Arg.Any<CancellationToken>());
+    }
+
     // ------------------------------------------------------------------------------------------ el detalle --
 
     [Fact]

@@ -213,17 +213,17 @@
                                 <p class="texto-apoyo">Débito: aumenta lo que debe (desembolso, causación, cargos). Crédito: lo disminuye (pagos, condonaciones). El saldo corre sobre lo que se ve.</p>
                                 <div class="tabla-desplazable">
                                     <table class="data-grid tabla-compacta">
-                                        <thead><tr><th>Fecha valor</th><th>Movimiento</th><th>Rubro</th><th class="numero">Cuota</th><th class="numero">Débito</th><th class="numero">Crédito</th><th class="numero">Saldo</th></tr></thead>
+                                        <thead><tr><th>Fecha valor</th><th>Movimiento</th><th>Rubro</th><th class="numero">Cuota</th><th>Recibo</th><th class="numero">Débito</th><th class="numero">Crédito</th><th class="numero">Saldo</th></tr></thead>
                                         <tbody>
                                             @foreach (var m in MovimientosDeCredito)
                                             {
                                                 <tr><td>@TextosDeCreditos.Fecha(m.Fila.ValueDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(m.Fila.Kind)@(m.Fila.ReversesTransaction is not null ? " (reverso)" : "")</td>
-                                                    <td>@TextosDeCreditos.Concepto(m.Fila.Concept)</td><td class="numero">@(m.Fila.Installment?.ToString() ?? "—")</td>
+                                                    <td>@TextosDeCreditos.Concepto(m.Fila.Concept)</td><td class="numero">@(m.Fila.Installment?.ToString() ?? "—")</td><td>@(m.Fila.ReceiptNumber ?? "")</td>
                                                     <td class="numero">@(m.Debito > 0 ? V(m.Debito) : "")</td><td class="numero">@(m.Credito > 0 ? V(m.Credito) : "")</td>
                                                     <td class="numero">@V(m.Saldo)</td></tr>
                                             }
                                         </tbody>
-                                        <tfoot><tr><th colspan="4">Totales</th><th class="numero">@V(MovimientosDeCredito.Sum(m => m.Debito))</th><th class="numero">@V(MovimientosDeCredito.Sum(m => m.Credito))</th><th></th></tr></tfoot>
+                                        <tfoot><tr><th colspan="5">Totales</th><th class="numero">@V(MovimientosDeCredito.Sum(m => m.Debito))</th><th class="numero">@V(MovimientosDeCredito.Sum(m => m.Credito))</th><th></th></tr></tfoot>
                                     </table>
                                 </div>
                                 @if (MovimientosDeCredito.Count == 0) { <p class="texto-tenue">Sin movimientos con esos filtros.</p> }
@@ -302,8 +302,11 @@
                         }
                         else
                         {
-                            var cuotas = _detalle == Detalle.Anticipadas
-                                ? (_estadoDelCredito?.Installments.Where(q => q.Status == "Covered").ToList() ?? [])
+                            var conAnticipos = _detalle == Detalle.Anticipadas;
+                            @* 2026-11-26 (pedido del dueño): las anticipadas son las cubiertas y también las por vencer con algo anticipado, con cuánto, cuándo y con qué
+                               recibo se anticipó cada una. *@
+                            var cuotas = conAnticipos
+                                ? (_estadoDelCredito?.Installments.Where(q => q.Status == "Covered" || (q.Status == "Upcoming" && AnticiposDeCuota(q.Number).Saldo > 0m)).ToList() ?? [])
                                 : (_estadoDelCredito?.Installments.Where(q => q.Status is "Upcoming" or "PastDue").ToList() ?? []);
                             @* 2026-11-17 (pedido del dueño): en las pendientes, lo que debe de cada cuota por rubro —el interés corriente y el de mora aparte—; en
                                las anticipadas (ya cubiertas), los valores del plan. *@
@@ -312,18 +315,20 @@
                             var conOtrosE = rubros.Any(x => x.R.Otros != 0m);
                             <div class="tabla-desplazable">
                                 <table class="data-grid tabla-compacta">
-                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés corriente</th><th class="numero">Interés de mora</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }@if (conOtrosE) { <th class="numero">Otros</th> }<th class="numero">Valor cuota</th><th class="numero">Debe</th></tr></thead>
+                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés corriente</th><th class="numero">Interés de mora</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }@if (conOtrosE) { <th class="numero">Otros</th> }<th class="numero">Valor cuota</th><th class="numero">Debe</th>@if (conAnticipos) { <th class="numero">Anticipado</th><th>Anticipado el</th><th>Recibo</th> }</tr></thead>
                                     <tbody>
                                         @foreach (var (q, r) in rubros)
                                         {
+                                            var anticipos = conAnticipos ? AnticiposDeCuota(q.Number) : default;
                                             <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
                                                 <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
                                                 <td class="numero">@V(r.Capital)</td><td class="numero">@V(r.Corriente)</td><td class="numero @(r.Mora > 0m ? "texto-alerta" : "")">@V(r.Mora)</td>
                                                 <td class="numero">@V(r.Seguro)</td>@if (conAdministracionE) { <td class="numero">@V(r.Administracion)</td> }@if (conOtrosE) { <td class="numero">@V(r.Otros)</td> }<td class="numero">@V(q.Total)</td>
-                                                <td class="numero">@V(RubrosDeCuota.Debe(q))</td></tr>
+                                                <td class="numero">@V(RubrosDeCuota.Debe(q))</td>
+                                                @if (conAnticipos) { <td class="numero">@V(anticipos.Saldo)</td><td>@anticipos.Fechas</td><td>@anticipos.Recibos</td> }</tr>
                                         }
                                     </tbody>
-                                    <tfoot><tr><th colspan="3">Totales</th><th class="numero">@V(rubros.Sum(x => x.R.Capital))</th><th class="numero">@V(rubros.Sum(x => x.R.Corriente))</th><th class="numero">@V(rubros.Sum(x => x.R.Mora))</th><th class="numero">@V(rubros.Sum(x => x.R.Seguro))</th>@if (conAdministracionE) { <th class="numero">@V(rubros.Sum(x => x.R.Administracion))</th> }@if (conOtrosE) { <th class="numero">@V(rubros.Sum(x => x.R.Otros))</th> }<th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(RubrosDeCuota.Debe))</th></tr></tfoot>
+                                    <tfoot><tr><th colspan="3">Totales</th><th class="numero">@V(rubros.Sum(x => x.R.Capital))</th><th class="numero">@V(rubros.Sum(x => x.R.Corriente))</th><th class="numero">@V(rubros.Sum(x => x.R.Mora))</th><th class="numero">@V(rubros.Sum(x => x.R.Seguro))</th>@if (conAdministracionE) { <th class="numero">@V(rubros.Sum(x => x.R.Administracion))</th> }@if (conOtrosE) { <th class="numero">@V(rubros.Sum(x => x.R.Otros))</th> }<th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(RubrosDeCuota.Debe))</th>@if (conAnticipos) { <th class="numero">@V(cuotas.Sum(q => AnticiposDeCuota(q.Number).Saldo))</th><th colspan="2"></th> }</tr></tfoot>
                                 </table>
                             </div>
                             @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Anticipadas ? "No hay cuotas cubiertas por anticipo." : "No hay cuotas pendientes.")</p> }
@@ -702,6 +707,7 @@
         _plan = null;
         _movimientosDeCredito = [];
         _movimientosDeCuenta = [];
+        _anticiposDelCredito = [];
     }
 
     private async Task CargarDetalleAsync()
@@ -714,6 +720,7 @@
                 var estado = await Creditos.EstadoDeCuentaAsync(p.PublicId, _estado?.Fecha);
                 if (!estado.IsSuccess) await Notification.ErrorAsync(estado.ErrorMessage ?? "No se pudo leer el crédito.");
                 _estadoDelCredito = estado.Value;
+                if (_detalle == Detalle.Anticipadas) await CargarAnticiposAsync(p);
                 break;
             case Detalle.Pendientes or Detalle.Anticipadas when TieneCuotas(p):
                 await CargarCuotasDeCuentaAsync(p);
@@ -734,6 +741,37 @@
         if (_elegido is not { } p) return;
         using var carga = _cargaDetalle.Iniciar();
         await CargarMovimientosSinIndicadorAsync(p);
+    }
+
+    // ------------------------------------------------------- 2026-11-26: cuándo y con qué recibo se anticipó cada cuota --
+
+    private List<FilaDelLibroDto> _anticiposDelCredito = [];
+
+    /// <summary>Las filas del anticipo del crédito hasta la fecha del estado de cuenta: lo recibido, lo aplicado y lo liberado de cada cuota.</summary>
+    private async Task CargarAnticiposAsync(ProductoDelEstadoDeCuentaDto p)
+    {
+        var filas = new List<FilaDelLibroDto>();
+        for (var pagina = 1; filas.Count < MaximoDeMovimientos; pagina++)
+        {
+            var r = await Creditos.LibroAsync(p.PublicId, hasta: _estado?.Fecha, concepto: "Advance", pagina: pagina, tamano: TamanoDePaginaDelLibro);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los anticipos del crédito."); break; }
+            filas.AddRange(r.Value.Items);
+            if (r.Value.Items.Count == 0 || filas.Count >= r.Value.TotalCount) break;
+        }
+        _anticiposDelCredito = filas;
+    }
+
+    /// <summary>
+    /// Lo anticipado a la cuota (su anticipo propio, lo que queda), las fechas en que se recibió y sus recibos (sin los reversados). El anticipo general, sin
+    /// cuota, no es de ninguna: va aparte, en «Anticipo o saldo a favor sin aplicar».
+    /// </summary>
+    private (decimal Saldo, string Fechas, string Recibos) AnticiposDeCuota(int numero)
+    {
+        var filas = _anticiposDelCredito.Where(f => f.Installment == numero).ToList();
+        var recibidos = filas.Where(f => f.Kind == "AdvanceReceived" && f.Amount > 0m && f.ReversedBy is null).OrderBy(f => f.ValueDate).ToList();
+        return (filas.Sum(f => f.Amount),
+            string.Join(", ", recibidos.Select(f => TextosDeCreditos.Fecha(f.ValueDate)).Distinct()),
+            string.Join(", ", recibidos.Select(f => f.ReceiptNumber).OfType<string>().Distinct()));
     }
 
     // ------------------------------------------------------------------ 2026-11-17: las cuotas de las cuentas --

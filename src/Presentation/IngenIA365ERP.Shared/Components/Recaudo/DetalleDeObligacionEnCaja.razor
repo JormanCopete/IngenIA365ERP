@@ -38,10 +38,14 @@
                         @if (PuedeAnticipar && Anticipables.Count > 0)
                         {
                             <p class="texto-apoyo">Marque hasta qué cuota quiere anticipar: se marcan en orden desde la próxima. Cada una entra a «Qué paga» con su valor.</p>
+                            @if (d.Vencido > 0m)
+                            {
+                                <p class="aviso">Tiene @V(d.Vencido) vencidos: antes de las cuotas entra «Lo exigible» por @V(d.DueToday), y el recibo cubre primero lo vencido.</p>
+                            }
                         }
-                        else if (!PuedeAnticipar && d.DueToday > 0)
+                        else if (!PuedeAnticipar && d.Vencido > 0)
                         {
-                            <p class="aviso aviso-alerta">Tiene cuotas vencidas por @V(d.DueToday): primero se paga lo exigible. Mientras tanto no se anticipan cuotas ni se abona a capital.</p>
+                            <p class="aviso aviso-alerta">Tiene cuotas vencidas por @V(d.Vencido): primero se paga lo exigible. Mientras tanto no se anticipan cuotas ni se abona a capital.</p>
                         }
                         <div class="tabla-desplazable">
                             <table class="data-grid tabla-compacta">
@@ -68,7 +72,7 @@
                         <div class="popup-acciones">
                             @if (PuedeAnticipar && _hasta is not null)
                             {
-                                <span class="texto-apoyo">@ElegidasParaAnticipar.Count cuota(s) por @V(ElegidasParaAnticipar.Sum(q => q.ValueToAnticipate))</span>
+                                <span class="texto-apoyo">@ElegidasParaAnticipar.Count cuota(s) por @V(ValorDeLasElegidas)@(d.Vencido > 0m ? $" más lo exigible ({V(d.DueToday)})" : "")</span>
                                 <SfButton CssClass="e-primary" OnClick="@AgregarAnticipoAsync">Agregar a «Qué paga»</SfButton>
                             }
                             <SfButton CssClass="e-flat" OnClick="@(() => CambioDeVisible(false))">Cerrar (Esc)</SfButton>
@@ -92,6 +96,12 @@
     /// <summary>La cooperativa no admite anticipos con cuotas vencidas (<c>Caja.ConMoraSoloExigible</c>).</summary>
     [Parameter] public bool ConMoraSoloExigible { get; set; } = true;
 
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): con cuotas vencidas, el mismo recibo paga lo vencido y además anticipa (<c>Caja.ConMoraPermiteAnticipar</c>): la caja pone
+    /// antes «Lo exigible».
+    /// </summary>
+    [Parameter] public bool ConMoraPermiteAnticipar { get; set; }
+
     /// <summary>Las cuotas elegidas para anticipar, en orden: la caja agrega un ítem «cuota específica» por cada una.</summary>
     [Parameter] public EventCallback<IReadOnlyList<CuotaDeObligacionDto>> Anticipar { get; set; }
 
@@ -104,8 +114,19 @@
 
     private string V(decimal? valor) => FormatoDelEstadoDeCuenta.Valor(valor, Decimales);
 
-    /// <summary>Se anticipa si la línea admite la cuota específica y, con lo exigible pendiente, sólo si la cooperativa lo permite.</summary>
-    private bool PuedeAnticipar => _detalle is { } d && d.AdmittedModalities.Contains(6) && (d.DueToday <= 0m || !ConMoraSoloExigible);
+    /// <summary>
+    /// Se anticipa si la línea admite la cuota específica y, con lo exigible pendiente, sólo si la cooperativa lo permite. 2026-11-26 (pedido del dueño): lo que
+    /// cuenta es lo vencido (el interés ya causado del mes en curso no); con cuotas vencidas, la cuota específica entra detrás de «Lo exigible» aunque la línea
+    /// no deje pagar fuera de orden.
+    /// </summary>
+    private bool PuedeAnticipar => _detalle is { } d && d.AdmittedModalities.Count > 0
+        && (d.Vencido <= 0m ? d.AdmittedModalities.Contains(6) : !ConMoraSoloExigible || ConMoraPermiteAnticipar);
+
+    /// <summary>
+    /// Lo que entra a «Qué paga» por las cuotas elegidas: con cuotas vencidas, menos lo que de cada una ya paga «Lo exigible» (su interés causado del período en
+    /// curso).
+    /// </summary>
+    private decimal ValorDeLasElegidas => ElegidasParaAnticipar.Sum(q => _detalle is { Vencido: > 0m } ? Math.Max(0m, q.ValueToAnticipate - q.DueInPeriod) : q.ValueToAnticipate);
 
     /// <summary>Las cuotas futuras que todavía tienen algo por anticipar, en orden.</summary>
     private IReadOnlyList<CuotaDeObligacionDto> Anticipables => _detalle?.Installments

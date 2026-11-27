@@ -509,7 +509,7 @@
 {
     <DetalleDeObligacionEnCaja Visible="true" VisibleChanged="@(v => { if (!v) _detalleDe = null; })" Obligacion="@detalleDe" Numero="@_numeroDelDetalle"
                                Fecha="@_operacion?.ValueDate" Tamano="@_tamano" Decimales="@_decimales" ConMoraSoloExigible="@(_pagables?.OverdueOnlyDue ?? true)"
-                               Anticipar="@AnticiparCuotas" />
+                               ConMoraPermiteAnticipar="@(_pagables?.OverdueAllowsAdvance ?? false)" Anticipar="@AnticiparCuotas" />
 }
 </PermissionGate>
 
@@ -835,11 +835,12 @@
 
     /// <summary>
     /// 2026-11-16: con algo exigible y la regla de la cooperativa, entra lo exigible (modalidad «lo vencido»); sin nada exigible, la cuota del ciclo
-    /// por su valor completo.
+    /// por su valor completo. 2026-11-26 (pedido del dueño): lo que decide es lo vencido; por período calendario, con sólo el interés ya causado del mes
+    /// entra la cuota del período completa.
     /// </summary>
     private void AgregarCredito(ObligacionPagableDto o)
     {
-        if (o.ConExigible && (_pagables?.OverdueOnlyDue ?? true))
+        if (o.ConVencido && (_pagables?.OverdueOnlyDue ?? true))
             Agregar(new ItemPedidoRequest(1, o.DueToday, o.ObligationPublicId, LoanModality: 2), $"Crédito {o.Number}");
         else
             Agregar(new ItemPedidoRequest(1, o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.ObligationPublicId, LoanModality: 3), $"Crédito {o.Number}");
@@ -922,23 +923,26 @@
 
     /// <summary>
     /// Las modalidades que se ofrecen: las que admite la obligación y, si tiene algo exigible y la cooperativa así lo dice
-    /// (<c>Caja.ConMoraSoloExigible</c>), sólo lo exigible, la cancelación y una cuota específica (para pagar una vencida).
+    /// (<c>Caja.ConMoraSoloExigible</c>), sólo lo exigible, la cancelación y una cuota específica (para pagar una vencida). 2026-11-26 (pedido del dueño):
+    /// lo que decide es lo vencido, y con <c>Caja.ConMoraPermiteAnticipar</c> se ofrecen todas: las que cubren primero lo exigible y la cuota específica
+    /// detrás de «Lo exigible».
     /// </summary>
     private IReadOnlyList<int> ModalidadesPermitidas(ObligacionPagableDto? o)
     {
         int[] orden = [2, 3, 1, 5, 6, 4, 7];
         var admitidas = o?.AdmittedModalities is { Count: > 0 } a ? a : orden;
         var lista = orden.Where(admitidas.Contains);
-        if (o is { ConExigible: true } && (_pagables?.OverdueOnlyDue ?? true)) lista = lista.Where(m => m is 1 or 2 or 6);
+        if (o is { ConVencido: true } && (_pagables?.OverdueOnlyDue ?? true) && _pagables?.OverdueAllowsAdvance != true)
+            lista = lista.Where(m => m is 1 or 2 or 6);
         return lista.ToList();
     }
 
     /// <summary>
     /// Sin nada exigible y con la regla de la cooperativa, la cuota del ciclo se paga completa: el mínimo es su valor menos lo que ya tenga
-    /// anticipado (lo mismo que exige el servidor).
+    /// anticipado (lo mismo que exige el servidor). 2026-11-26: «nada exigible» es nada vencido.
     /// </summary>
     private decimal? MinimoDe(ItemPedidoRequest i, ObligacionPagableDto o) =>
-        !o.ConExigible && (_pagables?.MinimumOneInstallment ?? true) && i.LoanModality == 3 && o.CycleInstallment - o.Advance > 0m
+        !o.ConVencido && (_pagables?.MinimumOneInstallment ?? true) && i.LoanModality == 3 && o.CycleInstallment - o.Advance > 0m
             ? o.CycleInstallment - o.Advance : null;
 
     private static readonly string[] ClasesPorDefecto = ["Aportes", "Creditos", "Ahorros", "Facturas", "Conceptos"];
@@ -1016,15 +1020,32 @@
         if (_items.Select(ObligacionDe).FirstOrDefault(o => o is not null) is { } enQuePaga) VerDetalle(enQuePaga.ObligationPublicId, enQuePaga.Number);
     }
 
-    /// <summary>Las cuotas que el asociado quiere anticipar: un ítem «cuota específica» por cada una, con su valor completo.</summary>
+    /// <summary>
+    /// Las cuotas que el asociado quiere anticipar: un ítem «cuota específica» por cada una, con su valor completo. 2026-11-26 (pedido del dueño): con cuotas
+    /// vencidas (y la cooperativa que lo permite), antes va «Lo exigible» por todo lo exigible, así el recibo cubre primero lo vencido; y lo que de una cuota
+    /// del período en curso ya pagó lo exigible (su interés causado) no se vuelve a anticipar.
+    /// </summary>
     private void AnticiparCuotas(IReadOnlyList<CuotaDeObligacionDto> cuotas)
     {
         if (_detalleDe is not { } obligacion) return;
         var numero = _numeroDelDetalle ?? "";
+        var conVencido = _pagables?.Obligations?.Obligations.FirstOrDefault(o => o.ObligationPublicId == obligacion) is { ConVencido: true } ob ? ob : null;
+        // Lo que ya está en «Qué paga» de este crédito y cubre primero lo exigible (todo menos la cuota específica): si alcanza para lo vencido, no se agrega nada.
+        var yaCubre = _items.Where(x => x.Target == 1 && x.ProductPublicId == obligacion && x.LoanModality is not (null or 6)).Sum(x => x.Amount);
+        if (conVencido is not null && yaCubre < conVencido.Vencido)
+        {
+            var exigible = _items.FirstOrDefault(x => x.Target == 1 && x.ProductPublicId == obligacion && x.LoanModality == 2);
+            if (exigible is null)
+                Agregar(new ItemPedidoRequest(1, conVencido.DueToday, obligacion, LoanModality: 2), $"Crédito {numero} · lo exigible");
+            else if (exigible.Amount < conVencido.DueToday)
+                Reemplazar(exigible, exigible with { Amount = conVencido.DueToday });
+        }
         foreach (var q in cuotas)
         {
             _items.RemoveAll(x => x.Target == 1 && x.ProductPublicId == obligacion && x.LoanModality == 6 && x.InstallmentNumber == q.Number);
-            Agregar(new ItemPedidoRequest(1, q.ValueToAnticipate, obligacion, LoanModality: 6, InstallmentNumber: q.Number), $"Crédito {numero} · cuota {q.Number}");
+            var valor = conVencido is null ? q.ValueToAnticipate : Math.Max(0m, q.ValueToAnticipate - q.DueInPeriod);
+            if (valor > 0m)
+                Agregar(new ItemPedidoRequest(1, valor, obligacion, LoanModality: 6, InstallmentNumber: q.Number), $"Crédito {numero} · cuota {q.Number}");
         }
         _detalleDe = null;
         ProgramarSimulacion();

@@ -54,8 +54,9 @@ public sealed class PreselectPayablesCommandHandler(
         foreach (var o in listado.Value?.Obligations ?? [])
         {
             // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota reconocida al inicio del ciclo es exigible del período: entra completa, por la cuota del
-            // ciclo, aunque todavía no venza.
-            if (o.BlockReasons.Count == 0 && o.DueToday <= 0m && o.RecognizedPending > 0m && o.CycleInstallment > 0m
+            // ciclo, aunque todavía no venza. 2026-11-26 (pedido del dueño): también la del período calendario en curso con su interés ya causado, si no hay nada
+            // vencido; antes entraba sólo ese interés, como si fuera mora.
+            if (o.BlockReasons.Count == 0 && ReglasDeLaCaja.Vencido(o) <= 0m && (o.RecognizedPending > 0m || o.DueToday > 0m) && o.CycleInstallment > 0m
                 && o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment))
             {
                 exigibles.Add(new ItemPedidoDto(ApplicationTarget.Loan, o.CycleInstallment, o.ObligationPublicId, titular, ModalidadDePago.CycleInstallment));
