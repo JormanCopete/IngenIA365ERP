@@ -42,7 +42,18 @@ public sealed class CanceladorDeRecuperacionesAlEntrar(
                          && r.EjecutadaEn == null && r.CanceladaEn == null)
                 .ToListAsync(ct);
 
-            if (vivas.Count == 0) return;
+            // Feature 027 (HU3): entrar con el segundo factor también gasta los pases de ingreso vivos. Si tiene su app a mano, el pase ya
+            // no hace falta, y dejarlo vivo es dejar una puerta abierta el resto de la jornada.
+            var pases = await adminDb.LoginPasses
+                .Where(p => p.CentralUserId == centralUserId && p.VoidedAt == null && p.ExpiresAt > ahora)
+                .ToListAsync(ct);
+            foreach (var pase in pases) pase.Anular(ahora, LoginPass.Motivos.EntroConSegundoFactor, centralUserId);
+
+            if (vivas.Count == 0)
+            {
+                if (pases.Count > 0) await adminDb.SaveChangesAsync(ct);
+                return;
+            }
 
             foreach (var solicitud in vivas)
             {

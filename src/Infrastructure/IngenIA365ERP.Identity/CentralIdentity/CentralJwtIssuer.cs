@@ -63,6 +63,30 @@ public class CentralJwtIssuer : ICentralJwtIssuer
             lifetime: TimeSpan.FromMinutes(_settings.AccessTokenExpirationMinutes));
     }
 
+    /// <summary>Feature 027: el access de una sesión abierta con un pase de ingreso (claim <c>login_pass_tenant</c>).</summary>
+    public CentralAccessTokenResult IssueAccessToken(
+        Guid centralUserId,
+        string email,
+        bool isGlobalMasterAdmin,
+        Guid? activeTenantId,
+        bool? tenantAdmin,
+        bool mfaVerified,
+        MetodosMfa metodoMfa,
+        Guid paseDeIngresoCooperativa)
+    {
+        return Issue(
+            centralUserId,
+            email,
+            isGlobalMasterAdmin,
+            activeTenantId,
+            tenantAdmin,
+            mfaVerified,
+            metodoMfa,
+            purpose: CentralJwtPurposes.Full,
+            lifetime: TimeSpan.FromMinutes(_settings.AccessTokenExpirationMinutes),
+            paseDeIngresoCooperativa: paseDeIngresoCooperativa);
+    }
+
     /// <summary>Emite un challenge token con purpose acotado (MFA verify / enroll /
     /// tenant-select / password-reset). TTL default 5 min.</summary>
     public CentralAccessTokenResult IssueChallengeToken(
@@ -120,7 +144,8 @@ public class CentralJwtIssuer : ICentralJwtIssuer
         bool mfaVerified,
         MetodosMfa metodoMfa,
         string purpose,
-        TimeSpan lifetime)
+        TimeSpan lifetime,
+        Guid? paseDeIngresoCooperativa = null)
     {
         var signingCredentials = new SigningCredentials(
             _keyProvider.GetSecurityKey(),
@@ -156,6 +181,9 @@ public class CentralJwtIssuer : ICentralJwtIssuer
 
         if (activeTenantId.HasValue)
             claims.Add(new Claim("active_tenant_id", activeTenantId.Value.ToString()));
+
+        if (paseDeIngresoCooperativa is { } pase)
+            claims.Add(new Claim(ClaimsDelPaseDeIngreso.Cooperativa, pase.ToString()));
 
         if (tenantAdmin.HasValue)
             claims.Add(new Claim("tenant_admin", tenantAdmin.Value ? "true" : "false", ClaimValueTypes.Boolean));

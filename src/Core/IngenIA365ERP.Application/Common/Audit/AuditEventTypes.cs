@@ -49,6 +49,13 @@ public static class AuditEventTypes
     public const string IdentityRecoveryLinkSent = "Identity.RecoveryLinkSent";
     public const string IdentityPolicyChanged = "IdentityPolicy.Changed";
 
+    // Feature 027: pases de ingreso sin segundo factor.
+    public const string LoginPassGranted = "Identity.LoginPass.Granted";
+    public const string LoginPassResent = "Identity.LoginPass.Resent";
+    public const string LoginPassVoided = "Identity.LoginPass.Voided";
+    public const string LoginPassUsed = "Identity.LoginPass.Used";
+    public const string LoginPassUseFailed = "Identity.LoginPass.UseFailed";
+
     // -------------------- Memberships --------------------
     public const string MembershipActivated = "Membership.Activated";
     public const string MembershipActivatedFromSuspension = "Membership.Activated.FromSuspension";

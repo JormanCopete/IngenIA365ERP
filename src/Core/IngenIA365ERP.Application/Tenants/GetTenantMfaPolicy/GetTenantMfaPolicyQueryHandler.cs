@@ -44,6 +44,10 @@ public sealed class GetTenantMfaPolicyQueryHandler(
             IsRequired: policy.IsRequired,
             ActivatedAt: policy.ActivatedAt,
             DeactivatedAt: policy.DeactivatedAt,
-            MetodosAceptados: ConversionDeMetodosMfa.ALiterales(policy.AllowedMethodsMask)));
+            MetodosAceptados: ConversionDeMetodosMfa.ALiterales(policy.AllowedMethodsMask),
+            PermitirRecuperacionPorCorreo: policy.AllowEmailRecovery,
+            HorasDeDemora: policy.EmailRecoveryDelayHours,
+            PermitirPasesDeIngreso: policy.AllowLoginPass,
+            HorasMaximasDelPase: policy.LoginPassMaxHours));
     }
 }
