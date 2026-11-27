@@ -96,6 +96,41 @@ public class AnulacionDeReciboTests
     }
 
     [Fact]
+    public async Task Anular_un_recibo_con_descuento_por_pago_anticipado_reversa_tambien_el_descuento()
+    {
+        // 2026-11-26 (pedido del dueño): la cuota 3 anticipada completa con el 22,22 % del interés de descuento; el asociado pagó 106.714 y Cartera recibió 110.404.
+        var todas = Enum.GetValues<ModalidadDePago>();
+        _k.Obligaciones.ListarAsync(Arg.Any<SolicitudDeListado>(), Arg.Any<CancellationToken>()).Returns(ci =>
+            new RespuestaDelContratoDto<ListadoDeObligacionesDto>(ResultadoDelContrato.Answered, "OK", "", new ListadoDeObligacionesDto(EstadoDeCartera.Active,
+                ci.Arg<SolicitudDeListado>().PersonPublicId, EscenarioDeRecaudo.Hoy,
+                [new ObligacionListadaDto(_k.CreditoA, "CR-A", "PRESTOR18", "Préstamo", RolEnLaObligacion.Debtor, EstadoDeObligacion.Active, 0, 0m, 110_404m, 0m,
+                    2_000_000m, 0m, 0m, todas, [], false, false)])));
+        _k.Obligaciones.DetalleAsync(Arg.Any<SolicitudDeDetalle>(), Arg.Any<CancellationToken>()).Returns(
+            new RespuestaDelContratoDto<DetalleDeObligacionDto>(ResultadoDelContrato.Answered, "OK", "", new DetalleDeObligacionDto(_k.CreditoA, "CR-A", "Préstamo",
+                "Vigente", 0, 0m, 0m, 2_000_000m, 0m, 0m, 110_404m, EscenarioDeRecaudo.Hoy.AddDays(20), [],
+                [new CuotaDeObligacionDto(3, EscenarioDeRecaudo.Hoy.AddDays(50), "Upcoming", 91_800m, 16_604m, 2_000m, 0m, 110_404m, 110_404m, 0m, 110_404m)],
+                todas, true, []) { AdvanceDiscountFraction = 0.2222222222m }));
+        await _k.AbrirAsync();
+        var op = await _k.PreparadaAsync([new ItemPedidoDto(ApplicationTarget.Loan, 110_404m, _k.CreditoA, LoanModality: ModalidadDePago.SpecificInstallment,
+            InstallmentNumber: 3, ApplyAdvanceDiscount: true)], [_k.Efectivo(106_714m)]);
+        var recibo = (await _k.Confirmacion().ConfirmarAsync(op.PublicId, Guid.NewGuid(), null, default)).Value;
+        var pedida = await Pedir().Handle(new RequestReceiptVoidingCommand(recibo.PublicId, "Era otra cuota") { OperationKey = Guid.NewGuid() }, default);
+        _k.C.E.Como(_k.C.E.Supervisor);
+
+        var aprobada = await Aprobar().Handle(new ApproveReceiptVoidingCommand(pedida.Value.PublicId, "Revisado") { OperationKey = Guid.NewGuid() }, default);
+
+        aprobada.IsSuccess.Should().BeTrue(aprobada.IsFailure ? aprobada.Error.Code : null);
+        var hecho = await _k.C.E.Db.IntegrationMessages.SingleAsync(m => m.Type == ReciboAnuladoV1.Type);
+        var contenido = System.Text.Json.JsonSerializer.Deserialize<ReciboAnuladoV1>(hecho.PayloadJson,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        var descuento = contenido.Lines.Single(l => l.Role == RolesDeRecaudo.DescuentoPorPagoAnticipado);
+        (descuento.Side, descuento.Amount).Should().Be((RolesDeRecaudo.Credito, 3_690m));
+        contenido.Lines.Where(l => l.Role == RolesDeRecaudo.PuenteDelModulo).Sum(l => l.Amount).Should().Be(110_404m, "lo que el módulo reversa: la cuota completa");
+        contenido.Lines.Where(l => l.Side == RolesDeRecaudo.Debito).Sum(l => l.Amount)
+            .Should().Be(contenido.Lines.Where(l => l.Side == RolesDeRecaudo.Credito).Sum(l => l.Amount), "cuadra");
+    }
+
+    [Fact]
     public async Task Con_el_permiso_de_anular_sin_segunda_persona_quien_la_pide_la_aplica_sin_solicitud_de_aprobacion()
     {
         _permisos.TienePermisoAsync(Arg.Any<int>(), AprobarAnulacion.PermisoSinSegundaPersona, Arg.Any<CancellationToken>()).Returns(true);

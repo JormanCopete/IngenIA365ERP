@@ -91,7 +91,7 @@ public sealed class PreselectPayablesCommandHandler(
             .Where(i => i.ProductPublicId is null || !productos.Contains(i.ProductPublicId))
             .Select(i => new ItemPedidoDto(i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.AccountModality, i.Choice,
                 i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId, i.PendingTarget,
-                i.LoadObligationPublicId, i.ProductReference))
+                i.LoadObligationPublicId, i.ProductReference, i.AdvanceDiscount > 0m))
             .ToList();
         return await new UpdateCashOperationItemsCommandHandler(db, alcance, obligaciones, cuentas, carga, contabilidad, parametros)
             .Handle(new UpdateCashOperationItemsCommand(request.OperationPublicId, [.. conservados, .. exigibles]) { OperationKey = request.OperationKey }, ct);

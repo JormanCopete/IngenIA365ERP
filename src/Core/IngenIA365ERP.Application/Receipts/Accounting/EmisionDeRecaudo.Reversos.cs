@@ -63,6 +63,9 @@ public sealed partial class EmisionDeRecaudo
             lineas.Add(aSaldo
                 ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, p.Amount, dim, pagador, anulacion.Number)
                 : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
+            // 2026-11-26 (pedido del dueño): con la porción que llevó el descuento por pago anticipado se reversa también el descuento.
+            if (await DescuentoDeLaPorcionAsync(a, p.Id, ct) is > 0m and var descuento)
+                lineas.AddRange(ReversoDelDescuento(a, descuento, recibo.CashBoxId is { } c ? await DimensionesDeCajaAsync(c, null, ct) : dim, anulacion.Number));
         }
         var contenido = new ReciboAnuladoV1
         {
@@ -72,6 +75,25 @@ public sealed partial class EmisionDeRecaudo
         };
         return await EmitirAsync(contenido, anulacion.PublicId, ClaseAnulacion, codigoDelTipo, anulacion.Number, contenido.VoidedOn, recibo.BranchId, pagador, ct);
     }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento por pago anticipado de la aplicación si <paramref name="porcionId"/> es la porción que lo llevó al módulo (la
+    /// última de la aplicación); cero en las demás.
+    /// </summary>
+    private async Task<decimal> DescuentoDeLaPorcionAsync(ReceiptApplication aplicacion, long porcionId, CancellationToken ct)
+    {
+        if (aplicacion.AdvanceDiscount is not > 0m) return 0m;
+        var ultima = await db.ReceiptApplicationPortions.AsNoTracking().Where(x => x.ReceiptApplicationId == aplicacion.Id).MaxAsync(x => (long?)x.Id, ct);
+        return ultima == porcionId ? aplicacion.AdvanceDiscount.Value : 0m;
+    }
+
+    /// <summary>2026-11-26: el reverso del descuento por pago anticipado: débito al puente del módulo y crédito al rol del descuento.</summary>
+    private static IEnumerable<FactLineV1> ReversoDelDescuento(ReceiptApplication a, decimal descuento, ReceiptsFactDimensionsV1 dim, string cruce) =>
+    [
+        Linea(RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.Debito, descuento, dim with { TargetModule = ModulosDeOrigen.Cartera, TargetNature = Naturaleza(a.Target, null) },
+            cruce: cruce),
+        Linea(RolesDeRecaudo.DescuentoPorPagoAnticipado, RolesDeRecaudo.Credito, descuento, dim, cruce: cruce),
+    ];
 
     private async Task<Guid?> PersonaPublicaAsync(int personaId, CancellationToken ct) =>
         await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == personaId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
@@ -97,6 +119,11 @@ public sealed partial class EmisionDeRecaudo
                 recibido
                     ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, reverso.Amount, dim, pagador, recibo.Number)
                     : Linea(RolDelMedio(medio?.MeansClass ?? PaymentMeansClass.Cash), RolesDeRecaudo.Credito, reverso.Amount, ConCuentaDelMedio(dim, medio), cruce: recibo.Number),
+                // 2026-11-26 (pedido del dueño): si el módulo reversó la porción que llevó el descuento por pago anticipado, el descuento vuelve a la cooperativa: no es
+                // del pagador (lo reversado por el módulo incluye el descuento, y la porción en medios no).
+                .. reverso.PortionId is { } pid && await DescuentoDeLaPorcionAsync(aplicacion, pid, ct) is > 0m and var descuento
+                    ? ReversoDelDescuento(aplicacion, descuento, recibo.CashBoxId is { } c ? await DimensionesDeCajaAsync(c, null, ct) : dim, reverso.ModuleReversalNumber)
+                    : [],
             ],
         };
         return await EmitirAsync(contenido, reverso.PublicId, ClaseReversoDelModulo, TipoReversoDelModulo, reverso.ModuleReversalNumber, fecha, recibo.BranchId, pagador, ct);

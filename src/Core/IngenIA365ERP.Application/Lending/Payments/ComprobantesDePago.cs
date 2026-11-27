@@ -111,6 +111,8 @@ public static class ComprobantesDePago
     {
         ArgumentNullException.ThrowIfNull(e);
         var delTramo = periodoCalendario && e.Plan is not null ? AplicadorDePagos.CuotasDelTramoEnCurso(e.Plan, e.Fecha) : new HashSet<int>();
+        // 2026-11-26 (pedido del dueño): la cuota del período en curso (el ciclo de la cuota o el tramo del calendario); las demás por vencer no han empezado.
+        var delPeriodo = CuotaDelPeriodo(e, periodoCalendario)?.Numero;
         var salida = new List<CuotaDeObligacionDto>();
         foreach (var c in e.Plan?.Cuotas ?? [])
         {
@@ -138,6 +140,7 @@ public static class ComprobantesDePago
             {
                 Administration = c.Administracion, Recognized = e.ReconocidoPendiente(c.Numero),
                 DueInPeriod = delTramo.Contains(c.Numero) ? ExigibleDelTramo(e, c.Numero) : 0m,
+                InCurrentPeriod = c.Numero == delPeriodo,
             });
         }
         return salida;

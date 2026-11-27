@@ -24,6 +24,8 @@ public class ParametrosDeCarteraTests
         { "Pagos.FirmezaDiasPorClaseDeMedio", "{\"*\": 10, \"InternalOffset\": 0}", [N], EntregaDeCartera.K1 },
         // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
         { "Pagos.InteresesAlPagarAntesDelVencimiento", "Corrido", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado en caja, por empresa y por línea (0 = sin descuento).
+        { "Pagos.DescuentoPorPagoAnticipado", "0", [N, L], EntregaDeCartera.K1 },
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         { "Pagos.PrelacionDeRubros", "Seguro,Administracion,Interes,CuotasExtras,Capital", [N], EntregaDeCartera.K1 },
         { "Mora.ToleranciaDeSaldoVencido", "0", [N, L], EntregaDeCartera.K1 },
