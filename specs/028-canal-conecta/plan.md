@@ -23,8 +23,9 @@ casos a/b/c y la representación siguen igual. El adaptador encaja en el puerto.
 Los cambios fuera del adaptador son pocos y acotados:
 
 1. **Canónico v2**, aditivo: datos que Conecta exige y el v1 no trae. Son nombres y apellidos separados, nombres de
-   municipio y departamento, código de departamento, código postal y tipo de organización. La versión del esquema se
-   guarda en cada versión del documento, para que reconstruir una v1 siga dando los mismos bytes.
+   municipio y departamento con su código. Los campos nuevos no se escriben cuando son nulos, y **la versión la decide
+   el canal sellado** (`EsquemaDelCanonico`: v2 sólo con `CONECTA*`). Así reconstruir una v1 da los mismos bytes **sin
+   columna nueva** (ajuste de C1, 2026-11-27).
 2. **Configuración**: dos columnas nulas en `COR_ElectronicEmissionSettings`: `ChannelTenantId` (Guid) y
    `ChannelEndpoint` (clave de la lista blanca). La migración par es aditiva.
 3. **Guardia**: motivos nuevos (contrato §9) y una regla: `CONECTA` sólo en un proceso de producción.
@@ -157,12 +158,17 @@ Conecta recalcula los totales. Si difieren, el XML (lo legal) diría otra cosa q
 ### D8 — Contingencia 03 con Conecta
 
 `CONECTA*` declara `ContingenciaDelFacturador = false` en esta entrega: `/v1/invoice-transcriptions` responde 409 con
-un tenant de proveedor. Se agrega a la guardia el motivo `ContingencyNotSupported`: con un evento 03 abierto y un canal
-que no transmite la 03, la venta en oficina se bloquea con salida («use el comprobante de contingencia en papel
-cuando el canal lo admita; mientras tanto, espere a que se cierre el evento»). El POS mantiene lo que hace hoy: la
-venta se confirma, queda pendiente y se transmite al volver el canal. Así nunca se numera en una resolución de
-contingencia que nadie va a transmitir. La transmisión 03 por Conecta queda trazada para cuando el tenant emita por
-motor propio.
+un tenant de proveedor.
+
+**Regla (ajustada en C1, 2026-11-27): un canal que no transmite la 03 nunca tiene evento 03.**
+`ContingenciaDeLaDian.AbrirDeFacturacionAsync`, el único sitio que la abre (a mano o por el circuito), responde
+`ElectronicInvoicing.Contingency.NotSupportedByChannel`. Así la numeración no cambia por un evento que nadie podría
+transmitir: ni el tipo de contingencia del POS, ni el bloqueo del tipo normal en oficina, ni la resolución de
+contingencia. Las ventas se numeran normalmente, quedan en cola (`Pending`) y salen solas al volver el canal; la alerta
+`Dian.CanalSinRespuesta` del circuito sigue avisando.
+
+El borrador bloqueaba sólo en oficina, y eso trataba distinto a la caja y a la oficina para la misma caída. La
+transmisión 03 por Conecta queda trazada para cuando el tenant emita por motor propio.
 
 ### D9 — Correo al comprador
 
@@ -200,7 +206,6 @@ quien hoy arma el contexto desde la vigencia **sellada** en el documento.
 |---|---|---|
 | `COR_ElectronicEmissionSettings.ChannelTenantId` | `uuid`/`uniqueidentifier` nulo | Tenant de Conecta |
 | `COR_ElectronicEmissionSettings.ChannelEndpoint` | `varchar(40)` nulo | Clave de la lista blanca (`QA`, `PDN`) |
-| `COR_ElectronicDocumentVersions.CanonicalSchemaVersion` | `smallint not null default 1` | Para reconstruir cada versión con su esquema |
 | Permiso `ElectronicInvoicing.Settings.ActivateProduction` | semilla de la API | Sólo el rol administrador |
 
 Migración par **aditiva** `CanalConecta` (PostgreSQL y SQL Server) con marca posterior a `EsquemaBase`. No toca filas

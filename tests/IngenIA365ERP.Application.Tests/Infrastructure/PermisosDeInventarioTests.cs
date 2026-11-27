@@ -62,7 +62,7 @@ public class PermisosDeInventarioTests
 
     private static readonly string[] FacturacionElectronica =
     [
-        "Settings.View", "Settings.Manage", "Resolutions.View", "Resolutions.Manage", "Documents.View",
+        "Settings.View", "Settings.Manage", "Settings.ActivateProduction", "Resolutions.View", "Resolutions.Manage", "Documents.View",
         "Documents.Transmit", "Documents.Correct", "Documents.TransmitByCurrentChannel", "Contingencies.View",
         "Contingencies.Declare",
     ];

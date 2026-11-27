@@ -8,6 +8,9 @@ public static class ErroresDeContingencias
     public const string Dian04OnlyByChannelCode = "ElectronicInvoicing.Contingency.Dian04OnlyByChannel";
     public const string AlreadyOpenCode = "ElectronicInvoicing.Contingency.AlreadyOpen";
 
+    /// <summary>Feature 028 (D8): el canal no transmite la contingencia 03. (nuevo)</summary>
+    public const string NotSupportedByChannelCode = "ElectronicInvoicing.Contingency.NotSupportedByChannel";
+
     /// <summary>El evento no existe. (nuevo)</summary>
     public const string NotFoundCode = "ElectronicInvoicing.Contingency.NotFound";
 
@@ -25,6 +28,12 @@ public static class ErroresDeContingencias
     public static Error AlreadyOpen(Guid abierta) =>
         new ErrorConDatos(AlreadyOpenCode, "Ya hay una contingencia de facturación abierta en este canal: ciérrela antes de abrir otra.",
             new { contingencyPublicId = abierta });
+
+    public static Error NotSupportedByChannel(string canal) =>
+        new ErrorConDatos(NotSupportedByChannelCode,
+            $"El canal {canal} no transmite documentos de contingencia del facturador (tipo 03): mientras el canal no responda, las ventas se " +
+            "numeran normalmente y quedan pendientes de transmitir; se envían solas cuando vuelva.",
+            new { channelCode = canal });
 
     public static Error NotFound() => new(NotFoundCode, "La contingencia no existe.");
 

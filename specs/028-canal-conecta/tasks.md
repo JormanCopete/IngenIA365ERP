@@ -15,22 +15,24 @@ lo pida.
 
 ## C1 — Canónico v2, configuración, guardia y permiso
 
-- [ ] T010 Canónico v2: `ParteCanonica.GivenNames/FamilyNames/TradeName`; `DireccionCanonica.CityName/DepartmentCode/
-  DepartmentName/PostalCode`; `VersionDelEsquema = 2`; el serializador omite los campos v2 al escribir una v1
-- [ ] T011 `ConstructorDelCanonico` llena v2 desde la copia fiscal y DIVIPOLA; `EntradaDeDocumentoElectronico` y
-  `FuenteDeEmisionDeInventario` (y las demás fuentes) entregan nombres y apellidos
-- [ ] T012 `COR_ElectronicDocumentVersions.CanonicalSchemaVersion` (escrita al crear la versión); `ReconstruccionDel
-  Canonico` construye con la versión guardada; prueba: una v1 reconstruida da el mismo SHA-256
-- [ ] T013 `COR_ElectronicEmissionSettings.ChannelTenantId`, `ChannelEndpoint`; DTO, `GetEmissionSettingsQuery`
-- [ ] T014 Migración par aditiva `CanalConecta` (PostgreSQL y SQL Server), con marca posterior a `EsquemaBase`
-- [ ] T015 `ContextoDeCanal.Canal` (`ParametrosDelCanal(TenantId, Endpoint)`); lo arma quien arma el contexto, desde la
-  vigencia **sellada**
-- [ ] T016 `ConfigureEmissionCommand`: campos nuevos, cuatro rechazos del contrato §9, `ConfirmProduction`, permiso
-  `ElectronicInvoicing.Settings.ActivateProduction` (sembrado por la API al arrancar, sólo para el administrador)
-- [ ] T017 `GuardiaDeEmisionFiscal.Decidir`: motivos `ChannelEnvironmentMismatch`, `ProductionChannelNotAllowedHere`
-  (lee `CanalesExternosOptions.AmbienteDePruebas`) y `ContingencyNotSupported` (D8)
-- [ ] T018 Pruebas: guardia (combinaciones de modo, ambiente y proceso), configuración, canónico v2 (casos dorados
-  nuevos; los v1 intactos)
+- [x] T010 Canónico v2: `ParteCanonica.GivenNames/FamilyNames` y `DireccionCanonica.CityName/DepartmentCode/
+  DepartmentName`, con `JsonIgnore(WhenWritingNull)`; `VersionConDatosDeConecta = 2`
+- [x] T011 `ConstructorDelCanonico` llena v2 (`NombresDePersona`); `FotoFiscalDeEntrada` y `FuenteDeEmisionDeInventario`
+  entregan nombres, municipio y departamento (DIVIPOLA)
+- [x] T012 **Sin columna** (ajuste de C1): `EsquemaDelCanonico.Para(canal sellado)`, v2 sólo con `CONECTA*`. La prueba
+  comprueba que una v1 con los datos nuevos en la entrada da los mismos bytes
+- [x] T013 `COR_ElectronicEmissionSettings.ChannelTenantId`, `ChannelEndpoint`; DTO y `CanalDisponibleDto` con ambiente
+  exigido, extremos y si es de producción
+- [x] T014 Migración par aditiva `CanalConecta` (PostgreSQL y SQL Server)
+- [x] T015 `ContextoDeCanal.Canal` (`ParametrosDelCanal`) desde la vigencia sellada, en los cuatro sitios que lo arman;
+  `IDeclaraParametrosDelCanal` y `ReglasDeParametrosDelCanal` en Application
+- [x] T016 `ConfigureEmissionCommand`: campos nuevos, rechazos del contrato §9, `ConfirmProduction`, permiso
+  `ElectronicInvoicing.Settings.ActivateProduction` (sembrado con el catálogo de facturación electrónica)
+- [x] T017 `GuardiaDeEmisionFiscal.Decidir`: `ChannelEnvironmentMismatch`, `ProductionChannelNotAllowedHere` (lee
+  `CanalesExternosOptions.AmbienteDePruebas`; sin ella asume pruebas) y `ChannelParametersMissing`. D8 va en
+  `ContingenciaDeLaDian.AbrirDeFacturacionAsync` (`NotSupportedByChannel`)
+- [x] T018 Pruebas: `ParametrosDelCanalTests` (configuración, guardia, 03, esquema, nombres, departamento) y tres
+  casos v2 en `ConstructorDelCanonicoTests`; las 1.006 de facturación electrónica y permisos pasan
 
 ## C2 — Adaptador
 

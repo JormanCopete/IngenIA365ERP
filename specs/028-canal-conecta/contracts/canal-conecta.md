@@ -83,15 +83,17 @@ por capacidades.
 
 ### 4.1 Canónico v2 (aditivo)
 
-Lo agrega `ConstructorDelCanonico` (desde el maestro de personas y DIVIPOLA, por la copia fiscal vigente cuando
-exista). Cada versión guarda `CanonicalSchemaVersion`:
+Lo agrega `ConstructorDelCanonico` **sólo cuando el canal sellado es `CONECTA*`** (`EsquemaDelCanonico`), desde la
+copia fiscal vigente (`FirstName`, `LastName`) y DIVIPOLA (`COR_Cities`). Los campos nuevos no se escriben si son nulos,
+así lo sellado a otro canal sigue en v1 con los mismos bytes:
 
 | Campo nuevo | De dónde |
 |---|---|
-| `counterparty.givenNames`, `counterparty.familyNames` | Nombres y apellidos de `COR_People` (persona natural); nulos en jurídica |
-| `counterparty.tradeName` | Nombre comercial, si existe |
-| `counterparty.address.cityName`, `departmentCode`, `departmentName`, `postalCode` | DIVIPOLA por `cityDaneCode`; el código de departamento son los 2 primeros dígitos del DANE |
-| `issuer.address.*` | Lo mismo para el emisor |
+| `counterparty.givenNames`, `counterparty.familyNames` | `NombresDePersona.Separar`: el nombre completo de la copia fiscal partido donde empieza el primer apellido; nulos en jurídica |
+| `counterparty.address.cityName`, `departmentCode`, `departmentName` | DIVIPOLA por `cityDaneCode`; el código de departamento son los 2 primeros dígitos del municipio |
+
+El emisor no viaja a Conecta: lo toma del perfil del tenant. `tradeName` y `postalCode` no se envían porque la copia
+fiscal no los guarda.
 
 ### 4.2 Factura — `POST /v1/invoices`
 
@@ -107,7 +109,6 @@ exista). Cada versión guarda `CanonicalSchemaVersion`:
 | `paymentMeans.dueDate` | `dueDate` | |
 | `customer.idType`, `idNumber`, `dv` | `counterparty.idTypeCode`, `taxId`, `checkDigit` | |
 | `customer.legalName` | `counterparty.name` | |
-| `customer.tradeName` | `counterparty.tradeName` (v2) | |
 | `customer.organizationType` | `counterparty.personTypeCode` (1 jurídica, 2 natural) | |
 | `customer.givenNames` / `familyNames` | v2 | Factible los exige en persona natural (`InvoiceRequest.cs`) |
 | `customer.taxLevelCodes` | `counterparty.responsibilities` | |
@@ -116,7 +117,7 @@ exista). Cada versión guarda `CanonicalSchemaVersion`:
 | `customer.email` | `counterparty.receptionEmail` **sólo si** `EmailDeliveryBy = Channel` | **D9** |
 | `customer.phone` | `counterparty.phone` | |
 | `customer.address.municipalityCode` | `address.cityDaneCode` | |
-| `customer.address.city`, `departmentCode`, `department`, `postalCode`, `line`, `country` | v2 y `address.line`, `countryCode` | |
+| `customer.address.city`, `departmentCode`, `department`, `line`, `country` | v2 y `address.line`, `countryCode` | |
 | `lines[].code`, `description`, `quantity`, `unitCode`, `unitPrice` | `lines[]` | |
 | `lines[].taxes[]` | `{ code = dianTaxCode, rate = Rate × 100, exempt = (Rate == 0) }` | Conecta recibe porcentaje (`InvoiceRequestValidator`: 0, 5, 16, 19). `AmountPerUnit` no nulo → `InvalidData` (**D3**). «Tarifa 0 = exento» **por cotejar** |
 | `lines[].allowances[]` | `{ isCharge = false, reason = ReasonCode ?? "Descuento", percent = Percent × 100, amount = Amount }` | La escala del porcentaje **por cotejar** con `/preview` |
@@ -256,8 +257,10 @@ La sonda del circuito usa el mismo `ProbarAsync`.
 
 - `ElectronicInvoicing.Readiness.ChannelEnvironmentMismatch`;
 - `ElectronicInvoicing.Readiness.ProductionChannelNotAllowedHere`;
-- `ElectronicInvoicing.Readiness.ContingencyNotSupported` (D8: evento 03 abierto y el canal sin
-  `ContingenciaDelFacturador`).
+- `ElectronicInvoicing.Readiness.ChannelParametersMissing` (falta el tenant o el extremo no está en la lista).
+
+D8: abrir una contingencia 03 en un canal sin `ContingenciaDelFacturador` responde
+`ElectronicInvoicing.Contingency.NotSupportedByChannel` (plan §3).
 
 ## 10. Webhook (P3)
 

@@ -18,6 +18,8 @@ public static class ElectronicInvoicingPermissionCatalogSeeder
     [
         ("ElectronicInvoicing.Settings",      "View",                     "Ver la configuración de facturación electrónica"),
         ("ElectronicInvoicing.Settings",      "Manage",                   "Configurar la emisión electrónica, sus canales y los parámetros EINV"),
+        // Feature 028: activar el canal de producción de Conecta (validez legal). Además de Manage y con la confirmación PRODUCCION.
+        ("ElectronicInvoicing.Settings",      "ActivateProduction",       "Activar la emisión con validez legal (canal CONECTA en producción)"),
         ("ElectronicInvoicing.Resolutions",   "View",                     "Ver las resoluciones de numeración de la DIAN"),
         ("ElectronicInvoicing.Resolutions",   "Manage",                   "Registrar resoluciones de numeración y vincularlas a un canal"),
         ("ElectronicInvoicing.Documents",     "View",                     "Ver los documentos electrónicos y su estado ante la DIAN"),

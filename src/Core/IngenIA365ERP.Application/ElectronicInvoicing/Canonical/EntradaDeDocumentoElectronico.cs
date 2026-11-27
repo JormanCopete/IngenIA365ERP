@@ -86,9 +86,21 @@ public sealed record FotoFiscalDeEntrada
 
     public string LegalName { get; init; } = string.Empty;
 
+    /// <summary>Feature 028: primer nombre de la persona natural, de la copia fiscal (nulo en jurídica).</summary>
+    public string? FirstName { get; init; }
+
+    /// <summary>Feature 028: primer apellido de la persona natural, de la copia fiscal (nulo en jurídica).</summary>
+    public string? LastName { get; init; }
+
     public string? Address { get; init; }
 
     public string? MunicipalityDaneCode { get; init; }
+
+    /// <summary>Feature 028: el municipio por nombre (DIVIPOLA), para el esquema v2.</summary>
+    public string? CityName { get; init; }
+
+    /// <summary>Feature 028: el departamento por nombre (DIVIPOLA), para el esquema v2.</summary>
+    public string? DepartmentName { get; init; }
 
     public string? CountryCode { get; init; }
 

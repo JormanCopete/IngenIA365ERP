@@ -130,6 +130,10 @@ public sealed record ReferenciaDeEnvio(
 /// <param name="TechnicalKey">Clave técnica de la resolución, sólo en modo propio y cuando la operación la necesita (§15).</param>
 /// <param name="IdempotencyKey">La clave del intento (§6.2), ver <see cref="ClaveDeIdempotencia"/>.</param>
 /// <param name="Credenciales">Las credenciales ya resueltas; nulas en <c>CanalSimulado</c>.</param>
+/// <param name="Canal">
+/// Feature 028: el tenant del servicio externo y la clave del extremo, de la vigencia <b>sellada</b> (nunca una URL ni un secreto). Nulo en
+/// <c>CanalSimulado</c>.
+/// </param>
 public sealed record ContextoDeCanal(
     Guid TenantPublicId,
     string IssuerTaxId,
@@ -140,8 +144,13 @@ public sealed record ContextoDeCanal(
     string? TestSetId,
     string? TechnicalKey,
     string? IdempotencyKey,
-    CredencialesDeCanal? Credenciales)
+    CredencialesDeCanal? Credenciales,
+    ParametrosDelCanal? Canal = null)
 {
+    /// <summary>Los parámetros del canal de una vigencia de configuración. (nuevo, 028)</summary>
+    public static ParametrosDelCanal ParametrosDe(Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting configuracion) =>
+        new(configuracion.ChannelTenantId, configuracion.ChannelEndpoint);
+
     /// <summary>
     /// <c>{tenantPublicId:N}:{Environment}:{Prefix}{Consecutive}:v{VersionNumber}</c> (contracts/dian.md §6.2), p. ej.
     /// <c>3f2a…c91:Testing:SETP990000123:v1</c>. (nuevo)
