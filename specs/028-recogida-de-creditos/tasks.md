@@ -87,11 +87,11 @@ el neto mostrado.
 **Prueba independiente**: desembolso de 10.000.000 que recoge 2.300.000: DS con «desembolso por girar» 7.700.000 y puente 2.300.000; el RC
 debita 2.300.000 al mismo puente; saldo del puente 0.
 
-- [ ] T045 [US3] `PayoffDeductionV1` con `ProductKind`, `AccountRef`, `ReceivableRef` opcionales en `App/Common/Integration/Contracts/Lending/BloquesComunesDeCarteraV1.cs`; emisión en `App/Lending/Integration/EmisionDeCartera.Desembolso.cs`
-- [ ] T046 [US3] Constructor del DS: `DesembolsoPorGirar` por el neto y `RecaudoPorAplicar`/`OwnLoanPayoff` por cada recogida (tercero = deudor, cruce = producto) en `App/Accounting/Lending/Contabilizacion/ConstructorDeLineasDeCartera.cs`; sin recogidas, idéntico
-- [ ] T047 [US3] Parámetro `Accounting.LendingDisbursementWithPayoffsInOneVoucher` (defecto falso) y agrupación del DS con sus RC en `App/Accounting/Lending/Lotes/ComprobantePorRecibo.cs` y la definición del parámetro de Contabilidad
-- [ ] T048 [P] [US3] Casos dorados: actualizar `TA/Accounting/Lending/Casos/01-desembolso-por-transferencia.json`; nuevo `TA/Accounting/Lending/Casos/NN-desembolso-con-dos-recogidas-giro-a-tercero.json` (cuenta con cruce, un comprobante)
-- [ ] T049 [P] [US3] Prueba de conciliación: puente en cero y «desembolso por girar» = neto de las órdenes abiertas, incluida una orden rechazada, en `TA/Lending/Integration/SaldosContablesConRecogidaTests.cs`
+- [X] T045 [US3] `PayoffDeductionV1` con `ProductKind`, `AccountRef`, `ReceivableRef` opcionales en `App/Common/Integration/Contracts/Lending/BloquesComunesDeCarteraV1.cs`; emisión en `App/Lending/Integration/EmisionDeCartera.Desembolso.cs`
+- [X] T046 [US3] Constructor del DS: `DesembolsoPorGirar` por el neto y `RecaudoPorAplicar`/`OwnLoanPayoff` por cada recogida (tercero = deudor, cruce = producto) en `App/Accounting/Lending/Contabilizacion/ConstructorDeLineasDeCartera.cs`; sin recogidas, idéntico
+- [X] T047 [US3] Parámetro `Accounting.LendingDisbursementWithPayoffsInOneVoucher` (defecto falso) y agrupación del DS con sus RC en `App/Accounting/Lending/Lotes/ComprobantePorRecibo.cs` y la definición del parámetro de Contabilidad
+- [X] T048 [P] [US3] Casos dorados: actualizar `TA/Accounting/Lending/Casos/01-desembolso-por-transferencia.json`; nuevo `TA/Accounting/Lending/Casos/NN-desembolso-con-dos-recogidas-giro-a-tercero.json` (cuenta con cruce, un comprobante)
+- [X] T049 [P] [US3] Prueba de conciliación: puente en cero y «desembolso por girar» = neto de las órdenes abiertas, incluida una orden rechazada, en `TA/Lending/Integration/SaldosContablesConRecogidaTests.cs`
 
 ## Fase 7 — HU5 e HU8: intereses proporcionales e informe (P2, E1)
 

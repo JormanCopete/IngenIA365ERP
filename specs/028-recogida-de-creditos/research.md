@@ -399,3 +399,44 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - **T044**: la e2e `DesembolsoYRecogidaTests` no recorre el giro nuevo ni las garantías del recogido; no se tocó.
 - **Hallazgo fuera de alcance (sin corregir)**: el giro nuevo emite la orden por `original.Amount` sin el aporte del fondo (`SubsidyAmount`) ni el
   `Subsidy` del hecho: un giro nuevo de una compra con descuento (2026-11-23) perdería la parte del fondo.
+
+### E-09 — Contabilidad del desembolso con recogidas (T045–T049, 2026-11-27)
+- **`PayoffDeductionV1`** gana, además de `ProductKind` (texto; ausente = `Loan`), `AccountRef` (`MemberAccountRefV1`) y `ReceivableRef`
+  (`ExternalDocumentRefV1`), dos campos opcionales que el DS necesita para el puente: `BranchPublicId` (la sucursal contable de la oficina del producto
+  recogido, la de las dimensiones de su `PagoAplicado`) y `PayerPersonPublicId` (quien paga la recogida, el deudor del crédito nuevo). Los llena
+  `EmisionDeCartera.RecogidasDelHechoAsync` en `DesembolsoAsync`, el único sitio que emite el DS (desembolso y giro nuevo), así que la orden de giro
+  los lleva también. Un mensaje de antes, sin ellos, se lee con la sucursal del desembolso y su deudor. `ClaseDeProducto()` es método: no viaja.
+- **El DS** (T046): el capital va contra «desembolso por girar» por el neto (bruto − recogido; la parte del fondo no cambia) y contra
+  `RecaudoPorAplicar` de la clase `OwnLoanPayoff` por cada recogida, con la sucursal del recogido, el pagador como tercero, el número del recogido como
+  cruce y **el tipo de cruce del mapeo del recibo** (`PagoAplicado` con esa clase), no el del DS: `Partida.HechoDelCruce` (nuevo, opcional) y
+  `TipoDeCruce` lo resuelven, así las dos puntas saldan aunque la contadora le dé otro cruce al DS. En especie no hay recogidas. Una recogida de otra
+  clase (aportes, ahorro, factura) es el fallo `Accounting.LendingFact.PayoffKindNotSupported` hasta que E2 y E4 la sepan asentar.
+- **El rol al crédito**: `RecaudoPorAplicar` es de naturaleza débito, pero el constructor no limita el lado de ningún rol (ya lo acreditaban
+  `PagoReversado` y el cruce al retiro de la 014, D45). Se agregó a los roles crédito de `CreditoDesembolsado` y débito de `DesembolsoReversado` en
+  `OperacionesDeCartera` (los leen la retroactividad de las reglas, el catálogo de la pantalla y la prueba de los casos). Como lo saldan dos hechos de
+  Cartera con el mismo cruce, la validación de la regla y la completitud ya no avisan naturaleza distinta ni «puente con cruce» para
+  `RecaudoPorAplicar|OwnLoanPayoff` (`ReglasDeLaMatrizDeCartera.NaturalezaIndiferente`); a los demás puentes, sí.
+- **El reverso del desembolso también** (no estaba en las tareas; sin esto el DS nuevo no cuadraba con un giro rechazado): `DesembolsoReversadoV1`
+  gana `PayoffDeductions` (opcional), que `DesembolsoReversadoAsync` copia del `CreditoDesembolsado` del desembolso que se reversa
+  (`RecogidasDelDesembolsoAsync`, de su contenido guardado). El DRV es su espejo: «desembolso por girar» vuelve por el neto y el puente recibe lo
+  recogido. Entre el reverso y el giro nuevo el puente queda con lo recogido (las recogidas siguen aplicadas, C11); el giro nuevo lo vuelve a acreditar
+  y la anulación del crédito lo cierra con sus `PagoReversado`. Un reverso de antes (sin la lista) se contabiliza como siempre; un desembolso con
+  recogidas contabilizado antes de la 028 y reversado después dejaría la diferencia entre las dos cuentas si son distintas: entra en el diagnóstico
+  de R10.
+- **T047**: `DesembolsoConSusRecogidas` (en `Lotes/ComprobantePorRecibo.cs`); la clave `Accounting.LendingDisbursementWithPayoffsInOneVoucher` vive
+  en `COR_SystemSettings` (módulo `ACC`, `SystemParametersSeeder`, «false»), como `Accounting.LendingVoucherPerReceipt`, no en
+  `COR_ParameterVersions`. Junta la unidad del desembolso con las de los recibos **que nombra** (`PayoffDeductions[].OperationPublicId` es el origen de
+  cada `PagoAplicado`, cuyo recibo es el número del desembolso) en la misma fecha contable. La clave de grupo empieza por `Recibo|`
+  (`Recibo|Desembolso|{op:N}`) para ir por el handler del recibo (en línea, sin lote, sin sumar); `DelRecibo` delega en `DelDesembolso`: tipo, fecha,
+  origen y «registrado por» del DS, su descripción con «· recoge N créditos», primero sus líneas. El planeador lo arma antes que el recibo por recibo
+  (si no, las recogidas se juntarían sólo entre ellas). Una tanda partida o un DS que no se puede contabilizar dejan comprobantes separados, que
+  cuadran igual.
+- **T049, defectos de la conciliación corregidos**: (1) `OrdenesAbiertasAsync` contaba como abiertas las órdenes `Rejected` y `CheckNotCashed` sin
+  reemisión, pero su `DesembolsoReversado` ya le devolvió a «desembolso por girar» lo acreditado: la conciliación descuadraba por el neto, con
+  recogidas o sin ellas. Abiertas son sólo las `Issued`. (2) `PuentesEnCeroAsync` espera en el puente `OwnLoanPayoff` lo recogido de los tramos con
+  todos sus desembolsos reversados (`RecogidoQueEsperaElGiroAsync`). (3) Lo que explica un hecho sin procesar: el DS explica «desembolso por girar» por
+  su `netToDisburse` (antes el bruto, y en especie lo que no le tocaba) y el puente por −recogido; el DRV, «desembolso por girar» por −neto (antes nada)
+  y el puente por +recogido. Como las órdenes, se mide con el estado de hoy.
+- Casos dorados: `01` actualizado (7.700.000 y el puente 2.300.000 en la misma cuenta, una línea por crédito), `68` (dos recogidas en dos sucursales,
+  giro a tercero, puente con tercero y cruce; trae `recibos` y `esperadoEnUnComprobante`, que corre `DesembolsoConSusRecogidasTests`) y `69` (el DRV
+  de 68). `escenario.json` gana la cuenta 24959503.

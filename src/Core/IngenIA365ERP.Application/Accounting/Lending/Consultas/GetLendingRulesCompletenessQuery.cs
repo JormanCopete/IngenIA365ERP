@@ -282,7 +282,10 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
         foreach (var r in reglas)
         {
             if (!cuentas.TryGetValue(r.AccountId, out var cuenta) || R.Buscar(r.Role) is not { } rol) continue;
-            if (rol.Codigo is R.RecaudoPorAplicar or R.DesembolsoPorGirar && cuenta.RequiresCrossDocument)
+            // 2026-11-27 (feature 028, T046): el puente de la recogida propia lo acredita el desembolso y lo debita el recibo de la recogida, los dos de
+            // Cartera y con el crédito recogido como cruce: saldan contra el mismo documento y su naturaleza no importa. No avisa por ninguna de las dos.
+            var dePasoEnCartera = ReglasDeLaMatrizDeCartera.NaturalezaIndiferente(rol.Codigo, r.CollectorClass);
+            if (rol.Codigo is R.RecaudoPorAplicar or R.DesembolsoPorGirar && cuenta.RequiresCrossDocument && !dePasoEnCartera)
                 yield return new AvisoDeCompletitudDeCarteraDto(AvisoPuenteConCruce,
                     $"La cuenta {cuenta.Code} del puente {rol.Codigo} exige documento cruce: el otro lado (Recaudo, Nómina, Tesorería) contabiliza con su propio documento y no saldará contra el número del crédito.",
                     cuenta.Code, r.PublicId);
@@ -290,7 +293,7 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
                 yield return new AvisoDeCompletitudDeCarteraDto(AvisoCausacionPorCredito,
                     $"La cuenta {cuenta.Code} ({rol.Codigo}) exige tercero o documento cruce: la causación resumida del día llevará una línea por crédito en ella.",
                     cuenta.Code, r.PublicId);
-            if (cuenta.Nature != rol.Naturaleza)
+            if (cuenta.Nature != rol.Naturaleza && !dePasoEnCartera)
                 yield return new AvisoDeCompletitudDeCarteraDto(ReglasDeLaMatrizDeCartera.AvisoNaturalezaDistinta,
                     $"La cuenta {cuenta.Code} no tiene la naturaleza del rol {rol.Codigo}.", cuenta.Code, r.PublicId);
         }

@@ -75,6 +75,13 @@ public static partial class ConstructorDeLineasDeCartera
     /// </summary>
     private static string? TipoDeCruce(Partida p, HechoDeCartera principal, TipoDeLaUnidadDeCartera? tipo, string? claseDeRecaudador, MapeosDeCartera mapeos)
     {
+        // 2026-11-27 (feature 028, T046): el puente de la recogida que acredita el desembolso cruza como lo debita el recibo de la recogida (el mapeo de
+        // su hecho con la clase del puente), aunque la contadora le haya dado otro cruce al desembolso: así las dos puntas saldan contra el mismo documento.
+        if (p.HechoDelCruce is { } hechoDelCruce)
+        {
+            var delOtroHecho = mapeos.Resolver(hechoDelCruce, p.Valores.CollectorClass);
+            return delOtroHecho.IsSuccess ? delOtroHecho.Value.CrossDocumentTypeCode : tipo?.CrossDocumentTypeCode;
+        }
         if (EsDeCaptaciones(p.Hecho) == EsDeCaptaciones(principal.Tipo)) return tipo?.CrossDocumentTypeCode;
         var propio = mapeos.Resolver(p.Hecho, claseDeRecaudador);
         return propio.IsSuccess ? propio.Value.CrossDocumentTypeCode : tipo?.CrossDocumentTypeCode;

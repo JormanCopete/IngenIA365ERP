@@ -239,6 +239,9 @@ public sealed class PostLendingSummaryGroupCommandHandler(
     public static PostingRequest DelRecibo(IReadOnlyList<ConstruccionDeCartera> construcciones)
     {
         ArgumentNullException.ThrowIfNull(construcciones);
+        // 2026-11-27 (feature 028, T047): el desembolso con los recibos de sus recogidas sale como el comprobante del desembolso.
+        if (construcciones.FirstOrDefault(c => c.Principal.Tipo == Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type) is { } desembolso)
+            return DelDesembolso(desembolso, construcciones);
         var primero = construcciones[0];
         var tipo = (construcciones.FirstOrDefault(c => c.Principal.Tipo == Common.Integration.Contracts.Lending.PagoAplicadoV1.Type) ?? primero).Tipo!.VoucherTypeCode;
         var recaudo = ComprobantePorRecibo.Recaudo(primero.Principal.Contenido);
@@ -251,5 +254,25 @@ public sealed class PostLendingSummaryGroupCommandHandler(
         return new PostingRequest(tipo, primero.Fecha, descripcion,
             new AccountingOrigin(ModuloContable.Cartera, OrigenesDeCartera.Documento, primero.Principal.Sobre.Origin.PublicId),
             construcciones.SelectMany(c => c.Request!.Lines).ToList(), Domain.Enums.Accounting.DocumentKind.Regular);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T047; FR-027b, D11; <see cref="DesembolsoConSusRecogidas"/>): el desembolso y los recibos de sus recogidas en un comprobante
+    /// <b>del desembolso</b>: su tipo (DS), su fecha, su origen, su descripción con cuántos créditos recoge y quien lo registró; primero sus líneas y detrás
+    /// las de cada recibo, tal cual, sin sumar (el puente de la recogida propia entra y sale a la vista).
+    /// </summary>
+    public static PostingRequest DelDesembolso(ConstruccionDeCartera desembolso, IReadOnlyList<ConstruccionDeCartera> construcciones)
+    {
+        ArgumentNullException.ThrowIfNull(desembolso);
+        ArgumentNullException.ThrowIfNull(construcciones);
+        var recibos = construcciones.Where(c => !ReferenceEquals(c, desembolso)).ToList();
+        var propio = desembolso.Request!;
+        var recogidos = recibos.SelectMany(c => c.Mapa).SelectMany(m => m.Creditos).Distinct(StringComparer.Ordinal).Count();
+        var descripcion = recogidos == 0 ? propio.Description : $"{propio.Description} · recoge {recogidos} {(recogidos == 1 ? "crédito" : "créditos")}";
+        return propio with
+        {
+            Description = descripcion,
+            Lines = [.. propio.Lines, .. recibos.SelectMany(c => c.Request!.Lines)],
+        };
     }
 }

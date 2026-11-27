@@ -108,6 +108,16 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
     /// <summary>El aviso de §3.6: la naturaleza de la cuenta no es la del rol (p. ej. un deterioro en una cuenta débito).</summary>
     public const string AvisoNaturalezaDistinta = "Accounting.LendingRule.NatureMismatch";
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T046; FR-027): el puente de la recogida propia (<c>RecaudoPorAplicar</c> de la clase <c>OwnLoanPayoff</c>) lo acredita el
+    /// desembolso y lo debita el recibo de cada recogida, con el mismo tercero, cruce y sucursal: se salda en el mismo desembolso y nunca guarda saldo
+    /// propio, así que la naturaleza de su cuenta no importa (muchas cooperativas lo llevaron a la cuenta de «desembolsos por girar», crédito, para que
+    /// netearan). Ni la regla ni la completitud avisan por ella; el resto de los puentes de recaudo, sí.
+    /// </summary>
+    public static bool NaturalezaIndiferente(string rol, string? claseDeRecaudador) =>
+        rol == R.RecaudoPorAplicar
+        && string.Equals(claseDeRecaudador?.Trim(), Contabilizacion.ConstructorDeLineasDeCartera.ClaseDeLaRecogidaPropia, StringComparison.Ordinal);
+
     /// <summary>Lo que las validaciones leen una vez.</summary>
     public async Task<CatalogosDeLaMatrizDeCartera> CargarAsync(CancellationToken ct) => new(await dimensiones.CatalogoAsync(ct));
 
@@ -208,7 +218,7 @@ public sealed class ReglasDeLaMatrizDeCartera(IApplicationDbContext db, IDimensi
         var cuenta = await db.ChartOfAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == propuesta.AccountId && !a.IsDeleted, ct);
         var elegible = AccountEligibility.Verificar(cuenta, propuesta.AccountId.ToString(CultureInfo.InvariantCulture), ModuloContable.Cartera);
         if (elegible.IsFailure) errores.Add(elegible.Error);
-        else if (cuenta!.Nature != rol.Naturaleza)
+        else if (cuenta!.Nature != rol.Naturaleza && !NaturalezaIndiferente(rol.Codigo, propuesta.CollectorClass))
             avisos.Add(new AvisoDeReglaDeCarteraDto(AvisoNaturalezaDistinta,
                 $"La cuenta {cuenta.Code} es de naturaleza {Naturaleza(cuenta.Nature)} y el rol {rol.Codigo} es de naturaleza {Naturaleza(rol.Naturaleza)}. "
                 + "Se guarda, pero revise que sea la cuenta que quiere: la completitud lo seguirá mostrando."));

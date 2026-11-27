@@ -196,14 +196,17 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
         return r.IsFailure ? Result.Failure<bool>(r.Error) : Result.Success(!r.Value.UnresolvedCombinations.Contains(0));
     }
 
-    /// <summary><c>DesembolsoPorGirar</c>: las órdenes abiertas al corte por forma, línea y sucursal.</summary>
+    /// <summary>
+    /// <c>DesembolsoPorGirar</c>: las órdenes abiertas al corte por forma, línea y sucursal. 2026-11-27 (feature 028, T049; E-09): abiertas son sólo las
+    /// <c>Issued</c>. Una orden rechazada o un cheque no cobrado ya tienen su <c>DesembolsoReversado</c>, que le devolvió a «desembolso por girar» lo que el
+    /// desembolso le acreditó: contarlas como abiertas hasta el giro nuevo dejaba en la conciliación una diferencia del tamaño del neto, con recogidas o sin
+    /// ellas. El giro nuevo es otra orden, <c>Issued</c>, con su propio desembolso.
+    /// </summary>
     public async Task<IReadOnlyList<SaldoDeCombinacionDeCartera>> OrdenesAbiertasAsync(DateOnly corte, AlcanceDeCartera? alcance, CancellationToken ct)
     {
         var limite = corte.ToDateTime(TimeOnly.MaxValue);
         var abiertas = await db.DisbursementOrders.AsNoTracking()
-            .Where(o => o.Form != DisbursementForm.InKind && o.IssuedAt <= limite
-                && (o.Status == DisbursementOrderStatus.Issued || o.Status == DisbursementOrderStatus.Rejected || o.Status == DisbursementOrderStatus.CheckNotCashed)
-                && !db.DisbursementOrders.Any(n => n.PreviousOrderId == o.Id))
+            .Where(o => o.Form != DisbursementForm.InKind && o.IssuedAt <= limite && o.Status == DisbursementOrderStatus.Issued)
             .Select(o => new { o.LoanId, o.Form, o.NetAmount, o.IssuedAt })
             .ToListAsync(ct);
         if (abiertas.Count == 0) return [];
@@ -216,7 +219,12 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
             .ToList();
     }
 
-    /// <summary>Los puentes de recaudo por clase y los de Comercial, que esperan cero.</summary>
+    /// <summary>
+    /// Los puentes de recaudo por clase y los de Comercial, que esperan cero. 2026-11-27 (feature 028, T049; E-09): el de la recogida propia
+    /// (<c>OwnLoanPayoff</c>) espera lo recogido por los tramos cuyo desembolso se reversó y todavía no tienen giro nuevo
+    /// (<see cref="RecogidoQueEsperaElGiroAsync"/>): el reverso se lo devolvió al puente y las recogidas siguen aplicadas (C11) hasta el giro nuevo, que se
+    /// lo vuelve a acreditar, o la anulación del crédito, que las reversa. Fuera de esa ventana, cero.
+    /// </summary>
     public async Task<IReadOnlyList<SaldoDeCombinacionDeCartera>> PuentesEnCeroAsync(DateOnly corte, CancellationToken ct)
     {
         if (await SucursalPrincipalAsync(ct) is not { } sucursal) return [];
@@ -226,7 +234,40 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
             .Select(c => new ClaveDeSaldoDeCartera("RecaudoPorAplicar", null, null, null, null, null, null, null, null, c, null, sucursal))
             .Append(new ClaveDeSaldoDeCartera("PuenteComercial", null, null, null, null, null, null, null, null, null, null, sucursal))
             .Append(new ClaveDeSaldoDeCartera("CuentaPorCobrarComercial", null, null, null, null, null, null, null, null, null, null, sucursal));
-        return puentes.Select(p => new SaldoDeCombinacionDeCartera(p, 0m, [], corte)).ToList();
+        var (recogido, creditos) = await RecogidoQueEsperaElGiroAsync(ct);
+        return puentes.Select(p => p.Rol == "RecaudoPorAplicar" && p.ClaseDeRecaudador == nameof(ClaseDeRecaudador.OwnLoanPayoff) && recogido != 0m
+                ? new SaldoDeCombinacionDeCartera(p, recogido, creditos, corte)
+                : new SaldoDeCombinacionDeCartera(p, 0m, [], corte))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T049; E-09): lo recogido que espera un giro nuevo —las recogidas vivas (<see cref="Disbursements.RecogidaEnElDesembolso.VivasAsync"/>)
+    /// de los tramos que tienen desembolsos y todos están reversados—, con los créditos nuevos. Es el saldo del puente de la recogida propia entre el
+    /// reverso del desembolso (orden rechazada, anulada o cheque no cobrado) y el giro nuevo. Como las órdenes abiertas, se mide con el estado de hoy.
+    /// </summary>
+    public async Task<(decimal Recogido, IReadOnlyList<int> Creditos)> RecogidoQueEsperaElGiroAsync(CancellationToken ct)
+    {
+        var reversados = await db.LoanOperations.AsNoTracking()
+            .Where(o => o.Kind == LoanOperationKind.Disbursement && o.ReversedByOperationId != null)
+            .Select(o => new { o.LoanId, Tramo = o.TrancheNumber ?? 1 })
+            .Distinct().ToListAsync(ct);
+        if (reversados.Count == 0) return (0m, []);
+        var ids = reversados.Select(r => r.LoanId).Distinct().ToList();
+        var desembolsos = await db.LoanOperations.AsNoTracking()
+            .Where(o => o.Kind == LoanOperationKind.Disbursement && ids.Contains(o.LoanId))
+            .Select(o => new { o.LoanId, Tramo = o.TrancheNumber ?? 1, o.PublicId, Vivo = o.ReversedByOperationId == null })
+            .ToListAsync(ct);
+        var recogido = 0m;
+        var creditos = new SortedSet<int>();
+        foreach (var tramo in desembolsos.GroupBy(d => (d.LoanId, d.Tramo)).Where(g => !g.Any(d => d.Vivo)))
+        {
+            var vivas = await Disbursements.RecogidaEnElDesembolso.VivasAsync(db, tramo.Select(d => d.PublicId).ToList(), ct);
+            if (vivas.Count == 0) continue;
+            recogido += vivas.Sum(v => v.Amount);
+            creditos.Add(tramo.Key.LoanId);
+        }
+        return (recogido, creditos.ToList());
     }
 
     private async Task<Guid?> SucursalPrincipalAsync(CancellationToken ct) =>

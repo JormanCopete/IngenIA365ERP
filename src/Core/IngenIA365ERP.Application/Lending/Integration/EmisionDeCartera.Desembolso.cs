@@ -118,6 +118,7 @@ public sealed partial class EmisionDeCartera
         var op = d.Operacion;
         var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var neto = d.Bruto - d.Recogidas.Sum(r => r.Amount);
+        d = d with { Recogidas = await RecogidasDelHechoAsync(d.Recogidas, h.DeudorPublicId, ct) };
         var contenido = new CreditoDesembolsadoV1
         {
             Loan = h.Referencia,
@@ -175,6 +176,49 @@ public sealed partial class EmisionDeCartera
     }
 
     /// <summary>
+    /// 2026-11-27 (feature 028, T045; FR-027, H5): las recogidas como las lleva el hecho del desembolso, con lo que su comprobante necesita para acreditar el
+    /// puente de la recogida propia con las mismas dimensiones con que el recibo de cada recogida lo debita: la clase del producto (en E1, un crédito), la
+    /// sucursal contable de la oficina del crédito recogido (la de las dimensiones de su <c>PagoAplicado</c>) y quien paga la recogida, el deudor del
+    /// crédito nuevo (el pagador de su recaudo). Lo que ya venga lleno se respeta. Sólo lee. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyList<PayoffDeductionV1>> RecogidasDelHechoAsync(IReadOnlyList<PayoffDeductionV1> recogidas, Guid deudorPublicId,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(recogidas);
+        if (recogidas.Count == 0) return recogidas;
+        var creditos = recogidas.Where(r => r.ClaseDeProducto() == PayoffDeductionV1.Credito && r.BranchPublicId is null)
+            .Select(r => r.Loan.LoanPublicId).Distinct().ToList();
+        var sucursales = creditos.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await (from l in db.Loans.AsNoTracking().IgnoreQueryFilters()
+                     join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on l.BranchId equals b.Id
+                     where creditos.Contains(l.PublicId)
+                     select new { l.PublicId, Sucursal = b.PublicId })
+                .ToDictionaryAsync(x => x.PublicId, x => x.Sucursal, ct);
+        return recogidas.Select(r => r with
+        {
+            ProductKind = r.ClaseDeProducto(),
+            BranchPublicId = r.BranchPublicId ?? (sucursales.TryGetValue(r.Loan.LoanPublicId, out var s) ? s : null),
+            PayerPersonPublicId = r.PayerPersonPublicId ?? deudorPublicId,
+        }).ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E-09): las recogidas que llevó el <c>CreditoDesembolsado</c> de la operación <paramref name="desembolso"/> —el último
+    /// emitido de ese origen—, para que su reverso sea su espejo. Vacío si no se encuentra o no las llevó. Sólo lee.
+    /// </summary>
+    public async Task<IReadOnlyList<PayoffDeductionV1>> RecogidasDelDesembolsoAsync(Guid desembolso, CancellationToken ct)
+    {
+        var json = db.IntegrationMessages.Local.Where(m => m.OriginPublicId == desembolso && m.Type == CreditoDesembolsadoV1.Type)
+                       .OrderByDescending(m => m.Id).Select(m => m.PayloadJson).FirstOrDefault()
+                   ?? await db.IntegrationMessages.AsNoTracking().Where(m => m.OriginPublicId == desembolso && m.Type == CreditoDesembolsadoV1.Type)
+                       .OrderByDescending(m => m.Id).Select(m => m.PayloadJson).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        var hecho = System.Text.Json.JsonSerializer.Deserialize<CreditoDesembolsadoV1>(json, OpcionesDeMensajes.Opciones);
+        return hecho?.PayoffDeductions ?? [];
+    }
+
+    /// <summary>
     /// <c>AnulacionDeOrdenDeGiro</c> (mensajes.md §11.4, C12): origen la misma orden, clave <c>Confirmation:{orden:N}</c>, <c>related</c> = la
     /// orden como documento, tercero el beneficiario, <c>Always</c>. Sin guardar.
     /// </summary>
@@ -221,6 +265,9 @@ public sealed partial class EmisionDeCartera
             PayoffReversals = r.ReversosDeRecogidas,
             // 2026-11-23 (descuento condicionado): el fondo vuelve como estaba, con la compra que sellaron las condiciones.
             Subsidy = Disbursements.CompraSubsidiada.Leer(h.Condiciones.SubsidizedPurchase)?.ComoHecho(),
+            // 2026-11-27 (feature 028, E-09): el espejo del desembolso también en sus recogidas: lo que su hecho acreditó al puente de la recogida propia
+            // vuelve a él (las recogidas siguen aplicadas mientras el crédito espera el giro nuevo, C11; si se anula, sus PagoReversado lo cierran).
+            PayoffDeductions = await RecogidasDelDesembolsoAsync(r.Desembolso.PublicId, ct),
         };
         List<object> contenidos = [contenido];
         if (r.AjusteDeCausacion.Count > 0)

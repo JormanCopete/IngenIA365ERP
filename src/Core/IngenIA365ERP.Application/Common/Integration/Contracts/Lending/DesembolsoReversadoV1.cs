@@ -57,4 +57,11 @@ public sealed record DesembolsoReversadoV1
 
     /// <summary>2026-11-23: la parte del fondo del desembolso que se reversa (el espejo de <see cref="CreditoDesembolsadoV1.Subsidy"/>).</summary>
     public SubsidyV1? Subsidy { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E-09; FR-027, H5): las recogidas del desembolso que se reversa, tal como las llevó su <c>CreditoDesembolsado</c>: el
+    /// reverso es su espejo y devuelve al puente de la recogida propia lo que el desembolso le acreditó (y a «desembolso por girar» sólo el neto).
+    /// Opcional y aditivo en la v1: un reverso emitido antes lo trae vacío y se contabiliza como siempre (el bruto contra «desembolso por girar»).
+    /// </summary>
+    public IReadOnlyList<PayoffDeductionV1>? PayoffDeductions { get; init; }
 }
