@@ -1,6 +1,6 @@
 # 028 — Recogida de créditos y productos en el desembolso
 
-**Rama**: `028-recogida-de-creditos` · **Creada**: 2026-11-27 · **Estado**: borrador, esperando las decisiones D1–D13 del dueño
+**Rama**: `028-recogida-de-creditos` · **Creada**: 2026-11-27 · **Estado**: aprobada; decisiones D1–D13 del dueño = las recomendadas (2026-11-27, research §3)
 **Base**: la 013 (originación, desembolso, contrato de obligaciones, libranza K2), la 014 (captaciones y contrato de cuentas), la 015 (Recaudo),
 la 024/025 (causación configurable y por período) y la 026 (cargos masivos).
 

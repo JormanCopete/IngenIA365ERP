@@ -205,6 +205,21 @@ quién reconoció; `Lending.Payoff.Viewed` en la proyección y en la vista previ
 - E3 y E4: sin esquema previsto (semilla de la clase de medio en E4).
 Todas aditivas: sin respaldo previo obligatorio.
 
-## 3. Respuestas del dueño
+## 3. Respuestas del dueño (2026-11-27)
 
-Pendientes (D1–D13 de la spec). Se anotan aquí al recibirlas y se ajustan las tareas que nombran cada decisión.
+El dueño respondió «OK con las recomendadas» (citado por la sesión coordinadora el 2026-11-27): **D1–D13 quedan con la opción A** de la spec.
+
+- D1 A: `Recogida.CuotaCausada` se lee con la línea del crédito que se recoge.
+- D2 A: existe `Preguntar` (el asesor elige por crédito).
+- D3: `Recogida.GiroPosteriorDeCreditoRecogido` con defecto `SaldoDeLaPagaduria` (como hoy); para COOFLOPAL la recomendada es `AlCreditoNuevo`
+  (se configura en la cooperativa, no es el defecto de fábrica).
+- D4 A: la caja también ofrece «todo menos la cuota enviada» con `Pagos.CuotaEnviadaAlCancelar` (defecto `Incluir`) y siempre avisa.
+- D5 A: se ofrece `MantenerLoProyectado`, con el aviso de que el producto puede quedar con saldo.
+- D6 A: `Recogida.ToleranciaDeDiferencia` vacía de fábrica: sólo se avisa y se reconoce.
+- D7 A: la recogida parcial de un crédito abona a capital con la elección del deudor.
+- D8 A: las facturas a crédito de Comercial van en esta feature como última entrega (E4).
+- D9 A: todas las recogidas autorizadas son obligatorias al desembolsar; quitar una exige devolver la solicitud.
+- D10: confirmado, recoger un crédito en mora sigue bloqueado (reestructuración).
+- D11 A: `Contabilidad.RecogidaEnUnComprobante` (clave `Accounting.LendingDisbursementWithPayoffsInOneVoucher`), defecto no.
+- D12 A: las garantías del crédito recogido se liberan al girar el crédito nuevo.
+- D13 A: la cuota que se deja queda tal como se envió, con el interés del período completo.
