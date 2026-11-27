@@ -161,7 +161,8 @@ public static class DependencyInjection
              Domain.Enums.Parameters.ParameterScopeKind.PointOfSale, Domain.Enums.Parameters.ParameterScopeKind.CashRegister,
              Domain.Enums.Parameters.ParameterScopeKind.ThirdPartyKind],
             sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>()));
-        // Feature 013 (T0653): Cartera resuelve el ambito LendingFactType (Contabilidad.ModoDePaso y sus hermanas por tipo de hecho).
+        // Feature 013 (T0653): Cartera resuelve el ambito LendingFactType (Contabilidad.ModoDePaso y sus hermanas por tipo de hecho) y,
+        // desde el 2026-11-26, CreditLine (la excepcion por linea de credito, que la pantalla ofrecia y respondia 404).
         services.AddScoped(sp => new Common.Parameters.ResolutorDeAmbitoDeModulo(
             Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Lending.Common.ResolutorDeAmbitoDeCartera.Ambitos,
             new Lending.Common.ResolutorDeAmbitoDeCartera(sp.GetRequiredService<Common.Interfaces.IApplicationDbContext>())));
