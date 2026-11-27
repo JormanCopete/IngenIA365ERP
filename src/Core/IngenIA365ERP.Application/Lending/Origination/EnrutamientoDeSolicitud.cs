@@ -25,6 +25,13 @@ public sealed record DatosDeEnrutamiento(
     IReadOnlyList<MotivoNoExceptuable> Hallazgos);
 
 /// <summary>
+/// 2026-11-27 (feature 028, T027): un producto que recoge la solicitud, como entra en la huella del enrutamiento: qué se recoge y cómo (no lo proyectado,
+/// que cambia con los días). (nuevo)
+/// </summary>
+public sealed record RecogidaEnLaHuella(PayoffProductKind Kind, int? LoanId, int? AccountId, string? Reference, PayoffMode Mode, decimal? RequestedAmount,
+    InstallmentTreatment? InstallmentTreatment);
+
+/// <summary>
 /// Una solicitud enrutada (T0395): la matriz vigente, el resultado del motor, el nivel efectivo como fila, la huella <c>RoutingSha256</c> y lo
 /// que se enrutó. (nuevo)
 /// </summary>
@@ -55,6 +62,13 @@ public sealed class EnrutamientoDeSolicitud(
 
         var codeudores = await db.CreditApplicationParties.AsNoTracking()
             .AnyAsync(p => p.ApplicationId == s.Id && p.Role == CreditPartyRole.CoDebtor && !p.IsDeleted, ct);
+        // 2026-11-27 (feature 028, T027): lo que recoge entra en la huella; quien decide con la versión anterior a un cambio de recogidas recibe
+        // Lending.Decision.ContentChanged.
+        var recogidas = await db.CreditApplicationPayoffs.AsNoTracking().Where(f => f.CreditApplicationId == s.Id && !f.IsDeleted)
+            .OrderBy(f => f.Order).ThenBy(f => f.Id)
+            .Select(f => new RecogidaEnLaHuella(f.ProductKind, f.LoanId, f.AccountId, f.CommercialReceivableReference, f.Mode, f.RequestedAmount,
+                f.InstallmentTreatment))
+            .ToListAsync(ct);
         var sujeto = new SujetoAEnrutar(LendingDecisionSubjects.CreditApplication, datos.MontoConsolidado)
         {
             Linea = linea.Code,
@@ -79,7 +93,7 @@ public sealed class EnrutamientoDeSolicitud(
         }
 
         var nivel = matriz.Niveles.Single(n => n.Code == enrutado.NivelEfectivo.Codigo);
-        return Result.Success(new SolicitudEnrutada(matriz, enrutado, nivel, Huella(s, linea, version, matriz, enrutado, datos), datos));
+        return Result.Success(new SolicitudEnrutada(matriz, enrutado, nivel, Huella(s, linea, version, matriz, enrutado, datos, recogidas), datos));
     }
 
     /// <summary>Sella el enrutamiento en la solicitud (<c>Submitted</c>/<c>PendingDecision</c>/<c>Approved</c> → <c>PendingDecision</c>).</summary>
@@ -138,9 +152,10 @@ public sealed class EnrutamientoDeSolicitud(
     /// <summary>
     /// La huella del enrutamiento (<c>RoutingSha256</c>, T63): la solicitud, lo pedido, la línea y su versión, la matriz y su versión, el nivel
     /// efectivo, las razones en su orden, el consolidado, el vinculado, el puntaje bajo, las alertas, la excepción pedida y los no exceptuables.
+    /// 2026-11-27 (feature 028, T027): y, si recoge algo, qué recoge y cómo; sin recogidas, la de siempre.
     /// </summary>
     public static string Huella(CreditApplication s, CreditLine linea, CreditLineVersion version, MatrizVigente matriz, EnrutamientoDeAtribucion e,
-        DatosDeEnrutamiento d) =>
+        DatosDeEnrutamiento d, IReadOnlyList<RecogidaEnLaHuella>? recogidas = null) =>
         new HuellaDeCartera()
             .Identificador("application", s.PublicId)
             .Decimal("requested", s.RequestedAmount)
@@ -159,5 +174,13 @@ public sealed class EnrutamientoDeSolicitud(
             .Lista("nonExceptionable", e.NoExceptuables, (h, m) => h.Enumeracion("reason", (MotivoNoExceptuable?)m))
             // 2026-11-25: cada edición de la radicada cambia la huella (lo editado puede no estar arriba); sin ediciones, la de siempre.
             .Si(s.EditsAfterSubmission > 0, h => h.Entero("editsAfterSubmission", s.EditsAfterSubmission))
+            .Si(recogidas is { Count: > 0 }, h => h.Lista("payoffs", recogidas!, (x, r) => x
+                .Enumeracion("kind", (PayoffProductKind?)r.Kind)
+                .Entero("loan", r.LoanId)
+                .Entero("account", r.AccountId)
+                .Texto("reference", r.Reference)
+                .Enumeracion("mode", (PayoffMode?)r.Mode)
+                .Decimal("amount", r.RequestedAmount)
+                .Enumeracion("installment", r.InstallmentTreatment)))
             .Calcular();
 }

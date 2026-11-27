@@ -164,6 +164,47 @@ public sealed record SeleccionDeRecogida(IReadOnlyList<RecogidaMarcada> Marcadas
 }
 
 /// <summary>
+/// 2026-11-27 (feature 028, HU2, T028): a qué fecha se proyectan las recogidas de la solicitud (D) y con la información hasta cuándo (R): lo que simuló el
+/// asesor en «Productos que recoge» (<c>payoffProjection</c> de la solicitud). (nuevo)
+/// </summary>
+public sealed record ProyeccionDeRecogidaRequest(DateOnly? ProjectedDisbursementDate, DateTime? RecordedAsOf);
+
+/// <summary>
+/// 2026-11-27 (feature 028, HU2, T028–T029): un producto que la solicitud recoge, con lo proyectado al guardarla o radicarla (<c>payoffs[]</c> del
+/// detalle): número, modo, valor pedido, lo proyectado y su desglose, la cuota causada, D, R y, si otra solicitud viva lo recoge también, su número.
+/// </summary>
+public sealed record RecogidaDeSolicitudDto(
+    int Kind,
+    Guid? ProductPublicId,
+    string? Reference,
+    string Number,
+    int Mode,
+    decimal? RequestedAmount,
+    decimal ProjectedAmount,
+    DesgloseDeRecogidaDto Breakdown,
+    int? InstallmentTreatment,
+    string? InterestMode,
+    CuotaCausadaDeRecogidaDto? CurrentInstallment,
+    DateOnly ProjectedDate,
+    DateTime RecordedAsOf,
+    bool Projected,
+    string? InOtherApplication,
+    int Order)
+{
+    /// <summary>Lo mismo, como lo pide el servidor al guardar (para mandarlo tal cual si no se cambia).</summary>
+    public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
+        Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? RequestedAmount : null, Reference, InstallmentTreatment);
+
+    /// <summary>Como lo marca la tabla de productos al abrir la corrección (sólo créditos).</summary>
+    public RecogidaMarcada? ComoMarcada() => Kind == TextosDeRecogida.ClaseCredito && ProductPublicId is { } producto
+        ? new RecogidaMarcada(producto, Number, Mode, Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount)
+        : null;
+}
+
+/// <summary>2026-11-27 (feature 028, HU2, T029): lo que recoge la solicitud en total, el neto a girar, D y R (<c>payoffSummary</c>).</summary>
+public sealed record ResumenDeRecogidasDeSolicitudDto(decimal Total, decimal NetToDisburse, DateOnly ProjectedDate, DateTime RecordedAsOf);
+
+/// <summary>
 /// Los textos de la recogida (feature 028, HU1): los números de los enums del servidor (<c>PayoffProductKind</c>, <c>PayoffMode</c>,
 /// <c>InstallmentTreatment</c>, <c>LoanOrigin</c>, <c>RepaymentChannel</c>, <c>LoanStatus</c>) en palabras, los motivos por los que no se recoge un producto
 /// y los valores en pesos. (nuevo)
@@ -261,6 +302,22 @@ public static class TextosDeRecogida
     /// <summary>«Está en la solicitud S-000123» o, sin número, «Está en otra solicitud en borrador».</summary>
     public static string EnOtraSolicitud(string? numero) =>
         numero is null ? string.Empty : string.IsNullOrWhiteSpace(numero) ? "Está en otra solicitud en borrador" : $"Está en la solicitud {numero}";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T029): los conceptos con valor de un desglose, en el orden en que se muestran; lo que se descuenta (interés devuelto,
+    /// anticipo, saldo a favor) va en negativo. Lo usan el detalle de un producto para recoger y «Lo que recoge» de la solicitud.
+    /// </summary>
+    public static IReadOnlyList<(string Concepto, decimal Valor)> Conceptos(DesgloseDeRecogidaDto d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        (string, decimal)[] todos =
+        [
+            ("Capital", d.Principal), ("Interés corriente", d.CurrentInterest), ("Interés devuelto por proporcionales", -d.InterestReturned),
+            ("Interés cobrado por proporcionales", d.InterestCharged), ("Interés de mora", d.DefaultInterest), ("Seguro", d.Insurance),
+            ("Administración", d.Administration), ("Otros cargos", d.OtherCharges), ("Anticipo a favor", -d.Advance), ("Saldo a favor", -d.CreditBalance),
+        ];
+        return todos.Where(c => c.Item2 != 0m).ToList();
+    }
 
     /// <summary>Un valor en pesos sin centavos: <c>$ 1.234.567</c>.</summary>
     public static string Pesos(decimal valor) => valor.ToString("C0", Colombia);

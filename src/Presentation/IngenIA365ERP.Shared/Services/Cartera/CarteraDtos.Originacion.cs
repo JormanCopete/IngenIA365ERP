@@ -131,6 +131,12 @@ public sealed class SolicitudRequest
     public string? PolicyExceptionReason { get; set; }
     public string? SimulationSha256 { get; set; }
 
+    /// <summary>2026-11-27 (feature 028, T028): los productos que recoge el crédito nuevo (nulo = ninguno: al corregir, se quitan los que tenía).</summary>
+    public List<RecogidaElegidaRequest>? Payoffs { get; set; }
+
+    /// <summary>2026-11-27 (feature 028, T028): a qué fecha y con la información hasta cuándo se proyectaron las recogidas.</summary>
+    public ProyeccionDeRecogidaRequest? PayoffProjection { get; set; }
+
     /// <summary>K6b: en una solicitud de vivienda, si el inmueble es de interés social (elige el límite de financiación VIS).</summary>
     public bool? IsSocialHousing { get; set; }
 
@@ -217,8 +223,14 @@ public sealed record SolicitudDto(
 
     public string? PolicyExceptionReason { get; init; }
 
-    /// <summary>2026-11-23: trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, recogidas, libranza).</summary>
+    /// <summary>2026-11-23: trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, libranza). Desde el 2026-11-27 las recogidas no.</summary>
     public bool UsesAdvancedTerms { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T028–T029): los productos que recoge, con lo proyectado, en su orden.</summary>
+    public IReadOnlyList<RecogidaDeSolicitudDto> Payoffs { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T029): el total recogido, el neto a girar, D y R; nulo si no recoge nada.</summary>
+    public ResumenDeRecogidasDeSolicitudDto? PayoffSummary { get; init; }
 
     /// <summary>2026-11-23: lo que se puede corregir ahora (nombres de grupo); vacío si no se edita.</summary>
     public IReadOnlyList<string> EditableGroups { get; init; } = [];

@@ -38,6 +38,12 @@ public sealed record MedicionDeConcentracion(
     public decimal Exceso => Math.Max(0m, Actual + Pedido - Limite);
 
     public bool Excede => Actual + Pedido > Limite;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): el capital que la recogida saca de <see cref="Actual"/> (lo que recoge la solicitud o el desembolso del mismo
+    /// deudor); nulo si no recoge nada.
+    /// </summary>
+    public decimal? LiberadoPorRecogidas { get; init; }
 }
 
 /// <summary>La concentración por deudor y por grupo; <see cref="Excedida"/> es la primera que pasa el límite (la del deudor primero). (nuevo)</summary>
@@ -82,8 +88,17 @@ public sealed class ValidacionDeConcentracion(
     /// Mide la concentración. Falla sólo si no se puede medir (sin patrimonio técnico vigente, sin el límite legal); excedida, lo dice el
     /// resultado (<see cref="ResultadoDeConcentracion.Error"/>).
     /// </summary>
+    public Task<Result<ResultadoDeConcentracion>> MedirAsync(int personId, decimal pedido, bool conGarantiaAdmisible, DateOnly fecha,
+        int? sinLaSolicitud = null, CancellationToken ct = default) =>
+        MedirAsync(personId, pedido, conGarantiaAdmisible, fecha, sinLaSolicitud, null, ct);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8, T025): la concentración después de recoger: el capital de los créditos del deudor que se recogen
+    /// (<paramref name="recogidas"/>; <see cref="RecogidaEnLaValidacion.CapitalQueLibera"/>) sale de su exposición —y de lo que suma él en la de su
+    /// grupo—, nunca por debajo de cero. Nulo o vacío, como siempre.
+    /// </summary>
     public async Task<Result<ResultadoDeConcentracion>> MedirAsync(int personId, decimal pedido, bool conGarantiaAdmisible, DateOnly fecha,
-        int? sinLaSolicitud = null, CancellationToken ct = default)
+        int? sinLaSolicitud, IReadOnlyList<RecogidaEnLaValidacion>? recogidas, CancellationToken ct)
     {
         var baseDeCalculo = await PatrimonioTecnicoAsync(fecha, ct);
         if (baseDeCalculo.IsFailure) return Result.Failure<ResultadoDeConcentracion>(baseDeCalculo.Error);
@@ -102,24 +117,35 @@ public sealed class ValidacionDeConcentracion(
             .ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
 
         var propia = exposiciones[personId];
-        var porDeudor = new MedicionDeConcentracion(AlcanceDeConcentracion.Debtor, null, limite, propia.Total, pedido, patrimonio, fraccion, corte,
-            conGarantiaAdmisible, [new MiembroQueSuma(publicos[personId], propia.Total)]);
+        // 2026-11-27 (feature 028, R8): lo que se recoge son créditos del deudor como deudor; sale de su exposición total y de su directa.
+        decimal? liberado = recogidas is { Count: > 0 }
+            ? RecogidaEnLaValidacion.Liberado(recogidas, id => propia.Creditos.Where(c => c.LoanId == id && !c.ComoCodeudor).Sum(c => c.Capital))
+            : null;
+        var suya = Math.Max(0m, propia.Total - (liberado ?? 0m));
+        var porDeudor = new MedicionDeConcentracion(AlcanceDeConcentracion.Debtor, null, limite, suya, pedido, patrimonio, fraccion, corte,
+            conGarantiaAdmisible, [new MiembroQueSuma(publicos[personId], suya)]) { LiberadoPorRecogidas = liberado };
 
         MedicionDeConcentracion? porGrupo = null;
         if (!grupo.EsDeUno)
         {
-            var miembros = grupo.Miembros.Select(m => new MiembroQueSuma(publicos[m], exposiciones[m].Directa)).ToList();
+            var miembros = grupo.Miembros.Select(m => new MiembroQueSuma(publicos[m],
+                m == personId ? Math.Max(0m, exposiciones[m].Directa - (liberado ?? 0m)) : exposiciones[m].Directa)).ToList();
             porGrupo = new MedicionDeConcentracion(AlcanceDeConcentracion.Group, grupo.GrupoPublicId, limite, miembros.Sum(m => m.Exposicion), pedido,
-                patrimonio, fraccion, corte, conGarantiaAdmisible, miembros);
+                patrimonio, fraccion, corte, conGarantiaAdmisible, miembros) { LiberadoPorRecogidas = liberado };
         }
         return Result.Success(new ResultadoDeConcentracion(porDeudor, porGrupo));
     }
 
     /// <summary>Mide y falla también si se excede (<c>Lending.Concentration.LimitExceeded</c>).</summary>
+    public Task<Result<ResultadoDeConcentracion>> ValidarAsync(int personId, decimal pedido, bool conGarantiaAdmisible, DateOnly fecha,
+        int? sinLaSolicitud = null, CancellationToken ct = default) =>
+        ValidarAsync(personId, pedido, conGarantiaAdmisible, fecha, sinLaSolicitud, null, ct);
+
+    /// <summary>2026-11-27 (feature 028, R8): mide después de recoger (<see cref="MedirAsync(int, decimal, bool, DateOnly, int?, IReadOnlyList{RecogidaEnLaValidacion}?, CancellationToken)"/>) y falla si se excede.</summary>
     public async Task<Result<ResultadoDeConcentracion>> ValidarAsync(int personId, decimal pedido, bool conGarantiaAdmisible, DateOnly fecha,
-        int? sinLaSolicitud = null, CancellationToken ct = default)
+        int? sinLaSolicitud, IReadOnlyList<RecogidaEnLaValidacion>? recogidas, CancellationToken ct)
     {
-        var medida = await MedirAsync(personId, pedido, conGarantiaAdmisible, fecha, sinLaSolicitud, ct);
+        var medida = await MedirAsync(personId, pedido, conGarantiaAdmisible, fecha, sinLaSolicitud, recogidas, ct);
         if (medida.IsFailure) return medida;
         return medida.Value.Error is { } error ? Result.Failure<ResultadoDeConcentracion>(error) : medida;
     }

@@ -41,6 +41,18 @@ public interface IConsultaDeListasDeCartera
 public sealed record DisponibleDeCupoCalculado(bool TieneCupo, decimal Cupo, decimal Consumido, decimal Disponible, Guid? CreditLimitPublicId)
 {
     public static DisponibleDeCupoCalculado SinCupo { get; } = new(false, 0m, 0m, 0m, null);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): el capital de cada crédito propio que suma en <see cref="Consumido"/>, por crédito (vacío si no se sabe): lo que libera
+    /// la recogida de uno de ellos.
+    /// </summary>
+    public IReadOnlyDictionary<int, decimal> CapitalPorCredito { get; init; } = new Dictionary<int, decimal>();
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): el disponible después de recoger <paramref name="liberado"/> de capital de los créditos que consumen el cupo: el cupo
+    /// menos lo que queda consumido, nunca por debajo de cero.
+    /// </summary>
+    public decimal DisponibleDespuesDe(decimal liberado) => Math.Max(0m, Cupo - Math.Max(0m, Consumido - liberado));
 }
 
 /// <summary>El disponible de cupo que la originación consulta (T0405). (nuevo)</summary>

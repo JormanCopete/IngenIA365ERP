@@ -35,8 +35,18 @@ public sealed record PayrollInput(
 /// <summary>Una garantía pedida (api.md §4.2): en K1 sólo el codeudor, que va como parte. (nuevo)</summary>
 public sealed record CollateralInput(CollateralKind Kind, Guid? PersonPublicId = null);
 
-/// <summary>Un crédito propio a recoger con el desembolso (FR-046): total o parcial. (nuevo)</summary>
+/// <summary>
+/// Un crédito propio a recoger con el desembolso (FR-046): total o parcial. 2026-11-27 (feature 028, R1): es la lista vieja; la solicitud la sigue
+/// aceptando y la traduce a <see cref="Payoffs.PayoffInput"/> (<c>RecogidasPedidas.Unificar</c>). (nuevo)
+/// </summary>
 public sealed record OwnLoanPayoffInput(Guid LoanPublicId, string Mode = "Full", decimal? Amount = null);
+
+/// <summary>
+/// 2026-11-27 (feature 028, T023; api.md §2 <c>payoffProjection</c>): a qué fecha se proyectan las recogidas (D, la fecha proyectada de desembolso; nula,
+/// la fecha esperada de desembolso de la solicitud o, sin ella, hoy) y hasta cuándo se tomó la información (R; nula, ahora). La pantalla manda lo que
+/// simuló el asesor. (nuevo)
+/// </summary>
+public sealed record PayoffProjectionInput(DateOnly? ProjectedDisbursementDate = null, DateTime? RecordedAsOf = null);
 
 /// <summary>Una autorización de datos que llega con la solicitud (FR-006, T69): se agrega en la misma transacción si no está vigente. (nuevo)</summary>
 public sealed record AuthorizationInput(
@@ -74,6 +84,17 @@ public sealed record CreditApplicationInput
     public IReadOnlyList<CreditApplicationPartyInput>? CoDebtors { get; init; }
     public IReadOnlyList<CollateralInput>? Collaterals { get; init; }
     public IReadOnlyList<OwnLoanPayoffInput>? OwnLoanPayoffs { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T023; R1): los productos que recoge el crédito nuevo con su desembolso. La lista vieja <see cref="OwnLoanPayoffs"/> se
+    /// sigue aceptando; las dos con elementos es un cuerpo ilegible (<c>Request.BodyInvalid</c>). Sin ninguna, la solicitud no recoge nada (al corregir,
+    /// se quitan las que tenía).
+    /// </summary>
+    public IReadOnlyList<Payoffs.PayoffInput>? Payoffs { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T023): a qué fecha (D) y con la información hasta cuándo (R) se proyectan las recogidas.</summary>
+    public PayoffProjectionInput? PayoffProjection { get; init; }
+
     public IReadOnlyList<AuthorizationInput>? Authorizations { get; init; }
     public bool PolicyExceptionRequested { get; init; }
     public string? PolicyExceptionReason { get; init; }
@@ -138,6 +159,36 @@ public sealed record CreditApplicationDecisionDto(Guid PublicId, CreditDecisionO
 
 public sealed record CreditApplicationApprovalDto(decimal? Amount, string? Conditions, DateOnly? ExpiresAt, bool Expired);
 
+/// <summary>
+/// 2026-11-27 (feature 028, T027; api.md §2): un producto que la solicitud recoge, con lo proyectado al guardarla o radicarla: el número, el modo, el valor
+/// pedido (parcial o abono), lo que se recogería a D con la información hasta R y su desglose, la cuota causada y qué se hace con ella, el modo de
+/// intereses y, si otra solicitud viva lo recoge también, su número (<see cref="InOtherApplication"/>: «» si es un borrador sin número; es un aviso).
+/// <see cref="Projected"/> es falso en las filas que copió la migración desde <c>PayoffRequest</c>: no tienen proyección hasta radicar. (nuevo)
+/// </summary>
+public sealed record CreditApplicationPayoffDto(
+    PayoffProductKind Kind,
+    Guid? ProductPublicId,
+    string? Reference,
+    string Number,
+    PayoffMode Mode,
+    decimal? RequestedAmount,
+    decimal ProjectedAmount,
+    Payoffs.PayoffBreakdownDto Breakdown,
+    InstallmentTreatment? InstallmentTreatment,
+    string? InterestMode,
+    Payoffs.PayoffCurrentInstallmentDto? CurrentInstallment,
+    DateOnly ProjectedDate,
+    DateTime RecordedAsOf,
+    bool Projected,
+    string? InOtherApplication,
+    int Order);
+
+/// <summary>
+/// 2026-11-27 (feature 028, T027; api.md §2 <c>payoffSummary</c>): lo que recoge la solicitud en total, el neto a girar (el monto aprobado, o el pedido,
+/// menos lo recogido), la fecha proyectada de desembolso (D) y hasta cuándo se tomó la información (R). (nuevo)
+/// </summary>
+public sealed record CreditApplicationPayoffSummaryDto(decimal Total, decimal NetToDisburse, DateOnly ProjectedDate, DateTime RecordedAsOf);
+
 /// <summary>La solicitud (api.md §4.2 <c>CreditApplicationDto</c>). «Vencida» y «bloqueada por listas» se calculan al leer (C53).</summary>
 public sealed record CreditApplicationDto(
     Guid PublicId,
@@ -186,10 +237,16 @@ public sealed record CreditApplicationDto(
     public string? PolicyExceptionReason { get; init; }
 
     /// <summary>
-    /// 2026-11-23: la solicitud trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, créditos que recoge, convenio de
-    /// libranza): la pantalla de corrección no la toca para no borrarlas.
+    /// 2026-11-23: la solicitud trae condiciones que la pantalla no edita (cuotas extraordinarias, gracia, convenio de libranza): la pantalla de
+    /// corrección no la toca para no borrarlas. 2026-11-27 (feature 028, T027): las recogidas ya no la encienden: la pantalla las edita.
     /// </summary>
     public bool UsesAdvancedTerms { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T027): los productos que recoge, con lo proyectado, en su orden; vacío si no recoge nada.</summary>
+    public IReadOnlyList<CreditApplicationPayoffDto> Payoffs { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T027): el total recogido, el neto a girar, D y R; nulo si no recoge nada.</summary>
+    public CreditApplicationPayoffSummaryDto? PayoffSummary { get; init; }
 
     /// <summary>2026-11-23: los grupos que se pueden corregir ahora (nombres de <c>GrupoEditableAlDevolver</c>); vacío si no se edita.</summary>
     public IReadOnlyList<string> EditableGroups { get; init; } = [];
@@ -263,6 +320,8 @@ public static class ConsultasDeSolicitudes
         var listas = await db.ScreeningResults.AsNoTracking().AnyAsync(r => r.ApplicationId == s.Id && !r.IsDeleted
             && (r.Outcome == Domain.Enums.Lending.ScreeningOutcome.Match || r.Outcome == Domain.Enums.Lending.ScreeningOutcome.PossibleMatch) && r.ReleasedAt == null, ct);
 
+        var recogidas = await RecogidasAsync(db, s, ct);
+
         var personas = await ReferenciasDeGobierno.PersonasAsync(db, partes.Select(p => p.PersonId).Append(s.ApplicantPersonId), ct);
         var usuarios = await ReferenciasDeGobierno.UsuariosAsync(db, decisiones.Where(d => d.DecidedByUserId is not null).Select(d => d.DecidedByUserId!.Value), ct);
         var personaDeParte = partes.ToDictionary(p => p.Id, p => personas[p.PersonId]);
@@ -298,10 +357,13 @@ public static class ConsultasDeSolicitudes
             IsSocialHousing = s.IsSocialHousing,
             Insurances = s.SelectedInsurances is { } seguros ? JsonSerializer.Deserialize<List<string>>(seguros, Json) ?? [] : [],
             PolicyExceptionReason = s.PolicyExceptionReason,
-            UsesAdvancedTerms = s.ExtraordinaryInstallments is not null || s.GraceKind is not null || s.PayoffRequest is not null
-                || s.PayrollAgreementId is not null,
+            // 2026-11-27 (feature 028, T027): las recogidas ya no la encienden (la pantalla las corrige).
+            UsesAdvancedTerms = s.ExtraordinaryInstallments is not null || s.GraceKind is not null || s.PayrollAgreementId is not null,
+            Payoffs = recogidas,
+            PayoffSummary = Resumen(s, recogidas),
             ChangesSinceReturn = FotoDeSolicitud.Leer(s.ReturnSnapshot) is { } foto
-                ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes) with
+                ? await CambiosAsync(db, foto, FotoDeSolicitud.De(s, partes, FotoDeSolicitud.TextoDeRecogidas(recogidas
+                    .Select(r => new RecogidaEnLaFoto(r.Number, r.Mode, r.RequestedAmount, r.InstallmentTreatment)))) with
                 {
                     PrimerPagoPorDefecto = s.ExpectedDisbursementDate is { } desembolso && s.Periodicity is { } periodicidad
                         ? FotoDeSolicitud.PrimerPagoSinFecha(desembolso, periodicidad, version?.PaymentDay)
@@ -311,6 +373,45 @@ public static class ConsultasDeSolicitudes
             SubsidizedPurchase = await CompraAsync(db, s, version, ct),
             SubmittedEdits = await EdicionesAsync(db, s.Id, ct),
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T027): las recogidas vivas de la solicitud, en su orden, con lo proyectado y el aviso de otra solicitud viva que recoge el
+    /// mismo crédito (FR-009). El desglose y la cuota causada salen de lo guardado; no se vuelve a liquidar al leer.
+    /// </summary>
+    public static async Task<IReadOnlyList<CreditApplicationPayoffDto>> RecogidasAsync(IApplicationDbContext db, CreditApplication s, CancellationToken ct)
+    {
+        var filas = await (from f in db.CreditApplicationPayoffs.AsNoTracking()
+                           join l in db.Loans.AsNoTracking().IgnoreQueryFilters() on f.LoanId equals l.Id into creditos
+                           from l in creditos.DefaultIfEmpty()
+                           where f.CreditApplicationId == s.Id && !f.IsDeleted
+                           orderby f.Order, f.Id
+                           select new { Fila = f, LoanPublicId = l == null ? (Guid?)null : l.PublicId })
+            .ToListAsync(ct);
+        if (filas.Count == 0) return [];
+        var enOtras = await Payoffs.RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync(db,
+            filas.Where(f => f.Fila.LoanId is not null).Select(f => f.Fila.LoanId!.Value).ToList(), s.Id, null, ct);
+        return filas.Select(x =>
+        {
+            var f = x.Fila;
+            return new CreditApplicationPayoffDto(f.ProductKind, x.LoanPublicId, f.CommercialReceivableReference, f.ProductNumber, f.Mode, f.RequestedAmount,
+                f.ProjectedAmount, Payoffs.PayoffBreakdownDto.De(f.Desglose()), f.InstallmentTreatment, f.InterestMode,
+                f.CurrentInstallmentNumber is { } numero
+                    ? new Payoffs.PayoffCurrentInstallmentDto(numero, null, f.CurrentInstallmentAmount ?? 0m, f.InstallmentTreatment ?? InstallmentTreatment.Include,
+                        Choosable: false, Sent: null)
+                    : null,
+                f.ProjectedDate, f.RecordedAsOf, f.TieneProyeccion,
+                f.LoanId is { } credito && enOtras.TryGetValue(credito, out var otra) ? otra : null, f.Order);
+        }).ToList();
+    }
+
+    /// <summary>2026-11-27 (feature 028, T027): el total recogido, el neto a girar contra el monto aprobado (o el pedido), D y R.</summary>
+    private static CreditApplicationPayoffSummaryDto? Resumen(CreditApplication s, IReadOnlyList<CreditApplicationPayoffDto> recogidas)
+    {
+        if (recogidas.Count == 0) return null;
+        var total = recogidas.Sum(r => r.ProjectedAmount);
+        return new CreditApplicationPayoffSummaryDto(total, (s.ApprovedAmount ?? s.RequestedAmount) - total, recogidas.Max(r => r.ProjectedDate),
+            recogidas.Max(r => r.RecordedAsOf));
     }
 
     /// <summary>2026-11-25: el historial de ediciones de la radicada, de la más reciente a la más antigua, con quién y los niveles por su nombre.</summary>
@@ -350,6 +451,8 @@ public static class ConsultasDeSolicitudes
     internal static async Task<IReadOnlyList<CreditApplicationChangeDto>> CambiosAsync(IApplicationDbContext db, FotoDeSolicitud antes,
         FotoDeSolicitud ahora, CancellationToken ct)
     {
+        // 2026-11-27 (feature 028, T026): una foto de antes de la feature trae las recogidas como el JSON de PayoffRequest.
+        antes = await FotoDeSolicitud.NormalizarAsync(db, antes, ct);
         var diferencias = antes.Diferencias(ahora);
         if (diferencias.Count == 0) return [];
         var lineas = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.Id == antes.LineaId || l.Id == ahora.LineaId)

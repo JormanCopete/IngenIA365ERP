@@ -10,7 +10,11 @@
    de ese momento) y dice, por cada uno, la forma de pago, los días de mora, la cuota, lo que cuesta recogerlo y si se puede recoger o por qué no. El
    asesor marca lo que se recoge, total o parcial; al pie, el total recogido, el neto a girar y las cuotas que se liberan frente a la cuota nueva. El
    detalle de cada crédito despliega el desglose por concepto, el modo de intereses, la cuota causada y los avisos. «Imprimir simulación» baja el PDF
-   con el membrete. Cada cambio de lo marcado se le avisa a quien la contiene (SeleccionCambiada). Lo usa la solicitud nueva (paso 2). *@
+   con el membrete. Cada cambio de lo marcado se le avisa a quien la contiene (SeleccionCambiada). Lo usa la solicitud nueva (paso 2).
+   2026-11-27 (feature 028, HU2, T028): al corregir abre con lo que la solicitud ya recoge (Inicial) y lo avisa sin volver a liquidar; con SoloLectura
+   (el grupo «Recogidas» no se puede corregir) se ve pero no se marca ni se cambia, y lo marcado no se quita aunque ya no se pueda recoger (el servidor lo
+   vuelve a revisar al guardar). La consulta ya no manda lo marcado: el resumen sale aquí con la misma regla del servidor, y así un crédito marcado que
+   dejó de ser del deudor (se canceló) no tumba la consulta. *@
 <div class="info-card">
     <h4>Productos que recoge</h4>
     <p class="texto-apoyo">
@@ -70,7 +74,7 @@
                                 var marcada = Marcada(p.ProductPublicId);
                                 <tr>
                                     <td>
-                                        <input type="checkbox" checked="@(marcada is not null)" disabled="@(!p.Eligible)"
+                                        <input type="checkbox" checked="@(marcada is not null)" disabled="@(!p.Eligible || SoloLectura)"
                                                title="@(p.Eligible ? "Recoger este crédito" : p.BlockMessage)" aria-label="@($"Recoger el crédito {p.Number}")"
                                                @onchange="@(e => MarcarAsync(p, e.Value is true))" />
                                     </td>
@@ -90,7 +94,7 @@
                                         }
                                         else if (marcada is { } m)
                                         {
-                                            <select class="e-input" value="@m.Mode" disabled="@(!p.AdmiteParcial)" aria-label="@($"Modo de recogida del crédito {p.Number}")"
+                                            <select class="e-input" value="@m.Mode" disabled="@(!p.AdmiteParcial || SoloLectura)" aria-label="@($"Modo de recogida del crédito {p.Number}")"
                                                     @onchange="@(e => CambiarModoAsync(p, LeerEntero(e.Value) ?? TextosDeRecogida.ModoTotal))">
                                                 @foreach (var modo in p.AdmittedModes)
                                                 {
@@ -100,7 +104,7 @@
                                             @if (m.Mode == TextosDeRecogida.ModoParcial)
                                             {
                                                 <input class="e-input" type="number" min="1" step="1000" max="@p.ToPayOff.ToString(CultureInfo.InvariantCulture)"
-                                                       value="@m.Amount?.ToString(CultureInfo.InvariantCulture)" aria-label="@($"Valor parcial del crédito {p.Number}")"
+                                                       disabled="@SoloLectura" value="@m.Amount?.ToString(CultureInfo.InvariantCulture)" aria-label="@($"Valor parcial del crédito {p.Number}")"
                                                        @onchange="@(e => CambiarValorAsync(p, LeerDecimal(e.Value)))" />
                                             }
                                         }
@@ -168,6 +172,9 @@
     /// <summary>Lo marcado al abrir (la solicitud que se corrige).</summary>
     [Parameter] public IReadOnlyList<RecogidaMarcada>? Inicial { get; set; }
 
+    /// <summary>2026-11-27 (T028): sólo se ve (al corregir, si el grupo «Recogidas» no se puede corregir).</summary>
+    [Parameter] public bool SoloLectura { get; set; }
+
     /// <summary>La solicitud que se corrige: no cuenta como «otra solicitud que lo recoge».</summary>
     [Parameter] public Guid? SolicitudExcluida { get; set; }
 
@@ -189,10 +196,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var recienTomada = false;
         if (!_inicialTomada && Inicial is { Count: > 0 } inicial)
         {
             _marcadas.AddRange(inicial);
-            _inicialTomada = true;
+            _inicialTomada = recienTomada = true;
         }
         // Otra persona, otra línea u otra fecha de desembolso de la simulación: se vuelve a consultar. El monto y la cuota sólo cambian el resumen.
         if (_consultado != (Persona, Linea, FechaDeDesembolso))
@@ -202,9 +210,10 @@
             if (Persona is not null) await ConsultarAsync();
             else { _respuesta = null; _marcadas.Clear(); await AvisarAsync(); }
         }
-        else if (_avisado != (Monto, CuotaNueva))
+        else if (recienTomada || _avisado != (Monto, CuotaNueva))
         {
-            // Otro monto u otra cuota (se volvió a simular con la misma fecha): el neto cambia y quien la contiene lo muestra.
+            // Otro monto u otra cuota (se volvió a simular con la misma fecha), o lo que ya recogía llegó después de consultar: el neto cambia y quien la
+            // contiene lo muestra. No se vuelve a liquidar.
             await AvisarAsync();
         }
     }
@@ -219,7 +228,8 @@
         if (Persona is not { } persona) return;
         using var carga = _carga.Iniciar();
         _error = null;
-        var r = await Recogidas.ProductosAsync(Pedido(persona));
+        // Sin lo marcado: el resumen sale aquí (Resumir) y un marcado que ya no es del deudor no tumba la consulta.
+        var r = await Recogidas.ProductosAsync(Pedido(persona) with { Selected = null });
         if (!r.IsSuccess || r.Value is not { } respuesta)
         {
             _error = r.ErrorMessage ?? "No se pudieron leer los productos del deudor.";
@@ -228,6 +238,15 @@
         }
         _respuesta = respuesta;
         _fechaVieja = false;
+        if (SoloLectura)
+        {
+            // Sólo se ve: lo marcado queda como está, con el valor de ahora si el producto sigue entre los del deudor.
+            var todos = respuesta.Products.ToDictionary(p => p.ProductPublicId);
+            for (var i = 0; i < _marcadas.Count; i++)
+                if (todos.TryGetValue(_marcadas[i].ProductPublicId, out var producto)) _marcadas[i] = _marcadas[i] with { ToPayOff = producto.ToPayOff };
+            await AvisarAsync();
+            return;
+        }
         // Lo marcado que ya no se puede recoger (otra fecha, otra línea) se desmarca; lo demás toma el valor de ahora.
         var vigentes = respuesta.Products.Where(p => p.Eligible).ToDictionary(p => p.ProductPublicId);
         var siguen = _marcadas.Where(m => vigentes.ContainsKey(m.ProductPublicId) && vigentes[m.ProductPublicId].AdmittedModes.Contains(m.Mode))
@@ -250,6 +269,7 @@
 
     private async Task MarcarAsync(ProductoParaRecogerDto p, bool marcar)
     {
+        if (SoloLectura) return;
         _marcadas.RemoveAll(m => m.ProductPublicId == p.ProductPublicId);
         if (marcar && p.Eligible)
         {
@@ -304,7 +324,13 @@
     {
         if (Persona is not { } persona || _respuesta is null) return;
         using var carga = _impresion.Iniciar();
-        var r = await Recogidas.SimulacionEnPdfAsync(Pedido(persona) with { ProjectedDisbursementDate = _respuesta.Date });
+        // Para imprimir sí va lo marcado (el PDF trae su resumen), sólo lo que la consulta trajo.
+        var deLaConsulta = _respuesta.Products.Select(p => p.ProductPublicId).ToHashSet();
+        var r = await Recogidas.SimulacionEnPdfAsync(Pedido(persona) with
+        {
+            ProjectedDisbursementDate = _respuesta.Date,
+            Selected = _marcadas.Where(m => deLaConsulta.Contains(m.ProductPublicId)).Select(m => m.ComoPedido()).ToList(),
+        });
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el PDF de la simulación."); return; }
         await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }

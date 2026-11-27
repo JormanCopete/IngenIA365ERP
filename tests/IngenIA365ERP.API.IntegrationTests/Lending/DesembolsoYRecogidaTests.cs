@@ -293,9 +293,14 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
         // Tres días después de la fecha exigible (art. 829), no del vencimiento: la mora es 3 cualquier día de la semana.
         var exigible = await PagosE2E.ExigibleAsync(http, esc.Usuarios.Jefe.Token, enMora);
 
+        // 2026-11-27 (feature 028, T024): desde la 028 la solicitud no se radica con un crédito en mora (Lending.Payoff.RequiresRestructuring al guardar):
+        // se aprueba la víspera de la fecha exigible, con el crédito al día, y entra en mora antes de desembolsar (la aprobación dura 30 días).
+        Guid solicitud;
+        using (CausacionE2E.RelojEn(fx, exigible.AddDays(-1)))
+            solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, enMora);
+
         using (CausacionE2E.RelojEn(fx, exigible.AddDays(3)))
         {
-            var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, enMora);
             var cuerpo = Desembolso(esc, solicitud, persona);
             cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = enMora, mode = "Full" } };
             var previa = await CarteraE2E.ExitoAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);

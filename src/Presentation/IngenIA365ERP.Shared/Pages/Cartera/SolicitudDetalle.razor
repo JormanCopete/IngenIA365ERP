@@ -16,7 +16,9 @@
    vio —un nivel colegiado se lleva a sesión— y anular o desistir con motivo. Fuera del alcance, la solicitud no existe (el mismo 404).
    US3 (T0460): la zona «Garantías y pagaré» (GarantiasYPagare), los documentos para firma (DocumentosParaFirmaDeSolicitud, 2026-11-18) y, aprobada, el botón «Desembolsar» hacia /cartera/desembolsos?solicitud=.
    2026-11-17 (pedido del dueño): los pasos arriba, «Qué sigue» con lo que falta para avanzar, las fechas pactadas, y «Decidir…» sólo para quien
-   tiene la atribución del nivel: a los demás se les dice quién decide (antes el diálogo respondía «La solicitud de crédito no existe»). *@
+   tiene la atribución del nivel: a los demás se les dice quién decide (antes el diálogo respondía «La solicitud de crédito no existe»).
+   2026-11-27 (feature 028, HU2, T029): «Lo que recoge» (LoQueRecoge): cada producto con lo proyectado y su desglose, el total, el neto a girar y la
+   fecha proyectada, para quien decide; viene con la solicitud, dentro de su zona de carga. *@
 <PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -158,6 +160,9 @@
                     <p><strong>Aprobación:</strong> @(a.Amount is { } m ? TextosDeOriginacion.Pesos(m) : "") @(a.Conditions) — vence @(a.ExpiresAt?.ToString("dd/MM/yyyy"))</p>
                 }
             </div>
+
+            @* Feature 028 (T029): lo que recoge el crédito nuevo, con lo proyectado y el neto. *@
+            <LoQueRecoge Recogidas="@s.Payoffs" Resumen="@s.PayoffSummary" />
 
             <div class="info-card">
                 <h4>Documentos</h4>

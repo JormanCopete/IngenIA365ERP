@@ -275,22 +275,11 @@ public sealed class GetPayoffCandidatesQueryHandler(
 
     /// <summary>
     /// Los créditos que ya están en la recogida proyectada viva de otra solicitud en curso (borrador, radicada, en decisión, devuelta o aprobada sin
-    /// desembolsar), con el número de esa solicitud («» si es un borrador sin número); la que se corrige no cuenta.
+    /// desembolsar), con el número de esa solicitud («» si es un borrador sin número); la que se corrige no cuenta. 2026-11-27 (T027): la misma lectura
+    /// que usa el detalle de la solicitud (<see cref="RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync"/>).
     /// </summary>
-    private async Task<Dictionary<int, string>> EnOtrasSolicitudesAsync(IReadOnlyCollection<int> ids, Guid? excluida, CancellationToken ct)
-    {
-        if (ids.Count == 0) return [];
-        var creditos = ids.ToArray();
-        var enCurso = SolicitudesEnCurso;
-        var filas = await (
-                from r in db.CreditApplicationPayoffs.AsNoTracking()
-                join s in db.CreditApplications.AsNoTracking() on r.CreditApplicationId equals s.Id
-                where !r.IsDeleted && r.LoanId != null && creditos.Contains(r.LoanId.Value) && !s.IsDeleted && enCurso.Contains(s.Status)
-                      && (excluida == null || s.PublicId != excluida)
-                select new { LoanId = r.LoanId!.Value, s.Id, s.Number })
-            .ToListAsync(ct);
-        return filas.GroupBy(f => f.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.Id).First().Number ?? string.Empty);
-    }
+    private Task<Dictionary<int, string>> EnOtrasSolicitudesAsync(IReadOnlyCollection<int> ids, Guid? excluida, CancellationToken ct) =>
+        RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync(db, ids, null, excluida, ct);
 
     /// <summary>«la solicitud S-000123» o, si es un borrador sin número, «otra solicitud en borrador».</summary>
     public static string TextoDeLaSolicitud(string numero) =>

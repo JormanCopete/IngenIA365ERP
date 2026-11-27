@@ -872,6 +872,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
         // 2026-11-27 (feature 028, R3, T010): el único sitio que liquida una recogida (la consulta de productos, la vista previa y el desembolso).
         services.AddScoped<Lending.Payoffs.LiquidacionDeRecogida>();
+        // 2026-11-27 (feature 028, T023): la recogida que pide una solicitud (validar, proyectar y guardar sus filas al crear, corregir y radicar).
+        services.AddScoped<Lending.Payoffs.RecogidasDeLaSolicitud>();
         services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();
         services.AddScoped<Lending.Accrual.ReajusteDeTasa>();
         services.AddScoped<Lending.Ledger.VerificacionDelLibro>();

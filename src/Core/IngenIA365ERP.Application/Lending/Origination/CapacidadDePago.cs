@@ -24,6 +24,12 @@ public sealed record CapacidadCalculada(
     /// <summary>Lo que queda después de todo: negativo = no alcanza.</summary>
     public decimal Disponible => Ingresos - Egresos - CuotasPropias - CuotasExternas - CuotaSimulada;
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): las cuotas propias que la solicitud libera al recoger créditos total (ya fuera de <see cref="CuotasPropias"/>); nulo si
+    /// la solicitud no recoge nada.
+    /// </summary>
+    public decimal? CuotasLiberadas { get; init; }
+
     public bool Alcanza => Declarada && Disponible >= 0m;
 
     /// <summary>Las cuotas (propias, externas y la simulada) sobre el ingreso: la fuente <c>Application.PaymentCapacityRatio</c> del puntaje.</summary>
@@ -43,6 +49,9 @@ public sealed record CapacidadDeDescuento(decimal Ingreso, decimal Fraccion, dec
     public decimal Disponible => Permitido - DescuentosVigentes - CuotaSimulada;
 
     public bool Alcanza => Ingreso > 0m && Disponible >= 0m;
+
+    /// <summary>2026-11-27 (feature 028, R8): lo que deja de descontar la nómina por los créditos recogidos total; nulo si la solicitud no recoge nada.</summary>
+    public decimal? Liberado { get; init; }
 }
 
 /// <summary>
@@ -55,31 +64,63 @@ public sealed class CapacidadDePago(IApplicationDbContext db, IValoresNacionales
 {
     private static readonly LoanStatus[] Vivos = [LoanStatus.PendingDisbursement, LoanStatus.Active];
 
-    public async Task<CapacidadCalculada> DePagoAsync(CreditApplicationParty parte, decimal cuotaSimulada, DateOnly fecha, CancellationToken ct)
+    public Task<CapacidadCalculada> DePagoAsync(CreditApplicationParty parte, decimal cuotaSimulada, DateOnly fecha, CancellationToken ct) =>
+        DePagoAsync(parte, cuotaSimulada, fecha, null, ct);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8, T025): la capacidad de pago después de recoger: sin la próxima cuota de los créditos de <paramref name="sinLasCuotasDe"/>
+    /// (los recogidos total; nulo = la solicitud no recoge nada), que van aparte en <see cref="CapacidadCalculada.CuotasLiberadas"/>.
+    /// </summary>
+    public async Task<CapacidadCalculada> DePagoAsync(CreditApplicationParty parte, decimal cuotaSimulada, DateOnly fecha,
+        IReadOnlyCollection<int>? sinLasCuotasDe, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(parte);
-        var propias = await CuotasPropiasAsync(parte.PersonId, fecha, soloNomina: false, ct);
+        var (propias, liberadas) = await CuotasPropiasSinAsync(parte.PersonId, fecha, soloNomina: false, sinLasCuotasDe ?? [], ct);
         return new CapacidadCalculada(parte.MonthlyIncome is not null, parte.MonthlyIncome ?? 0m, parte.MonthlyExpenses ?? 0m, propias,
-            parte.ExternalInstallments ?? 0m, cuotaSimulada);
+            parte.ExternalInstallments ?? 0m, cuotaSimulada) { CuotasLiberadas = sinLasCuotasDe is null ? null : liberadas };
     }
 
     /// <summary>
     /// La capacidad de descuento del solicitante en nómina propia contra el límite legal vigente a la fecha. Sin el límite replicado,
     /// <c>NationalValues.Missing</c> (el lector alerta).
     /// </summary>
+    public Task<Result<CapacidadDeDescuento>> DeDescuentoAsync(CreditApplicationParty solicitante, decimal cuotaSimulada, DateOnly fecha,
+        CancellationToken ct) => DeDescuentoAsync(solicitante, cuotaSimulada, fecha, null, ct);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8, T025): la capacidad de descuento por nómina propia después de recoger: sin la próxima cuota de los créditos de
+    /// nómina propia que se recogen total (<paramref name="sinLasCuotasDe"/>; nulo = la solicitud no recoge nada).
+    /// </summary>
     public async Task<Result<CapacidadDeDescuento>> DeDescuentoAsync(CreditApplicationParty solicitante, decimal cuotaSimulada, DateOnly fecha,
-        CancellationToken ct)
+        IReadOnlyCollection<int>? sinLasCuotasDe, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(solicitante);
         var limite = await valores.LeerAsync(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.LibranzaCapacidadDescuento, fecha, null, ct);
         if (limite.IsFailure) return Result.Failure<CapacidadDeDescuento>(limite.Error);
-        var nomina = await CuotasPropiasAsync(solicitante.PersonId, fecha, soloNomina: true, ct);
+        var (nomina, liberado) = await CuotasPropiasSinAsync(solicitante.PersonId, fecha, soloNomina: true, sinLasCuotasDe ?? [], ct);
         return Result.Success(new CapacidadDeDescuento(solicitante.MonthlyIncome ?? 0m, limite.Value.Valor ?? 0m, nomina, cuotaSimulada,
-            limite.Value.Fuente));
+            limite.Value.Fuente) { Liberado = sinLasCuotasDe is null ? null : liberado });
     }
 
     /// <summary>La próxima cuota del plan vigente de cada crédito vivo de la persona (de nómina propia, si se pide), sumadas.</summary>
-    public async Task<decimal> CuotasPropiasAsync(int personId, DateOnly fecha, bool soloNomina, CancellationToken ct)
+    public async Task<decimal> CuotasPropiasAsync(int personId, DateOnly fecha, bool soloNomina, CancellationToken ct) =>
+        (await CuotasPropiasSinAsync(personId, fecha, soloNomina, [], ct)).Propias;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): las cuotas propias sin las de <paramref name="sin"/> (las que libera la recogida) y, aparte, las que se liberaron: la
+    /// próxima cuota de cada crédito vivo de la persona que está entre ellos (de nómina propia, si se pide).
+    /// </summary>
+    public async Task<(decimal Propias, decimal Liberadas)> CuotasPropiasSinAsync(int personId, DateOnly fecha, bool soloNomina,
+        IReadOnlyCollection<int> sin, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(sin);
+        var porCredito = await CuotasPropiasPorCreditoAsync(personId, fecha, soloNomina, ct);
+        var liberadas = porCredito.Where(c => sin.Contains(c.Key)).Sum(c => c.Value);
+        return (porCredito.Values.Sum() - liberadas, liberadas);
+    }
+
+    /// <summary>La próxima cuota de cada crédito vivo de la persona como deudora (de nómina propia, si se pide), por crédito.</summary>
+    private async Task<IReadOnlyDictionary<int, decimal>> CuotasPropiasPorCreditoAsync(int personId, DateOnly fecha, bool soloNomina, CancellationToken ct)
     {
         var creditos = await db.Loans.AsNoTracking()
             .Where(l => !l.IsDeleted && l.DebtorPersonId == personId && Vivos.Contains(l.Status))
@@ -93,8 +134,8 @@ public sealed class CapacidadDePago(IApplicationDbContext db, IValoresNacionales
                 .ToListAsync(ct);
             creditos = creditos.Intersect(deNomina).ToList();
         }
-        if (creditos.Count == 0) return 0m;
-        return (await ProximaCuotaPorCreditoAsync(creditos, fecha, ct)).Values.Sum();
+        if (creditos.Count == 0) return new Dictionary<int, decimal>();
+        return await ProximaCuotaPorCreditoAsync(creditos, fecha, ct);
     }
 
     /// <summary>

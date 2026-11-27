@@ -189,8 +189,10 @@ public sealed class DecisionSobreSolicitud(
             return Result.Failure<AprobacionRevalidada>(ErroresDeLineasDeCredito.UsuraExcedida("conditions.amount", simulacion.Fecha, simulacion.Usura,
                 simulacion.Combinacion.ModalityCode));
 
-        // La concentración con el monto aprobado (FR-041): excedida o sin patrimonio técnico, no se aprueba.
-        var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, monto, conGarantiaAdmisible: false, reloj.HoyLocal, s.Id, ct);
+        // La concentración con el monto aprobado (FR-041): excedida o sin patrimonio técnico, no se aprueba. 2026-11-27 (feature 028, R8): después de
+        // recoger lo que recoge la solicitud, como al radicar.
+        var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, monto, conGarantiaAdmisible: false, reloj.HoyLocal, s.Id,
+            c.Recogidas.Count > 0 ? c.Recogidas : null, ct);
         if (medida.IsFailure) return Result.Failure<AprobacionRevalidada>(medida.Error);
 
         var excepcion = s.PolicyExceptionRequested;

@@ -51,15 +51,15 @@ cambia el valor y el neto.
 **Objetivo**: la solicitud guarda la proyección, valida después de recoger y el decisor la ve.
 **Prueba independiente**: un ingreso que sólo alcanza liberando la cuota del crédito viejo pasa la capacidad con la recogida y no sin ella.
 
-- [ ] T023 [US2] `CreditApplicationInput.Payoffs` y `PayoffProjection` en `App/Lending/Origination/CreditApplicationDtos.cs`; persistencia de filas `CreditApplicationPayoff` (reescritura al guardar) en `App/Lending/Origination/CreditApplicationCommands.cs`; deja de escribir `PayoffRequest`
-- [ ] T024 [US2] Validación al guardar y radicar (del solicitante, vivo, admitido, modo admitido, parcial con valor, neto positivo) con los códigos `Lending.Payoff.*` en `App/Lending/Origination/ErroresDeOriginacion.cs` y el validador
-- [ ] T025 [US2] Validaciones después de recoger (R8): `ContextoDeValidacion.Recogidas` y su lectura en `App/Lending/Origination/ValidacionesDeOriginacion.cs`; `CapacidadDePago.CuotasPropiasAsync` con exclusiones en `CapacidadDePago.cs`; `ExposicionConsolidadaDelDeudor`, cupo (`IDisponibleDeCupo`) y `ValidacionDeConcentracion` con el capital recogido; detalle `releasedByPayoffs`
-- [ ] T026 [US2] `FotoDeSolicitud` lee las recogidas de las filas (grupo «Recogidas») en `App/Lending/Origination/FotoDeSolicitud.cs`
-- [ ] T027 [US2] DTO de la solicitud con `payoffs` y `payoffSummary`; `UsesAdvancedTerms` sin recogidas, en `App/Lending/Origination/CreditApplicationDtos.cs`
-- [ ] T028 [US2] `Sh/Pages/Cartera/SolicitudNueva.razor`: manda `Payoffs`, quita el bloqueo por recogidas (sigue para cuotas extraordinarias y gracia), abre la corrección con las recogidas guardadas y las deja editar si el grupo es editable
-- [ ] T029 [US2] Sección «Lo que recoge» (proyectado, total, neto, fecha) en `Sh/Pages/Cartera/SolicitudDetalle.razor` con `IndicadorDeCarga`
-- [ ] T030 [P] [US2] Pruebas de radicación con recogidas y de las cinco validaciones después de recoger en `TA/Lending/Origination/SolicitudConRecogidasTests.cs`
-- [ ] T031 [P] [US2] Pruebas de la foto y de la corrección al devolver con recogidas en `TA/Lending/Origination/CorreccionConRecogidasTests.cs`
+- [X] T023 [US2] `CreditApplicationInput.Payoffs` y `PayoffProjection` en `App/Lending/Origination/CreditApplicationDtos.cs`; persistencia de filas `CreditApplicationPayoff` (reescritura al guardar) en `App/Lending/Origination/CreditApplicationCommands.cs`; deja de escribir `PayoffRequest`
+- [X] T024 [US2] Validación al guardar y radicar (del solicitante, vivo, admitido, modo admitido, parcial con valor, neto positivo) con los códigos `Lending.Payoff.*` en `App/Lending/Origination/ErroresDeOriginacion.cs` y el validador
+- [X] T025 [US2] Validaciones después de recoger (R8): `ContextoDeValidacion.Recogidas` y su lectura en `App/Lending/Origination/ValidacionesDeOriginacion.cs`; `CapacidadDePago.CuotasPropiasAsync` con exclusiones en `CapacidadDePago.cs`; `ExposicionConsolidadaDelDeudor`, cupo (`IDisponibleDeCupo`) y `ValidacionDeConcentracion` con el capital recogido; detalle `releasedByPayoffs`
+- [X] T026 [US2] `FotoDeSolicitud` lee las recogidas de las filas (grupo «Recogidas») en `App/Lending/Origination/FotoDeSolicitud.cs`
+- [X] T027 [US2] DTO de la solicitud con `payoffs` y `payoffSummary`; `UsesAdvancedTerms` sin recogidas, en `App/Lending/Origination/CreditApplicationDtos.cs`
+- [X] T028 [US2] `Sh/Pages/Cartera/SolicitudNueva.razor`: manda `Payoffs`, quita el bloqueo por recogidas (sigue para cuotas extraordinarias y gracia), abre la corrección con las recogidas guardadas y las deja editar si el grupo es editable
+- [X] T029 [US2] Sección «Lo que recoge» (proyectado, total, neto, fecha) en `Sh/Pages/Cartera/SolicitudDetalle.razor` con `IndicadorDeCarga`
+- [X] T030 [P] [US2] Pruebas de radicación con recogidas y de las cinco validaciones después de recoger en `TA/Lending/Origination/SolicitudConRecogidasTests.cs`
+- [X] T031 [P] [US2] Pruebas de la foto y de la corrección al devolver con recogidas en `TA/Lending/Origination/CorreccionConRecogidasTests.cs`
 
 ## Fase 5 — HU3: desembolsar con recálculo y diferencias (P1, E1)
 

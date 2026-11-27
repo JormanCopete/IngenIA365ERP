@@ -302,3 +302,36 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   auditar `Lending.Payoff.Viewed`. «Simular» (o cambiar persona, línea o fecha de la simulación) vuelve a consultar.
 - **El PDF** (`/payoffs/candidates/pdf`) queda en la auditoría de exportaciones con la clave `payoff-candidates-simulation`. Reusa la hoja, los datos de la
   persona y los avisos de `EstadoDeCuentaDeLaPersonaReport` (ahora `internal`).
+
+### E-06 — Radicar, corregir y decidir una solicitud que recoge (T023–T031, 2026-11-27)
+- **Un solo sitio para la recogida de la solicitud**: `Lending/Payoffs/RecogidasDeLaSolicitud` unifica el cuerpo (`payoffs` u `ownLoanPayoffs`), valida,
+  proyecta con `LiquidacionDeRecogida` y reescribe las filas; lo usan crear, corregir, editar la radicada (`PrepararAsync`) y radicar
+  (`ReproyectarAsync`). Al reescribir, la baja lógica de las filas viejas se guarda **antes** de agregar las nuevas: el único filtrado por crédito no ve la
+  baja si la fila nueva entra primero en el mismo guardado.
+- **D y R**: D = la de `payoffProjection`, si no la fecha esperada de desembolso, si no hoy; una D pasada se lleva a hoy (no se rechaza) y una R futura a
+  ahora. Al radicar, la D que se guardó (la mayor de las filas con proyección; las copiadas de `PayoffRequest` toman la fecha esperada) y R = ahora.
+- **Códigos**: una cuenta o una factura en E1 es `Lending.Payoff.ProductNotAdmitted` (además del validador); un crédito que no existe, de otra persona o
+  donde el solicitante es codeudor, `NotOfApplicant`; `ModeNotAdmitted` y `NetNotPositive` son nuevos (`ErroresDeRecogida`). El parcial sin valor, un
+  producto repetido, más de 50 y la cuota causada «Excluir» (llega con E2) los rechaza el validador de `CreditApplicationInput`.
+- **El parcial se proyecta a capital** (`Capital = valor pedido`): un crédito que se puede recoger está al día y a D no tiene nada vencido; si el valor
+  cubre lo que cuesta recogerlo, se proyecta el desglose total (caso límite de la spec). El desembolso lo vuelve a liquidar.
+- **«Otra solicitud que lo recoge» no se guarda**: sale al leer la solicitud (`payoffs[].inOtherApplication`, la misma lectura de la consulta de
+  productos, `RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync`). La solicitud no tiene lista de avisos.
+- **R8, reglas finas** (`Origination/RecogidaEnLaValidacion`): el parcial no reduce la cuota; libera de capital el valor pedido topado en el capital del
+  crédito en esa medida (nunca negativo). **El consolidado del enrutamiento (quién decide) no cambia**: sigue siendo el bruto (más exposición, nivel más
+  alto) y así la huella no se mueve con cada proyección; sólo la validación del endeudamiento mide después de recoger. El cupo libera por
+  `DisponibleDeCupoCalculado.CapitalPorCredito` (el puerto `IDisponibleDeCupo` no cambia); la libranza, por `ConveniosDeLibranza.DescuentosVigentesSinAsync`
+  (sí suma cuotas vigentes del mismo convenio). La decisión revalida la concentración igual que la radicación. `releasedByPayoffs` va nulo sin recogidas.
+- **Desembolso**: la concentración se mide sobre bruto − **capital** liberado (no bruto − recogido, que con los intereses subestimaría la exposición); por
+  eso las recogidas se evalúan antes de la concentración, con sus bloqueos anotados en su paso de siempre (el orden de los errores no cambia). Lo
+  autorizado son los créditos de las filas vivas; `PayoffRequest` ya no se lee en ningún sitio.
+- **La foto** guarda «número modo [valor] [sin la cuota causada]» separado por «; » (`FotoDeSolicitud.TextoDeRecogidas`); la etiqueta sigue siendo
+  «Créditos que recoge». Las fotos viejas con el JSON de `PayoffRequest` se normalizan al compararlas (`NormalizarAsync`, en `CambiosAsync`) con las
+  reglas de la migración (repetido una vez, inexistente fuera, `Partial` con su valor).
+- **La huella del enrutamiento** incluye las recogidas (clase, crédito/cuenta/referencia, modo, valor pedido, cuota causada) sólo si las hay: la de las
+  solicitudes sin recogidas no cambia; las que tenían `PayoffRequest` cambian una vez al desplegar (quien decide relee).
+- **Pantalla**: la consulta de productos ya no manda lo marcado (el resumen sale en la pantalla con la regla del servidor y un crédito marcado que se
+  canceló no tumba la consulta); el PDF manda sólo lo marcado que trajo la consulta. Al corregir sin poder cambiar las recogidas, o sin ver la tabla (sin
+  `Lending.Payoffs.Read`), se mandan las guardadas tal cual. «Lo que recoge» del expediente es el componente `LoQueRecoge`.
+- **e2e**: `La_recogida_de_un_credito_en_mora_es_una_reestructuracion` radicaba con el crédito ya en mora; ahora se aprueba la víspera de la fecha exigible
+  y entra en mora antes de desembolsar (sin correr: va con la fase 13).

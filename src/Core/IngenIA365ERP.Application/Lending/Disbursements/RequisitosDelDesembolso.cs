@@ -258,7 +258,14 @@ public sealed class RequisitosDelDesembolso(
                 new { blocks = vigentes.Select(b => new { kind = b.Reason.ToString(), since = ErroresDeOriginacion.Fecha(b.StartedOn), blockPublicId = b.PublicId }).ToList() }));
         var conGarantia = await db.Collaterals.AsNoTracking().AnyAsync(c => c.ApplicationId == s.Id && !c.IsDeleted
             && (c.Status == CollateralStatus.Constituted || c.Status == CollateralStatus.Valid), ct);
-        var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, bruto, conGarantia, fechaValor, s.Id, ct);
+        // 2026-11-27 (feature 028, R8, T025): la concentración se mide después de recoger —sin el capital de lo que recoge este desembolso (total: todo el
+        // capital del crédito; parcial: lo que se le aplica, topado)—, así que las recogidas se evalúan aquí; sus bloqueos se anotan en su paso (7), en el
+        // mismo orden de siempre.
+        var bloqueosDeRecogidas = new List<Error>();
+        var recogidas = await RecogidasAsync(s, e, fechaValor, bloqueosDeRecogidas, ct);
+        var recogidasQueLiberan = recogidas.Select(r => new RecogidaEnLaValidacion(r.LoanId, r.Number, r.Total, r.AAplicar)).ToList();
+        var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, bruto, conGarantia, fechaValor, s.Id,
+            recogidasQueLiberan.Count > 0 ? recogidasQueLiberan : null, ct);
         if (medida.IsFailure) bloqueosHallados.Add(medida.Error);
 
         // 6. Monto operativo, sucursal contable y beneficiario.
@@ -270,8 +277,8 @@ public sealed class RequisitosDelDesembolso(
         var beneficiario = await BeneficiarioAsync(e, personas[s.ApplicantPersonId], ct);
         if (beneficiario.IsFailure) bloqueosHallados.Add(beneficiario.Error);
 
-        // 7. Recogidas.
-        var recogidas = await RecogidasAsync(s, e, fechaValor, bloqueosHallados, ct);
+        // 7. Recogidas (evaluadas con la concentración, arriba).
+        bloqueosHallados.AddRange(bloqueosDeRecogidas);
         var recogido = recogidas.Sum(r => r.AAplicar);
         if (recogidas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
 
@@ -442,7 +449,9 @@ public sealed class RequisitosDelDesembolso(
     /// <summary>
     /// Las recogidas pedidas: sólo las que autoriza la solicitud (FR-046), del deudor, vivas, con su liquidación a la fecha valor. 2026-11-27 (feature 028,
     /// T010): la liquidación sale de <see cref="LiquidacionDeRecogida"/> —el único sitio que liquida una recogida—, que cobra lo mismo que aplica el
-    /// contrato con el modo de <c>Recogida.InteresesProporcionales</c>; lo que no se puede liquidar bloquea con su código.
+    /// contrato con el modo de <c>Recogida.InteresesProporcionales</c>; lo que no se puede liquidar bloquea con su código. 2026-11-27 (feature 028, T023):
+    /// lo autorizado son los créditos de las recogidas proyectadas vivas de la solicitud (<c>LND_CreditApplicationPayoffs</c>), no el JSON
+    /// <c>PayoffRequest</c>, que ya no se escribe.
     /// </summary>
     private async Task<IReadOnlyList<RecogidaEvaluada>> RecogidasAsync(CreditApplication s, DisbursementInput e, DateOnly fecha, List<Error> hallados,
         CancellationToken ct)
@@ -450,13 +459,15 @@ public sealed class RequisitosDelDesembolso(
         var resultado = new List<RecogidaEvaluada>();
         if (e.OwnLoanPayoffs.Count == 0) return resultado;
 
-        var autorizadas = (string.IsNullOrWhiteSpace(s.PayoffRequest)
-                ? null
-                : JsonSerializer.Deserialize<List<OwnLoanPayoffInput>>(s.PayoffRequest, Json)) ?? [];
+        var autorizadas = await (from f in db.CreditApplicationPayoffs.AsNoTracking()
+                                 join l in db.Loans.AsNoTracking() on f.LoanId equals l.Id
+                                 where f.CreditApplicationId == s.Id && !f.IsDeleted && f.ProductKind == PayoffProductKind.Loan
+                                 select l.PublicId)
+            .ToListAsync(ct);
         var enMora = new List<RecogidaEnMoraDto>();
         foreach (var pedido in e.OwnLoanPayoffs)
         {
-            if (autorizadas.All(a => a.LoanPublicId != pedido.LoanPublicId))
+            if (!autorizadas.Contains(pedido.LoanPublicId))
             {
                 hallados.Add(ErroresDeDesembolso.RecogidaNoAutorizada(pedido.LoanPublicId));
                 continue;

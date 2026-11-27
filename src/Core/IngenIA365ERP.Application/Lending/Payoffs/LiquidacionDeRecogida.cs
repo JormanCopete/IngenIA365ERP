@@ -96,6 +96,40 @@ public static class ErroresDeRecogida
 
     public static BloqueoDeRecogida SinLiquidar(string numero, Error error) => new(error.Code, MotivoSinLiquidar,
         $"El crédito {numero} no se pudo liquidar a la fecha: {error.Message}");
+
+    // 2026-11-27 (feature 028, T024): los de guardar y radicar una solicitud que recoge (api.md §2). (nuevo)
+
+    public const string CodigoModoNoAdmitido = "Lending.Payoff.ModeNotAdmitted";
+    public const string CodigoNetoNoPositivo = "Lending.Payoff.NetNotPositive";
+
+    /// <summary>En la entrega E1 sólo se recogen créditos: una cuenta o una factura todavía no (llegan con E3 y E4).</summary>
+    public static Error ClaseNoAdmitida(PayoffProductKind clase) => new ErrorConDatos(CodigoProductoNoAdmitido,
+        clase == PayoffProductKind.Account
+            ? "Por ahora el crédito nuevo sólo recoge créditos: las cuentas de aportes y ahorros se recogerán en otra entrega."
+            : "Por ahora el crédito nuevo sólo recoge créditos: las facturas a crédito se recogerán en otra entrega.",
+        new { kind = clase.ToString() });
+
+    /// <summary>La línea del crédito nuevo admite recoger créditos, pero no de ese modo (<c>Recogida.ProductosAdmitidos</c>).</summary>
+    public static Error ModoNoAdmitido(string numero, PayoffMode modo, IReadOnlyList<PayoffMode> admitidos) => new ErrorConDatos(CodigoModoNoAdmitido,
+        $"La línea del crédito nuevo no admite recoger el crédito {numero} {TextoDelModo(modo)}. Admite: {string.Join(", ", admitidos.Select(TextoDelModo))}.",
+        new { number = numero, mode = modo.ToString(), admittedModes = admitidos.Select(m => m.ToString()).ToList() });
+
+    /// <summary>Lo que se recoge deja el neto a girar en cero o negativo: así no se radica (FR-007).</summary>
+    public static Error NetoNoPositivo(decimal monto, decimal recogido) => new ErrorConDatos(CodigoNetoNoPositivo,
+        $"Lo que se recoge ({Pesos(recogido)}) deja el neto a girar del crédito nuevo ({Pesos(monto)}) en {Pesos(monto - recogido)}: suba el monto o "
+        + "recoja menos.",
+        new { amount = monto, payoffTotal = recogido, net = monto - recogido });
+
+    private static string TextoDelModo(PayoffMode modo) => modo switch
+    {
+        PayoffMode.Total => "total",
+        PayoffMode.Partial => "parcial",
+        PayoffMode.Installments => "por cuotas",
+        PayoffMode.Deposit => "como abono",
+        _ => modo.ToString(),
+    };
+
+    private static string Pesos(decimal valor) => "$" + valor.ToString("#,##0.##", CultureInfo.GetCultureInfo("es-CO"));
 }
 
 /// <summary>

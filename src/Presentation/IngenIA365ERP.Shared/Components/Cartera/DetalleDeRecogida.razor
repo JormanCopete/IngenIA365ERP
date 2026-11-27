@@ -8,7 +8,7 @@
         <span class="etiqueta-campo">Lo que cuesta recogerlo</span>
         <table class="data-grid">
             <tbody>
-                @foreach (var (concepto, valor) in Conceptos())
+                @foreach (var (concepto, valor) in TextosDeRecogida.Conceptos(Producto.Breakdown))
                 {
                     <tr><td>@concepto</td><td class="numero">@TextosDeRecogida.Pesos(valor)</td></tr>
                 }
@@ -56,17 +56,4 @@
     private static string TextoDelEnvio(CuotaEnviadaDto e) =>
         "Ya se envió" + (e.Paymaster is { } pagaduria ? $" a la pagaduría {pagaduria}" : "") + (e.File is { } archivo ? $" en el archivo {archivo}" : "")
         + (e.Period is { } periodo ? $" de {periodo}" : "") + ".";
-
-    /// <summary>Los conceptos con valor; lo que se descuenta va en negativo.</summary>
-    private IEnumerable<(string Concepto, decimal Valor)> Conceptos()
-    {
-        var d = Producto.Breakdown;
-        (string, decimal)[] todos =
-        [
-            ("Capital", d.Principal), ("Interés corriente", d.CurrentInterest), ("Interés devuelto por proporcionales", -d.InterestReturned),
-            ("Interés cobrado por proporcionales", d.InterestCharged), ("Interés de mora", d.DefaultInterest), ("Seguro", d.Insurance),
-            ("Administración", d.Administration), ("Otros cargos", d.OtherCharges), ("Anticipo a favor", -d.Advance), ("Saldo a favor", -d.CreditBalance),
-        ];
-        return todos.Where(c => c.Item2 != 0m);
-    }
 }

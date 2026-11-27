@@ -18,6 +18,9 @@ public sealed record SolicitudCargada(
     SimulacionCalculada Simulacion)
 {
     public CreditApplicationParty Solicitante => Partes.Single(p => p.Role == CreditPartyRole.Applicant);
+
+    /// <summary>2026-11-27 (feature 028, R8): los créditos que recoge (sus filas vivas), para medir la situación después de recogerlos.</summary>
+    public IReadOnlyList<RecogidaEnLaValidacion> Recogidas { get; init; } = [];
 }
 
 /// <summary>Una solicitud evaluada: las validaciones registradas, el puntaje (si la línea lo tiene) y el enrutamiento. (nuevo)</summary>
@@ -49,9 +52,9 @@ public sealed class EvaluacionDeSolicitud(
         var ids = partes.Select(p => p.PersonId).Distinct().ToList();
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         var simulada = await SimularAsync(s, linea, personas[s.ApplicantPersonId], s.RequestedAmount, s.Installments ?? 1, ct);
-        return simulada.IsFailure
-            ? Result.Failure<SolicitudCargada>(simulada.Error)
-            : Result.Success(new SolicitudCargada(s, linea, partes, personas, simulada.Value));
+        if (simulada.IsFailure) return Result.Failure<SolicitudCargada>(simulada.Error);
+        var recogidas = await RecogidaEnLaValidacion.DeLaSolicitudAsync(db, s.Id, ct);
+        return Result.Success(new SolicitudCargada(s, linea, partes, personas, simulada.Value) { Recogidas = recogidas });
     }
 
     /// <summary>
@@ -85,7 +88,7 @@ public sealed class EvaluacionDeSolicitud(
     {
         var s = c.Solicitud;
         var hoy = reloj.HoyLocal;
-        var contexto = new ContextoDeValidacion(s, c.Partes, c.Personas, c.Linea, c.Simulacion, etapa, hoy) { Solo = solo };
+        var contexto = new ContextoDeValidacion(s, c.Partes, c.Personas, c.Linea, c.Simulacion, etapa, hoy) { Solo = solo, Recogidas = c.Recogidas };
         var evaluadas = await validaciones.EvaluarAsync(contexto, ct);
         if (detenerSi?.Invoke(evaluadas) is { } alto) return Result.Failure<SolicitudEvaluada>(alto);
 
