@@ -24,6 +24,9 @@ el de ver, y el administrador trae los dos.
   - `Caja.SoloCajerosAsignados` (encendido de fábrica, 2026-11-25) hace que cada caja de Recaudo, del punto de venta y de la caja única la abran sólo
     sus cajeros (ver [mi-caja-y-arqueo.md](mi-caja-y-arqueo.md#quién-abre-cada-caja)).
   - `Recaudo.HoraDeCorte` tiene que caer antes del ciclo diario de Cartera.
+  - `Caja.ConMoraPermiteAnticipar` (apagado de fábrica, 2026-11-26) sólo cuenta con `Caja.ConMoraSoloExigible` encendido. Deja que un mismo recibo
+    pague lo vencido y además anticipe o abone, siempre que lo vencido vaya primero (ver
+    [recaudo-manual-del-cajero.md](recaudo-manual-del-cajero.md#10-la-caja-desde-el-2026-11-16-pedido-del-dueño)).
 - Las cajas leen sus parámetros al momento de cada operación. Por eso cambiar `Caja.ArqueoEstricto` o `Caja.SesionUnica` rige también para las sesiones que
   ya están abiertas.
 

@@ -15,8 +15,12 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 /// Las reglas de la caja vigentes a una fecha (2026-11-16): si con algo exigible sólo se paga lo exigible (<c>Caja.ConMoraSoloExigible</c>), si sin nada exigible se
 /// paga al menos una cuota completa (<c>Caja.AnticipoMinimoUnaCuota</c>) y la prelación por clase de producto (<c>Caja.PrelacionPorClase</c>; vacía = libre). (nuevo)
 /// </summary>
+/// <remarks>
+/// 2026-11-26 (pedido del dueño): <see cref="ConMoraPermiteAnticipar"/> (<c>Caja.ConMoraPermiteAnticipar</c>): con mora, el mismo recibo paga lo vencido y además
+/// anticipa o abona, siempre que lo vencido se cubra primero.
+/// </remarks>
 public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinimoUnaCuota, IReadOnlyList<string> PrelacionPorClase,
-    bool CargarExigibleAlElegir = false)
+    bool CargarExigibleAlElegir = false, bool ConMoraPermiteAnticipar = false)
 {
     public const string Aportes = "Aportes";
     public const string Creditos = "Creditos";
@@ -29,7 +33,8 @@ public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinim
         DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaConMoraSoloExigible),
         DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaAnticipoMinimoUnaCuota),
         Clases(Defecto(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase)),
-        DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir));
+        DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir),
+        DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar));
 
     /// <summary>Las reglas vigentes a <paramref name="fecha"/> por el único lector de parámetros; sin él, los defectos.</summary>
     public static async Task<PoliticaDeCaja> LeerAsync(ParametrosDeCaja? parametros, DateOnly fecha, CancellationToken ct)
@@ -39,7 +44,8 @@ public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinim
             await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaConMoraSoloExigible, fecha, ct),
             await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaAnticipoMinimoUnaCuota, fecha, ct),
             Clases(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase, fecha, ct)),
-            await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir, fecha, ct));
+            await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir, fecha, ct),
+            await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaConMoraPermiteAnticipar, fecha, ct));
     }
 
     /// <summary>Las clases de la prelación escrita («Aportes, Creditos»), con su nombre canónico, sin repetir y sin las que no existen.</summary>
@@ -118,6 +124,13 @@ public sealed record RechazoDeLaCaja(Guid ItemId, string Code, string Message)
 /// posterior lleva valor (<c>Receipts.Receipt.PriorityNotRespected</c>, con la clase pendiente y su valor). Lo exigible de cada clase: créditos, lo exigible de sus
 /// obligaciones como deudora sin bloqueo; aportes y ahorros, las cuotas exigibles pendientes de sus cuentas de esa naturaleza; facturas, el saldo de sus cuentas por
 /// cobrar comerciales; conceptos, nada. Un crédito que el listado no trae (otro deudor, un doble de pruebas) no se juzga aquí: lo juzga Cartera al simular. (nuevo)
+/// <para>
+/// 2026-11-26 (pedido del dueño): la mora es lo <b>vencido</b> (<see cref="Vencido"/>: las cuotas vencidas o que vencen hoy), no lo exigible del período —por
+/// período calendario, el interés ya causado del mes en curso no es mora y no impide pagar la cuota completa ni anticipar—. Con
+/// <c>Caja.ConMoraPermiteAnticipar</c>, con mora se admite toda modalidad que cubre primero lo exigible (cuota del ciclo, anticipo, valor libre, abono a
+/// capital) y la cuota específica de una cuota por vencer sólo detrás de los ítems del mismo recibo que cubren lo vencido. Esa cuota específica se admite aunque
+/// la línea no deje pagar fuera de orden: Cartera la simula sobre lo que dejan los ítems anteriores.
+/// </para>
 /// </summary>
 public sealed class ReglasDeLaCaja(
     IApplicationDbContext db,
@@ -147,11 +160,15 @@ public sealed class ReglasDeLaCaja(
         }
 
         var detalles = new Dictionary<Guid, DetalleDeObligacionDto?>();
+        // Los ítems admitidos de cada crédito, en el orden del recibo: lo que va antes de un ítem le paga primero a lo vencido.
+        var anteriores = new Dictionary<Guid, List<ItemDeLaRegla>>();
         foreach (var item in deCreditos)
         {
             var o = listados.GetValueOrDefault(item.BeneficiaryPersonPublicId)?.FirstOrDefault(x => x.ObligationPublicId == item.ProductPublicId);
             if (o is null) continue;
-            if (await DelCreditoAsync(politica, o, item, fecha, detalles, ct) is { } rechazo) rechazos[item.ItemId] = rechazo;
+            if (!anteriores.TryGetValue(o.ObligationPublicId, out var antes)) anteriores[o.ObligationPublicId] = antes = [];
+            if (await DelCreditoAsync(politica, o, item, antes, fecha, detalles, ct) is { } rechazo) rechazos[item.ItemId] = rechazo;
+            else antes.Add(item);
         }
 
         if (conPrelacion)
@@ -161,32 +178,57 @@ public sealed class ReglasDeLaCaja(
         return items.Where(i => rechazos.ContainsKey(i.ItemId)).Select(i => rechazos[i.ItemId]).ToList();
     }
 
-    private async Task<RechazoDeLaCaja?> DelCreditoAsync(PoliticaDeCaja politica, ObligacionListadaDto o, ItemDeLaRegla item, DateOnly fecha,
-        Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): la mora de un crédito para las reglas de la caja: lo exigible sin el interés ya causado de la cuota del período calendario
+    /// en curso (las cuotas vencidas o que vencen hoy y los cargos sin cuota). Con el ciclo de la cuota es lo exigible; un listado sin el dato, también.
+    /// </summary>
+    public static decimal Vencido(ObligacionListadaDto o)
+    {
+        ArgumentNullException.ThrowIfNull(o);
+        return o.DueWithoutPeriodInProgress ?? o.DueToday;
+    }
+
+    private async Task<RechazoDeLaCaja?> DelCreditoAsync(PoliticaDeCaja politica, ObligacionListadaDto o, ItemDeLaRegla item, IReadOnlyList<ItemDeLaRegla> antes,
+        DateOnly fecha, Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
     {
         var modalidad = item.LoanModality!.Value;
+        var vencido = Vencido(o);
         if (o.BlockReasons.Count > 0)
             return new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoObligacionBloqueada,
                 $"El crédito {o.Number} {string.Join(" y ", o.BlockReasons.Select(Bloqueo))}: sus pagos no se reciben en caja.");
-        if (!o.AdmittedModalities.Contains(modalidad))
+        // 2026-11-26: la cuota específica que la línea sólo admite sin nada vencido entra detrás de los ítems del recibo que cubren lo vencido; Cartera la
+        // simula sobre lo que ellos dejan.
+        if (!o.AdmittedModalities.Contains(modalidad)
+            && !(modalidad == ModalidadDePago.SpecificInstallment && o.AdmittedModalities.Count > 0 && vencido > 0m
+                 && await CubiertoAntesAsync(o, antes, fecha, detalles, ct) >= vencido))
             return new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoModalidadNoAdmitida,
-                modalidad == ModalidadDePago.SpecificInstallment
-                    ? $"El crédito {o.Number} no admite pagar una cuota específica: su línea no lo permite."
-                    : $"El crédito {o.Number} no admite la modalidad «{NombreDeModalidad(modalidad)}».");
+                modalidad != ModalidadDePago.SpecificInstallment
+                    ? $"El crédito {o.Number} no admite la modalidad «{NombreDeModalidad(modalidad)}»."
+                    : vencido > 0m
+                        ? $"El crédito {o.Number} tiene {vencido:N2} vencidos y su línea no deja pagar una cuota con anteriores impagas: agregue antes «Lo exigible» por lo vencido, en este mismo recibo."
+                        : $"El crédito {o.Number} no admite pagar una cuota específica: su línea no lo permite.");
 
-        if (politica.ConMoraSoloExigible && o.DueToday > 0m)
+        if (politica.ConMoraSoloExigible && vencido > 0m)
         {
             if (modalidad is ModalidadDePago.FullPayoff or ModalidadDePago.PastDue) return null;
             if (modalidad == ModalidadDePago.SpecificInstallment)
             {
                 var cuota = await CuotaAsync(o.ObligationPublicId, item.InstallmentNumber, fecha, detalles, ct);
                 if (cuota is null || cuota.DueDate <= fecha) return null;
+                // 2026-11-26 (pedido del dueño): si la cooperativa lo permite, la cuota por vencer se anticipa detrás de lo que cubre lo vencido.
+                if (politica.ConMoraPermiteAnticipar)
+                    return await CubiertoAntesAsync(o, antes, fecha, detalles, ct) >= vencido
+                        ? null
+                        : new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoSoloLoExigible,
+                            $"El crédito {o.Number} tiene {vencido:N2} vencidos: para anticipar la cuota {cuota.Number} agregue antes «Lo exigible» por lo vencido, en este mismo recibo.");
             }
+            // 2026-11-26: la cuota del ciclo, el anticipo, el valor libre y el abono a capital pagan primero lo exigible.
+            else if (politica.ConMoraPermiteAnticipar) return null;
             return new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoSoloLoExigible,
-                $"El crédito {o.Number} tiene {o.DueToday:N2} exigibles: con cuotas causadas o vencidas sólo se paga lo exigible, una cuota exigible o la cancelación total; no se anticipa ni se abona a capital.");
+                $"El crédito {o.Number} tiene {vencido:N2} vencidos: con cuotas vencidas sólo se paga lo exigible, una cuota exigible o la cancelación total; no se anticipa ni se abona a capital.");
         }
 
-        if (politica.AnticipoMinimoUnaCuota && o.DueToday <= 0m)
+        if (politica.AnticipoMinimoUnaCuota && vencido <= 0m)
         {
             if (modalidad == ModalidadDePago.CycleInstallment)
             {
@@ -203,6 +245,26 @@ public sealed class ReglasDeLaCaja(
                     $"Anticipar la cuota {cuota.Number} del crédito {o.Number} cuesta {cuota.ValueToAnticipate:N2} (capital, interés, seguro y otros cargos): se anticipa completa.");
         }
         return null;
+    }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): lo que los ítems anteriores del mismo recibo a este crédito le pagan primero a lo vencido. Toda modalidad cubre primero lo
+    /// exigible salvo la cuota específica de una cuota por vencer; lo exigible o la cancelación sin valor cubren lo exigible entero.
+    /// </summary>
+    private async Task<decimal> CubiertoAntesAsync(ObligacionListadaDto o, IReadOnlyList<ItemDeLaRegla> antes, DateOnly fecha,
+        Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
+    {
+        var cubierto = 0m;
+        foreach (var a in antes)
+        {
+            if (a.LoanModality == ModalidadDePago.SpecificInstallment)
+            {
+                var cuota = await CuotaAsync(o.ObligationPublicId, a.InstallmentNumber, fecha, detalles, ct);
+                if (cuota is null || cuota.DueDate > fecha) continue;
+            }
+            cubierto += a.Amount <= 0m && a.LoanModality is ModalidadDePago.PastDue or ModalidadDePago.FullPayoff ? o.DueToday : a.Amount;
+        }
+        return cubierto;
     }
 
     /// <summary>La cuota del detalle de la obligación (una lectura por obligación); nula si el contrato no da el detalle o la cuota no existe.</summary>

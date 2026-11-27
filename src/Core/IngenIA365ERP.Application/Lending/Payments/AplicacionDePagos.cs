@@ -23,6 +23,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Payments;
 
+/// <summary>
+/// 2026-11-26 (pedido del dueño): un pago que va antes en el mismo recibo a la misma obligación: se reparte sobre el estado, sin escribir, para simular el
+/// siguiente sobre lo que deja (<see cref="AplicacionDePagos.DistribuirAsync"/>). (nuevo)
+/// </summary>
+public sealed record PagoPrevioDeDistribucion(PaymentModality Modalidad, decimal Valor, PrepaymentChoice? Eleccion = null, int? Cuota = null);
+
 /// <summary>La distribución de un pago sobre el estado a su fecha valor, con su huella y, en un abono sin elección, sus dos alternativas. (nuevo)</summary>
 public sealed record PagoDistribuido(
     Loan Credito,
@@ -144,13 +150,35 @@ public sealed class AplicacionDePagos(
     /// aplicación). Un abono extraordinario sin elección en la forma no interactiva toma la preferencia vigente; en la interactiva y al simular
     /// devuelve las dos alternativas.
     /// </summary>
+    /// <remarks>
+    /// 2026-11-26 (pedido del dueño): con <paramref name="previos"/> —los pagos que van antes en el mismo recibo a la misma obligación—, cada uno se reparte
+    /// sobre el estado que deja el anterior y entra a la reconstrucción como un pago más (sin escribir), y éste se distribuye sobre lo que dejan todos: lo mismo
+    /// que pasa al aplicar el lote en orden dentro de una transacción. Así se simulan juntos lo vencido y una cuota anticipada del mismo recibo.
+    /// </remarks>
     public async Task<Result<PagoDistribuido>> DistribuirAsync(Loan credito, PaymentModality modalidad, decimal valor, DateOnly fechaValor,
-        PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, CancellationToken ct, DateOnly? seriesHasta = null, DateTime? informacionHasta = null)
+        PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, CancellationToken ct, DateOnly? seriesHasta = null, DateTime? informacionHasta = null,
+        IReadOnlyList<PagoPrevioDeDistribucion>? previos = null)
     {
         ArgumentNullException.ThrowIfNull(credito);
         var cargado = await cargador.CargarAsync(credito.Id, null, seriesHasta is { } h && h > fechaValor ? h : fechaValor, ct);
         if (cargado is null) return Result.Failure<PagoDistribuido>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
         if (!cargado.Listo) return Result.Failure<PagoDistribuido>(cargado.Error!);
+        var anteriores = previos ?? [];
+        for (var k = 0; k < anteriores.Count; k++)
+        {
+            var previo = anteriores[k];
+            var r = await DistribuirSobreAsync(credito, cargado, previo.Modalidad, previo.Valor, fechaValor, previo.Eleccion, previo.Cuota, usaPreferencia: false,
+                informacionHasta, ct);
+            if (r.IsFailure) return r;
+            // Después de los pagos guardados y antes del que se simula (Despues usa int.MaxValue): la reconstrucción ordena por fecha valor y secuencia.
+            cargado = cargado with { Entrada = ConPago(r.Value, r.Value.Distribucion, int.MaxValue - (anteriores.Count - k)) };
+        }
+        return await DistribuirSobreAsync(credito, cargado, modalidad, valor, fechaValor, eleccion, cuota, usaPreferencia, informacionHasta, ct);
+    }
+
+    private async Task<Result<PagoDistribuido>> DistribuirSobreAsync(Loan credito, CreditoCargado cargado, PaymentModality modalidad, decimal valor,
+        DateOnly fechaValor, PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, DateTime? informacionHasta, CancellationToken ct)
+    {
         var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fechaValor);
         if (estado.Plan is null) return Result.Failure<PagoDistribuido>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
         var condiciones = cargado.Entrada!.Condiciones;
@@ -214,19 +242,24 @@ public sealed class AplicacionDePagos(
     }
 
     /// <summary>El estado a la fecha valor con el pago ya aplicado (sin escribir), para mostrar los saldos que quedan.</summary>
-    private EstadoDelCredito Despues(PagoDistribuido p, DistribucionDePago d)
+    private EstadoDelCredito Despues(PagoDistribuido p, DistribucionDePago d) => MotorDeCartera.Reconstruir(ConPago(p, d, int.MaxValue), d.FechaValor);
+
+    /// <summary>
+    /// La entrada de la reconstrucción con el pago distribuido como una operación más, sin escribir: con su valor tomado y lo que sella su decisión
+    /// (elección, cuota, cuota completa, rubros y período calendario), en la secuencia <paramref name="secuencia"/>.
+    /// </summary>
+    private EntradaDeReconstruccion ConPago(PagoDistribuido p, DistribucionDePago d, int secuencia)
     {
         var simulado = new LoanOperation
         {
             LoanId = p.Credito.Id, Kind = LoanOperationKind.Payment, ValueDate = d.FechaValor, RegisteredAt = reloj.UtcNow,
-            Sequence = int.MaxValue,
+            Sequence = secuencia,
         };
-        var entrada = CargadorDeReconstruccion.ConOperacion(p.Cargado.Entrada!, simulado,
+        return CargadorDeReconstruccion.ConOperacion(p.Cargado.Entrada!, simulado,
             new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente)
             {
                 Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros, PeriodoCalendario = p.PeriodoCalendario,
             });
-        return MotorDeCartera.Reconstruir(entrada, d.FechaValor);
     }
 
     /// <summary>

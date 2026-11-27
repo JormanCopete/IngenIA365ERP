@@ -756,6 +756,18 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
     (`Inventory.CashSession.CashierNotAssigned`); «Mi caja» muestra las ajenas sin dejarlas elegir.
   - Receta: `docs/manual/mi-caja-y-arqueo.md`.
 
+- **Lo vencido y el anticipo en el mismo recibo (2026-11-26, pedido del dueño)**:
+  - **Qué es mora en la caja.** La caja mira lo **vencido**: lo exigible sin el interés ya causado del período calendario en curso. Cartera lo publica
+    como `DueWithoutPeriodInProgress` en el listado y el detalle; `ReglasDeLaCaja.Vencido` lo lee. Así, por período calendario, el asociado al día ya
+    no queda limitado a lo exigible, y F4 trae la cuota del período completa.
+  - **`Caja.ConMoraPermiteAnticipar`** (RCD, apagado). Con mora, admite las modalidades que cubren primero lo exigible. La cuota específica de una cuota
+    futura entra detrás de los ítems del mismo recibo que cubren lo vencido, aunque la línea no deje pagar fuera de orden.
+  - **Simulación encadenada.** `SolicitudDeSimulacion.Previous`: Cartera reparte en memoria los ítems anteriores del mismo crédito
+    (`AplicacionDePagos.DistribuirAsync`, `previos`). Al confirmar, la segunda porción y las siguientes de un crédito se vuelven a simular antes de
+    aplicarse.
+  - **Estado de cuenta.** F4 dice cuánto, cuándo y con qué recibo se anticipó cada cuota; F8 y su Excel llevan el recibo.
+  - Sin migración. Receta: `docs/manual/recaudo-manual-del-cajero.md` §10.
+
 - **Editar la solicitud radicada sin devolverla (2026-11-25, pedido del dueño)**: `PUT /api/lending/applications/{id}/submitted` (permiso
   `Lending.Applications.EditSubmitted`, motivo obligatorio) en `Submitted`/`PendingDecision`, si `Originacion.EditarRadicadaSinDevolver` (sí de
   fábrica, por cooperativa o línea) lo deja y en los grupos de `Originacion.GruposEditablesAlDevolver`. Vuelve a correr validaciones y

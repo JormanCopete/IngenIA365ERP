@@ -195,5 +195,22 @@ public sealed class SolicitudDeSimulacionValidator : AbstractValidator<Solicitud
                                                                              && x.PaymentIdempotencyKeyToReverse is null)
             .WithErrorCode("InstallmentNumber");
         RuleFor(x => x.PaymentIdempotencyKeyToReverse).MaximumLength(GramaticaDeClaves.LargoMaximo);
+        // 2026-11-26 (pedido del dueño): los pagos anteriores del mismo recibo, cada uno con la forma de un pago; no en la simulación de un reverso.
+        RuleFor(x => x.Previous).Must(p => p is null || p.Count <= MaximoDePagosPrevios).WithErrorCode("Previous")
+            .WithMessage($"A lo sumo {MaximoDePagosPrevios} pagos anteriores del mismo recibo.");
+        RuleFor(x => x.Previous).Must(p => p is null || p.Count == 0).When(x => x.PaymentIdempotencyKeyToReverse is not null).WithErrorCode("Previous")
+            .WithMessage("La simulación de un reverso no lleva pagos anteriores.");
+        RuleForEach(x => x.Previous).ChildRules(p =>
+        {
+            p.RuleFor(x => x.Modality).IsInEnum().WithErrorCode("Previous.Modality");
+            p.RuleFor(x => x.Amount).GreaterThan(0m).When(x => x.Modality is not (ModalidadDePago.FullPayoff or ModalidadDePago.PastDue))
+                .WithErrorCode("Previous.Amount").WithMessage("El valor de cada pago anterior es mayor que cero.");
+            p.RuleFor(x => x.Amount).GreaterThanOrEqualTo(0m).WithErrorCode("Previous.Amount");
+            p.RuleFor(x => x.InstallmentNumber).NotNull().GreaterThan(0).When(x => x.Modality == ModalidadDePago.SpecificInstallment)
+                .WithErrorCode("Previous.InstallmentNumber");
+        });
     }
+
+    /// <summary>Cuántos pagos anteriores del mismo recibo admite una simulación.</summary>
+    public const int MaximoDePagosPrevios = 60;
 }

@@ -74,6 +74,8 @@ public class ParametrosDeRecaudoYTesoreriaTests
         // 2026-11-16 (pedido del dueño): las reglas de la caja sobre lo que se paga; la prelación vacía es libre.
         { P.ModuloRecaudo, P.CajaConMoraSoloExigible, "true", false },
         { P.ModuloRecaudo, P.CajaAnticipoMinimoUnaCuota, "true", false },
+        // 2026-11-26 (pedido del dueño): con mora, pagar lo vencido y además anticipar en el mismo recibo; de fábrica, no.
+        { P.ModuloRecaudo, P.CajaConMoraPermiteAnticipar, "false", false },
         { P.ModuloRecaudo, P.CajaPrelacionPorClase, "", false },
         { P.ModuloRecaudo, P.CajaCajeroCierraSuSesionOlvidada, "false", false },
         { P.ModuloRecaudo, P.CajaCajeroApruebaSuDiferencia, "false", false },

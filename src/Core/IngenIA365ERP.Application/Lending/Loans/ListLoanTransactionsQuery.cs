@@ -48,7 +48,8 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
         var operaciones = filas.Where(t => t.OperationId is not null).Select(t => t.OperationId!.Value).Distinct().ToList();
         var corridas = filas.Where(t => t.ProcessRunId is not null).Select(t => t.ProcessRunId!.Value).Distinct().ToList();
         var originales = filas.Where(t => t.ReversesTransactionId is not null).Select(t => t.ReversesTransactionId!.Value).Distinct().ToList();
-        var deOperacion = await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.PublicId, ct);
+        var deOperacion = await db.LoanOperations.AsNoTracking().Where(o => operaciones.Contains(o.Id))
+            .Select(o => new { o.Id, o.PublicId, o.ReceiptNumber }).ToDictionaryAsync(o => o.Id, ct);
         var deCorrida = await db.LendingProcessRuns.AsNoTracking().Where(r => corridas.Contains(r.Id)).ToDictionaryAsync(r => r.Id, r => r.PublicId, ct);
         var reversadas = await db.LoanTransactions.AsNoTracking().Where(t => originales.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.PublicId, ct);
         var espejos = await db.LoanTransactions.AsNoTracking().Where(t => t.ReversesTransactionId != null && ids.Contains(t.ReversesTransactionId.Value))
@@ -56,7 +57,7 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
 
         var items = filas.Select(t => new LoanTransactionDto(t.PublicId, t.Kind.ToString(), t.Concept.ToString(), t.InstallmentNumber, t.Amount, t.ValueDate,
             t.AccountingDate, t.RegisteredAt,
-            t.OperationId is { } o && deOperacion.TryGetValue(o, out var op) ? op : null,
+            t.OperationId is { } o && deOperacion.TryGetValue(o, out var op) ? op.PublicId : null,
             t.ProcessRunId is { } r && deCorrida.TryGetValue(r, out var run) ? run : null,
             t.ReversesTransactionId is { } x && reversadas.TryGetValue(x, out var original) ? original : null,
             espejos.TryGetValue(t.Id, out var espejo) ? espejo : null,
@@ -64,6 +65,8 @@ public sealed class ListLoanTransactionsQueryHandler(IApplicationDbContext db, I
         {
             UvrAmount = t.UvrAmount,
             UvrValue = t.UvrValue,
+            // 2026-11-26 (pedido del dueño): el recibo con que entró, para saber de qué pago es cada anticipo.
+            ReceiptNumber = t.OperationId is { } conRecibo && deOperacion.TryGetValue(conRecibo, out var deRecibo) ? deRecibo.ReceiptNumber : null,
         }).ToList();
         return Result.Success(new PagedResult<LoanTransactionDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
