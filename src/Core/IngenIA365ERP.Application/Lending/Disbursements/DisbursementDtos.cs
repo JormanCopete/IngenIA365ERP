@@ -254,6 +254,12 @@ public sealed record CollateralDto(
 
     /// <summary>Los adjuntos <c>LendingGuaranteeDocument</c> de la garantía.</summary>
     public IReadOnlyList<Guid> Documents { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T039; FR-027d): «Por liberar al girar el crédito {número}» si el crédito de la garantía lo canceló el desembolso de otro
+    /// que todavía no está girado; nulo en los demás casos. (nuevo)
+    /// </summary>
+    public string? ReleaseNotice { get; init; }
 }
 
 /// <summary>Un pagaré (api.md §6.2 <c>PromissoryNoteDto</c>); sus comandos son los de <c>Disbursements/PromissoryNotes</c> (bloque 7B).</summary>
@@ -283,4 +289,10 @@ public sealed record PromissoryNoteDto(
 
     /// <summary>Los adjuntos <c>LendingGuaranteeDocument</c> del pagaré.</summary>
     public IReadOnlyList<Guid> Documents { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T039; FR-027d): «Por liberar al girar el crédito {número}» si el crédito del pagaré lo canceló el desembolso de otro que
+    /// todavía no está girado; nulo en los demás casos. (nuevo)
+    /// </summary>
+    public string? ReleaseNotice { get; init; }
 }

@@ -9,10 +9,10 @@ namespace IngenIA365ERP.Shared.Services.Cartera;
 /// <summary>El beneficiario del giro: la persona y, en transferencia, su cuenta (<c>accountType</c> <c>Savings</c> o <c>Checking</c>).</summary>
 public sealed record BeneficiarioRequest(Guid PersonPublicId, Guid? BankPublicId = null, string? AccountType = null, string? AccountNumber = null);
 
-/// <summary>Un crédito propio que se recoge (<c>mode</c> <c>Full</c> o <c>Partial</c> con <c>amount</c>).</summary>
-public sealed record RecogidaRequest(Guid LoanPublicId, string Mode = "Full", decimal? Amount = null);
-
-/// <summary><c>DisbursementInput</c> (§9.1) con <c>acknowledgeWarnings</c>.</summary>
+/// <summary>
+/// <c>DisbursementInput</c> (§9.1) con <c>acknowledgeWarnings</c>. 2026-11-27 (feature 028, T042; api.md §3): ya no lleva los créditos que se recogen —salen de
+/// la solicitud, todas sus recogidas autorizadas (D9)— y gana <see cref="AcknowledgedPayoffDifferences"/>.
+/// </summary>
 public sealed record DesembolsoRequest
 {
     public Guid ApplicationPublicId { get; init; }
@@ -21,10 +21,12 @@ public sealed record DesembolsoRequest
     public DateOnly? ValueDate { get; init; }
     public string Form { get; init; } = "Transfer";
     public BeneficiarioRequest? Beneficiary { get; init; }
-    public IReadOnlyList<RecogidaRequest> OwnLoanPayoffs { get; init; } = [];
     public bool PaidByFile { get; init; }
     public string? ExpectedPreviewSha256 { get; init; }
     public bool AcknowledgeWarnings { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): quien desembolsa revisó las diferencias de lo que se recoge y los productos que se omiten. (nuevo)</summary>
+    public bool AcknowledgedPayoffDifferences { get; init; }
 }
 
 public sealed record GarantiaPendienteDto(string Kind, string Reason);
@@ -35,7 +37,44 @@ public sealed record AprobacionDelDesembolsoDto(DateOnly? ExpiresAt, bool Valid)
 
 public sealed record GarantiasDelDesembolsoDto(bool Perfected, IReadOnlyList<GarantiaPendienteDto> Pending);
 
-public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring);
+/// <summary>
+/// Un producto que recoge el desembolso, a la fecha valor. 2026-11-27 (feature 028, T042; api.md §3): con lo proyectado en la solicitud, lo de ahora, lo que
+/// se aplica, la diferencia (ahora − proyectado) por concepto con sus causas, si se omite (ya cancelado), si pasa de la tolerancia y la cuota causada.
+/// Clase, modo y causas viajan como texto (<c>Loan</c>, <c>Total</c>/<c>Partial</c>, <c>Payments</c>…).
+/// </summary>
+public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring)
+{
+    public string Kind { get; init; } = "Loan";
+    public Guid ProductPublicId { get; init; }
+    public string Mode { get; init; } = "Total";
+    public string RequestedMode { get; init; } = "Total";
+
+    /// <summary>Nulo si la solicitud no traía proyección (no hay con qué comparar).</summary>
+    public decimal? Projected { get; init; }
+
+    public decimal Current { get; init; }
+    public decimal ToApply { get; init; }
+
+    /// <summary>Lo de ahora menos lo proyectado; nulo sin proyección.</summary>
+    public decimal? Difference { get; init; }
+
+    public IReadOnlyList<string> Causes { get; init; } = [];
+
+    /// <summary>La diferencia por concepto (<c>principal</c>, <c>currentInterest</c>…), sólo los que cambiaron.</summary>
+    public IReadOnlyDictionary<string, decimal> Detail { get; init; } = new Dictionary<string, decimal>();
+
+    public bool Omitted { get; init; }
+    public bool AboveTolerance { get; init; }
+    public string? InterestMode { get; init; }
+    public CuotaCausadaDelDesembolsoDto? CurrentInstallment { get; init; }
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
+
+/// <summary>2026-11-27 (feature 028): la cuota causada del crédito recogido y qué se hace con ella (<c>Include</c>; <c>Left</c> llega con E2). (nuevo)</summary>
+public sealed record CuotaCausadaDelDesembolsoDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left);
+
+/// <summary>2026-11-27 (feature 028, <c>payoffDifferences</c>): cuántos productos difieren o se omiten, el total y si confirmar exige reconocerlo. (nuevo)</summary>
+public sealed record DiferenciasDeRecogidasDto(int Count, decimal Total, bool RequiresAcknowledgement, bool AboveTolerance);
 
 public sealed record CuotaPropuestaDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total)
 {
@@ -63,9 +102,29 @@ public sealed record VistaPreviaDeDesembolsoDto(
     SegregacionDelDesembolsoDto Segregation,
     IReadOnlyList<string> Blocking,
     IReadOnlyList<string> Warnings,
-    string PreviewSha256);
+    string PreviewSha256)
+{
+    /// <summary>2026-11-27 (feature 028): el resumen de las diferencias de lo que se recoge. (nuevo)</summary>
+    public DiferenciasDeRecogidasDto PayoffDifferences { get; init; } = new(0, 0m, false, false);
 
-public sealed record RecogidaAplicadaDto(Guid LoanPublicId, string Number, decimal Applied, Guid ReceiptOperationPublicId);
+    /// <summary>Lo que se aplica a los productos que no se omiten (bruto − neto, sin el aporte de una compra con descuento).</summary>
+    public decimal Recogido => Payoffs.Where(p => !p.Omitted).Sum(p => p.ToApply);
+}
+
+/// <summary>Un producto recogido: lo aplicado y su comprobante. 2026-11-27 (feature 028): con modo, proyectado, actual, diferencia y causas.</summary>
+public sealed record RecogidaAplicadaDto(Guid LoanPublicId, string Number, decimal Applied, Guid ReceiptOperationPublicId)
+{
+    public string Kind { get; init; } = "Loan";
+    public string Mode { get; init; } = "Total";
+    public decimal? Projected { get; init; }
+    public decimal Current { get; init; }
+    public decimal? Difference { get; init; }
+    public IReadOnlyList<string> Causes { get; init; } = [];
+    public decimal? LeftInstallment { get; init; }
+}
+
+/// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
+public sealed record RecogidaOmitidaDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason);
 
 public sealed record ReferenciaDeOrdenDto(Guid PublicId, string Number, string Status);
 
@@ -84,7 +143,14 @@ public sealed record DesembolsoRealizadoDto(
     ReferenciaDeOrdenDto? Order,
     int ScheduleVersion,
     IReadOnlyList<MensajeEmitidoDeCarteraDto> Messages,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>2026-11-27 (feature 028): los productos autorizados que ya estaban cancelados y no se recogieron. (nuevo)</summary>
+    public IReadOnlyList<RecogidaOmitidaDto> OmittedPayoffs { get; init; } = [];
+
+    /// <summary>Lo aplicado a todos los productos recogidos.</summary>
+    public decimal Recogido => Payoffs.Sum(p => p.Applied);
+}
 
 /// <summary>Un tramo desembolsado (lista de §9.1).</summary>
 public sealed record TramoDesembolsadoDto(
@@ -194,6 +260,9 @@ public sealed record GarantiaDto(
 
     /// <summary>K6b: el grado de una hipoteca.</summary>
     public byte? MortgageRank { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, FR-027d): «Por liberar al girar el crédito …» si un desembolso sin girar canceló su crédito. (nuevo)</summary>
+    public string? ReleaseNotice { get; init; }
 }
 
 /// <summary>Registrar o editar una garantía real o de fondo (§6.1).</summary>
@@ -236,6 +305,9 @@ public sealed record PagareDto(
     public DateTime? InCustodyAt { get; init; }
     public bool SignatureRejected { get; init; }
     public IReadOnlyList<Guid> Documents { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, FR-027d): «Por liberar al girar el crédito …» si un desembolso sin girar canceló su crédito. (nuevo)</summary>
+    public string? ReleaseNotice { get; init; }
 }
 
 public sealed record PagareRequest(string OwnerKind, Guid OwnerPublicId, string Form, string? PhysicalNumber = null, string? CustodyLocation = null);

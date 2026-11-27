@@ -373,3 +373,29 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   se suma en `prevalidation` de la respuesta. Su bloqueo entra si no está ya el mismo código.
 - **T040**: se marcan las filas de las recogidas que el contrato reversó (por la clave); las omitidas no se tocan.
 - `ErroresDeRecogida.Pesos` quedó público y pone el signo antes del «$».
+
+### E-08 — Giro nuevo, garantías del recogido y pantalla del desembolso (T038, T039, T042, T044, 2026-11-27)
+- **T038, de dónde salen las recogidas del giro nuevo**: de los pagos `CAR` **vivos** (aplicados y sin reversar) cuya clave empieza por
+  `CAR:{desembolso:N}:` de cualquier desembolso del mismo tramo del crédito (`RecogidaEnElDesembolso.VivasAsync`), no de las filas
+  `LND_DisbursementPayoffs`: así sirve también para un crédito desembolsado antes de la 028 y pendiente de giro. El monto de cada una es lo aplicado (el
+  pago menos el excedente). En una cadena de giros nuevos la clave sigue siendo la del primer desembolso del tramo.
+- **La orden del giro nuevo descuenta lo recogido vivo**, no el `PayoffAmount` de la orden anterior: es la regla de FR-016 (bruto − aplicado) y deja la
+  orden y el hecho con el mismo neto por construcción; si una recogida ya no está viva, no se descuenta. La operación lleva las recogidas en sus entradas.
+- **T039, «liberar» es dejar en firme**: liberar una garantía y anular el pagaré siguen siendo actos de una persona (`ReleaseCollateralCommand`,
+  `VoidPromissoryNoteCommand`, con su permiso y motivo); no hay liberación automática al consumir el resultado de Tesorería. Lo que cambia es la firmeza:
+  `GarantiasDeCartera.FirmezaDeLaCancelacionAsync` responde `Lending.Collateral.PendingNewLoanDisbursement` (código nuevo, con `newLoanPublicId` y
+  `newLoanNumber`, mensaje «Por liberar al girar el crédito {número}: …») mientras el crédito tenga un pago `CAR` vivo de un desembolso cuyo tramo tiene
+  órdenes y ninguna `Disbursed` (`PorLiberarAlGirarAsync`). Un tramo sin ninguna orden queda en firme al desembolsarse (hoy ninguna forma omite la orden: el
+  validador del desembolso no admite en especie). Cuenta cualquier recogida viva del crédito, también un abono que precedió a una cancelación por caja. Un
+  cheque `Disbursed` que pasa a `CheckNotCashed` vuelve a dejarlo pendiente hasta que el giro nuevo quede pagado. `ConsumeTreasuryResultCommand` no
+  cambia (sólo su comentario): la regla lee el estado de la orden.
+- **El detalle**: `CollateralDto.ReleaseNotice` y `PromissoryNoteDto.ReleaseNotice` («Por liberar al girar el crédito {número}») en las garantías vivas y los
+  pagarés no anulados de un crédito **cancelado** que espera el giro; `CreditoDetalle.razor` lo muestra junto al estado.
+- **T042**: el `DesembolsoRequest` de Shared deja de tener `OwnLoanPayoffs` (y se retiró `RecogidaRequest`, que nadie más usaba) y gana
+  `AcknowledgedPayoffDifferences`. «Lo que recoge» es un componente nuevo, `Components/Cartera/RecogidasDelDesembolso.razor`: `DetalleDeRecogida.razor`
+  pinta un `ProductoParaRecogerDto` (la consulta de productos), no la recogida de la vista previa. Dos clases nuevas en `componentes.css`:
+  `.diferencia-en-contra` (ámbar: recoger cuesta más, el asociado recibe menos) y `.diferencia-a-favor` (verde). La pantalla usaba `aviso-exito`, que no
+  existe en `componentes.css`: pasó a `aviso-ok`.
+- **T044**: la e2e `DesembolsoYRecogidaTests` no recorre el giro nuevo ni las garantías del recogido; no se tocó.
+- **Hallazgo fuera de alcance (sin corregir)**: el giro nuevo emite la orden por `original.Amount` sin el aporte del fondo (`SubsidyAmount`) ni el
+  `Subsidy` del hecho: un giro nuevo de una compra con descuento (2026-11-23) perdería la parte del fondo.

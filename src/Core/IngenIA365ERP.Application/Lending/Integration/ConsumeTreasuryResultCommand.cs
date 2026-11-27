@@ -35,7 +35,8 @@ public sealed class ConsumeTreasuryResultCommandValidator : AbstractValidator<Co
 /// <c>MessagePublicId</c>), su evaluación <c>LND_InboundMessageEvaluations</c>, la <c>LND_DisbursementOrderResults</c> y, si corresponde, el reverso
 /// del desembolso desde su origen (<see cref="ReversoDeDesembolso"/>):
 /// <list type="bullet">
-/// <item><c>Issued → Disbursed</c>: sin efecto en el libro; <c>Issued → Rejected</c> y, con la anulación pedida, <c>Issued → Voided</c>: el reverso;
+/// <item><c>Issued → Disbursed</c>: sin efecto en el libro (2026-11-27, feature 028, T039: desde ahí se liberan las garantías y el pagaré de lo que
+/// recogió el desembolso, FR-027d); <c>Issued → Rejected</c> y, con la anulación pedida, <c>Issued → Voided</c>: el reverso;
 /// <c>Disbursed</c> (cheque) <c>→ CheckNotCashed</c>: el mismo reverso; con la anulación pedida, <c>Disbursed</c>: la anulación no tuvo efecto
 /// (FR-045);</item>
 /// <item>lo que no cabe —valor distinto del neto, transición fuera de la tabla, un resultado desconocido— es <c>Rejected</c> con un solo código,
@@ -121,6 +122,8 @@ public sealed class ConsumeTreasuryResultCommandHandler(
                 if (hecho.IsFailure) return Result.Failure<ResultadoDeConsumo>(hecho.Error);
                 reversoId = hecho.Value.Reverso.Id;
             }
+            // 2026-11-27 (feature 028, T039; FR-027d, D12): una orden Disbursed deja en firme la cancelación de los créditos que recogió su desembolso: sus
+            // garantías y su pagaré se pueden liberar (lo decide GarantiasDeCartera.PorLiberarAlGirarAsync con este estado; liberar sigue siendo de una persona).
             orden.RegistrarResultado(hacia, ahora);
             db.DisbursementOrderResults.Add(DisbursementOrderResult.Registrar(orden.Id, recibo.Id, hacia, resultado.OccurredOn, resultado.TreasuryReference,
                 resultado.Reason, reversoId, ahora));

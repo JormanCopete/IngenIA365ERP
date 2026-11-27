@@ -18,7 +18,9 @@
    (sólo lectura); y las garantías, el pagaré y las órdenes de giro. Liquidar no escribe nada: la misma (D, R) da siempre lo mismo y la huella lo
    muestra. Fuera del alcance de oficina o línea el crédito no existe (el mismo 404).
    US5 (T0562): la pestaña «Simular pago» (Lending.Payments.Simulate; siete modalidades, sin aplicar: el pago entra por el recaudador), la
-   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa. *@
+   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa.
+   2026-11-27 (feature 028, T039; FR-027d): la garantía o el pagaré de un crédito cancelado por el desembolso de otro que no se ha girado dicen «Por liberar
+   al girar el crédito …». *@
 <PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -424,14 +426,15 @@
                         <tbody>
                             @foreach (var g in _garantias)
                             {
-                                <tr><td>@TextosDeDesembolso.ClaseDeGarantia(g.Kind)</td><td>@g.Description</td><td class="numero">@TextosDeCreditos.Pesos(g.AdmissibleValue)</td><td>@TextosDeDesembolso.EstadoDeGarantia(g.Status)</td></tr>
+                                <tr><td>@TextosDeDesembolso.ClaseDeGarantia(g.Kind)</td><td>@g.Description</td><td class="numero">@TextosDeCreditos.Pesos(g.AdmissibleValue)</td><td>@TextosDeDesembolso.EstadoDeGarantia(g.Status)@if (g.ReleaseNotice is { } porLiberar) { <span class="texto-alerta"> · @porLiberar</span> }</td></tr>
                             }
                         </tbody>
                     </table>
                     @if (_garantias.Count == 0) { <p class="texto-tenue">Sin garantías registradas.</p> }
                     @foreach (var p in _pagares)
                     {
-                        <p><strong>Pagaré:</strong> @(p.Number ?? "sin número") · @TextosDeDesembolso.FormaDePagare(p.Form) · @TextosDeDesembolso.EstadoDePagare(p.Status)</p>
+                        <p><strong>Pagaré:</strong> @(p.Number ?? "sin número") · @TextosDeDesembolso.FormaDePagare(p.Form) · @TextosDeDesembolso.EstadoDePagare(p.Status)
+                            @if (p.ReleaseNotice is { } porLiberar) { <span class="texto-alerta"> · @porLiberar</span> }</p>
                     }
                 </div>
             </PermissionGate>

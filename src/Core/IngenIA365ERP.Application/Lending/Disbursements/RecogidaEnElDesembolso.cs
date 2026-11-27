@@ -1,8 +1,12 @@
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Lending;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
+using IngenIA365ERP.Domain.Enums.Lending;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Disbursements;
 
@@ -33,6 +37,52 @@ public sealed class RecogidaEnElDesembolso(IContratoDeObligaciones contrato)
 
     /// <summary>La clave de negocio de la recogida de <paramref name="obligacion"/> en el desembolso <paramref name="desembolso"/>.</summary>
     public static string Clave(Guid desembolso, Guid obligacion) => $"{ClavesDeRecaudador.Cartera}:{desembolso:N}:{obligacion:N}";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T038–T039): el desembolso (<c>PublicId</c> de su operación) de una clave de recogida <c>CAR:{desembolso:N}:{obligación:N}</c>;
+    /// nulo si la clave no es la de una recogida (otra gramática, la de su reverso o vacía). (nuevo)
+    /// </summary>
+    public static Guid? DesembolsoDeLaClave(string? clave)
+    {
+        if (string.IsNullOrEmpty(clave)) return null;
+        var partes = clave.Split(':');
+        return partes.Length == 3 && string.Equals(partes[0], ClavesDeRecaudador.Cartera, StringComparison.Ordinal)
+            && Guid.TryParseExact(partes[1], "N", out var desembolso) && Guid.TryParseExact(partes[2], "N", out _)
+            ? desembolso
+            : null;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T038; FR-027c, H6): las recogidas <b>vivas</b> de los desembolsos <paramref name="desembolsos"/> como las lleva el hecho del
+    /// desembolso: por cada pago <c>CAR</c> aplicado con su clave y sin reversar, el crédito recogido, su operación de pago y lo aplicado (el pago menos el
+    /// excedente devuelto), en el orden en que se aplicaron. Lee los pagos, no las filas <c>LND_DisbursementPayoffs</c>: así sirve también para los
+    /// desembolsos de antes de la 028, que no las tienen. (nuevo)
+    /// </summary>
+    public static async Task<IReadOnlyList<PayoffDeductionV1>> VivasAsync(IApplicationDbContext db, IReadOnlyCollection<Guid> desembolsos, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(desembolsos);
+        var pagos = new List<(long Id, int LoanId, Guid PublicId, decimal Aplicado)>();
+        foreach (var desembolso in desembolsos.Distinct())
+        {
+            var prefijo = $"{ClavesDeRecaudador.Cartera}:{desembolso:N}:";
+            var deEste = await db.LoanOperations.AsNoTracking()
+                .Where(o => o.CollectorCode == ClavesDeRecaudador.Cartera && o.Kind == LoanOperationKind.Payment && o.ReversedByOperationId == null
+                            && o.IdempotencyKey != null && o.IdempotencyKey.StartsWith(prefijo))
+                .Select(o => new { o.Id, o.LoanId, o.PublicId, o.Amount, o.ExcessAmount, o.IdempotencyKey })
+                .ToListAsync(ct);
+            pagos.AddRange(deEste.Where(o => DesembolsoDeLaClave(o.IdempotencyKey) == desembolso)
+                .Select(o => (o.Id, o.LoanId, o.PublicId, o.Amount - (o.ExcessAmount ?? 0m))));
+        }
+        if (pagos.Count == 0) return [];
+
+        var ids = pagos.Select(p => p.LoanId).Distinct().ToList();
+        var recogidos = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, l => new LoanRefV1 { LoanPublicId = l.PublicId, LoanNumber = l.Number }, ct);
+        return pagos.OrderBy(p => p.Id)
+            .Select(p => new PayoffDeductionV1 { Loan = recogidos[p.LoanId], OperationPublicId = p.PublicId, Amount = p.Aplicado })
+            .ToList();
+    }
 
     /// <summary>
     /// Aplica las recogidas del desembolso <paramref name="operacion"/> pagadas por <paramref name="deudor"/> (las omitidas no). Devuelve las aplicadas, en

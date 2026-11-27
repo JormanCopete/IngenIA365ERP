@@ -1,0 +1,94 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* 2026-11-27 (pedido del dueño; feature 028, HU3, T042; FR-013, FR-015): «Lo que recoge» en la vista previa del desembolso. Las recogidas salen de la
+   solicitud (todas las autorizadas, D9) y se recalculan a la fecha valor: por producto, el modo, lo proyectado al radicar, lo de ahora, la diferencia
+   con su signo (en contra del asociado si recoger cuesta más, a su favor si cuesta menos) y sus causas en palabras, si ya estaba cancelado (se omite y el
+   neto sube) o requiere reestructuración, y una fila desplegable con la diferencia por concepto, la cuota causada y los avisos. No consulta nada: pinta
+   lo que trajo la vista previa (su zona de carga es la de la pantalla). *@
+@if (Recogidas.Count > 0)
+{
+    <h4>Lo que recoge</h4>
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>Producto</th><th>Modo</th><th class="numero">Proyectado</th><th class="numero">Actual</th><th class="numero">Diferencia</th>
+                    <th>Causa</th><th class="numero">Se aplica</th><th>Estado</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var recogida in Recogidas)
+                {
+                    var r = recogida;
+                    <tr class="@(r.Omitted || r.RequiresRestructuring || r.AboveTolerance ? "fila-alerta" : null)">
+                        <td>@TextosDeDesembolso.ClaseDeProducto(r.Kind) @r.Number</td>
+                        <td>@TextosDeDesembolso.ModoDeRecogida(r.Mode)</td>
+                        <td class="numero">@(r.Projected is { } proyectado ? TextosDeOriginacion.Pesos(proyectado) : "Sin proyección")</td>
+                        <td class="numero">@(r.Omitted ? "—" : TextosDeOriginacion.Pesos(r.Current))</td>
+                        <td class="numero"><span class="@TextosDeDesembolso.ClaseDeDiferencia(r.Difference)">@TextosDeDesembolso.Diferencia(r.Difference)</span></td>
+                        <td>@TextosDeDesembolso.Causas(r.Causes)</td>
+                        <td class="numero">@(r.Omitted ? "—" : TextosDeOriginacion.Pesos(r.ToApply))</td>
+                        <td>@TextosDeDesembolso.EstadoDeRecogida(r)</td>
+                        <td>
+                            <SfButton CssClass="e-flat e-small" OnClick="@(() => Alternar(r.ProductPublicId == Guid.Empty ? r.LoanPublicId : r.ProductPublicId))">
+                                @(Abierto(r) ? "Ocultar" : "Detalle")
+                            </SfButton>
+                        </td>
+                    </tr>
+                    @if (Abierto(r))
+                    {
+                        <tr>
+                            <td colspan="9">
+                                @if (r.Detail.Count > 0)
+                                {
+                                    <table class="data-grid">
+                                        <thead><tr><th>Concepto</th><th class="numero">Diferencia</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var (concepto, valor) in r.Detail)
+                                            {
+                                                <tr>
+                                                    <td>@TextosDeDesembolso.ConceptoDeDiferencia(concepto)</td>
+                                                    <td class="numero"><span class="@TextosDeDesembolso.ClaseDeDiferencia(valor)">@TextosDeDesembolso.Diferencia(valor)</span></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <p class="texto-tenue">@(r.Projected is null ? "La solicitud no guardó proyección: no hay con qué comparar." : "Ningún concepto cambió desde la proyección.")</p>
+                                }
+                                <p class="texto-apoyo">
+                                    Para cancelar a la fecha valor: @TextosDeOriginacion.Pesos(r.ToPayOff) · días de mora: @r.DaysPastDue
+                                    @if (r.InterestMode is { } modo) { <span> · @TextosDeRecogida.ModoDeIntereses(modo)</span> }
+                                </p>
+                                @if (r.CurrentInstallment is { } cuota)
+                                {
+                                    <p class="texto-apoyo">
+                                        Cuota causada @cuota.Number@(cuota.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "") por
+                                        @TextosDeOriginacion.Pesos(cuota.Amount): @(cuota.Treatment == "Exclude" ? "queda como se envió" : "se incluye en la recogida").
+                                    </p>
+                                }
+                                @foreach (var aviso in r.Warnings) { <p class="aviso aviso-info">@aviso</p> }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    /// <summary>Lo que recoge el desembolso (<c>payoffs[]</c> de la vista previa), en el orden de la solicitud.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RecogidaPropuestaDto> Recogidas { get; set; } = [];
+
+    private readonly HashSet<Guid> _abiertos = [];
+
+    private bool Abierto(RecogidaPropuestaDto r) => _abiertos.Contains(r.ProductPublicId == Guid.Empty ? r.LoanPublicId : r.ProductPublicId);
+
+    private void Alternar(Guid producto)
+    {
+        if (!_abiertos.Remove(producto)) _abiertos.Add(producto);
+    }
+}
