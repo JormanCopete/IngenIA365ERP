@@ -64,7 +64,8 @@ public static class OperacionesDeCaja
             aImputar.Add(new MedioAImputar(m.MeansId!.Value.ToString("N"), sellado.Class, m.Amount));
         }
         var pedido = new PedidoDeImputacion(
-            items.Select(i => new AplicacionAImputar(i.ItemId.ToString("N"), i.Amount)).ToList(),
+            // 2026-11-26 (pedido del dueño): los medios cubren lo que paga el asociado; el descuento por pago anticipado lo asume la cooperativa.
+            items.Select(i => new AplicacionAImputar(i.ItemId.ToString("N"), i.AmountToPay)).ToList(),
             aImputar,
             orden,
             fijada?.Select(p => new PorcionImputada(p.ItemId.ToString("N"), p.MeansId.ToString("N"), p.Amount)).ToList());
@@ -95,7 +96,7 @@ public static class OperacionesDeCaja
             : null;
         var items = Items(o);
         var medios = Medios(o);
-        var totalItems = items.Sum(i => i.Amount);
+        var totalItems = items.Sum(i => i.AmountToPay);
         var totalMedios = medios.Sum(m => m.Amount);
         return new CashOperationDto(o.PublicId, o.Status, sesion, publicos[o.PayerPersonId],
             o.BeneficiaryPersonId is { } b ? publicos[b] : null, o.DeliveredByPersonId is { } d ? publicos[d] : null, o.ValueDate, items, medios, Imputacion(o),

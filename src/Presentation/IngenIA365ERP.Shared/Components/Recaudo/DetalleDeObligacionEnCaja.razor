@@ -49,7 +49,7 @@
                         }
                         <div class="tabla-desplazable">
                             <table class="data-grid tabla-compacta">
-                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th>@if (ConReconocido) { <th class="numero" title="Reconocida al inicio de su ciclo y todavía por causar: la cuota se paga completa">Reconocido</th> }</tr></thead>
+                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th>@if (ConDescuentoDisponible) { <th class="numero" title="Descuento por pago anticipado: lo asume la cooperativa; el crédito recibe la cuota completa">Descuento</th><th class="numero">A pagar</th> }@if (ConReconocido) { <th class="numero" title="Reconocida al inicio de su ciclo y todavía por causar: la cuota se paga completa">Reconocido</th> }</tr></thead>
                                 <tbody>
                                     @foreach (var q in d.Installments.Where(q => q.Status != "Paid"))
                                     {
@@ -63,16 +63,31 @@
                                             <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td><td class="numero">@V(q.Insurance)</td>@if (ConAdministracion) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Other)</td>
                                             <td class="numero">@V(q.Total)</td><td class="numero">@V(q.Owed)</td>
                                             <td class="numero">@(anticipable ? V(q.ValueToAnticipate) : "—")</td>
+                                            @if (ConDescuentoDisponible)
+                                            {
+                                                var descuento = anticipable ? DescuentoDe(q) : 0m;
+                                                <td class="numero">@(descuento > 0m ? V(descuento) : "—")</td>
+                                                <td class="numero">@(anticipable ? V(q.ValueToAnticipate - descuento) : "—")</td>
+                                            }
                                             @if (ConReconocido) { <td class="numero">@(q.Recognized > 0m ? V(q.Recognized) : "—")</td> }
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
+                        @if (PuedeAnticipar && _hasta is not null && ConDescuentoDisponible && ElegidasParaAnticipar.Any(q => q.AdmiteDescuentoPorAnticipo))
+                        {
+                            @* 2026-11-26 (pedido del dueño): el cajero decide si aplica el descuento por pago anticipado; lo asume la cooperativa. *@
+                            <label class="campo">
+                                <input type="checkbox" @bind="_conDescuento" />
+                                Aplicar descuento por pago anticipado (@PorcentajeDelDescuento del interés): @V(ElegidasParaAnticipar.Sum(q => DescuentoDe(q)))
+                            </label>
+                            <p class="texto-tenue">Sólo las cuotas completas de períodos que no han empezado. El crédito recibe la cuota completa; la diferencia la asume la cooperativa.</p>
+                        }
                         <div class="popup-acciones">
                             @if (PuedeAnticipar && _hasta is not null)
                             {
-                                <span class="texto-apoyo">@ElegidasParaAnticipar.Count cuota(s) por @V(ValorDeLasElegidas)@(d.Vencido > 0m ? $" más lo exigible ({V(d.DueToday)})" : "")</span>
+                                <span class="texto-apoyo">@ElegidasParaAnticipar.Count cuota(s) por @V(ValorDeLasElegidas)@(d.Vencido > 0m ? $" más lo exigible ({V(d.DueToday)})" : "")@(_conDescuento && DescuentoDeLasElegidas > 0m ? $" · descuento {V(DescuentoDeLasElegidas)} · paga {V(ValorDeLasElegidas - DescuentoDeLasElegidas)}" : "")</span>
                                 <SfButton CssClass="e-primary" OnClick="@AgregarAnticipoAsync">Agregar a «Qué paga»</SfButton>
                             }
                             <SfButton CssClass="e-flat" OnClick="@(() => CambioDeVisible(false))">Cerrar (Esc)</SfButton>
@@ -102,8 +117,29 @@
     /// </summary>
     [Parameter] public bool ConMoraPermiteAnticipar { get; set; }
 
-    /// <summary>Las cuotas elegidas para anticipar, en orden: la caja agrega un ítem «cuota específica» por cada una.</summary>
-    [Parameter] public EventCallback<IReadOnlyList<CuotaDeObligacionDto>> Anticipar { get; set; }
+    /// <summary>
+    /// Las cuotas elegidas para anticipar, en orden: la caja agrega un ítem «cuota específica» por cada una. 2026-11-26: con si el cajero aplica el descuento por
+    /// pago anticipado.
+    /// </summary>
+    [Parameter] public EventCallback<AnticipoElegido> Anticipar { get; set; }
+
+    private bool _conDescuento;
+
+    /// <summary>2026-11-26 (pedido del dueño): la fracción del interés que la línea descuenta por pago anticipado (<c>Pagos.DescuentoPorPagoAnticipado</c>).</summary>
+    private decimal Fraccion => _detalle?.AdvanceDiscountFraction ?? 0m;
+
+    private bool ConDescuentoDisponible => Fraccion > 0m;
+
+    private string PorcentajeDelDescuento => (Fraccion * 100m).ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("es-CO")) + " %";
+
+    /// <summary>
+    /// La vista previa del descuento de una cuota: su interés del plan por la fracción, al peso (lo mismo que calcula el servidor, que es quien decide). Cero si
+    /// la cuota no lo admite.
+    /// </summary>
+    private decimal DescuentoDe(CuotaDeObligacionDto q) =>
+        ConDescuentoDisponible && q.AdmiteDescuentoPorAnticipo ? Math.Round(q.Interest * Fraccion, 0, MidpointRounding.AwayFromZero) : 0m;
+
+    private decimal DescuentoDeLasElegidas => ElegidasParaAnticipar.Sum(DescuentoDe);
 
     private readonly EstadoDeCarga _carga = new();
     private DetalleDeObligacionDto? _detalle;
@@ -158,7 +194,7 @@
     {
         var cuotas = ElegidasParaAnticipar;
         if (cuotas.Count == 0) return;
-        await Anticipar.InvokeAsync(cuotas);
+        await Anticipar.InvokeAsync(new AnticipoElegido(cuotas, _conDescuento && ConDescuentoDisponible));
         await CambioDeVisible(false);
     }
 

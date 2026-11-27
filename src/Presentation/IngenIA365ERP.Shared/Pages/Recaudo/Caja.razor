@@ -203,6 +203,17 @@
                                         <span class="item-de-caja-valor">@V(item.Amount)</span>
                                         <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
                                     </div>
+                                    @if (item.LoanModality == 6 && _descuentoOfrecido.Contains(item.ItemId!.Value))
+                                    {
+                                        @* 2026-11-26 (pedido del dueño): el descuento por pago anticipado lo asume la cooperativa; el crédito recibe la cuota completa. *@
+                                        <div class="fila-campos">
+                                            <label class="campo"><input type="checkbox" checked="@item.ApplyAdvanceDiscount" data-ayuda="Descuento de intereses por pago anticipado de la cuota: lo asume la cooperativa; el crédito recibe la cuota completa y la persona paga menos." @onchange="@(e => CambiarDescuento(item, e.Value is true))" /> Descuento por pago anticipado</label>
+                                            @if (item.ApplyAdvanceDiscount && simulado is { AdvanceDiscount: > 0m } conDescuento)
+                                            {
+                                                <span class="texto-apoyo">−@V(conDescuento.AdvanceDiscount) · paga @V(item.Amount - conDescuento.AdvanceDiscount)</span>
+                                            }
+                                        </div>
+                                    }
                                     @if (obligacion is not null)
                                     {
                                         <div class="texto-tenue">
@@ -298,6 +309,10 @@
                             }
                         </div>
                     </IndicadorDeCarga>
+                    @if (TotalDescuentos > 0m)
+                    {
+                        <div class="caja-pie pos-renglon texto-tenue"><span>Descuento por pago anticipado</span><span>−@V(TotalDescuentos)</span></div>
+                    }
                     <div class="caja-pie pos-renglon"><span>Total a pagar · @_items.Count ítem(s)</span><strong>@V(TotalItems)</strong></div>
                 </section>
 
@@ -382,7 +397,8 @@
                         <div class="caja-desplazable">
                             <div class="aviso aviso-ok caja-recibo-confirmado" role="status">Pago registrado · recibo <b>@_recibo.Number</b></div>
                             <div class="pos-total">
-                                <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(_recibo.TotalApplied)</span></div>
+                                @if (_recibo.TotalDiscount > 0m) { <div class="pos-renglon"><span>Descuento por pago anticipado</span><span>−@V(_recibo.TotalDiscount)</span></div> }
+                                <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(_recibo.TotalApplied - _recibo.TotalDiscount)</span></div>
                                 <div class="pos-renglon"><span>Recibido</span><span>@V(_recibo.TotalMeans)</span></div>
                                 @if (_recibo.ChangeGiven > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@V(_recibo.ChangeGiven)</span></div> }
                             </div>
@@ -431,7 +447,8 @@
                     <p class="pago-registrado-titulo">El pago quedó registrado</p>
                     <p class="pago-registrado-recibo">Recibo <strong>@recibo.Number</strong></p>
                     <div class="pos-total">
-                        <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(recibo.TotalApplied)</span></div>
+                        @if (recibo.TotalDiscount > 0m) { <div class="pos-renglon"><span>Descuento por pago anticipado</span><span>−@V(recibo.TotalDiscount)</span></div> }
+                        <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(recibo.TotalApplied - recibo.TotalDiscount)</span></div>
                         <div class="pos-renglon"><span>Recibido</span><span>@V(recibo.TotalMeans)</span></div>
                         @if (recibo.ChangeGiven > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@V(recibo.ChangeGiven)</span></div> }
                     </div>
@@ -580,7 +597,19 @@
     private sealed record Pagable(string Grupo, string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar,
         Guid? Obligacion = null, string? Numero = null, CuentaPagableDto? Cuenta = null);
 
-    private decimal TotalItems => _items.Sum(i => i.Amount);
+    /// <summary>
+    /// Lo que paga la persona: lo de los ítems menos el descuento por pago anticipado que asume la cooperativa (2026-11-26), según la última simulación.
+    /// </summary>
+    private decimal TotalItems => _items.Sum(i => i.Amount) - TotalDescuentos;
+
+    /// <summary>2026-11-26 (pedido del dueño): el descuento por pago anticipado de los ítems que lo llevan, según la última simulación.</summary>
+    private decimal TotalDescuentos => _items.Where(i => i.ApplyAdvanceDiscount).Sum(DescuentoDe);
+
+    private decimal DescuentoDe(ItemPedidoRequest i) =>
+        i.ApplyAdvanceDiscount ? _operacion?.Items.FirstOrDefault(x => x.ItemId == i.ItemId)?.AdvanceDiscount ?? 0m : 0m;
+
+    /// <summary>2026-11-26: quita o vuelve a pedir el descuento por pago anticipado de una cuota anticipada.</summary>
+    private void CambiarDescuento(ItemPedidoRequest i, bool aplica) => Reemplazar(i, Vigente(i) with { ApplyAdvanceDiscount = aplica });
 
     // Feature 015, R1 (T0358): tarjetas y bonos; US15 (T0219): cheques; D-f: cuentas propias.
     private const int ClaseConsignacion = 6, ClaseTransferencia = 7, ClaseCheque = 9;
@@ -823,12 +852,16 @@
 
     // ------------------------------------------------------------------------------------- qué paga --
 
-    private void Agregar(ItemPedidoRequest item, string rotulo)
+    private Guid Agregar(ItemPedidoRequest item, string rotulo)
     {
         var conId = item with { ItemId = Guid.NewGuid() };
         _items.Add(conId);
         _rotulos[conId.ItemId!.Value] = rotulo;
+        return conId.ItemId.Value;
     }
+
+    /// <summary>2026-11-26 (pedido del dueño): los ítems a los que el cajero aplicó el descuento por pago anticipado en el detalle (puede quitarlo y volver a ponerlo).</summary>
+    private readonly HashSet<Guid> _descuentoOfrecido = [];
 
     private void AgregarPendiente(int modulo) =>
         Agregar(new ItemPedidoRequest(5, 0, PendingTarget: modulo), modulo == 1 ? "Pendiente de aplicar · crédito" : "Pendiente de aplicar · cuenta");
@@ -1025,9 +1058,10 @@
     /// vencidas (y la cooperativa que lo permite), antes va «Lo exigible» por todo lo exigible, así el recibo cubre primero lo vencido; y lo que de una cuota
     /// del período en curso ya pagó lo exigible (su interés causado) no se vuelve a anticipar.
     /// </summary>
-    private void AnticiparCuotas(IReadOnlyList<CuotaDeObligacionDto> cuotas)
+    private void AnticiparCuotas(AnticipoElegido elegido)
     {
         if (_detalleDe is not { } obligacion) return;
+        var cuotas = elegido.Cuotas;
         var numero = _numeroDelDetalle ?? "";
         var conVencido = _pagables?.Obligations?.Obligations.FirstOrDefault(o => o.ObligationPublicId == obligacion) is { ConVencido: true } ob ? ob : null;
         // Lo que ya está en «Qué paga» de este crédito y cubre primero lo exigible (todo menos la cuota específica): si alcanza para lo vencido, no se agrega nada.
@@ -1044,8 +1078,12 @@
         {
             _items.RemoveAll(x => x.Target == 1 && x.ProductPublicId == obligacion && x.LoanModality == 6 && x.InstallmentNumber == q.Number);
             var valor = conVencido is null ? q.ValueToAnticipate : Math.Max(0m, q.ValueToAnticipate - q.DueInPeriod);
-            if (valor > 0m)
-                Agregar(new ItemPedidoRequest(1, valor, obligacion, LoanModality: 6, InstallmentNumber: q.Number), $"Crédito {numero} · cuota {q.Number}");
+            // 2026-11-26 (pedido del dueño): el descuento por pago anticipado, si el cajero lo aplicó y la cuota lo admite (el servidor lo calcula y lo decide).
+            var conDescuento = elegido.ConDescuento && q.AdmiteDescuentoPorAnticipo;
+            if (valor <= 0m) continue;
+            var id = Agregar(new ItemPedidoRequest(1, valor, obligacion, LoanModality: 6, InstallmentNumber: q.Number, ApplyAdvanceDiscount: conDescuento),
+                $"Crédito {numero} · cuota {q.Number}");
+            if (conDescuento) _descuentoOfrecido.Add(id);
         }
         _detalleDe = null;
         ProgramarSimulacion();

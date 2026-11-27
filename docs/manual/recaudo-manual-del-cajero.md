@@ -134,6 +134,9 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   - La cuota se anticipa aunque la línea no deje pagar cuotas fuera de orden: el recibo cubre primero las anteriores.
   - La simulación de cada ítem de un crédito se hace sobre lo que deja el ítem anterior del mismo crédito, y al confirmar se aplican en ese
     orden.
+- **Descuento por pago anticipado** (2026-11-26): si la línea tiene descuento (`Pagos.DescuentoPorPagoAnticipado`), «Detalle» muestra por cuota el
+  descuento y lo que se paga, y el cajero decide con una casilla si lo aplica. El crédito recibe la cuota completa y la cooperativa asume el
+  descuento. Ver [descuento-por-pago-anticipado.md](descuento-por-pago-anticipado.md).
 - **Sin nada exigible se paga al menos una cuota** (`Caja.AnticipoMinimoUnaCuota`, de fábrica Sí; `Receipts.Receipt.BelowOneInstallment`). Para
   anticipar varias, en «Detalle» se marca hasta qué cuota: cada una entra a «Qué paga» con su valor completo (capital, interés, seguro y otros, menos
   lo que ya tenga anticipado). El plan ya calcula el interés de la siguiente sobre el saldo después de la anterior. Desde esta fecha se anticipa por

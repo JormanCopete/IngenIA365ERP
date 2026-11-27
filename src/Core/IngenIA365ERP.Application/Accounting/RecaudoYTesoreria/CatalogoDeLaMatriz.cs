@@ -91,6 +91,9 @@ public static class MatricesDeRecaudoYTesoreria
             // R1 (fase 26): el GMF de los egresos de caja, que asume la cooperativa.
             Resultado(RolesDeRecaudo.GmfGasto, "Gasto por GMF de egresos de caja", Oficina),
             R(RolesDeRecaudo.GmfPorPagar, "GMF por pagar de egresos de caja"),
+            // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado que asume la cooperativa; la cuenta puede ser un fondo, un gasto o el
+            // ingreso por intereses al débito, así que no es un rol de resultado.
+            R(RolesDeRecaudo.DescuentoPorPagoAnticipado, "Descuento por pago anticipado", Oficina),
             // R1 (fase 30): las cuentas por cobrar comerciales que se cobran en el recibo, con tercero y factura.
             R(RolesDeRecaudo.CuentasPorCobrarComerciales, "Cuentas por cobrar comerciales"),
             // R2 (fase 38): la comisión de los convenios (de resultado), su IVA descontable y las retenciones a favor, por cuenta propia y con el aliado como tercero.
@@ -101,7 +104,7 @@ public static class MatricesDeRecaudoYTesoreria
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
-                RolesDeRecaudo.CuentasPorCobrarComerciales),
+                RolesDeRecaudo.CuentasPorCobrarComerciales, RolesDeRecaudo.DescuentoPorPagoAnticipado),
             H(ReciboDeBancoEmitidoV1.Type, "Recibo de banco", "RB", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.PartidasPorIdentificar, RolesDeRecaudo.ConceptoVario),
             H(ReciboDePagaduriaEmitidoV1.Type, "Recibo de pagaduría", "RB", [RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.PuenteDelModulo]),
@@ -122,9 +125,11 @@ public static class MatricesDeRecaudoYTesoreria
             H(RemesaDespachadaV1.Type, "Remesa despachada", "MC", [RolesDeRecaudo.EfectivoEnTransito, RolesDeRecaudo.Boveda]),
             H(ReciboAnuladoV1.Type, "Recibo anulado", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
-                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.CuentasPorCobrarComerciales),
+                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.CuentasPorCobrarComerciales,
+                RolesDeRecaudo.DescuentoPorPagoAnticipado),
             H(AplicacionReversadaPorModuloV1.Type, "Aplicación reversada por el módulo", "AR", [RolesDeRecaudo.PuenteDelModulo],
-                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
+                RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar,
+                RolesDeRecaudo.DescuentoPorPagoAnticipado),
             H(ChequeRecibidoDevueltoV1.Type, "Cheque recibido devuelto", "AR", [RolesDeRecaudo.ChequesEnCanje],
                 RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.CuentaPorCobrarPagador),
             // Segunda ronda del 2026-10-27 (D-l; FR-235): el cheque recibido pagado pasa del canje al banco de la cuenta que recibió el abono.

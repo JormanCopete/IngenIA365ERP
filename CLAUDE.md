@@ -768,6 +768,19 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   - **Estado de cuenta.** F4 dice cuánto, cuándo y con qué recibo se anticipó cada cuota; F8 y su Excel llevan el recibo.
   - Sin migración. Receta: `docs/manual/recaudo-manual-del-cajero.md` §10.
 
+- **Descuento por pago anticipado (2026-11-26, pedido del dueño para COOFLOPAL)**:
+  - **El descuento lo asume la cooperativa y Cartera no se entera.** La caja descuenta una fracción del interés de una cuota anticipada; Cartera recibe
+    la cuota completa en un solo pago. La porción en medios más el descuento van con la última porción del ítem (`ConfirmacionDeRecibo.AlModulo`).
+  - **Parámetro.** `Pagos.DescuentoPorPagoAnticipado` (LND, fracción 0..1, por línea con vigencia; 0 de fábrica). Cartera sólo lo informa en el
+    detalle (`AdvanceDiscountFraction`, `CuotaDeObligacionDto.InCurrentPeriod`).
+  - **Quién lo calcula y lo admite.** Recaudo: `DescuentoPorPagoAnticipado.Calcular` (interés del plan × fracción, al peso) y `ReglasDeLaCaja`.
+    Sólo la cuota completa, sin anticipo previo, de un período que no ha empezado, con el crédito al día después de lo que va antes en el recibo
+    (`Receipts.Receipt.AdvanceDiscountNotAllowed`). Si cambia entre simular y confirmar: `.AdvanceDiscountChanged`.
+  - **Qué queda guardado.** `RCD_ReceiptApplications.AdvanceDiscount`/`AdvanceDiscountFraction` (migración aditiva `DescuentoPorPagoAnticipado`).
+  - **Contabilidad.** Rol de Recaudo `DescuentoPorPagoAnticipado` (débito en `ReciboEmitido`; reversado en `ReciboAnulado` y en
+    `AplicacionReversadaPorModulo` de la porción que lo llevó). La imputación cubre `AmountToPay` = valor − descuento.
+  - Receta: `docs/manual/descuento-por-pago-anticipado.md`.
+
 - **Editar la solicitud radicada sin devolverla (2026-11-25, pedido del dueño)**: `PUT /api/lending/applications/{id}/submitted` (permiso
   `Lending.Applications.EditSubmitted`, motivo obligatorio) en `Submitted`/`PendingDecision`, si `Originacion.EditarRadicadaSinDevolver` (sí de
   fábrica, por cooperativa o línea) lo deja y en los grupos de `Originacion.GruposEditablesAlDevolver`. Vuelve a correr validaciones y

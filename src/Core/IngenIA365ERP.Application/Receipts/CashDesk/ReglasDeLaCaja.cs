@@ -91,13 +91,14 @@ public sealed record ItemDeLaRegla(
     ModalidadDePago? LoanModality,
     int? InstallmentNumber,
     string? CrossDocument,
-    ApplicationTarget? PendingTarget)
+    ApplicationTarget? PendingTarget,
+    bool ApplyAdvanceDiscount = false)
 {
     public static ItemDeLaRegla De(ItemDeCajaDto i)
     {
         ArgumentNullException.ThrowIfNull(i);
         return new ItemDeLaRegla(i.ItemId, i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.InstallmentNumber, i.CrossDocument,
-            i.PendingTarget);
+            i.PendingTarget, i.AdvanceDiscount > 0m);
     }
 }
 
@@ -138,6 +139,9 @@ public sealed class ReglasDeLaCaja(
     IContratoDeCuentas cuentas,
     IContabilidadParaRecaudo? contabilidad = null)
 {
+    /// <summary>El detalle de cada obligación consultada (una lectura por obligación): lo usan las reglas y el descuento por pago anticipado.</summary>
+    private readonly Dictionary<Guid, DetalleDeObligacionDto?> _detalles = [];
+
     /// <summary>Los rechazos de <paramref name="items"/> de la operación de <paramref name="titular"/> a la fecha valor, en el orden de los ítems.</summary>
     public async Task<IReadOnlyList<RechazoDeLaCaja>> EvaluarAsync(PoliticaDeCaja politica, Guid titular, DateOnly fecha, IReadOnlyList<ItemDeLaRegla> items,
         CancellationToken ct)
@@ -159,7 +163,7 @@ public sealed class ReglasDeLaCaja(
             listados[persona] = r?.Value?.Obligations ?? [];
         }
 
-        var detalles = new Dictionary<Guid, DetalleDeObligacionDto?>();
+        var detalles = _detalles;
         // Los ítems admitidos de cada crédito, en el orden del recibo: lo que va antes de un ítem le paga primero a lo vencido.
         var anteriores = new Dictionary<Guid, List<ItemDeLaRegla>>();
         foreach (var item in deCreditos)
@@ -189,7 +193,55 @@ public sealed class ReglasDeLaCaja(
     }
 
     private async Task<RechazoDeLaCaja?> DelCreditoAsync(PoliticaDeCaja politica, ObligacionListadaDto o, ItemDeLaRegla item, IReadOnlyList<ItemDeLaRegla> antes,
-        DateOnly fecha, Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
+        DateOnly fecha, Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct) =>
+        await ModalidadDelCreditoAsync(politica, o, item, antes, fecha, detalles, ct)
+        ?? (item.ApplyAdvanceDiscount ? await DescuentoNoAdmitidoAsync(o, item, antes, fecha, detalles, ct) : null);
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): por qué el ítem no lleva el descuento de intereses por pago anticipado que pidió el cajero, o nulo si lo lleva. Sólo la
+    /// cuota específica de una cuota completa y por vencer, sin anticipo previo, de un período que no ha empezado, de una línea con descuento
+    /// (<c>Pagos.DescuentoPorPagoAnticipado</c>) y con el crédito al día después de lo que va antes en el recibo.
+    /// </summary>
+    private async Task<RechazoDeLaCaja?> DescuentoNoAdmitidoAsync(ObligacionListadaDto o, ItemDeLaRegla item, IReadOnlyList<ItemDeLaRegla> antes, DateOnly fecha,
+        Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
+    {
+        string? motivo;
+        if (item.LoanModality != ModalidadDePago.SpecificInstallment || item.InstallmentNumber is not { } n)
+            motivo = "sólo se da al anticipar una cuota completa (cuota específica)";
+        else
+        {
+            var detalle = await DetalleAsync(o.ObligationPublicId, fecha, detalles, ct);
+            var cuota = detalle?.Installments.FirstOrDefault(q => q.Number == n);
+            var vencido = Vencido(o);
+            motivo = detalle is not { AdvanceDiscountFraction: > 0m } ? "su línea no tiene descuento por pago anticipado"
+                : cuota is not { Status: "Upcoming" } ? $"la cuota {n} no está por vencer"
+                : cuota.InCurrentPeriod ? $"la cuota {n} es la del período en curso; sólo llevan descuento las de períodos que no han empezado"
+                : cuota.AdvanceApplied > 0m ? $"la cuota {n} ya tiene un anticipo; el descuento es sólo para la cuota completa"
+                : item.Amount != cuota.ValueToAnticipate ? $"la cuota {n} se anticipa completa, por {cuota.ValueToAnticipate:N2}"
+                : vencido > 0m && await CubiertoAntesAsync(o, antes, fecha, detalles, ct) < vencido
+                    ? $"tiene {vencido:N2} vencidos; el recibo tiene que dejarlo al día antes (agregue «Lo exigible»)"
+                    : null;
+        }
+        return motivo is null
+            ? null
+            : new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoDescuentoNoAdmitido, $"El crédito {o.Number} no lleva descuento por pago anticipado: {motivo}.");
+    }
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado de la cuota <paramref name="cuota"/> a <paramref name="fecha"/>: el interés
+    /// del plan de la cuota por la fracción de la línea, al peso (<see cref="DescuentoPorPagoAnticipado.Calcular"/>), con la fracción usada. Cero si la línea no
+    /// tiene descuento o la cuota no existe. Lo admite o no <see cref="EvaluarAsync"/>; esto sólo lo calcula.
+    /// </summary>
+    public async Task<(decimal Descuento, decimal Fraccion)> DescuentoAsync(Guid obligacion, int cuota, DateOnly fecha, CancellationToken ct)
+    {
+        var detalle = await DetalleAsync(obligacion, fecha, _detalles, ct);
+        var q = detalle?.Installments.FirstOrDefault(x => x.Number == cuota);
+        if (detalle is null || q is null || detalle.AdvanceDiscountFraction <= 0m) return (0m, 0m);
+        return (DescuentoPorPagoAnticipado.Calcular(q.Interest, detalle.AdvanceDiscountFraction), detalle.AdvanceDiscountFraction);
+    }
+
+    private async Task<RechazoDeLaCaja?> ModalidadDelCreditoAsync(PoliticaDeCaja politica, ObligacionListadaDto o, ItemDeLaRegla item,
+        IReadOnlyList<ItemDeLaRegla> antes, DateOnly fecha, Dictionary<Guid, DetalleDeObligacionDto?> detalles, CancellationToken ct)
     {
         var modalidad = item.LoanModality!.Value;
         var vencido = Vencido(o);
@@ -272,12 +324,19 @@ public sealed class ReglasDeLaCaja(
         CancellationToken ct)
     {
         if (numero is not { } n) return null;
+        return (await DetalleAsync(obligacion, fecha, detalles, ct))?.Installments.FirstOrDefault(q => q.Number == n);
+    }
+
+    /// <summary>El detalle de la obligación (una lectura por obligación); nulo si el contrato no lo da.</summary>
+    private async Task<DetalleDeObligacionDto?> DetalleAsync(Guid obligacion, DateOnly fecha, Dictionary<Guid, DetalleDeObligacionDto?> detalles,
+        CancellationToken ct)
+    {
         if (!detalles.TryGetValue(obligacion, out var detalle))
         {
             var r = await obligaciones.DetalleAsync(new SolicitudDeDetalle(ClavesDeRecaudo.Recaudador, obligacion, fecha), ct);
             detalles[obligacion] = detalle = r?.Result == ResultadoDelContrato.Answered ? r.Value : null;
         }
-        return detalle?.Installments.FirstOrDefault(q => q.Number == n);
+        return detalle;
     }
 
     private async Task<IReadOnlyList<RechazoDeLaCaja>> PrelacionAsync(PoliticaDeCaja politica, Guid titular, DateOnly fecha, IReadOnlyList<ItemDeLaRegla> items,

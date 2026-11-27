@@ -117,6 +117,10 @@ public class ReceiptApplicationConfiguration : IEntityTypeConfiguration<ReceiptA
         builder.Property(e => e.Target).HasConversion<int>();
         builder.Property(e => e.Status).HasConversion<int>();
         builder.Property(e => e.Amount).Monto();
+        // 2026-11-26 (pedido del dueño): el descuento por pago anticipado y la fracción del interés con que se calculó (informativa: el descuento se
+        // calcula con el parámetro entero y queda en AdvanceDiscount).
+        builder.Property(e => e.AdvanceDiscount).Monto();
+        builder.Property(e => e.AdvanceDiscountFraction).Tarifa();
         builder.Property(e => e.ProductNumber).HasMaxLength(40);
         builder.Property(e => e.CrossDocumentReference).HasMaxLength(60);
         builder.Property(e => e.ModuleVoucherNumber).HasMaxLength(40);

@@ -234,6 +234,8 @@ public sealed class ContratoDeObligacionesDeCartera(
             RecognizedPending = reconocido,
             // 2026-11-26 (pedido del dueño): la mora para la caja, sin el interés ya causado del período en curso.
             DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
+            // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado de la línea, que aplica la caja.
+            AdvanceDiscountFraction = await aplicacion.DescuentoPorPagoAnticipadoAsync(credito, estado, fecha, ct),
         };
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractDetailed, "Loan", credito.PublicId, solicitud.Collector,
             new { date = fecha, recordedAsOf = reloj.UtcNow, sha256 = estado.Huella }, ct);
