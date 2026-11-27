@@ -58,6 +58,16 @@ public sealed class MembershipsClient
             $"/api/tenants/{tenantPublicId}/mfa-policy",
             new { isRequired, metodosAceptados }, ct);
 
+    /// <summary>
+    /// Feature 027: enciende o apaga los pases de ingreso sin segundo factor y fija su duración máxima. Manda la exigencia actual tal cual
+    /// (el PUT la pide) y deja los métodos como están.
+    /// </summary>
+    public Task<InvitationApiResult<MfaPolicyUpdateResponse>> SetPasesDeIngresoAsync(
+        Guid tenantPublicId, bool isRequired, bool permitir, int horasMaximas, CancellationToken ct = default) =>
+        PutAsync<MfaPolicyUpdateResponse>(
+            $"/api/tenants/{tenantPublicId}/mfa-policy",
+            new { isRequired, permitirPasesDeIngreso = permitir, horasMaximasDelPase = horasMaximas }, ct);
+
     // -------------------- Helpers --------------------
 
     private async Task<InvitationApiResult<T>> GetAsync<T>(string url, CancellationToken ct)
@@ -135,7 +145,12 @@ public sealed record MfaPolicyResponse(
     bool IsRequired,
     DateTime? ActivatedAt,
     DateTime? DeactivatedAt,
-    IReadOnlyList<string>? MetodosAceptados = null);
+    IReadOnlyList<string>? MetodosAceptados = null,
+    bool PermitirRecuperacionPorCorreo = false,
+    int HorasDeDemora = 24,
+    // Feature 027: pases de ingreso sin segundo factor (apagado de fábrica, 12 horas).
+    bool PermitirPasesDeIngreso = false,
+    int HorasMaximasDelPase = 12);
 
 /// <param name="MiembrosSinMetodoAceptado">
 /// Cuantas personas de la cooperativa tienen segundo factor pero ninguno de los

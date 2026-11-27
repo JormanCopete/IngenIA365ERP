@@ -66,6 +66,66 @@
                 <button class="boton-principal" type="button" @onclick="CorregirAsync">Corregir documento</button>
             </section>
 
+            @* Feature 027 (FR-020): el pase de ingreso sin segundo factor, también para administradores de una cooperativa. *@
+            @if (!d.Identidad.IsGlobalMasterAdmin && d.Identidad.Memberships.Any(m => m.Status == "Active"))
+            {
+                <section class="tarjeta">
+                    <h3>Pase de ingreso sin segundo factor</h3>
+                    <p class="texto-apoyo">
+                        Deja entrar a la persona a una cooperativa, por una jornada, con su contraseña y sin el código de su app. El enlace le llega a
+                        su correo; su app sigue inscrita. La cooperativa debe tener encendida la opción en su política de segundo factor.
+                    </p>
+                    <div class="rejilla-campos">
+                        <label>Cooperativa
+                            <select value="@_cooperativaDelPase" @onchange="CambiarCooperativaDelPaseAsync">
+                                <option value="">Elija…</option>
+                                @foreach (var m in d.Identidad.Memberships.Where(m => m.Status == "Active"))
+                                {
+                                    <option value="@m.TenantId">@m.TenantName @(m.IsTenantAdmin ? "(administrador)" : "")</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Duración
+                            <select @bind="_horasDelPase">
+                                @for (var h = 12; h >= 1; h--)
+                                {
+                                    var horas = h;
+                                    <option value="@horas">@horas @(horas == 1 ? "hora" : "horas")</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Motivo <input @bind="_motivoDelPase" maxlength="500" /></label>
+                    </div>
+                    <button class="boton-principal" type="button" disabled="@(_cooperativaDelPase is null)" @onclick="ConcederPaseAsync">
+                        Conceder pase de ingreso
+                    </button>
+                    @if (_pases.Count > 0)
+                    {
+                        <table class="data-grid">
+                            <thead><tr><th>Estado</th><th>Vence</th><th>Por</th><th>Motivo</th><th>Usos</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var p in _pases)
+                                {
+                                    <tr>
+                                        <td>@(p.Status == "Active" ? "Vigente" : p.Status == "Expired" ? "Vencido" : "Anulado")</td>
+                                        <td>@p.ExpiresAt.AddHours(-5).ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@p.GrantedByEmail</td>
+                                        <td>@p.Reason</td>
+                                        <td>@p.UseCount</td>
+                                        <td>
+                                            @if (p.Status == "Active")
+                                            {
+                                                <button type="button" title="Escriba el motivo en «Motivo»" @onclick="() => AnularPaseAsync(p)">Anular</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+            }
+
             <section class="tarjeta">
                 <h3>Cambiar el correo (rescate)</h3>
                 <p class="texto-apoyo">Sólo cuando la persona perdió su buzón. Se avisa al correo anterior y al nuevo, y se cierran sus sesiones.</p>
@@ -192,6 +252,55 @@
                 : $"Fusión en curso: faltan {r.Value.PendingTenants.Count} cooperativas. Repita la fusión para completarla.")
             : r.ErrorMessage, !r.IsSuccess);
         if (r.IsSuccess) await CargarAsync();
+    }
+
+    // ---------- Pase de ingreso (feature 027) ----------
+
+    private Guid? _cooperativaDelPase;
+    private int _horasDelPase = 12;
+    private string? _motivoDelPase;
+    private List<PaseDeIngresoDelMaestro> _pases = new();
+
+    private async Task CambiarCooperativaDelPaseAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _cooperativaDelPase = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null;
+        await CargarPasesAsync();
+    }
+
+    private async Task CargarPasesAsync()
+    {
+        if (_cooperativaDelPase is not { } coop) { _pases = new(); return; }
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.PasesAsync(coop, Id);
+        _pases = r.IsSuccess ? r.Value ?? new() : new();
+    }
+
+    private async Task ConcederPaseAsync()
+    {
+        if (_cooperativaDelPase is not { } coop) return;
+        if ((_motivoDelPase?.Trim().Length ?? 0) < 10) { Avisar("Escriba el motivo (mínimo 10 caracteres).", true); return; }
+        using (_carga.Iniciar())
+        {
+            var r = await Identidades.ConcederPaseAsync(coop, Id, _horasDelPase, _motivoDelPase!.Trim());
+            if (!r.IsSuccess) { Avisar(r.ErrorMessage, true); return; }
+            Avisar(r.Value!.EmailSent
+                ? "Pase concedido: el enlace le llegó al correo de la persona."
+                : "El pase quedó concedido, pero el correo no se pudo enviar. Anúlelo y conceda otro.", !r.Value.EmailSent);
+            _motivoDelPase = null;
+        }
+        await CargarPasesAsync();
+    }
+
+    private async Task AnularPaseAsync(PaseDeIngresoDelMaestro pase)
+    {
+        if ((_motivoDelPase?.Trim().Length ?? 0) < 10) { Avisar("Escriba en «Motivo» por qué lo anula (mínimo 10 caracteres).", true); return; }
+        using (_carga.Iniciar())
+        {
+            var r = await Identidades.AnularPaseAsync(pase.TenantPublicId, pase.PublicId, _motivoDelPase!.Trim());
+            Avisar(r.IsSuccess ? "Pase anulado." : r.ErrorMessage, !r.IsSuccess);
+            if (r.IsSuccess) _motivoDelPase = null;
+        }
+        await CargarPasesAsync();
     }
 
     private void Avisar(string? texto, bool error) { _mensaje = texto; _esError = error; }

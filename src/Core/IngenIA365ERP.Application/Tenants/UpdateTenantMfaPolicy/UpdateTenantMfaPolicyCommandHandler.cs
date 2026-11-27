@@ -81,8 +81,20 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
                 "a valer lo que valga el buzón.");
         }
 
+        // Feature 027: pases de ingreso. null = no tocar, como lo demás.
+        var pasesPedidos = request.PermitirPasesDeIngreso ?? policy.AllowLoginPass;
+        var horasDelPase = request.HorasMaximasDelPase ?? policy.LoginPassMaxHours;
+        if (horasDelPase is < 1 or > LoginPass.HorasMaximas)
+        {
+            return Result.Failure<UpdateTenantMfaPolicyResult>(
+                "Validation.TenantMfaPolicy.HorasDelPase",
+                $"La duración máxima del pase de ingreso está entre 1 y {LoginPass.HorasMaximas} horas.");
+        }
+
         var sinCambios =
             !esFilaNueva
+            && policy.AllowLoginPass == pasesPedidos
+            && policy.LoginPassMaxHours == horasDelPase
             && policy.IsRequired == request.IsRequired
             && policy.AllowedMethodsMask == mascaraPedida
             && policy.AllowEmailRecovery == recuperacionPedida
@@ -103,6 +115,17 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
         // misma petición estaba a punto de volver válida.
         policy.PermitirMetodos(mascaraPedida);
         policy.ConfigurarRecuperacionPorCorreo(recuperacionPedida, demoraPedida);
+
+        // Feature 027 (HU6): apagar los pases anula los vivos de la cooperativa en la misma transacción.
+        var apagaLosPases = policy.AllowLoginPass && !pasesPedidos;
+        policy.ConfigurarPasesDeIngreso(pasesPedidos, horasDelPase);
+        if (apagaLosPases)
+        {
+            var vivos = await adminDb.LoginPasses
+                .Where(p => p.TenantId == request.TenantPublicId && p.VoidedAt == null && p.ExpiresAt > now)
+                .ToListAsync(ct);
+            foreach (var pase in vivos) pase.Anular(now, LoginPass.Motivos.OpcionApagada, actor);
+        }
 
         if (request.IsRequired) policy.Enable(actor, now);
         else policy.Disable(actor, now);
@@ -142,6 +165,8 @@ public sealed class UpdateTenantMfaPolicyCommandHandler(
                     metodos = ConversionDeMetodosMfa.ALiterales(mascaraPedida),
                     recuperacionPorCorreo = recuperacionPedida,
                     horasDeDemora = demoraPedida,
+                    pasesDeIngreso = pasesPedidos,
+                    horasMaximasDelPase = horasDelPase,
                 }),
                 ChangedFields: cambiaronLosMetodos
                     ? ["IsRequired", "AllowedMethodsMask"]

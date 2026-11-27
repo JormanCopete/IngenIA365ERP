@@ -42,6 +42,21 @@ public interface ICentralJwtIssuer
         bool mfaVerified,
         MetodosMfa metodoMfa);
 
+    /// <summary>
+    /// Feature 027: la misma sesión, abierta con un pase de ingreso. Lleva el claim <c>login_pass_tenant</c> con la cooperativa del pase, y
+    /// con él la sesión no puede pasarse a otra. Es una sobrecarga y no un parámetro opcional para que las demás puertas sigan sin poder
+    /// olvidarse de nada: sólo el canje del pase y el refresh de una sesión de pase la usan.
+    /// </summary>
+    CentralAccessTokenResult IssueAccessToken(
+        Guid centralUserId,
+        string email,
+        bool isGlobalMasterAdmin,
+        Guid? activeTenantId,
+        bool? tenantAdmin,
+        bool mfaVerified,
+        MetodosMfa metodoMfa,
+        Guid paseDeIngresoCooperativa);
+
     /// <param name="metodoMfa">
     /// Sólo tiene sentido en el desafío de <c>tenant-select</c>, que es el único
     /// que se emite DESPUÉS de superar el segundo factor y por tanto el único que
@@ -89,4 +104,11 @@ public static class CentralJwtPurposes
 
     public static bool IsValid(string purpose) =>
         purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset or DocumentRequired or StepUp;
+}
+
+/// <summary>Feature 027: el claim que marca una sesión abierta con un pase de ingreso.</summary>
+public static class ClaimsDelPaseDeIngreso
+{
+    /// <summary>La cooperativa del pase (su PublicId). La sesión no puede cambiar a otra.</summary>
+    public const string Cooperativa = "login_pass_tenant";
 }

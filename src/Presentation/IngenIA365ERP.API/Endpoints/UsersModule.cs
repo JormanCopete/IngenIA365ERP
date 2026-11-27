@@ -83,6 +83,16 @@ public sealed class UsersModule : ICarterModule
         group.MapPost("/{publicId:guid}/send-recovery-link", SendRecoveryLinkAsync).WithName("Users_SendRecoveryLink")
             .RequirePermission("Security.Users.Update");
 
+        // Feature 027: pases de ingreso sin segundo factor (la ficha del usuario).
+        group.MapGet("/{publicId:guid}/login-passes", ListLoginPassesAsync).WithName("Users_ListLoginPasses")
+            .RequirePermission("Security.Users.GrantMfaBypass");
+        group.MapPost("/{publicId:guid}/login-passes", GrantLoginPassAsync).WithName("Users_GrantLoginPass")
+            .RequirePermission("Security.Users.GrantMfaBypass");
+        group.MapPost("/{publicId:guid}/login-passes/{passPublicId:guid}/resend", ResendLoginPassAsync).WithName("Users_ResendLoginPass")
+            .RequirePermission("Security.Users.GrantMfaBypass");
+        group.MapPost("/{publicId:guid}/login-passes/{passPublicId:guid}/void", VoidLoginPassAsync).WithName("Users_VoidLoginPass")
+            .RequirePermission("Security.Users.GrantMfaBypass");
+
         group.MapPost("/{publicId:guid}/unlock", UnlockAsync).WithName("Users_Unlock")
             .RequirePermission("Security.Users.Unlock");
 
@@ -148,6 +158,21 @@ public sealed class UsersModule : ICarterModule
         Guid publicId, ISender sender, CancellationToken ct) =>
         await sender.Send(new SendRecoveryLinkCommand(publicId), ct);
 
+    private static async Task<object?> ListLoginPassesAsync(Guid publicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.PasesDeIngreso.ListarPasesDelUsuarioQuery(publicId), ct);
+
+    private static async Task<object?> GrantLoginPassAsync(
+        Guid publicId, [FromBody] GrantLoginPassBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.PasesDeIngreso.ConcederPaseDeIngresoCommand(
+            publicId, body.Hours, body.Reason), ct);
+
+    private static async Task<object?> ResendLoginPassAsync(Guid publicId, Guid passPublicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.PasesDeIngreso.ReenviarPaseDeIngresoCommand(passPublicId), ct);
+
+    private static async Task<object?> VoidLoginPassAsync(
+        Guid publicId, Guid passPublicId, [FromBody] VoidLoginPassBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.PasesDeIngreso.AnularPaseDeIngresoCommand(passPublicId, body.Reason), ct);
+
     private static async Task<object?> UnlockAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
         await sender.Send(new UnlockUserCommand(publicId), ct);
@@ -176,6 +201,12 @@ public sealed record UsersListQueryParams(
 /// </summary>
 public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId, Guid? PersonPublicId = null);
 public sealed record AssignRoleBody(Guid RolePublicId);
+
+/// <summary>Feature 027: el cuerpo para conceder un pase de ingreso (horas 1 a 12, motivo 10 a 500).</summary>
+public sealed record GrantLoginPassBody(int Hours, string? Reason);
+
+/// <summary>Feature 027: el cuerpo para anular un pase de ingreso.</summary>
+public sealed record VoidLoginPassBody(string? Reason);
 public sealed record SetUserPersonBody(Guid? PersonPublicId);
 
 public sealed record SetUserPrintAliasBody(string? PrintAlias);

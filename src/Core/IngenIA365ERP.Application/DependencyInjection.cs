@@ -1003,6 +1003,9 @@ public static class DependencyInjection
         services.AddScoped<Identity.Politica.IInactividadDeLaCooperativa, Identity.Politica.InactividadDeLaCooperativa>();
         services.AddScoped<Identity.Documento.PropagadorDeIdentidad>();
         services.AddScoped<Identity.Documento.CorreosDeIdentidad>();
+        // Feature 027: pases de ingreso sin segundo factor.
+        services.AddScoped<Identity.PasesDeIngreso.ConcesionDePaseDeIngreso>();
+        services.AddScoped<Identity.PasesDeIngreso.IAvisosDelPaseDeIngreso, Identity.PasesDeIngreso.AvisosDelPaseDeIngreso>();
         services.AddScoped<Common.Interfaces.Identity.ICanalDeRecuperacion, Identity.Profile.RequestPasswordReset.CanalDeRecuperacionPorCorreo>();
         services.AddScoped<Identity.Correccion.CorregirDocumento.CorreccionDeDocumento>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();

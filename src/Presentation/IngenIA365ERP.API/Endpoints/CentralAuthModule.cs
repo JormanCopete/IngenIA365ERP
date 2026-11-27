@@ -54,6 +54,11 @@ public sealed class CentralAuthModule : ICarterModule
         // varias e2e encima construyendo ese cuerpo. Ensancharlo por un método
         // que ni siquiera manda un código habría sido romper el camino de entrada
         // para ahorrarse dos rutas.
+        // Feature 027: canjear un pase de ingreso en vez del código de la app. Con el token del desafío, como /mfa/verify.
+        anon.MapPost("/mfa/pass", UsarPaseDeIngresoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_MfaLoginPass");
+
         anon.MapPost("/mfa/webauthn/challenge", BeginWebAuthnAssertionAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_WebAuthnChallenge");
@@ -149,6 +154,13 @@ public sealed class CentralAuthModule : ICarterModule
             UserAgent: GetUserAgent(http)), ct);
 
     public sealed record MfaVerifyBody(string Code, bool UseRecoveryCode = false);
+
+    private static async Task<object?> UsarPaseDeIngresoAsync(
+        [FromBody] PaseDeIngresoBody body, HttpContext http, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.PasesDeIngreso.UsarPaseDeIngresoCommand(
+            body.Pass, GetIp(http), GetUserAgent(http)), ct);
+
+    public sealed record PaseDeIngresoBody(string? Pass);
 
     private static async Task<object?> RegistrarDocumentoAsync(
         [FromBody] RegistrarDocumentoBody body, ISender sender, CancellationToken ct) =>

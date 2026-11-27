@@ -109,4 +109,11 @@ public sealed record CentralRefreshSession(
     /// reuso (<c>Sesion:GraciaDeReusoSegundos</c>) se mide desde aquí. <c>null</c> en los que no rotaron y en los que rotaron antes
     /// de este campo (registros ya vivos en Redis el día del despliegue): sin el dato no hay gracia y el reuso se trata como siempre.
     /// </summary>
-    DateTime? ReplacedAt = null);
+    DateTime? ReplacedAt = null,
+
+    /// <summary>
+    /// Feature 027: la cooperativa del pase de ingreso con que se abrió la sesión. El refresh la arrastra y vuelve a sellar el claim
+    /// <c>login_pass_tenant</c>, así la sesión del pase no sale de esa cooperativa en ninguna rotación. <c>null</c> en toda otra sesión (y en
+    /// las que ya estaban en Redis el día del despliegue).
+    /// </summary>
+    Guid? PaseDeIngresoCooperativa = null);

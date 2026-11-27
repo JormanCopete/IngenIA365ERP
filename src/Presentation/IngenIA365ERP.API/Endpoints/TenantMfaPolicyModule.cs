@@ -33,7 +33,8 @@ public sealed class TenantMfaPolicyModule : ICarterModule
         ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdateTenantMfaPolicyCommand(
             tenantPublicId, body.IsRequired, body.MetodosAceptados,
-            body.PermitirRecuperacionPorCorreo, body.HorasDeDemora), ct);
+            body.PermitirRecuperacionPorCorreo, body.HorasDeDemora,
+            body.PermitirPasesDeIngreso, body.HorasMaximasDelPase), ct);
 
     /// <param name="MetodosAceptados">
     /// Literales: ["Totp"], ["WebAuthn"], o ambos. Omitirlo deja los metodos como
@@ -43,5 +44,7 @@ public sealed class TenantMfaPolicyModule : ICarterModule
         bool IsRequired,
         IReadOnlyList<string>? MetodosAceptados = null,
         bool? PermitirRecuperacionPorCorreo = null,
-        int? HorasDeDemora = null);
+        int? HorasDeDemora = null,
+        bool? PermitirPasesDeIngreso = null,
+        int? HorasMaximasDelPase = null);
 }

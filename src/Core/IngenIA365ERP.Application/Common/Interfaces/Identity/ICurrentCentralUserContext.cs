@@ -63,4 +63,10 @@ public interface ICurrentCentralUserContext
 
     /// <summary>true si hay un JWT central válido autenticado (CentralUserId no es null).</summary>
     bool IsAuthenticated { get; }
+
+    /// <summary>
+    /// Feature 027: claim <c>login_pass_tenant</c>. Si la sesión se abrió con un pase de ingreso, la cooperativa del pase; la sesión no puede
+    /// pasarse a otra. <c>null</c> en toda otra sesión.
+    /// </summary>
+    Guid? PaseDeIngresoCooperativa => null;
 }

@@ -77,7 +77,9 @@ public sealed record UserDetailDto(
     string? PersonName = null,
     string? PersonDocument = null,
     // 2026-11-15: el sobrenombre con que sale en los documentos impresos.
-    string? PrintAlias = null);
+    string? PrintAlias = null,
+    // Feature 027: la duración máxima del pase de ingreso si la cooperativa lo permite; null si no.
+    int? LoginPassMaxHours = null);
 
 public sealed record UserRoleDto(Guid PublicId, string Code, string Name);
 /// <summary>

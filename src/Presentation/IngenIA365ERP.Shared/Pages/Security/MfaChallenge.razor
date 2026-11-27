@@ -72,6 +72,30 @@
         </p>
     }
 
+    @* Feature 027: el pase de ingreso que dio un administrador reemplaza el código de la app. Desde el enlace del correo se canjea solo;
+       en la app del celular se pega aquí el enlace o el pase. *@
+    @if (_canjeandoPase)
+    {
+        <p class="aviso aviso-info" role="status" style="margin-top: var(--pad-lg);">Entrando con tu pase de ingreso…</p>
+    }
+    else if (_mostrarPase)
+    {
+        <div style="margin-top: var(--pad-lg);">
+            <label for="pase-de-ingreso">Pega aquí el enlace o el pase que te llegó al correo</label>
+            <InputText id="pase-de-ingreso" @bind-Value="_paseEscrito" autocomplete="off" autocapitalize="none" spellcheck="false" />
+            <button type="button" class="boton boton-secundario" disabled="@(_busy || string.IsNullOrWhiteSpace(_paseEscrito))"
+                    @onclick="() => CanjearPaseAsync(_paseEscrito!)">
+                Entrar con el pase
+            </button>
+        </div>
+    }
+    else
+    {
+        <p style="margin-top: var(--pad-lg); font-size: var(--texto-sm);">
+            <a href="" @onclick="() => _mostrarPase = true" @onclick:preventDefault>Tengo un pase de ingreso de mi administrador</a>
+        </p>
+    }
+
     <p style="margin-top: var(--pad-xl); font-size: var(--texto-sm);">
         <a href="" @onclick="ToggleMode" @onclick:preventDefault>
             @(_useRecovery ? "Usar el código de mi app de autenticación" : "¿No tienes tu app? Usa un código de recuperación")
@@ -126,6 +150,42 @@
 
     private DateTime? _recuperacionPedida;
     private bool _correoNoSalio;
+
+    private bool _mostrarPase;
+    private bool _canjeandoPase;
+    private string? _paseEscrito;
+
+    /// <summary>Feature 027: canjea el pase (del enlace o pegado). Si no sirve, se olvida y queda el código de siempre.</summary>
+    private async Task CanjearPaseAsync(string pase)
+    {
+        if (_busy) return;
+        _busy = true;
+        _canjeandoPase = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await AuthClient.UsarPaseDeIngresoAsync(pase);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                AuthClient.PaseDeIngreso = null;
+                _error = MapError(result.ErrorCode, result.ErrorMessage);
+                return;
+            }
+
+            Encaminar(result.Value);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _canjeandoPase = false;
+            _busy = false;
+        }
+    }
 
     /// <summary>
     /// Pide la recuperación por correo. Va con el challenge token, así que la
@@ -214,6 +274,13 @@
 
         _passkeysDisponibles = await Passkeys.EstaDisponibleAsync();
         StateHasChanged();
+
+        // Feature 027: llegó desde el enlace del pase de ingreso (el login lo guardó): se canjea sin pedir nada más.
+        if (AuthClient.PaseDeIngreso is { Length: > 0 } pase)
+        {
+            await CanjearPaseAsync(pase);
+            StateHasChanged();
+        }
     }
 
     /// <summary>
@@ -315,6 +382,10 @@
         "Identity.RetoVencido" =>
             "Pasó demasiado tiempo. Pulsa otra vez el botón de la llave.",
         "Identity.WebAuthnInvalido" => "La llave no se pudo verificar.",
+
+        // Feature 027: el servidor ya da el mensaje (genérico a propósito para el pase que no sirve).
+        "Identity.LoginPass.Invalid" or "Identity.LoginPass.DocumentRequired" =>
+            message ?? "El pase de ingreso no es válido o ya venció. Entra con tu app o pide otro pase a tu administrador.",
 
         _ => message ?? "No se pudo verificar el código.",
     };

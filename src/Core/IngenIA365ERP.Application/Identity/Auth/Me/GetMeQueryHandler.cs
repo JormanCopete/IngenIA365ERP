@@ -74,6 +74,7 @@ public sealed class GetMeQueryHandler(
                 : null,
             DocumentPending: documentPending,
             DocumentUsername: user.DocumentUsername,
-            DocumentRequiredFrom: exigencias));
+            DocumentRequiredFrom: exigencias,
+            LoginPassTenantPublicId: currentUser.PaseDeIngresoCooperativa));
     }
 }

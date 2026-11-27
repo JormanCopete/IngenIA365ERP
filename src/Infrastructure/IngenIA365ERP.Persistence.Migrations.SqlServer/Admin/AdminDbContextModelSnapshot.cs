@@ -519,6 +519,121 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                     b.ToTable("ADM_Invitations", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.LoginPass", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("CentralUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("GrantedByMaster")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("GrantedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastUsedIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SecurityStampAtGrant")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varbinary(32)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("UseCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VoidedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ADM_LoginPasses_TokenHash")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("CentralUserId", "TenantId")
+                        .HasDatabaseName("IX_ADM_LoginPasses_CentralUserId_TenantId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("TenantId", "GrantedAt")
+                        .HasDatabaseName("IX_ADM_LoginPasses_TenantId_GrantedAt")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("ADM_LoginPasses", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Admin.MfaCredential", b =>
                 {
                     b.Property<int>("Id")
@@ -1988,6 +2103,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("AllowLoginPass")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<int>("AllowedMethodsMask")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -2023,6 +2143,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Admin
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<int>("LoginPassMaxHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(12);
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
