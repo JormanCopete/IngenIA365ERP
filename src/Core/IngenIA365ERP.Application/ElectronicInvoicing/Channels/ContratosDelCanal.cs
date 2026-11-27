@@ -149,7 +149,8 @@ public sealed record ContextoDeCanal(
 {
     /// <summary>Los parámetros del canal de una vigencia de configuración. (nuevo, 028)</summary>
     public static ParametrosDelCanal ParametrosDe(Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting configuracion) =>
-        new(configuracion.ChannelTenantId, configuracion.ChannelEndpoint);
+        new(configuracion.ChannelTenantId, configuracion.ChannelEndpoint,
+            configuracion.EmailDeliveryBy == Domain.Enums.ElectronicInvoicing.EmailDeliveryBy.Channel);
 
     /// <summary>
     /// <c>{tenantPublicId:N}:{Environment}:{Prefix}{Consecutive}:v{VersionNumber}</c> (contracts/dian.md §6.2), p. ej.

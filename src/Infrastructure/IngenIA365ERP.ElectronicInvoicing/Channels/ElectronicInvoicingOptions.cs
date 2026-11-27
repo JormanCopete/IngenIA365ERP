@@ -57,6 +57,26 @@ public sealed class OpcionesDeCanal
     /// mientras contrata el proveedor no debe ver ventas colgadas ni contingencias por el documento del cliente (2026-11-10).
     /// </summary>
     public bool? SimulateScenarios { get; set; }
+
+    /// <summary>
+    /// Feature 028 (contracts/canal-conecta.md §3): la lista blanca de extremos del canal, clave → URL base (<c>QA</c> →
+    /// <c>https://conecta-qa.ingenia365.com</c>). La vigencia guarda sólo la clave, así la credencial nunca viaja a un host leído de la base.
+    /// Un canal de Conecta sin extremos no se registra.
+    /// </summary>
+    public Dictionary<string, string> Endpoints { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Feature 028: cuánto espera <c>EmitirAsync</c> la decisión tras el 202, consultando (nunca reenviando). 0 = no espera.</summary>
+    public int SyncWaitSeconds { get; set; } = 8;
+
+    /// <summary>Feature 028: cada cuánto consulta durante esa espera.</summary>
+    public int PollIntervalMs { get; set; } = 500;
+
+    /// <summary>
+    /// Feature 028, compuerta del pedido D1: si Conecta ya acepta el número que asigna el ERP en este extremo. Mientras sea falso (el defecto),
+    /// «Verificar credencial» falla con <c>CONECTA-NUMERACION-DEL-ERP</c> y la guardia no deja emitir: Conecta numeraría distinto al ERP.
+    /// Lo enciende operaciones cuando Conecta despliegue la numeración del cliente.
+    /// </summary>
+    public bool ConectaAceptaNumeroDelErp { get; set; }
 }
 
 /// <summary><c>ElectronicInvoicing:Retries</c> (§6.3): 15 s, 1, 2, 5, 15, 30 y 60 minutos, después cada hora; y el arrendamiento de fila. (nuevo)</summary>

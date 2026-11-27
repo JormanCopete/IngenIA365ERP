@@ -2,7 +2,9 @@ using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.ElectronicInvoicing.Channels;
 using IngenIA365ERP.Application.ElectronicInvoicing.Documents;
+using IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 using IngenIA365ERP.ElectronicInvoicing.Channels;
+using IngenIA365ERP.ElectronicInvoicing.Channels.Conecta;
 using IngenIA365ERP.ElectronicInvoicing.Channels.Simulado;
 using IngenIA365ERP.ElectronicInvoicing.Circuit;
 using IngenIA365ERP.ElectronicInvoicing.Credentials;
@@ -22,8 +24,9 @@ namespace IngenIA365ERP.ElectronicInvoicing;
 /// del contrato) por los reales. Registra:
 /// <list type="bullet">
 /// <item>la sección técnica <c>ElectronicInvoicing</c> (<see cref="ElectronicInvoicingOptions"/>) y las esperas de <c>ElectronicInvoicing:Retries</c>;</item>
-/// <item>los canales: <see cref="CanalSimulado"/> (con su memoria) y el registro <see cref="CanalesDeEmision"/>; el adaptador del proveedor
-/// (T732) y <c>CanalServicioCentral</c> (T733) se suman aquí cuando existan, con sus clientes HTTP (<see cref="AgregarClientesDelCanal"/>);</item>
+/// <item>los canales: <see cref="CanalSimulado"/> (con su memoria), los dos de IngenIA Conecta (feature 028: <c>CONECTA-PRUEBAS</c> si su
+/// sección trae extremos, <c>CONECTA</c> además sólo en un proceso de producción) con sus clientes HTTP (<see cref="AgregarClientesDelCanal"/>)
+/// y el registro <see cref="CanalesDeEmision"/>;</item>
 /// <item>las credenciales en archivo (<see cref="CredencialesEnArchivo"/>, con su caché);</item>
 /// <item>el circuito (<see cref="CircuitoDeCanal"/>, que es el <see cref="IRegistroDeFallasDelCanal"/>);</item>
 /// <item>el procesador (<see cref="ProcesadorDeDocumentosElectronicos"/>) como singleton, <b>sin</b> <c>AddHostedService</c>: lo arranca
@@ -38,8 +41,12 @@ public static class DependencyInjection
     /// Si la base ya está migrada (en la API, <c>DatabaseReadiness.IsReady</c>): el procesador no arranca antes. Este proyecto no conoce
     /// Persistence, así que la condición la da quien lo compone; nula = siempre lista.
     /// </param>
+    /// <param name="procesoDeProduccion">
+    /// Feature 028: si el proceso es el de producción (<c>IHostEnvironment.IsProduction()</c>). Sin él, el canal <c>CONECTA</c> (validez legal) no
+    /// se registra aunque su sección exista: doble seguro sobre la guardia.
+    /// </param>
     public static IServiceCollection AddElectronicInvoicing(this IServiceCollection services, IConfiguration configuration,
-        Func<IServiceProvider, bool>? baseLista = null)
+        Func<IServiceProvider, bool>? baseLista = null, bool procesoDeProduccion = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -62,6 +69,18 @@ public static class DependencyInjection
         {
             if (string.Equals(canal, CanalSimulado.Codigo, StringComparison.OrdinalIgnoreCase)) continue;
             AgregarClientesDelCanal(services, canal, opciones ?? new OpcionesDeCanal());
+        }
+
+        // IngenIA Conecta (feature 028).
+        services.TryAddSingleton<TokensDeConecta>();
+        foreach (var codigo in new[] { EsquemaDelCanonico.CanalConectaPruebas, EsquemaDelCanonico.CanalConecta })
+        {
+            var opcionesDeConecta = leidas.Canal(codigo);
+            if (opcionesDeConecta.Endpoints.Count == 0) continue;
+            if (codigo == EsquemaDelCanonico.CanalConecta && !procesoDeProduccion) continue;
+            services.AddSingleton<ICanalDeEmisionElectronica>(sp => new CanalConecta(codigo, sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IOptions<ElectronicInvoicingOptions>>(), sp.GetRequiredService<TokensDeConecta>(),
+                sp.GetRequiredService<ILogger<CanalConecta>>()));
         }
 
         // Credenciales en archivo (§11).

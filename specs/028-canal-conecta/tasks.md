@@ -36,27 +36,34 @@ lo pida.
 
 ## C2 — Adaptador
 
-- [ ] T020 `OpcionesDeCanal`: `Endpoints`, `SyncWaitSeconds`, `PollIntervalMs`; `ExtremosDeConecta` (lista blanca,
-  https salvo Development)
-- [ ] T021 DTOs de Conecta en el adaptador (copia mínima de `InvoiceRequest`, `NoteRequest`, `DocumentSummary`,
-  `IssueInvoiceResult`, Problem Details), sin referenciar el repositorio Conecta365
-- [ ] T022 `TraductorAConecta` (puro, contrato §4) + casos dorados JSON en
-  `tests/IngenIA365ERP.Application.Tests/ElectronicInvoicing/Canales/Conecta/Casos/`
-- [ ] T023 `TraductorDeResultadosConecta` (puro, contrato §6–§7) + una prueba por fila
-- [ ] T024 `TokensDeConecta` (caché por extremo, cliente y huella; renovación) + pruebas con reloj falso
-- [ ] T025 `ClienteConecta` sobre los dos `HttpClient` de `AgregarClientesDelCanal` (emisión sin reintentos,
-  consulta con resiliencia); clave de idempotencia UUID v5
-- [ ] T026 `CanalConecta` (dos registros: `CONECTA-PRUEBAS` siempre; `CONECTA` sólo con su sección y en un proceso de
-  producción), `IDeclaraEsquemaDeCredenciales`, espera síncrona tras el 202, comprobación del número y del ambiente,
-  artefactos, `ProbarAsync` (contrato §9)
-- [ ] T027 Alertas: `Dian.TotalesDelCanalDistintos` (D7) y uso de las existentes para `CONECTA-NUMERO`,
-  `CONECTA-AMBIENTE`, `CONECTA-DUPLICADO`
-- [ ] T028 `ConectaStubHandler` (tests) con los escenarios del plan §7; `CanalConectaConformidadTests :
-  ConformidadDelCanal`
-- [ ] T029 Arquitectura: `ElProveedorTecnologicoSoloLoConoceSuAdaptador` ampliada; `ElSecretoDeConectaSoloViajaALa
-  ListaBlanca`; `LasCredencialesDeFacturacionNoTocanLaBase` revisada
-- [ ] T030 `DependencyInjection`: registro y retiro de la mención a `CanalServicioCentral`; borrar
-  `Channels/ServicioCentral/.gitkeep`
+- [x] T020 `OpcionesDeCanal`: `Endpoints`, `SyncWaitSeconds`, `PollIntervalMs` y la compuerta de D1
+  `ConectaAceptaNumeroDelErp` (falsa por defecto: la verificación falla con `CONECTA-NUMERACION-DEL-ERP` hasta que
+  Conecta acepte el número del ERP y operaciones la encienda). La lista blanca exige https, salvo un servidor local
+- [x] T021 DTOs de Conecta en `ModeloDeConecta.cs`, con los nombres del OpenAPI, sin referenciar el repositorio Conecta365
+- [x] T022 `TraductorAConecta` (puro). Las pruebas afirman campo por campo sobre el JSON enviado, sin archivos dorados
+  aparte: número del ERP, tenant, porcentajes, nombres separados, régimen, D2, D3, D9, notas con factura referida
+- [x] T023 `TraductorDeResultadosConecta` (puro); una prueba por fila de la tabla de errores
+- [x] T024 `TokensDeConecta` (caché por extremo, cliente y huella del secreto; un pedido a la vez; renovación tras 401)
+- [x] T025 Transporte dentro de `CanalConecta` sobre los dos `HttpClient` de `AgregarClientesDelCanal`; clave de
+  idempotencia UUID v5 de la clave del ERP
+- [x] T026 `CanalConecta`:
+  - dos registros: `CONECTA-PRUEBAS` con extremos; `CONECTA` además en un proceso de producción, por el parámetro
+    nuevo `procesoDeProduccion` de `AddElectronicInvoicing`;
+  - espera síncrona tras el 202;
+  - comprobación del número y del ambiente;
+  - «validado» sólo con los tres artefactos;
+  - QR del `sts:QRCode`;
+  - `ProbarAsync` con ambiente, NIT, `missing` y D1
+- [x] T027 Sin alerta nueva. `CONECTA-NUMERO`, `CONECTA-AMBIENTE` y `CONECTA-DUPLICADO` son `InvalidData`, que ya
+  levanta `Dian.DocumentoRechazado`. La diferencia de totales (D7, puente) queda como notificación `CONECTA-TOTALES`
+  en la transmisión. El adaptador no tiene `IAlertas`; la alerta crítica llega con el pedido D7 de Conecta, que
+  rechaza antes de consumir el número
+- [x] T028 `ConectaStubHandler` y `CanalConectaConformidadTests : ConformidadDelCanal`, más `CanalConectaTests`
+  (71 pruebas del canal en total)
+- [x] T029 Arquitectura: `ElSecretoDeConectaSoloViajaALaListaBlanca` (no lee la base, un solo sitio convierte texto en
+  URL y lo toma de la lista, no registra secretos). `ElProveedorTecnologicoSoloLoConoceSuAdaptador` y
+  `LasCredencialesDeFacturacionNoTocanLaBase` siguen verdes sin cambios: 930 de arquitectura
+- [x] T030 `DependencyInjection`: registro de Conecta y retiro de `Channels/ServicioCentral`
 
 ## C3 — Pantalla, operación y GitOps
 

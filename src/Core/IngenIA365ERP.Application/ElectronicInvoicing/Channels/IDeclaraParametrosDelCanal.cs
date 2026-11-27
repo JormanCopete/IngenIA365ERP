@@ -31,7 +31,11 @@ public interface IDeclaraParametrosDelCanal
 /// </summary>
 /// <param name="TenantId">El tenant de la cooperativa en el servicio externo.</param>
 /// <param name="Endpoint">La clave del extremo de la lista blanca.</param>
-public sealed record ParametrosDelCanal(Guid? TenantId, string? Endpoint);
+/// <param name="CanalEntregaCorreo">
+/// <c>EmailDeliveryBy = Channel</c>: el canal entrega el documento al comprador. Si no, el adaptador no le pasa el correo, para que no haya dos
+/// correos (plan 028 D9).
+/// </param>
+public sealed record ParametrosDelCanal(Guid? TenantId, string? Endpoint, bool CanalEntregaCorreo = false);
 
 /// <summary>Las reglas de configuración de un canal con parámetros (contracts/canal-conecta.md §9). Puras. (nuevo)</summary>
 public static class ReglasDeParametrosDelCanal
