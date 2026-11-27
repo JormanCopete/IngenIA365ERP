@@ -2,8 +2,11 @@ using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Domain.Lending.Payoffs;
 
-/// <summary>La cuota causada de un crédito recogido a la fecha proyectada: su número y su valor (feature 028, FR-003). (nuevo)</summary>
-public sealed record CuotaCausadaDeRecogida(int Numero, decimal Valor);
+/// <summary>
+/// La cuota causada de un crédito recogido a la fecha proyectada: su número, su valor pendiente y su vencimiento (feature 028, FR-003; el vencimiento,
+/// desde T010: no se guarda, sale del plan). (nuevo)
+/// </summary>
+public sealed record CuotaCausadaDeRecogida(int Numero, decimal Valor, DateOnly? Vencimiento = null);
 
 /// <summary>
 /// Lo que la liquidación de una recogida dice a la fecha proyectada D con la información hasta R (feature 028, R3), como lo guarda la solicitud

@@ -259,9 +259,21 @@ public static class AplicadorDePagos
     public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(estado);
-        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario).Sum(l => l.Monto) : 0m;
+        var extra = cuotaCompleta ? InteresDeLaCuotaCompleta(estado, periodoCalendario).Sum(l => l.Monto) : 0m;
         var noCobrado = periodoCalendario && !estado.EnUvr ? InteresSinTramo(estado, estado.Fecha).Sum(l => l.Monto) : 0m;
         return Math.Max(0m, estado.ValorParaCancelar + extra - noCobrado);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R3): lo que una cancelación con la cuota completa agrega a lo causado —el interés de la cuota en curso que falta por causar
+    /// (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>)—, por cuota y concepto; por período calendario, sólo el de un tramo ya empezado.
+    /// Vacío en UVR. Es la misma regla con que cobran <see cref="ValorParaCancelar"/> y la cancelación: la liquidación de la recogida la usa para desglosar
+    /// «el interés que se cobra por la cuota completa». (nuevo)
+    /// </summary>
+    public static IReadOnlyList<LineaDeDistribucion> InteresDeLaCuotaCompleta(EstadoDelCredito estado, bool periodoCalendario = false)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.EnUvr ? [] : DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario);
     }
 
     /// <summary>
@@ -334,7 +346,7 @@ public static class AplicadorDePagos
         bool cuotaCompleta, bool periodoCalendario)
     {
         var corrida = Cancelacion(estado, cubetas, salida, avisos);
-        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario) : [];
+        var extra = cuotaCompleta ? InteresDeLaCuotaCompleta(estado, periodoCalendario) : [];
         if (extra.Count == 0) return corrida;
         var regulares = cubetas.Sum(c => c.Monto);
         var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos);

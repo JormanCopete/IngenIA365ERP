@@ -24,10 +24,10 @@ Rutas: `Dom` = `src/Core/IngenIA365ERP.Domain`, `App` = `src/Core/IngenIA365ERP.
 - [X] T006 Configuraciones `CreditApplicationPayoffConfiguration` y `DisbursementPayoffConfiguration` (`ComoEntidadDeCartera`, índice único filtrado de la proyectada, índice por `LoanId`) en `Pers/Configurations/Lending/Payoffs/`; `DbSet` en `App/Common/Interfaces/IApplicationDbContext*.cs` y el contexto
 - [X] T007 Migración `RecogidaDeCreditos` en los dos motores con `tools/scripts/add-migration.ps1 -Name RecogidaDeCreditos -Context Application` (fechada después de `EsquemaBase`), con el SQL que copia `LND_CreditApplications.PayoffRequest` a filas `Loan`; `tools/scripts/check-migration-parity.ps1`
 - [X] T008 Comparador puro de desgloses `DiferenciaDeRecogida` (por concepto, con la causa) en `Dom/Lending/Payoffs/DiferenciaDeRecogida.cs`, con casos en `TD/Lending/Payoffs/DiferenciaDeRecogidaTests.cs`
-- [ ] T009 `InteresesAlCancelar.ModoAlRecogerAsync` (R5: `ComoAlCancelar`/`Si`/`No`, excepciones legales) en `App/Lending/Common/InteresesAlCancelar.cs`
-- [ ] T010 `LiquidacionDeRecogida` (R3): reconstrucción a (D, R), modo de intereses, desglose, bloqueos (mora, castigo, insolvencia, sin saldo), huella; reemplaza `MotorDeCreditoEnDesembolso.LiquidarAsync` en `App/Lending/Payoffs/LiquidacionDeRecogida.cs` y `App/Lending/Disbursements/IMotorDeCreditoEnDesembolso.cs`; registro en `App/DependencyInjection.cs`
-- [ ] T011 [P] Pruebas de `LiquidacionDeRecogida`: tres modos de intereses × causación diaria, al inicio del ciclo y por período calendario; vivienda; tope del prepago; anticipo y saldo a favor, en `TA/Lending/Payoffs/LiquidacionDeRecogidaTests.cs`
-- [ ] T012 [P] Regla de arquitectura `LaRecogidaSeLiquidaEnUnSoloSitio` en `TR/Principles/LaRecogidaSeLiquidaEnUnSoloSitio.cs`
+- [X] T009 `InteresesAlCancelar.ModoAlRecogerAsync` (R5: `ComoAlCancelar`/`Si`/`No`, excepciones legales) en `App/Lending/Common/InteresesAlCancelar.cs`
+- [X] T010 `LiquidacionDeRecogida` (R3): reconstrucción a (D, R), modo de intereses, desglose, bloqueos (mora, castigo, insolvencia, sin saldo), huella; reemplaza `MotorDeCreditoEnDesembolso.LiquidarAsync` en `App/Lending/Payoffs/LiquidacionDeRecogida.cs` y `App/Lending/Disbursements/IMotorDeCreditoEnDesembolso.cs`; registro en `App/DependencyInjection.cs`
+- [X] T011 [P] Pruebas de `LiquidacionDeRecogida`: tres modos de intereses × causación diaria, al inicio del ciclo y por período calendario; vivienda; tope del prepago; anticipo y saldo a favor, en `TA/Lending/Payoffs/LiquidacionDeRecogidaTests.cs`
+- [X] T012 [P] Regla de arquitectura `LaRecogidaSeLiquidaEnUnSoloSitio` en `TR/Principles/LaRecogidaSeLiquidaEnUnSoloSitio.cs`
 - [X] T013 `PayoffInput` (R1) y la traducción de `ownLoanPayoffs` en `App/Lending/Payoffs/PayoffInput.cs`; ambos cuerpos a la vez → `Request.BodyInvalid`
 
 ## Fase 3 — HU1: ver los productos y simular al vender (P1, E1) 🎯
@@ -95,7 +95,7 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 ## Fase 7 — HU5 e HU8: intereses proporcionales e informe (P2, E1)
 
-- [ ] T050 [US5] La recogida aplica el modo de `ModoAlRecogerAsync` sellado en la decisión del pago (`FullPayoff` con el modo) en `App/Lending/Disbursements/RecogidaEnElDesembolso.cs` y `App/Lending/Payments/AplicacionDePagos.cs`
+- [X] T050 [US5] La recogida aplica el modo de `ModoAlRecogerAsync` sellado en la decisión del pago (`FullPayoff` con el modo) en `App/Lending/Disbursements/RecogidaEnElDesembolso.cs` y `App/Lending/Payments/AplicacionDePagos.cs`
 - [ ] T051 [US5] Explicación en el desglose («interés devuelto: N días», «se cobra el proporcional por el tope del prepago») en `LiquidacionDeRecogida` y en `ProductosParaRecoger.razor`
 - [ ] T052 [P] [US5] Pruebas de los escenarios de HU5 (1–3) en `TA/Lending/Payoffs/InteresesProporcionalesTests.cs`
 - [ ] T053 [US8] Vista `payoffs` (`TablaExportable`, filtros período, oficina, línea, asesor, producto; datos personales) en `App/Lending/Reports/Vistas/PayoffsReportQuery.cs` y su registro en el catálogo de vistas de Cartera

@@ -13,7 +13,15 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Lending.Disbursements;
 
 /// <summary>Lo que cuesta cancelar un crédito recogido a la fecha valor, y sus días de mora. (nuevo)</summary>
-public sealed record LiquidacionParaRecogida(decimal ParaCancelar, int DiasDeMora, bool PerdioCapacidad);
+public sealed record LiquidacionParaRecogida(decimal ParaCancelar, int DiasDeMora, bool PerdioCapacidad)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, T010): en el desembolso, la liquidación completa de la recogida (<see cref="Payoffs.LiquidacionDeRecogida"/>: desglose,
+    /// modo de intereses, cuota causada, huella, avisos); nula en el cruce del retiro, que sigue con <see cref="IMotorDeCreditoEnDesembolso.LiquidarAsync"/>.
+    /// (nuevo)
+    /// </summary>
+    public Payoffs.LiquidacionDeCreditoRecogido? Detalle { get; init; }
+}
 
 /// <summary>
 /// Lo que el desembolso necesita del motor del crédito (feature 013, US3; T0443, T0444 pasos 3, T0447): <b>punto de extensión</b> con firma
@@ -23,7 +31,10 @@ public sealed record LiquidacionParaRecogida(decimal ParaCancelar, int DiasDeMor
 /// </summary>
 public interface IMotorDeCreditoEnDesembolso
 {
-    /// <summary>La liquidación de un crédito recogido a <paramref name="fecha"/> (lo que muestra la vista previa como <c>toPayOff</c>).</summary>
+    /// <summary>
+    /// La liquidación de un crédito a <paramref name="fecha"/> con el modo de intereses de la caja. 2026-11-27 (feature 028, T010): la usa sólo el cruce del
+    /// retiro del asociado; la recogida del desembolso se liquida en <see cref="Payoffs.LiquidacionDeRecogida"/> (<c>LaRecogidaSeLiquidaEnUnSoloSitio</c>).
+    /// </summary>
     Task<LiquidacionParaRecogida> LiquidarAsync(int loanId, DateOnly fecha, CancellationToken ct);
 
     /// <summary>

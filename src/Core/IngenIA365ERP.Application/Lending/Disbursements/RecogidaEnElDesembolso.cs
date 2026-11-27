@@ -40,7 +40,7 @@ public sealed class RecogidaEnElDesembolso(IContratoDeObligaciones contrato)
             operacion.ValueDate,
             ClaseDeMedioDeRecaudo.InternalOffset,
             deudor,
-            new ReferenciaDeRecibo(operacion.Number, operacion.ValueDate, null, null, "LoanDisbursement"))).ToList();
+            new ReferenciaDeRecibo(operacion.Number, operacion.ValueDate, null, null, Common.InteresesAlCancelar.DocumentoDelDesembolso))).ToList();
         var respuesta = await contrato.AplicarAsync(new SolicitudDeAplicacion(Recaudador, FormaDeAplicacion.NonInteractive, pagos, []), ct);
 
         var aplicadas = new List<RecogidaAplicada>(recogidas.Count);

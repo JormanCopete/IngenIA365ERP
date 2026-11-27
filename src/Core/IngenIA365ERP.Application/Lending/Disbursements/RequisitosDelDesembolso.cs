@@ -13,6 +13,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
@@ -137,7 +138,7 @@ public sealed class RequisitosDelDesembolso(
     ReglasDeParametrosDeCartera parametros,
     ILectorDeParametros lector,
     ValidacionPreviaContableDeCartera validacionPrevia,
-    IMotorDeCreditoEnDesembolso motor,
+    LiquidacionDeRecogida liquidacionDeRecogida,
     EmisionDeCartera emision,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
@@ -438,7 +439,11 @@ public sealed class RequisitosDelDesembolso(
             bancoId, codigo, tipo, cuenta));
     }
 
-    /// <summary>Las recogidas pedidas: sólo las que autoriza la solicitud (FR-046), del deudor, vivas, con su liquidación a la fecha valor.</summary>
+    /// <summary>
+    /// Las recogidas pedidas: sólo las que autoriza la solicitud (FR-046), del deudor, vivas, con su liquidación a la fecha valor. 2026-11-27 (feature 028,
+    /// T010): la liquidación sale de <see cref="LiquidacionDeRecogida"/> —el único sitio que liquida una recogida—, que cobra lo mismo que aplica el
+    /// contrato con el modo de <c>Recogida.InteresesProporcionales</c>; lo que no se puede liquidar bloquea con su código.
+    /// </summary>
     private async Task<IReadOnlyList<RecogidaEvaluada>> RecogidasAsync(CreditApplication s, DisbursementInput e, DateOnly fecha, List<Error> hallados,
         CancellationToken ct)
     {
@@ -462,7 +467,13 @@ public sealed class RequisitosDelDesembolso(
                 hallados.Add(ErroresDeDesembolso.RecogidaNoAutorizada(pedido.LoanPublicId));
                 continue;
             }
-            var liquidacion = await motor.LiquidarAsync(credito.Id, fecha, ct);
+            var liquidada = await liquidacionDeRecogida.LiquidarCreditoAsync(credito, fecha, null, ct);
+            if (liquidada.IsFailure)
+            {
+                hallados.Add(liquidada.Error);
+                continue;
+            }
+            var liquidacion = new LiquidacionParaRecogida(liquidada.Value.ValorARecoger, liquidada.Value.DiasDeMora, false) { Detalle = liquidada.Value };
             var modo = string.Equals(pedido.Mode, ModoParcial, StringComparison.OrdinalIgnoreCase) ? ModoParcial : ModoTotal;
             var aplicar = modo == ModoParcial ? Math.Min(pedido.Amount ?? 0m, liquidacion.ParaCancelar) : liquidacion.ParaCancelar;
             var r = new RecogidaEvaluada(credito.Id, credito.PublicId, credito.Number, modo, aplicar, liquidacion);

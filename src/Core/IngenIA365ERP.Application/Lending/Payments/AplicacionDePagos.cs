@@ -154,10 +154,12 @@ public sealed class AplicacionDePagos(
     /// 2026-11-26 (pedido del dueño): con <paramref name="previos"/> —los pagos que van antes en el mismo recibo a la misma obligación—, cada uno se reparte
     /// sobre el estado que deja el anterior y entra a la reconstrucción como un pago más (sin escribir), y éste se distribuye sobre lo que dejan todos: lo mismo
     /// que pasa al aplicar el lote en orden dentro de una transacción. Así se simulan juntos lo vencido y una cuota anticipada del mismo recibo.
+    /// 2026-11-27 (feature 028, T050): con <paramref name="recogida"/> —la recogida del crédito en el desembolso de otro—, el modo de intereses de la
+    /// cancelación sale de <c>Recogida.InteresesProporcionales</c> (<see cref="InteresesAlCancelar.ModoAlRecogerAsync"/>), no del parámetro de la caja.
     /// </remarks>
     public async Task<Result<PagoDistribuido>> DistribuirAsync(Loan credito, PaymentModality modalidad, decimal valor, DateOnly fechaValor,
         PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, CancellationToken ct, DateOnly? seriesHasta = null, DateTime? informacionHasta = null,
-        IReadOnlyList<PagoPrevioDeDistribucion>? previos = null)
+        IReadOnlyList<PagoPrevioDeDistribucion>? previos = null, bool recogida = false)
     {
         ArgumentNullException.ThrowIfNull(credito);
         var cargado = await cargador.CargarAsync(credito.Id, null, seriesHasta is { } h && h > fechaValor ? h : fechaValor, ct);
@@ -168,16 +170,16 @@ public sealed class AplicacionDePagos(
         {
             var previo = anteriores[k];
             var r = await DistribuirSobreAsync(credito, cargado, previo.Modalidad, previo.Valor, fechaValor, previo.Eleccion, previo.Cuota, usaPreferencia: false,
-                informacionHasta, ct);
+                informacionHasta, recogida: false, ct);
             if (r.IsFailure) return r;
             // Después de los pagos guardados y antes del que se simula (Despues usa int.MaxValue): la reconstrucción ordena por fecha valor y secuencia.
             cargado = cargado with { Entrada = ConPago(r.Value, r.Value.Distribucion, int.MaxValue - (anteriores.Count - k)) };
         }
-        return await DistribuirSobreAsync(credito, cargado, modalidad, valor, fechaValor, eleccion, cuota, usaPreferencia, informacionHasta, ct);
+        return await DistribuirSobreAsync(credito, cargado, modalidad, valor, fechaValor, eleccion, cuota, usaPreferencia, informacionHasta, recogida, ct);
     }
 
     private async Task<Result<PagoDistribuido>> DistribuirSobreAsync(Loan credito, CreditoCargado cargado, PaymentModality modalidad, decimal valor,
-        DateOnly fechaValor, PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, DateTime? informacionHasta, CancellationToken ct)
+        DateOnly fechaValor, PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, DateTime? informacionHasta, bool recogida, CancellationToken ct)
     {
         var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fechaValor);
         if (estado.Plan is null) return Result.Failure<PagoDistribuido>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
@@ -189,8 +191,9 @@ public sealed class AplicacionDePagos(
             eleccion = await preferencias.EleccionDelCreditoAsync(credito.Id, informacionHasta ?? reloj.UtcNow, ct);
             dePreferencia = eleccion is not null;
         }
-        // 2026-11-16 (pedido del dueño): cómo cobra una cancelación el interés de la cuota en curso, a la fecha valor.
-        var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct);
+        // 2026-11-16 (pedido del dueño): cómo cobra una cancelación el interés de la cuota en curso, a la fecha valor. 2026-11-27 (feature 028, T050): la
+        // recogida del desembolso, con Recogida.InteresesProporcionales.
+        var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct, recogida);
         // 2026-11-24 (feature 025, fase 5, HU5; D3): si la línea causa por período calendario a la fecha valor (nunca en UVR).
         var calendario = await PeriodoCalendarioAsync(credito, estado, fechaValor, ct);
         if (valor <= 0m && modalidad is PaymentModality.FullPayoff or PaymentModality.PastDue)
@@ -277,14 +280,31 @@ public sealed class AplicacionDePagos(
     /// (<see cref="InteresesAlCancelar"/>). Sólo una modalidad que puede cancelar (<c>FullPayoff</c> o el abono extraordinario que alcanza el capital por
     /// vencer) lo pregunta; las demás, un crédito en UVR (vivienda) y un programa sin el servicio cobran el corrido. (nuevo)
     /// </summary>
+    /// <param name="recogida">2026-11-27 (feature 028, T050): es la recogida del crédito en el desembolso de otro (<see cref="EsRecogidaDelDesembolso"/>):
+    /// el modo sale de <c>Recogida.InteresesProporcionales</c> (<see cref="InteresesAlCancelar.ModoAlRecogerAsync"/>; de fábrica, lo mismo que la caja).</param>
     public async Task<ModoDeInteresesAlCancelar> ModoAsync(Loan credito, EstadoDelCredito estado, PaymentModality modalidad, DateOnly fecha,
-        CancellationToken ct)
+        CancellationToken ct, bool recogida = false)
     {
         ArgumentNullException.ThrowIfNull(credito);
         ArgumentNullException.ThrowIfNull(estado);
         if (intereses is null || estado.EnUvr || modalidad is not (PaymentModality.FullPayoff or PaymentModality.ExtraordinaryPrincipal))
             return ModoDeInteresesAlCancelar.Corrido;
-        return await intereses.ModoAsync(credito, estado.RulesVersion, fecha, ct);
+        return recogida
+            ? await intereses.ModoAlRecogerAsync(credito, estado.RulesVersion, fecha, ct)
+            : await intereses.ModoAsync(credito, estado.RulesVersion, fecha, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T050): ¿el pago es la recogida del crédito en el desembolso de otro? El recaudador de clase <c>OwnLoanPayoff</c> con el
+    /// documento del desembolso (<c>Receipt.DocumentKind</c> = <see cref="InteresesAlCancelar.DocumentoDelDesembolso"/>). El cruce del retiro del asociado y
+    /// el débito automático también pagan con <c>OwnLoanPayoff</c>, pero con otro documento: siguen con el modo de la caja. (nuevo)
+    /// </summary>
+    public static bool EsRecogidaDelDesembolso(Recaudador recaudador, PagoAAplicar pago)
+    {
+        ArgumentNullException.ThrowIfNull(recaudador);
+        ArgumentNullException.ThrowIfNull(pago);
+        return recaudador.Class == ClaseDeRecaudador.OwnLoanPayoff
+               && string.Equals(pago.Receipt?.DocumentKind, InteresesAlCancelar.DocumentoDelDesembolso, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -381,7 +401,9 @@ public sealed class AplicacionDePagos(
             return Falla(ErroresDePagos.PreferenciaFaltante());
         var distribuido = await DistribuirAsync(credito, modalidad, pago.Amount, v, ComprobantesDePago.Eleccion(pago.Choice), pago.InstallmentNumber,
             usaPreferencia: p.Forma == FormaDeAplicacion.NonInteractive, ct, seriesHasta: marca,
-            informacionHasta: control.LastRegisteredAt >= reloj.UtcNow ? control.LastRegisteredAt.AddTicks(1) : reloj.UtcNow);
+            informacionHasta: control.LastRegisteredAt >= reloj.UtcNow ? control.LastRegisteredAt.AddTicks(1) : reloj.UtcNow,
+            // 2026-11-27 (feature 028, T050): la recogida del desembolso cobra el interés con Recogida.InteresesProporcionales.
+            recogida: EsRecogidaDelDesembolso(r, pago));
         if (distribuido.IsFailure) return Falla(distribuido.Error);
         var d = distribuido.Value;
         if (p.Forma == FormaDeAplicacion.Interactive && !string.Equals(pago.SimulationId, d.SimulationId, StringComparison.Ordinal))

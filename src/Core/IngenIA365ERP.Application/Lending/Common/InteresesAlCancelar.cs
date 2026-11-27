@@ -58,6 +58,13 @@ public sealed class InteresesAlCancelar(ReglasDeParametrosDeCartera parametros, 
     public const string MotivoDentroDelTope = "WithinLegalPrepaymentCap";
     public const string MotivoTopeDesconocido = "LegalPrepaymentCapUnknown";
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T050): el documento con que la recogida del desembolso paga el crédito recogido por el contrato
+    /// (<c>ReferenciaDeRecibo.DocumentKind</c>); con el recaudador <c>OwnLoanPayoff</c>, es lo que distingue la recogida del cruce del retiro y del débito
+    /// automático. (nuevo)
+    /// </summary>
+    public const string DocumentoDelDesembolso = "LoanDisbursement";
+
     /// <summary>Lo que dice el parámetro a <paramref name="fecha"/>: el de la línea si lo tiene, si no el general; ilegible = «Corrido».</summary>
     public async Task<string> ConfiguradoAsync(DateOnly fecha, int? lineaId, CancellationToken ct)
     {
@@ -76,6 +83,68 @@ public sealed class InteresesAlCancelar(ReglasDeParametrosDeCartera parametros, 
         ArgumentNullException.ThrowIfNull(credito);
         var configurado = await ConfiguradoAsync(fecha, credito.CreditLineId, ct);
         if (configurado != ParametrosDeCartera.InteresesDeLaCuotaCompleta) return ModoDeInteresesAlCancelar.Corrido;
+        return await CuotaCompletaConExcepcionesAsync(credito, rulesVersion, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU5): lo que dice <c>Recogida.InteresesProporcionales</c> a <paramref name="fecha"/> —el de la línea del crédito que se recoge
+    /// si lo tiene, si no el general—: <c>ComoAlCancelar</c>, <c>Si</c> o <c>No</c>; ilegible = <c>ComoAlCancelar</c> (lo de siempre). (nuevo)
+    /// </summary>
+    public async Task<string> RecogidaConfiguradaAsync(DateOnly fecha, int? lineaId, CancellationToken ct)
+    {
+        var leido = lineaId is { } l
+            ? await parametros.LeerAsync(ParametrosDeCartera.RecogidaInteresesProporcionales, fecha, null, ParameterScopeKind.CreditLine, l, ct)
+            : await parametros.LeerAsync(ParametrosDeCartera.RecogidaInteresesProporcionales, fecha, ct: ct);
+        return (leido.IsSuccess ? leido.Value.Texto?.Trim() : null) switch
+        {
+            ParametrosDeCartera.ProporcionalesSi => ParametrosDeCartera.ProporcionalesSi,
+            ParametrosDeCartera.ProporcionalesNo => ParametrosDeCartera.ProporcionalesNo,
+            _ => ParametrosDeCartera.ProporcionalesComoAlCancelar,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, HU5, R5): cómo cobra el interés de la cuota en curso la <b>recogida</b> de <paramref name="credito"/> en el desembolso de otro
+    /// con fecha valor <paramref name="fecha"/>, según <c>Recogida.InteresesProporcionales</c> (<see cref="RecogidaConfiguradaAsync"/>):
+    /// <list type="bullet">
+    /// <item><c>ComoAlCancelar</c> (de fábrica): exactamente lo que cobraría una cancelación en caja (<see cref="ModoAsync"/>), como siempre;</item>
+    /// <item><c>Si</c>: el corrido —se cobra el interés causado hasta la fecha y, por período calendario, se devuelve lo causado de un tramo sin
+    /// empezar—, sin importar lo que diga <c>Pagos.InteresesAlPagarAntesDelVencimiento</c>;</item>
+    /// <item><c>No</c>: la cuota completa, con las mismas excepciones legales que la cancelación: vivienda, dentro del tope legal del prepago o sin los
+    /// valores nacionales para saberlo, el corrido.</item>
+    /// </list>
+    /// Lo sella la decisión del pago igual que el de la cancelación (<c>InterestBeforeDueDate</c>): la reconstrucción lo repite. (nuevo)
+    /// </summary>
+    public async Task<ModoDeInteresesAlCancelar> ModoAlRecogerAsync(Loan credito, string? rulesVersion, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        return await RecogidaConfiguradaAsync(fecha, credito.CreditLineId, ct) switch
+        {
+            ParametrosDeCartera.ProporcionalesSi => ModoDeInteresesAlCancelar.Corrido,
+            ParametrosDeCartera.ProporcionalesNo => await CuotaCompletaConExcepcionesAsync(credito, rulesVersion, ct),
+            _ => await ModoAsync(credito, rulesVersion, fecha, ct),
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R5): el gemelo de <see cref="ValorParaCancelarAsync"/> para la recogida: lo que cobra el <c>FullPayoff</c> de la recogida
+    /// a la fecha de <paramref name="estado"/>, con el modo de <see cref="ModoAlRecogerAsync"/> y el período calendario de la línea. (nuevo)
+    /// </summary>
+    public async Task<decimal> ValorParaRecogerAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var cuotaCompleta = !estado.EnUvr && (await ModoAlRecogerAsync(credito, estado.RulesVersion, estado.Fecha, ct)).CuotaCompleta;
+        var calendario = !estado.EnUvr && await PeriodoCalendarioAsync(estado.Fecha, credito.CreditLineId, ct);
+        return AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta, calendario);
+    }
+
+    /// <summary>
+    /// La cuota completa pedida (por <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> o por <c>Recogida.InteresesProporcionales = No</c>) con sus
+    /// excepciones legales: vivienda, dentro del tope legal del prepago o sin los valores nacionales para saberlo, el corrido.
+    /// </summary>
+    private async Task<ModoDeInteresesAlCancelar> CuotaCompletaConExcepcionesAsync(Loan credito, string? rulesVersion, CancellationToken ct)
+    {
+        const string configurado = ParametrosDeCartera.InteresesDeLaCuotaCompleta;
         if (VersionesDeReglas.EsConocida(rulesVersion) && VersionesDeReglas.Para(rulesVersion).PrepagoSinPenalidad)
             return new(configurado, ParametrosDeCartera.InteresesCorridos, MotivoVivienda);
         var tope = await TopeAsync(credito, ct);

@@ -259,3 +259,25 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - Además de «capital menor → pagos», un anticipo o un saldo a favor mayor también es `Payments` (sólo entra por un pago).
 - «Causación» abarca todo lo que se causa con los días —interés corriente, devuelto o cobrado por proporcionales, seguro y administración—
   cuando el capital no cambió; con el capital menor, esos cambios los explica el pago.
+
+### E-04 — La liquidación de la recogida y el modo de intereses (T009–T012, T050, 2026-11-27)
+- **Nombre y forma**: `LiquidacionDeRecogida.LiquidarCreditoAsync(Loan, D, R)` devuelve `Result<LiquidacionDeCreditoRecogido>` (no `LiquidarAsync`, para
+  que `LaRecogidaSeLiquidaEnUnSoloSitio` distinga sus llamadas de las de `MotorDeCreditoEnDesembolso.LiquidarAsync`). Falla sólo si no se puede liquidar:
+  una regla del motor o, con D ≤ hoy, la usura del día sin publicar (como la liquidación del crédito); lo demás son `Bloqueos`.
+- **Bloqueos**: mora → `Lending.Payoff.RequiresRestructuring` (el mismo código del desembolso); castigado, insolvencia que negocia, sin saldo y no activo →
+  `Lending.Payoff.NotPayable` con el motivo (`WrittenOff`, `Insolvency`, `NoBalance`, `NotActive`), en `ErroresDeRecogida`. `RequisitosDelDesembolso`
+  usa ya la liquidación nueva (valor y mora) pero conserva su propia revisión de estado; los demás bloqueos entran al desembolso con T033.
+- **Saldo a favor**: la cancelación no lo usa (D7 de la 013), así que el desglose de un crédito lo lleva en cero y la liquidación lo informa aparte
+  (`SaldoAFavorSinDescontar` y un aviso). La spec («el valor para cancelar ya los descuenta») vale sólo para el anticipo.
+- **Interés devuelto** es `AplicadorDePagos.InteresSinTramo` (por período calendario); **interés cobrado** es lo que agrega la cuota completa, ahora público
+  como `AplicadorDePagos.InteresDeLaCuotaCompleta` (refactor sin cambio de comportamiento: lo usan `ValorParaCancelar` y la cancelación). Lo reconocido al
+  inicio del ciclo y no causado nunca fue deuda: no aparece como devuelto (T051 puede explicarlo).
+- **El valor del desembolso cambia sólo por período calendario**: `MotorDeCreditoEnDesembolso` tomaba el mayor entre su valor y el valor para cancelar, así
+  que con período calendario cobraba el interés de un tramo sin empezar que el `FullPayoff` no aplica (quedaba excedente). La liquidación nueva cobra lo
+  que aplica el contrato. De fábrica y con la cuota completa, el mismo valor. El cruce del retiro sigue con `MotorDeCreditoEnDesembolso.LiquidarAsync`
+  sin cambios.
+- **T050**: el discriminador es `AplicacionDePagos.EsRecogidaDelDesembolso` (recaudador de clase `OwnLoanPayoff` y `Receipt.DocumentKind` =
+  `InteresesAlCancelar.DocumentoDelDesembolso`, «LoanDisbursement», que ahora usa también `RecogidaEnElDesembolso`). `DistribuirAsync` y `ModoAsync`
+  ganan el parámetro opcional `recogida`; el puerto `IContratoDeObligaciones` no cambia. La simulación del contrato no lo lleva (no trae recibo).
+- **Sin condiciones selladas**: posición diaria o libro, como el motor; de la posición sale el desglose y lo que no desglose va en otros cargos, para que
+  el total sea el de la posición. `CuotaCausadaDeRecogida` gana el vencimiento (opcional, no se guarda).
