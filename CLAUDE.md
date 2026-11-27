@@ -1217,15 +1217,14 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/026-cargos-masivos/plan.md](specs/026-cargos-masivos/plan.md)
+[specs/027-pase-ingreso-sin-mfa/plan.md](specs/027-pase-ingreso-sin-mfa/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/026-cargos-masivos/spec.md)
-- [research.md](specs/026-cargos-masivos/research.md)
-- [data-model.md](specs/026-cargos-masivos/data-model.md)
-- [quickstart.md](specs/026-cargos-masivos/quickstart.md)
-- [contracts/](specs/026-cargos-masivos/contracts/)
+- [spec.md](specs/027-pase-ingreso-sin-mfa/spec.md)
+- [research.md](specs/027-pase-ingreso-sin-mfa/research.md)
+- [data-model.md](specs/027-pase-ingreso-sin-mfa/data-model.md)
+- [quickstart.md](specs/027-pase-ingreso-sin-mfa/quickstart.md)
+- [contracts/](specs/027-pase-ingreso-sin-mfa/contracts/)
 
-The 026 builds on Cartera (013): a run creates one obligation per associate of a line marked for bulk charges, without application
-or payout, through the single ledger writer, and posts the whole run as one summarized voucher (type CO) through the accounting
-matrix (new role «Contrapartida del cargo»).
+The 027 builds on central identity (003/017): a cooperativa admin grants a reusable, emailed login pass (12 h max) that replaces only
+the second-factor code after the normal password login, seals the session as method None and locks it to the granting cooperativa.
 <!-- SPECKIT END -->
