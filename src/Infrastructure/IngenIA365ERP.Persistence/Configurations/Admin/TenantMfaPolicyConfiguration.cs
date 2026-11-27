@@ -53,6 +53,10 @@ public class TenantMfaPolicyConfiguration : IEntityTypeConfiguration<TenantMfaPo
         builder.Property(e => e.EmailRecoveryDelayHours)
             .HasDefaultValue(TenantMfaPolicy.DemoraPorDefectoEnHoras);
 
+        // Feature 027: apagado de fábrica y 12 horas. El default de la BASE va explícito para que las filas existentes queden así al migrar.
+        builder.Property(e => e.AllowLoginPass).HasDefaultValue(false);
+        builder.Property(e => e.LoginPassMaxHours).HasDefaultValue(LoginPass.HorasMaximas);
+
         builder.Property(e => e.CreatedAt);
 
         builder.Property(e => e.RowVersion).IsRowVersion();

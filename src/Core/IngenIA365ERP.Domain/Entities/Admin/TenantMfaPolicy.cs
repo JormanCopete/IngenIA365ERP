@@ -57,6 +57,26 @@ public class TenantMfaPolicy : AuditableEntity
     public const int DemoraPorDefectoEnHoras = 24;
     public const int DemoraMinimaEnHoras = 1;
 
+    /// <summary>
+    /// Feature 027: si un administrador puede conceder pases de ingreso sin segundo factor. <b>Apagado de fábrica</b> (decisión del dueño del
+    /// 2026-11-26): ninguna cooperativa lo ofrece hasta que lo enciende.
+    /// </summary>
+    public bool AllowLoginPass { get; private set; }
+
+    /// <summary>Feature 027: la duración máxima de un pase en esta cooperativa, entre 1 y <see cref="LoginPass.HorasMaximas"/>.</summary>
+    public int LoginPassMaxHours { get; private set; } = LoginPass.HorasMaximas;
+
+    /// <summary>Configura los pases de ingreso. Las horas se conservan aunque se apague, como la demora de la recuperación.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">Si las horas quedan fuera de 1 a <see cref="LoginPass.HorasMaximas"/>.</exception>
+    public void ConfigurarPasesDeIngreso(bool permitir, int horasMaximas)
+    {
+        if (horasMaximas is < 1 or > LoginPass.HorasMaximas)
+            throw new ArgumentOutOfRangeException(nameof(horasMaximas), horasMaximas,
+                $"La duración máxima del pase está entre 1 y {LoginPass.HorasMaximas} horas.");
+        AllowLoginPass = permitir;
+        LoginPassMaxHours = horasMaximas;
+    }
+
     public DateTime? ActivatedAt { get; private set; }
     public Guid? ActivatedByUserId { get; private set; }
 
