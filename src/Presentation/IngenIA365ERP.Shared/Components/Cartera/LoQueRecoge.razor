@@ -4,7 +4,9 @@
    guardarla o radicarla —el modo, el valor pedido de un parcial, lo que se recogería a la fecha proyectada y su desglose desplegable, la cuota causada—,
    el total, el neto a girar y la fecha proyectada con la información hasta cuándo se tomó. Avisa si otra solicitud viva recoge el mismo crédito. Al
    desembolsar todo se vuelve a calcular y se muestran las diferencias. No consulta nada: pinta lo que trajo la solicitud (su zona de carga es la de
-   la pantalla). *@
+   la pantalla).
+   2026-11-27 (feature 028, E2, T072; HU4): la cuota causada con su tratamiento —incluida o dejada a su canal, con lo que deberá—, la cuota enviada y qué
+   pasa con ella en la recogida. *@
 @if (Recogidas.Count > 0)
 {
     <div class="info-card">
@@ -30,7 +32,20 @@
                             <td>@TextosDeRecogida.Modo(p.Mode)</td>
                             <td class="numero">@TextosDeRecogida.Pesos(p.RequestedAmount)</td>
                             <td class="numero">@(p.Projected ? TextosDeRecogida.Pesos(p.ProjectedAmount) : "Se proyecta al radicar")</td>
-                            <td>@(p.CurrentInstallment is { } c ? $"Cuota {c.Number} por {TextosDeRecogida.Pesos(c.Amount)}: {TextosDeRecogida.TratamientoDeCuota(c.Treatment).ToLowerInvariant()}" : "—")</td>
+                            <td>
+                                @if (p.CurrentInstallment is { } c)
+                                {
+                                    <span>Cuota @c.Number por @TextosDeRecogida.Pesos(c.Treatment == TextosDeRecogida.CuotaExcluida ? c.Left ?? c.Amount : c.Amount): @TextosDeRecogida.TratamientoDeCuota(c.Treatment).ToLowerInvariant()</span>
+                                    @if (c.Sent is { } enviada)
+                                    {
+                                        <span class="texto-alerta"> · @TextosDeRecogida.EstadoDeEnvio(enviada.State)</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>—</span>
+                                }
+                            </td>
                             <td>
                                 @if (p.Projected)
                                 {
@@ -41,6 +56,10 @@
                         @if (p.InOtherApplication is not null)
                         {
                             <tr><td colspan="6"><span class="texto-alerta">@TextosDeRecogida.EnOtraSolicitud(p.InOtherApplication), que también lo recoge.</span></td></tr>
+                        }
+                        @if (p.CurrentInstallment?.Explanation is { } explicacionDeLaCuota)
+                        {
+                            <tr><td colspan="6"><span class="texto-apoyo">@explicacionDeLaCuota</span></td></tr>
                         }
                         @if (_abiertos.Contains(p.Order))
                         {

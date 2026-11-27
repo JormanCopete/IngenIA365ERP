@@ -47995,6 +47995,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<decimal?>("LeftInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("LeftInstallmentNumber")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LeftInstallmentSettledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("LoanId")
                         .HasColumnType("int");
 
@@ -49427,6 +49437,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<bool>("LoanClosedAtResult")
+                        .HasColumnType("bit");
 
                     b.Property<int>("LoanId")
                         .HasColumnType("int");

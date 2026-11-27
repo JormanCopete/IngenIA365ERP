@@ -108,7 +108,8 @@ public class SolicitudConRecogidasClientTests
 
         total.ComoPedido().Should().Be(new RecogidaElegidaRequest(1, Credito, 1, null, null, 1), "el valor sólo va en un parcial");
         parcial.ComoPedido().Amount.Should().Be(400_000m);
-        total.ComoMarcada().Should().Be(new RecogidaMarcada(Credito, "65-78925", 1, null, 1_015_000m));
+        // 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada que guardó (en una recogida total).
+        total.ComoMarcada().Should().Be(new RecogidaMarcada(Credito, "65-78925", 1, null, 1_015_000m, TextosDeRecogida.CuotaIncluida));
         parcial.ComoMarcada()!.Amount.Should().Be(400_000m);
         (total with { Kind = TextosDeRecogida.ClaseFactura, ProductPublicId = null, Reference = "FE-1" }).ComoMarcada()
             .Should().BeNull("la tabla de productos sólo marca créditos");

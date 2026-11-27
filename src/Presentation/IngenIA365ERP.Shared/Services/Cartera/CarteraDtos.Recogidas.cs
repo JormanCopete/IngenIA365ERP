@@ -46,11 +46,58 @@ public sealed record DesgloseDeRecogidaDto(
         - Advance - CreditBalance;
 }
 
-/// <summary>La cuota causada enviada a su canal (llega con la entrega E2).</summary>
-public sealed record CuotaEnviadaDto(int State, string? Paymaster, string? File, string? Period, decimal? LineAmount);
+/// <summary>
+/// La cuota causada enviada a su canal. 2026-11-27 (feature 028, E2, T066): en qué va (<c>SentInstallmentState</c> como número), la pagaduría, el archivo, el
+/// período, el valor de la línea, la cuota que nombra, el convenio, lo corriente y lo vencido, la corrida de la nómina propia y la frase que lo dice.
+/// </summary>
+public sealed record CuotaEnviadaDto(int State, string? Paymaster, string? File, string? Period, decimal? LineAmount)
+{
+    public int? InstallmentNumber { get; init; }
+    public string? Agreement { get; init; }
+    public decimal? CurrentAmount { get; init; }
+    public decimal? PastDueAmount { get; init; }
+    public Guid? PayrollRunPublicId { get; init; }
 
-/// <summary>La cuota causada del crédito a la fecha proyectada, qué se hace con ella y si se puede elegir.</summary>
-public sealed record CuotaCausadaDeRecogidaDto(int Number, DateOnly? DueDate, decimal Amount, int Treatment, bool Choosable, CuotaEnviadaDto? Sent);
+    /// <summary>«La cuota 7 ya se envió a la pagaduría X en el archivo ADP-000123 de noviembre de 2026 y no ha respondido.»</summary>
+    public string? Text { get; init; }
+
+    /// <summary>El estado en palabras (cuando el servidor no mandó la frase).</summary>
+    public string Texto => Text ?? TextosDeRecogida.EstadoDeEnvio(State);
+
+    /// <summary>¿Va en la nómina propia? (si no, en un archivo de libranza).</summary>
+    public bool EnNominaPropia => State is TextosDeRecogida.EnvioNominaGenerada or TextosDeRecogida.EnvioNominaCalculada or TextosDeRecogida.EnvioNominaAprobada;
+}
+
+/// <summary>
+/// La cuota causada del crédito a la fecha proyectada, qué se hace con ella y si se puede elegir. 2026-11-27 (feature 028, E2, T066): con «Preguntar» el
+/// asesor elige (<see cref="Choosable"/>); <see cref="Left"/> es lo que la cuota debería a su canal si se deja (nulo si no se puede dejar) y las explicaciones
+/// dicen qué pasa con ella en cada caso.
+/// </summary>
+public sealed record CuotaCausadaDeRecogidaDto(int Number, DateOnly? DueDate, decimal Amount, int Treatment, bool Choosable, CuotaEnviadaDto? Sent)
+{
+    public decimal? Left { get; init; }
+
+    /// <summary>Lo que dice <c>Recogida.CuotaCausada</c> para la línea del crédito: <c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>.</summary>
+    public string? Parameter { get; init; }
+
+    public string? Explanation { get; init; }
+    public string? IncludedExplanation { get; init; }
+    public string? LeftExplanation { get; init; }
+
+    /// <summary>Por qué no se puede dejar aunque la línea lo pida (vivienda, sin cuota causada a la fecha).</summary>
+    public string? NotLeftReason { get; init; }
+
+    /// <summary>Qué pasa con la cuota con el tratamiento <paramref name="tratamiento"/> (nulo, el que rige).</summary>
+    public string? Explicacion(int? tratamiento) => tratamiento switch
+    {
+        TextosDeRecogida.CuotaExcluida when Choosable => LeftExplanation ?? Explanation,
+        TextosDeRecogida.CuotaIncluida when Choosable => IncludedExplanation ?? Explanation,
+        _ => Explanation,
+    };
+
+    /// <summary>El tratamiento que rige con lo que eligió el asesor: sólo con «Preguntar» cuenta su elección.</summary>
+    public int Tratamiento(int? elegido) => Choosable && elegido is TextosDeRecogida.CuotaIncluida or TextosDeRecogida.CuotaExcluida ? elegido.Value : Treatment;
+}
 
 /// <summary>Un producto del deudor que el crédito nuevo podría recoger.</summary>
 public sealed record ProductoParaRecogerDto(
@@ -89,6 +136,29 @@ public sealed record ProductoParaRecogerDto(
     public decimal RecognizedReleased { get; init; }
 
     public bool AdmiteParcial => AdmittedModes.Contains(TextosDeRecogida.ModoParcial);
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): el desglose de todo menos la cuota causada; nulo si no se puede dejar.</summary>
+    public DesgloseDeRecogidaDto? BreakdownExcludingCurrentInstallment { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): con qué tratamiento de la cuota causada se marcó (en la respuesta con lo marcado).</summary>
+    public int? SelectedInstallmentTreatment { get; init; }
+
+    /// <summary>¿El asesor elige qué hacer con la cuota causada? («Preguntar» y un crédito que admite dejarla).</summary>
+    public bool CuotaElegible => CurrentInstallment is { Choosable: true } && ToPayOffExcludingCurrentInstallment is not null;
+
+    /// <summary>El tratamiento de la cuota que rige con lo que eligió el asesor (nulo, el de la línea).</summary>
+    public int TratamientoDeLaCuota(int? elegido) => CurrentInstallment?.Tratamiento(elegido) ?? TextosDeRecogida.CuotaIncluida;
+
+    /// <summary>
+    /// Lo que cuesta recogerlo con el tratamiento elegido: con «Preguntar» y la cuota dejada, todo menos ella; si no, <see cref="ToPayOff"/> (que ya es el del
+    /// tratamiento de la línea).
+    /// </summary>
+    public decimal ParaRecoger(int? elegido) =>
+        CuotaElegible && elegido == TextosDeRecogida.CuotaExcluida ? ToPayOffExcludingCurrentInstallment!.Value : ToPayOff;
+
+    /// <summary>El desglose con el tratamiento elegido (como <see cref="ParaRecoger"/>).</summary>
+    public DesgloseDeRecogidaDto Desglose(int? elegido) =>
+        CuotaElegible && elegido == TextosDeRecogida.CuotaExcluida && BreakdownExcludingCurrentInstallment is { } d ? d : Breakdown;
 }
 
 /// <summary>
@@ -135,10 +205,14 @@ public sealed record ProductosParaRecogerDto(
 /// Lo que la pantalla marca en la tabla de productos para recoger y lo que devuelve al que la contiene: el producto, el modo y el valor del parcial, y
 /// lo que la tabla ya sabe de él (número y valor a recoger) para mostrarlo sin volver a consultar. (nuevo)
 /// </summary>
-public sealed record RecogidaMarcada(Guid ProductPublicId, string Number, int Mode, decimal? Amount, decimal ToPayOff)
+public sealed record RecogidaMarcada(Guid ProductPublicId, string Number, int Mode, decimal? Amount, decimal ToPayOff, int? InstallmentTreatment = null)
 {
-    /// <summary>Lo que pide el servidor (en E1, siempre un crédito).</summary>
-    public RecogidaElegidaRequest ComoPedido() => new(TextosDeRecogida.ClaseCredito, ProductPublicId, Mode, Mode == TextosDeRecogida.ModoParcial ? Amount : null);
+    /// <summary>
+    /// Lo que pide el servidor (en E1, siempre un crédito). 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada elegido, sólo en una
+    /// recogida total.
+    /// </summary>
+    public RecogidaElegidaRequest ComoPedido() => new(TextosDeRecogida.ClaseCredito, ProductPublicId, Mode, Mode == TextosDeRecogida.ModoParcial ? Amount : null,
+        InstallmentTreatment: Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null);
 }
 
 /// <summary>
@@ -167,7 +241,8 @@ public sealed record SeleccionDeRecogida(IReadOnlyList<RecogidaMarcada> Marcadas
         foreach (var m in marcadas)
         {
             if (!porProducto.TryGetValue(m.ProductPublicId, out var p) || !p.AdmittedModes.Contains(m.Mode)) continue;
-            total += m.Mode == TextosDeRecogida.ModoTotal ? p.ToPayOff : Math.Min(m.Amount ?? 0m, p.ToPayOff);
+            // 2026-11-27 (feature 028, E2, T066): una recogida total con la cuota causada dejada a su canal recoge todo menos ella.
+            total += m.Mode == TextosDeRecogida.ModoTotal ? p.ParaRecoger(m.InstallmentTreatment) : Math.Min(m.Amount ?? 0m, p.ToPayOff);
             if (m.Mode == TextosDeRecogida.ModoTotal) liberadas += p.Installment ?? 0m;
             contadas++;
         }
@@ -214,9 +289,10 @@ public sealed record RecogidaDeSolicitudDto(
     public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
         Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? RequestedAmount : null, Reference, InstallmentTreatment);
 
-    /// <summary>Como lo marca la tabla de productos al abrir la corrección (sólo créditos).</summary>
+    /// <summary>Como lo marca la tabla de productos al abrir la corrección (sólo créditos; con el tratamiento de la cuota causada que guardó).</summary>
     public RecogidaMarcada? ComoMarcada() => Kind == TextosDeRecogida.ClaseCredito && ProductPublicId is { } producto
-        ? new RecogidaMarcada(producto, Number, Mode, Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount)
+        ? new RecogidaMarcada(producto, Number, Mode, Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount,
+            Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null)
         : null;
 }
 
@@ -243,6 +319,15 @@ public static class TextosDeRecogida
 
     public const int CuotaIncluida = 1;
     public const int CuotaExcluida = 2;
+
+    // 2026-11-27 (feature 028, E2, T066): SentInstallmentState (en qué va la cuota del período frente a su canal).
+    public const int EnvioNinguno = 0;
+    public const int EnvioSinRespuesta = 1;
+    public const int EnvioDescontadaPendienteDeGiro = 2;
+    public const int EnvioNoDescontada = 3;
+    public const int EnvioNominaGenerada = 4;
+    public const int EnvioNominaCalculada = 5;
+    public const int EnvioNominaAprobada = 6;
 
     public static string Clase(int clase) => clase switch
     {
@@ -292,8 +377,28 @@ public static class TextosDeRecogida
     public static string TratamientoDeCuota(int tratamiento) => tratamiento switch
     {
         CuotaIncluida => "Se incluye en la recogida",
-        CuotaExcluida => "Queda como se envió",
+        CuotaExcluida => "Se deja a su canal, como se envió",
         _ => "—",
+    };
+
+    /// <summary>2026-11-27 (feature 028, E2, T072): las dos opciones del selector de la cuota causada con «Preguntar».</summary>
+    public static string OpcionDeCuota(int tratamiento) => tratamiento switch
+    {
+        CuotaIncluida => "Incluir la cuota",
+        CuotaExcluida => "Dejarla a su canal",
+        _ => "—",
+    };
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): en qué va la cuota del período frente a su canal, en palabras.</summary>
+    public static string EstadoDeEnvio(int estado) => estado switch
+    {
+        EnvioSinRespuesta => "Enviada a la pagaduría, sin respuesta",
+        EnvioDescontadaPendienteDeGiro => "Descontada por la pagaduría, pendiente de giro",
+        EnvioNoDescontada => "No descontada por la pagaduría",
+        EnvioNominaGenerada => "En la nómina propia (novedad generada)",
+        EnvioNominaCalculada => "En la nómina propia (corrida en borrador)",
+        EnvioNominaAprobada => "Aplicada por la nómina propia",
+        _ => "Sin enviar",
     };
 
     /// <summary>El motivo corto por el que no se recoge (el <c>blockReason</c> del servidor), para la marca deshabilitada.</summary>

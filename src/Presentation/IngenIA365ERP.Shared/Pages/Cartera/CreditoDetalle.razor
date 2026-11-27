@@ -150,6 +150,11 @@
                                 <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/creditos/{nuevo}"))">Ver el crédito @por.Number</SfButton>
                             }
                         </p>
+                        @* 2026-11-27 (feature 028, E2, T072; HU4): la cuota causada que la recogida dejó a su canal, mientras no esté pagada. *@
+                        @if (por.CuotaDejadaPendiente && c.Status != "PaidOff")
+                        {
+                            <p class="aviso aviso-info">@por.CuotaDejada. El crédito queda cancelado cuando se pague.</p>
+                        }
                     }
                     @if (c.PaidOff.Count > 0)
                     {

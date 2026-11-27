@@ -2,17 +2,19 @@
 
 @* 2026-11-27 (pedido del dueño; feature 028, HU1, T019): el detalle desplegable de un producto en «Productos que recoge»: lo que cuesta recogerlo por
    concepto (lo devuelto por proporcionales y el anticipo se descuentan), el modo de intereses con su explicación, la cuota causada y qué se hace con
-   ella, por qué no se puede recoger y los avisos. No consulta nada: pinta lo que trajo la consulta. *@
+   ella, por qué no se puede recoger y los avisos. No consulta nada: pinta lo que trajo la consulta.
+   2026-11-27 (feature 028, E2, T072; HU4): con el tratamiento de la cuota causada que eligió el asesor (o el de la línea): el desglose de todo menos la
+   cuota si se deja, la cuota con lo que deberá, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella. *@
 <div class="form-grid">
     <div class="campo">
         <span class="etiqueta-campo">Lo que cuesta recogerlo</span>
         <table class="data-grid">
             <tbody>
-                @foreach (var (concepto, valor) in TextosDeRecogida.Conceptos(Producto.Breakdown))
+                @foreach (var (concepto, valor) in TextosDeRecogida.Conceptos(Producto.Desglose(Tratamiento)))
                 {
                     <tr><td>@concepto</td><td class="numero">@TextosDeRecogida.Pesos(valor)</td></tr>
                 }
-                <tr><th>Para recoger</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ToPayOff)</th></tr>
+                <tr><th>Para recoger</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ParaRecoger(Tratamiento))</th></tr>
             </tbody>
         </table>
     </div>
@@ -20,7 +22,7 @@
         <span class="etiqueta-campo">Intereses</span>
         <span>@TextosDeRecogida.ModoDeIntereses(Producto.InterestMode)</span>
         @* 2026-11-27 (feature 028, T051): el interés renglón a renglón, con los días que cuenta el servidor; el proporcional por la ley ya dice su motivo. *@
-        @foreach (var renglon in Producto.InterestExplanation.Where(r => !r.EsInformativo))
+        @foreach (var renglon in Producto.InterestExplanation.Where(r => !r.EsInformativo && !(SeDeja && r.Installment == Producto.CurrentInstallment?.Number)))
         {
             <span class="texto-apoyo">@renglon.Text</span>
         }
@@ -31,10 +33,18 @@
         @if (Producto.CurrentInstallment is { } c)
         {
             <span class="etiqueta-campo">Cuota causada</span>
-            <span>@TextoDeLaCuota(c)</span>
+            <span>@TextoDeLaCuota(c, c.Tratamiento(Tratamiento))</span>
             @if (c.Sent is { } enviada)
             {
-                <span class="texto-alerta">@TextoDelEnvio(enviada)</span>
+                <span class="texto-alerta">@enviada.Texto</span>
+            }
+            @if (c.Explicacion(Tratamiento) is { } explicacionDeLaCuota)
+            {
+                <span class="texto-apoyo">@explicacionDeLaCuota</span>
+            }
+            @if (c.NotLeftReason is { } porque)
+            {
+                <span class="texto-tenue">@porque</span>
             }
         }
         <span class="etiqueta-campo">Estado</span>
@@ -61,11 +71,13 @@
 @code {
     [Parameter, EditorRequired] public ProductoParaRecogerDto Producto { get; set; } = null!;
 
-    private static string TextoDeLaCuota(CuotaCausadaDeRecogidaDto c) =>
-        $"Cuota {c.Number}{(c.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "")} por {TextosDeRecogida.Pesos(c.Amount)}: "
-        + $"{TextosDeRecogida.TratamientoDeCuota(c.Treatment).ToLowerInvariant()}.";
+    /// <summary>2026-11-27 (T072): el tratamiento de la cuota causada que eligió el asesor con «Preguntar» (nulo, el de la línea).</summary>
+    [Parameter] public int? Tratamiento { get; set; }
 
-    private static string TextoDelEnvio(CuotaEnviadaDto e) =>
-        "Ya se envió" + (e.Paymaster is { } pagaduria ? $" a la pagaduría {pagaduria}" : "") + (e.File is { } archivo ? $" en el archivo {archivo}" : "")
-        + (e.Period is { } periodo ? $" de {periodo}" : "") + ".";
+    private bool SeDeja => Producto.CurrentInstallment?.Tratamiento(Tratamiento) == TextosDeRecogida.CuotaExcluida;
+
+    private static string TextoDeLaCuota(CuotaCausadaDeRecogidaDto c, int tratamiento) =>
+        $"Cuota {c.Number}{(c.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "")} por "
+        + $"{TextosDeRecogida.Pesos(tratamiento == TextosDeRecogida.CuotaExcluida ? c.Left ?? c.Amount : c.Amount)}: "
+        + $"{TextosDeRecogida.TratamientoDeCuota(tratamiento).ToLowerInvariant()}.";
 }

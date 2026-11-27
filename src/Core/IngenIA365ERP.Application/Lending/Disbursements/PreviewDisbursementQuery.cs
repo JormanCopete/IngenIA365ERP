@@ -93,15 +93,31 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             Omitted = x.Omitida,
             AboveTolerance = x.SobreLaTolerancia,
             InterestMode = x.ModoDeIntereses,
-            CurrentInstallment = x.Liquidacion.Detalle?.CuotaCausada is { } c
-                ? new DisbursementPayoffInstallmentDto(c.Numero, c.Vencimiento, c.Valor, nameof(InstallmentTreatment.Include), null)
-                : null,
+            // 2026-11-27 (feature 028, E2, T066): la cuota causada con el tratamiento con que se aplica, la que se deja, la enviada y su explicación.
+            CurrentInstallment = Cuota(x),
             Warnings = x.Avisos,
             // 2026-11-27 (feature 028, T051): el interés explicado sólo en una cancelación (un abono va a capital y no lo cobra así).
             InterestExplanation = x.Omitida || !x.Total || x.Liquidacion.Detalle is not { } explicada
                 ? []
-                : PayoffInterestLineDto.De(explicada.ExplicacionDelInteres),
+                : PayoffInterestLineDto.De(x.Segun?.ExplicacionDelInteres ?? explicada.ExplicacionDelInteres),
             RecognizedReleased = x.Omitida || !x.Total ? 0m : x.Liquidacion.Detalle?.ReconocidoQueSeLibera ?? 0m,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; api.md §3 <c>currentInstallment</c>): la cuota causada del recogido con el tratamiento con que se aplica —la que se
+    /// deja con lo que debe (<c>left</c>), o la que se incluye—, la cuota enviada y qué pasa con ella. Sin cuota, nula.
+    /// </summary>
+    public static DisbursementPayoffInstallmentDto? Cuota(RecogidaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        if (x.Liquidacion.Detalle is not { } l) return null;
+        var segun = x.Segun ?? l.Segun(InstallmentTreatment.Include);
+        if (segun.Cuota is not { } c) return null;
+        return new DisbursementPayoffInstallmentDto(c.Numero, c.Vencimiento, c.Valor, x.Tratamiento.ToString(), x.ValorDejado)
+        {
+            Sent = PayoffSentInstallmentDto.De(l.CuotaEnviada),
+            Explanation = x.Omitida || !x.Total ? null : segun.ExplicacionDeLaCuota,
         };
     }
 

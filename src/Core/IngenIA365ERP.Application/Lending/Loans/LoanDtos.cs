@@ -109,7 +109,20 @@ public sealed record LoanDto(
 /// 2026-11-27 (feature 028, T054): un vínculo de recogida visto desde un crédito: el otro lado —el crédito nuevo que lo recogió, o el producto que éste
 /// recogió—, la fecha valor del desembolso, el modo (<c>Total</c>, <c>Partial</c>…), lo aplicado y si se reversó. (nuevo)
 /// </summary>
-public sealed record LoanPayoffLinkDto(string Kind, Guid? LoanPublicId, string Number, DateOnly Date, string Mode, decimal Applied, bool Reversed);
+public sealed record LoanPayoffLinkDto(string Kind, Guid? LoanPublicId, string Number, DateOnly Date, string Mode, decimal Applied, bool Reversed)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066, T072; HU4): la cuota causada que la recogida dejó a su canal, con lo que debe, cuándo quedó pagada (nula mientras se
+    /// deba) y el canal que la paga (<c>PaymasterDeduction</c>, <c>OwnPayroll</c>, <c>Cashier</c>…). Nulos si se recogió todo. (nuevo)
+    /// </summary>
+    public int? LeftInstallmentNumber { get; init; }
+
+    public decimal? LeftInstallmentAmount { get; init; }
+
+    public DateTime? LeftInstallmentSettledAt { get; init; }
+
+    public string? LeftInstallmentChannel { get; init; }
+}
 
 /// <summary>La validación fallida de la obligación de una venta (T0603): código, motivo y la confirmación por excepción si la hubo. (nuevo)</summary>
 public sealed record LoanValidationFailureDto(string Code, string? Reason, DateTime? ConfirmedByExceptionAt);

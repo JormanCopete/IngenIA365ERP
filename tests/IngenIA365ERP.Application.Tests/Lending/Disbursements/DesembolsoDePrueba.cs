@@ -89,7 +89,8 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia(), Intereses());
     public Application.Lending.Common.InteresesAlCancelar Intereses() => new(Parametros(), O.L.Valores());
     /// <summary>2026-11-27 (feature 028, T010): el único sitio que liquida una recogida (lo usan los requisitos del desembolso).</summary>
-    public Application.Lending.Payoffs.LiquidacionDeRecogida LiquidacionDeRecogida() => new(Db, Cargador(), Intereses(), G.Reloj);
+    public Application.Lending.Payoffs.LiquidacionDeRecogida LiquidacionDeRecogida() =>
+        new(Db, Cargador(), Intereses(), G.Reloj, Parametros(), O.CuotaEnviada());
 
     // Feature 013, US4 (bloque 8B): el motor real del crédito, sus series y la puesta al día. Una sola instancia por escenario de lo que
     // recuerda algo entre llamadas (la puesta al día preparada antes del tramo y escrita después).

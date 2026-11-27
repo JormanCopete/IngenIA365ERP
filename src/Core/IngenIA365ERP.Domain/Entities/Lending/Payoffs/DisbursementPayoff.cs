@@ -10,7 +10,8 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Payoffs;
 /// fila de <see cref="CreditApplicationPayoff"/>, cero si no había), lo que se liquidó a la fecha valor, lo que aplicó de verdad el contrato o el
 /// registro, la diferencia con su causa y su detalle por concepto, quién la reconoció, la clave con que se aplicó (<c>CAR:{op:N}:{producto:N}</c>) y
 /// la operación resultante. Un producto que ya estaba cancelado queda <see cref="Omitted"/>, sin aplicar. Al anular el crédito nuevo antes del giro se
-/// marca reversado con su clave de reverso. Las columnas de la cuota dejada a la pagaduría llegan con la entrega E2. (nuevo)
+/// marca reversado con su clave de reverso. 2026-11-27 (feature 028, E2, T063, T066; HU4): con «todo menos la cuota causada» guarda la cuota que se dejó a
+/// su canal (la pagaduría, la nómina o la caja: número y valor) y, cuando su canal la pague, el instante (<see cref="LeftInstallmentSettledAt"/>). (nuevo)
 /// </summary>
 public class DisbursementPayoff : AuditableEntity
 {
@@ -88,15 +89,28 @@ public class DisbursementPayoff : AuditableEntity
 
     public DateTime? AcknowledgedAt { get; init; }
 
+    /// <summary>2026-11-27 (feature 028, E2, T063): la cuota causada que se dejó a su canal («todo menos la cuota causada»); nula si se recogió todo. (nuevo)</summary>
+    public int? LeftInstallmentNumber { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T063): lo que la cuota dejada debe al vencer (lo que su canal paga para cerrarla al peso). (nuevo)</summary>
+    public decimal? LeftInstallmentAmount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T063): cuando la cuota dejada quedó pagada; nula mientras se deba. (nuevo)</summary>
+    public DateTime? LeftInstallmentSettledAt { get; private set; }
+
     public bool EstaReversada => ReversedAt is not null;
+
+    /// <summary>2026-11-27 (feature 028, E2): ¿se dejó la cuota causada a su canal y todavía se debe? (nuevo)</summary>
+    public bool CuotaDejadaPendiente => LeftInstallmentNumber is not null && LeftInstallmentSettledAt is null && !EstaReversada;
 
     /// <summary>
     /// La recogida evaluada al desembolsar, antes de aplicarse: lo proyectado, lo de ahora y la diferencia con su causa. Quien reconoció va con el
-    /// instante, o los dos nulos.
+    /// instante, o los dos nulos. 2026-11-27 (feature 028, E2): con la cuota causada excluida, la cuota que se deja y su valor (los dos o ninguno; sólo en un
+    /// crédito que se recoge excluyéndola).
     /// </summary>
     public static DisbursementPayoff Evaluar(long operacionDeDesembolsoId, int? proyectadaId, ProductoRecogido producto, PayoffMode modo,
         InstallmentTreatment? tratamientoDeCuota, string? modoDeIntereses, decimal proyectado, decimal actual, ResultadoDeDiferencia diferencia,
-        bool omitido, string clave, string? reconocidoPor, DateTime? reconocidoEn)
+        bool omitido, string clave, string? reconocidoPor, DateTime? reconocidoEn, int? cuotaDejada = null, decimal? valorDejado = null)
     {
         ArgumentNullException.ThrowIfNull(producto);
         ArgumentNullException.ThrowIfNull(diferencia);
@@ -111,6 +125,12 @@ public class DisbursementPayoff : AuditableEntity
         if (reconocidoPor is { Length: > LargoDeQuienReconoce }) throw new ArgumentOutOfRangeException(nameof(reconocidoPor));
         if (producto.Clase != PayoffProductKind.Loan && tratamientoDeCuota is not null)
             throw new ArgumentException("El tratamiento de la cuota causada sólo aplica a la recogida de un crédito.", nameof(tratamientoDeCuota));
+        if ((cuotaDejada is null) != (valorDejado is null))
+            throw new ArgumentException("La cuota dejada va con su valor, o ninguno de los dos.", nameof(cuotaDejada));
+        if (cuotaDejada is not null && (tratamientoDeCuota != Enums.Lending.InstallmentTreatment.Exclude || omitido))
+            throw new ArgumentException("Sólo se deja la cuota causada de un crédito que se recoge excluyéndola.", nameof(cuotaDejada));
+        if (cuotaDejada is <= 0) throw new ArgumentOutOfRangeException(nameof(cuotaDejada));
+        if (valorDejado is < 0m) throw new ArgumentOutOfRangeException(nameof(valorDejado), "El valor de la cuota dejada no es negativo.");
 
         return new DisbursementPayoff
         {
@@ -133,7 +153,19 @@ public class DisbursementPayoff : AuditableEntity
             IdempotencyKey = clave,
             AcknowledgedBy = reconocidoPor,
             AcknowledgedAt = reconocidoEn,
+            LeftInstallmentNumber = cuotaDejada,
+            LeftInstallmentAmount = valorDejado,
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2; data-model «Transiciones»): la cuota dejada quedó pagada por su canal. Una vez: repetirlo no cambia el instante. Sin cuota
+    /// dejada es un error.
+    /// </summary>
+    public void MarcarCuotaDejadaPagada(DateTime instante)
+    {
+        if (LeftInstallmentNumber is null) throw Problema("Lending.Payoff.NoLeftInstallment", "Esta recogida no dejó ninguna cuota a su canal.");
+        LeftInstallmentSettledAt ??= instante;
     }
 
     /// <summary>

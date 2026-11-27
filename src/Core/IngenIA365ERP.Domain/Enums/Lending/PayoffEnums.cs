@@ -49,7 +49,9 @@ public enum PayoffDifferenceCause
 
 /// <summary>
 /// En qué va la cuota causada frente a su canal: sin envío, en un archivo de libranza enviado y sin respuesta, descontada y pendiente de giro, no
-/// descontada, o en la nómina propia del período en curso. (nuevo)
+/// descontada, o en la nómina propia del período en curso. 2026-11-27 (feature 028, T064a; R6 «Nómina propia»): la nómina propia se detalla en tres
+/// estados —la novedad del descuento ya está en el período abierto (<c>OwnPayrollGenerated</c>, el que antes se llamaba <c>OwnPayroll</c>, con el mismo
+/// número), la corrida en borrador ya lo calculó (<c>OwnPayrollCalculated</c>) o la corrida aprobada ya lo aplicó (<c>OwnPayrollApproved</c>)—. (nuevo)
 /// </summary>
 public enum SentInstallmentState
 {
@@ -57,5 +59,7 @@ public enum SentInstallmentState
     SentWithoutResponse = 1,
     DeductedPendingTransfer = 2,
     NotDeducted = 3,
-    OwnPayroll = 4,
+    OwnPayrollGenerated = 4,
+    OwnPayrollCalculated = 5,
+    OwnPayrollApproved = 6,
 }

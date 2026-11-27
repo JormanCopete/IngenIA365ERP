@@ -4,7 +4,9 @@
    solicitud (todas las autorizadas, D9) y se recalculan a la fecha valor: por producto, el modo, lo proyectado al radicar, lo de ahora, la diferencia
    con su signo (en contra del asociado si recoger cuesta más, a su favor si cuesta menos) y sus causas en palabras, si ya estaba cancelado (se omite y el
    neto sube) o requiere reestructuración, y una fila desplegable con la diferencia por concepto, la cuota causada y los avisos. No consulta nada: pinta
-   lo que trajo la vista previa (su zona de carga es la de la pantalla). *@
+   lo que trajo la vista previa (su zona de carga es la de la pantalla).
+   2026-11-27 (feature 028, E2, T072; HU4): la cuota causada que se deja a su canal («todo menos la cuota causada») va en el modo y en el detalle, con lo que
+   debe, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella. *@
 @if (Recogidas.Count > 0)
 {
     <h4>Lo que recoge</h4>
@@ -22,7 +24,13 @@
                     var r = recogida;
                     <tr class="@(r.Omitted || r.RequiresRestructuring || r.AboveTolerance ? "fila-alerta" : null)">
                         <td>@TextosDeDesembolso.ClaseDeProducto(r.Kind) @r.Number</td>
-                        <td>@TextosDeDesembolso.ModoDeRecogida(r.Mode)</td>
+                        <td>
+                            @TextosDeDesembolso.ModoDeRecogida(r.Mode)
+                            @if (r.CurrentInstallment is { SeDeja: true } dejada)
+                            {
+                                <span class="texto-tenue"> sin la cuota @dejada.Number</span>
+                            }
+                        </td>
                         <td class="numero">@(r.Projected is { } proyectado ? TextosDeOriginacion.Pesos(proyectado) : "Sin proyección")</td>
                         <td class="numero">@(r.Omitted ? "—" : TextosDeOriginacion.Pesos(r.Current))</td>
                         <td class="numero"><span class="@TextosDeDesembolso.ClaseDeDiferencia(r.Difference)">@TextosDeDesembolso.Diferencia(r.Difference)</span></td>
@@ -74,10 +82,15 @@
                                 }
                                 @if (r.CurrentInstallment is { } cuota)
                                 {
-                                    <p class="texto-apoyo">
-                                        Cuota causada @cuota.Number@(cuota.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "") por
-                                        @TextosDeOriginacion.Pesos(cuota.Amount): @(cuota.Treatment == "Exclude" ? "queda como se envió" : "se incluye en la recogida").
-                                    </p>
+                                    <p class="texto-apoyo">@cuota.Texto</p>
+                                    @if (cuota.Sent is { } enviada)
+                                    {
+                                        <p class="texto-alerta">@enviada.Texto</p>
+                                    }
+                                    @if (cuota.Explanation is { } explicacion)
+                                    {
+                                        <p class="aviso aviso-info">@explicacion</p>
+                                    }
                                 }
                                 @foreach (var aviso in r.Warnings) { <p class="aviso aviso-info">@aviso</p> }
                             </td>

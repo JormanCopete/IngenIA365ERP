@@ -129,4 +129,36 @@ public class EntidadesDeRecogidaTests
             sinDiferencia, false, "CAR:x", "asesor", null);
         sinInstante.Should().Throw<ArgumentException>();
     }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T063, T066): la que deja la cuota causada a su canal guarda la cuota y lo que debe (los dos o ninguno, sólo excluyéndola),
+    /// queda pendiente hasta que la cuota se pague (una vez) y deja de estarlo si se reversa. (nuevo)
+    /// </summary>
+    [Fact]
+    public void La_que_deja_la_cuota_causada_la_guarda_hasta_que_se_paga()
+    {
+        var sinDiferencia = DiferenciaDeRecogida.Comparar(Desglose, Desglose);
+        DisbursementPayoff Evaluada(InstallmentTreatment? tratamiento, int? cuota, decimal? valor, bool omitido = false) =>
+            DisbursementPayoff.Evaluar(900, 33, ProductoRecogido.Credito(5, "CR-1"), PayoffMode.Total, tratamiento, "Corrido", Desglose.Total, Desglose.Total,
+                sinDiferencia, omitido, "CAR:op:prod", null, null, cuota, valor);
+
+        var a = Evaluada(InstallmentTreatment.Exclude, 7, 312_400m);
+        (a.LeftInstallmentNumber, a.LeftInstallmentAmount, a.LeftInstallmentSettledAt, a.CuotaDejadaPendiente)
+            .Should().Be(((int?)7, (decimal?)312_400m, (DateTime?)null, true));
+        a.MarcarCuotaDejadaPagada(new DateTime(2026, 12, 30));
+        a.MarcarCuotaDejadaPagada(new DateTime(2026, 12, 31));
+        a.LeftInstallmentSettledAt.Should().Be(new DateTime(2026, 12, 30), "se marca una vez");
+        a.CuotaDejadaPendiente.Should().BeFalse();
+
+        var reversada = Evaluada(InstallmentTreatment.Exclude, 7, 312_400m);
+        reversada.Reversar(new DateTime(2026, 11, 29), "CAR:op:prod:reverso");
+        reversada.CuotaDejadaPendiente.Should().BeFalse("al anular el crédito nuevo la cuota vuelve a ser del crédito viejo entero");
+
+        Evaluada(InstallmentTreatment.Include, null, null).LeftInstallmentNumber.Should().BeNull();
+        ((Action)(() => Evaluada(InstallmentTreatment.Exclude, 7, null))).Should().Throw<ArgumentException>("la cuota va con su valor");
+        ((Action)(() => Evaluada(InstallmentTreatment.Include, 7, 1m))).Should().Throw<ArgumentException>("sólo se deja excluyéndola");
+        ((Action)(() => Evaluada(InstallmentTreatment.Exclude, 7, 1m, omitido: true))).Should().Throw<ArgumentException>("un omitido no deja nada");
+        var sinCuota = () => Evaluada(InstallmentTreatment.Include, null, null).MarcarCuotaDejadaPagada(DateTime.UtcNow);
+        sinCuota.Should().Throw<ReglaDeCarteraException>().Which.Codigo.Should().Be("Lending.Payoff.NoLeftInstallment");
+    }
 }

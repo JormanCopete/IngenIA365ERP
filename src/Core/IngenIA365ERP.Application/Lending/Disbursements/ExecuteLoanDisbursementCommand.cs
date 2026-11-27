@@ -189,7 +189,7 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 payee = r.Beneficiario?.PersonPublicId,
                 bank = r.Beneficiario?.BankId,
                 account = r.Beneficiario?.AccountNumber,
-                payoffs = r.Recogidas.Select(x => new { loan = x.LoanPublicId, mode = x.Modo, amount = x.AAplicar, omitted = x.Omitida }),
+                payoffs = r.Recogidas.Select(x => new { loan = x.LoanPublicId, mode = x.Modo, amount = x.AAplicar, omitted = x.Omitida, leftInstallment = x.CuotaDejada }),
                 rate = r.Simulacion.TasaPactada,
                 usury = r.Simulacion.Usura.UsuraPublicId,
                 simulation = r.Simulacion.Huella,
@@ -270,6 +270,9 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                     Current = a.Recogida.Actual,
                     Difference = a.Recogida.ConProyeccion ? a.Recogida.Diferencia.Total : null,
                     Causes = RequisitosDelDesembolso.Causas(a.Recogida.Diferencia.Causa),
+                    // 2026-11-27 (feature 028, E2, T066): la cuota causada que se dejó a su canal.
+                    LeftInstallment = a.Recogida.ValorDejado,
+                    LeftInstallmentNumber = a.Recogida.CuotaDejada,
                 }).ToList(),
                 orden.NetAmount,
                 new DisbursementOrderRefDto(orden.PublicId, orden.Number, orden.Status.ToString()),
@@ -333,6 +336,10 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
             omitted = x.Omitida,
             acknowledgedBy = x.PorReconocer ? reconocio : null,
+            // 2026-11-27 (feature 028, E2, T066): la cuota causada que se dejó a su canal, con lo que debe.
+            installmentTreatment = x.Tratamiento.ToString(),
+            leftInstallment = x.CuotaDejada,
+            leftAmount = x.ValorDejado,
         }),
     };
 
@@ -340,7 +347,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
     private static bool MismasRecogidas(IReadOnlyList<RecogidaEvaluada> antes, IReadOnlyList<RecogidaEvaluada> ahora) =>
         antes.Count == ahora.Count
         && antes.Zip(ahora).All(p => p.First.LoanId == p.Second.LoanId && p.First.Modo == p.Second.Modo && p.First.AAplicar == p.Second.AAplicar
-                                     && p.First.Omitida == p.Second.Omitida && p.First.Diferencia.Total == p.Second.Diferencia.Total);
+                                     && p.First.Omitida == p.Second.Omitida && p.First.Diferencia.Total == p.Second.Diferencia.Total
+                                     && p.First.CuotaDejada == p.Second.CuotaDejada && p.First.ValorDejado == p.Second.ValorDejado);
 
     /// <summary>
     /// 2026-11-27 (feature 028, T035; data-model <c>LND_DisbursementPayoffs</c>): una fila por producto recogido (<see cref="DisbursementPayoff.Evaluar"/> y,
@@ -357,9 +365,11 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
         foreach (var x in recogidas)
         {
             var fila = DisbursementPayoff.Evaluar(operacion.Id, x.ProyectadaId, ProductoRecogido.Credito(x.LoanId, x.Number),
-                x.Total ? PayoffMode.Total : PayoffMode.Partial, InstallmentTreatment.Include, x.ModoDeIntereses, x.Proyectado, x.Actual, x.Diferencia,
+                x.Total ? PayoffMode.Total : PayoffMode.Partial, x.Tratamiento, x.ModoDeIntereses, x.Proyectado, x.Actual, x.Diferencia,
                 x.Omitida, RecogidaEnElDesembolso.Clave(operacion.PublicId, x.LoanPublicId), x.PorReconocer ? reconocio : null,
-                x.PorReconocer && reconocio is not null ? ahora : null);
+                x.PorReconocer && reconocio is not null ? ahora : null,
+                // 2026-11-27 (feature 028, E2, T066): la cuota causada que se dejó a su canal.
+                x.Omitida ? null : x.CuotaDejada, x.Omitida ? null : x.ValorDejado);
             if (aplicadas.FirstOrDefault(a => a.Recogida.LoanId == x.LoanId) is { } a)
                 fila.Aplicar(a.Comprobante.AppliedAmount, pagos.TryGetValue(a.Comprobante.OperationPublicId, out var pago) ? pago : null);
             db.DisbursementPayoffs.Add(fila);

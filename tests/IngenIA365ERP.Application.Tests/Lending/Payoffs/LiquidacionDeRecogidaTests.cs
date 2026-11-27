@@ -69,7 +69,7 @@ public class LiquidacionDeRecogidaTests
     private static void Proporcionales(PagosDePrueba p, string valor, bool porLinea = true) =>
         Vigencia(p.Db, ParametrosDeCartera.RecogidaInteresesProporcionales, valor, porLinea ? p.Credito.CreditLineId : null);
 
-    private static LiquidacionDeRecogida Liquidacion(PagosDePrueba p) => new(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj);
+    private static LiquidacionDeRecogida Liquidacion(PagosDePrueba p) => new(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj, p.D.Parametros(), p.D.O.CuotaEnviada());
 
     private static async Task<LiquidacionDeCreditoRecogido> LiquidarAsync(PagosDePrueba p, DateOnly fecha, DateTime? r = null, Loan? credito = null)
     {

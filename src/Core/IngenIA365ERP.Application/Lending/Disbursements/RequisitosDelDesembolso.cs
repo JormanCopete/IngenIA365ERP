@@ -86,6 +86,21 @@ public sealed record RecogidaEvaluada(int LoanId, Guid LoanPublicId, string Numb
     /// <summary>2026-11-27 (feature 028, FR-015): confirmar exige reconocerla: una diferencia u omisión. (nuevo)</summary>
     public bool PorReconocer => Omitida || Diferencia.HayDiferencia;
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; FR-020): el tratamiento de la cuota causada con que se aplica: <c>Exclude</c> sólo en una cancelación que deja la
+    /// cuota a su canal (<c>PayoffExceptCurrentInstallment</c>). (nuevo)
+    /// </summary>
+    public InstallmentTreatment Tratamiento { get; init; } = InstallmentTreatment.Include;
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): la cuota causada que se deja a su canal; nula si se recoge todo. (nuevo)</summary>
+    public int? CuotaDejada { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): lo que la cuota dejada debe al vencer (lo que su canal paga para cerrarla al peso). (nuevo)</summary>
+    public decimal? ValorDejado { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): la recogida con el tratamiento de la cuota que rige (valor, desglose, cuota y explicaciones). (nuevo)</summary>
+    public Payoffs.RecogidaSegunCuota? Segun { get; init; }
+
     /// <summary>Sin diferencia: lo de una fila sin proyección o igual a lo de ahora.</summary>
     public static ResultadoDeDiferencia SinDiferencia { get; } = new(0m, DesgloseDeRecogida.Vacio, PayoffDifferenceCause.None);
 }
@@ -659,14 +674,23 @@ public sealed class RequisitosDelDesembolso(
             foreach (var bloqueo in l.Bloqueos.Where(b => b.Motivo is not (ErroresDeRecogida.MotivoEnMora or ErroresDeRecogida.MotivoSinSaldo)))
                 hallados.Add(bloqueo.ComoError());
 
+            // 2026-11-27 (feature 028, E2, T066; FR-020): la cuota causada con Recogida.CuotaCausada de la línea del crédito a la fecha valor y, con «Preguntar»,
+            // la elección que guardó la solicitud; sin rechazar (lo autorizado no se vuelve a validar): una «Excluir» guardada con la línea ya en «Incluir» se
+            // incluye, y un crédito que ya no admite dejarla se recoge completo. El cambio frente a lo proyectado es la causa CurrentInstallment. Un parcial no
+            // la toca.
+            var tratamiento = fila.Mode == PayoffMode.Total && l.ResolverTratamiento(fila.InstallmentTreatment) is { IsSuccess: true } resuelto
+                ? resuelto.Value
+                : InstallmentTreatment.Include;
+            var segun = l.Segun(tratamiento);
             var parcial = fila.Mode == PayoffMode.Partial && fila.RequestedAmount is { } pedido && pedido < l.ValorARecoger;
-            var desgloseActual = parcial ? new DesgloseDeRecogida(Capital: fila.RequestedAmount!.Value) : l.Desglose;
-            var actual = parcial ? fila.RequestedAmount!.Value : l.ValorARecoger;
+            var desgloseActual = parcial ? new DesgloseDeRecogida(Capital: fila.RequestedAmount!.Value) : segun.Desglose;
+            var actual = parcial ? fila.RequestedAmount!.Value : segun.Valor;
             var diferencia = fila.TieneProyeccion
-                ? await CausasAsync(DiferenciaDeRecogida.Comparar(proyectado, desgloseActual), fila, credito, l, ct)
+                ? await CausasAsync(DiferenciaDeRecogida.Comparar(proyectado, desgloseActual), fila, credito, l, segun, ct)
                 : RecogidaEvaluada.SinDiferencia;
             var aplicar = contexto.MantenerLoProyectado && fila.TieneProyeccion ? Math.Min(proyectado.Total, actual) : actual;
-            var cancela = aplicar >= l.ValorARecoger;
+            var cancela = aplicar >= segun.Valor;
+            var dejaLaCuota = cancela && !parcial && segun.CuotaDejada is not null;
 
             var avisosDelProducto = new List<string>();
             if (diferencia.HayDiferencia)
@@ -675,7 +699,7 @@ public sealed class RequisitosDelDesembolso(
             if (aplicar < actual)
             {
                 var aviso = $"Se mantiene lo proyectado: al crédito {credito.Number} se le abonan {ErroresDeRecogida.Pesos(aplicar)} y queda con un saldo de "
-                    + $"{ErroresDeRecogida.Pesos(l.ValorARecoger - aplicar)}.";
+                    + $"{ErroresDeRecogida.Pesos(segun.Valor - aplicar)}.";
                 avisosDelProducto.Add(aviso);
                 avisos.Add(aviso);
             }
@@ -685,7 +709,11 @@ public sealed class RequisitosDelDesembolso(
             var evaluada = pedida with
             {
                 Modo = cancela ? ModoTotal : ModoParcial,
-                AAplicar = cancela ? l.ValorARecoger : aplicar,
+                AAplicar = cancela ? segun.Valor : aplicar,
+                Tratamiento = dejaLaCuota ? InstallmentTreatment.Exclude : InstallmentTreatment.Include,
+                CuotaDejada = dejaLaCuota ? segun.CuotaDejada : null,
+                ValorDejado = dejaLaCuota ? segun.ValorDejado : null,
+                Segun = segun,
                 Liquidacion = liquidacion,
                 Actual = actual,
                 Diferencia = diferencia,
@@ -723,9 +751,11 @@ public sealed class RequisitosDelDesembolso(
     /// <summary>
     /// Completa la causa de una diferencia con lo que el comparador no ve en los conceptos (R9): un pago registrado en el crédito después de R
     /// (<c>Payments</c>), el modo de intereses que cambió desde la proyección (<c>Parameters</c>) y la cuota causada distinta (<c>CurrentInstallment</c>).
+    /// 2026-11-27 (feature 028, E2, T066): también <c>CurrentInstallment</c> si cambió el tratamiento de la cuota (la solicitud la dejaba y ya no se puede
+    /// dejar), comparando con la cuota del tratamiento que rige.
     /// </summary>
     private async Task<ResultadoDeDiferencia> CausasAsync(ResultadoDeDiferencia d, CreditApplicationPayoff fila, Loan credito, LiquidacionDeCreditoRecogido l,
-        CancellationToken ct)
+        Payoffs.RecogidaSegunCuota segun, CancellationToken ct)
     {
         if (!d.HayDiferencia) return d;
         var causa = d.Causa;
@@ -734,7 +764,9 @@ public sealed class RequisitosDelDesembolso(
             causa |= PayoffDifferenceCause.Payments;
         if (fila.InterestMode is { Length: > 0 } antes && !string.Equals(antes, l.Intereses.Efectivo, StringComparison.Ordinal))
             causa |= PayoffDifferenceCause.Parameters;
-        if (fila.CurrentInstallmentNumber is { } proyectada && l.CuotaCausada?.Numero is { } ahora && proyectada != ahora)
+        if (fila.CurrentInstallmentNumber is { } proyectada && segun.Cuota?.Numero is { } ahora && proyectada != ahora)
+            causa |= PayoffDifferenceCause.CurrentInstallment;
+        if (fila.InstallmentTreatment is { } antes2 && fila.Mode == PayoffMode.Total && antes2 != segun.Tratamiento)
             causa |= PayoffDifferenceCause.CurrentInstallment;
         return d with { Causa = causa };
     }
@@ -872,7 +904,9 @@ public sealed class RequisitosDelDesembolso(
             .Texto("account", beneficiario?.AccountNumber)
             .Lista("payoffs", recogidas.OrderBy(r => r.LoanId), (h, r) => h.Identificador("loan", r.LoanPublicId).Decimal("amount", r.AAplicar)
                 .Texto("mode", r.Modo).Decimal("difference", r.Diferencia.Total).Enumeracion("causes", (PayoffDifferenceCause?)r.Diferencia.Causa)
-                .Logico("omitted", r.Omitida))
+                .Logico("omitted", r.Omitida)
+                // 2026-11-27 (feature 028, E2, T066): la cuota que se deja a su canal (sin ella, la huella de siempre).
+                .Si(r.CuotaDejada is not null, x => x.Entero("leftInstallment", r.CuotaDejada).Decimal("leftAmount", r.ValorDejado ?? 0m)))
             .Texto("simulation", sim.Huella)
             .Si(subsidio > 0m, h => h.Decimal("subsidy", subsidio))
             .Calcular();

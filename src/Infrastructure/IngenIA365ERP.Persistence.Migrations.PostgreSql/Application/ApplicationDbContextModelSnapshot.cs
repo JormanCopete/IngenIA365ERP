@@ -47605,6 +47605,16 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<decimal?>("LeftInstallmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("LeftInstallmentNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LeftInstallmentSettledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("LoanId")
                         .HasColumnType("integer");
 
@@ -49024,6 +49034,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<bool>("LoanClosedAtResult")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("LoanId")
                         .HasColumnType("integer");

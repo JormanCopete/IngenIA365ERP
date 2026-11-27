@@ -192,6 +192,27 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(10, PuertosOfrecidos.Length);
     }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T064a; R6 «Nómina propia»): Cartera sabe si la nómina propia ya descuenta la cuota de un crédito sólo por el puerto de sólo
+    /// lectura que Nómina ofrece (<c>IDescuentosDeNominaParaCartera</c>, un método), en <c>Application.Common.Integration.Payroll</c>, implementado por Nómina
+    /// (<c>Application.Payroll.Integration</c>) y registrado en <c>DependencyInjection</c>: Cartera no lee tablas <c>PAY_</c>.
+    /// </summary>
+    [Fact]
+    public void Los_descuentos_de_la_nomina_propia_llegan_a_Cartera_por_el_puerto_de_Nomina()
+    {
+        var puerto = typeof(IngenIA365ERP.Application.Common.Integration.Payroll.IDescuentosDeNominaParaCartera);
+        Assert.Equal(["VivosAsync"], MetodosDe(puerto));
+        Assert.Equal("IngenIA365ERP.Application.Common.Integration.Payroll", puerto.Namespace);
+        var implementaciones = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && puerto.IsAssignableFrom(t)).ToList();
+        Assert.Equal(["IngenIA365ERP.Application.Payroll.Integration.DescuentosDeNominaParaCartera"], implementaciones.Select(t => t.FullName));
+        var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IDescuentosDeNominaParaCartera,\s*[\w.]*DescuentosDeNominaParaCartera>", di);
+        var cuotaEnviada = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending", "Payroll", "CuotaEnviadaDelCredito.cs");
+        Assert.Contains("IDescuentosDeNominaParaCartera", FuenteSinComentarios.Leer(cuotaEnviada), StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bdb\.(Payroll(Novelties|Runs|LoanDeductions)|PayPeriods)\b", FuenteSinComentarios.Leer(cuotaEnviada));
+    }
+
     [Fact]
     public void Fuera_de_Cartera_solo_los_provisionales_del_mismo_espacio_implementan_los_puertos()
     {

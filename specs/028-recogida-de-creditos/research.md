@@ -511,3 +511,51 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   inicio del ciclo; 03 período calendario con tramo en curso, sin tramo y cuota parcialmente pagada; 04 anticipo general, de la cuota dejada y de una cuota
   que sale; 05 seguro y administración), con `CancelacionSalvoCuotaTests` (simular = aplicar, valor sin aplicar, cierre al peso, causar día a día = reconstruir,
   vivienda) y `CancelacionSalvoCuotaEnElContratoTests` (Application).
+
+### E-12 — Cuota enviada, nómina propia y recogida con la cuota causada (T063–T066, parte de recogida de T072, 2026-11-27)
+- **T063**: la migración `CuotaDejadaALaPagaduria` (aditiva, los dos motores) agrega `LND_PayrollDeductionResults.LoanClosedAtResult` (falso de fábrica; lo
+  sellará T067) y `LeftInstallmentNumber`/`LeftInstallmentAmount`/`LeftInstallmentSettledAt` en `LND_DisbursementPayoffs`. `DisbursementPayoff.Evaluar` recibe la
+  cuota dejada y su valor (los dos o ninguno, sólo en un crédito recogido excluyéndola) y gana `MarcarCuotaDejadaPagada` (para T070) y `CuotaDejadaPendiente`.
+- **`SentInstallmentState` (R6 «Nómina propia»)**: valor nuevo del enum, no campo aparte. `OwnPayroll = 4` se renombró `OwnPayrollGenerated` (mismo número; nada
+  lo había guardado) y se agregaron `OwnPayrollCalculated = 5` y `OwnPayrollApproved = 6`. El contrato de obligaciones lleva su espejo
+  `EstadoDeCuotaEnviada` (otros módulos no pueden nombrar `Domain.Enums.Lending`), vigilado por `LosEnumsDelContratoNumeranComoElDominio`.
+- **T064a, el puerto de Nómina** `IDescuentosDeNominaParaCartera.VivosAsync(obligaciones, fecha)` devuelve todos los descuentos vivos por obligación y período:
+  calculado (fila `PAY_PayrollLoanDeductions` `Calculated` de la corrida ordinaria en `Draft`/`Stale` de un período `Open`/`Calculated`), generado (novedad
+  `LoanDeduction` activa de ese período sin corrida) y aprobado (fila aplicada de la corrida aprobada de un período que **no había terminado a la fecha**). Los
+  vivos no se acotan por la fecha (una nómina atrasada sigue descontando). Su propio enum `EstadoDelDescuentoDeNomina`. La regla de arquitectura es una prueba
+  nueva en `LaCarteraSoloSeTocaPorSusInterfaces` (un método, implementado sólo por Nómina, registrado en DI, `CuotaEnviadaDelCredito` lo usa y no lee `PAY_`).
+- **T064, qué cuota y qué período**: la cuota por la que se pregunta es la primera que vence en la fecha o después (`CuotaDelEstado`; la que vence hoy todavía
+  puede ir en el archivo). En libranza se mira la línea del archivo `Sent` del período que contiene su vencimiento (en un convenio quincenal, la quincena del
+  vencimiento); sin resultado, enviada sin respuesta; con el último resultado (el que nadie reemplaza) pendiente de giro, descontada; con algo sin descontar,
+  no descontada; descontada y girada, nada (ya está pagada). Si ese período no dice nada, lo descontado y sin girar de una línea anterior del crédito (la más
+  reciente). Los archivos se buscan desde dos meses antes de la fecha. La nómina propia sólo se pregunta por los créditos que la libranza no resolvió, y se
+  toma el descuento del período que contiene el vencimiento o, si no, el primero vivo.
+- **T065**: el listado y el detalle del contrato llevan `SentInstallment` (`CuotaEnviadaDto`, con la frase) y anuncian la modalidad 8 sólo al recaudador que la
+  admite (la recogida y Recaudo) y sólo en un crédito vigente, al día y con cuota causada (`AplicadorDePagos.CuotaCausada`: no en vivienda ni sin cuota en
+  curso). La cuota enviada se consulta en lote, una vez por listado. El detalle además la agrega a sus avisos. api.md §4 decía que no había métodos nuevos en el
+  puerto: se cumple (campos opcionales).
+- **T066, la liquidación**: `LiquidacionDeRecogida` recibe `ReglasDeParametrosDeCartera` y `CuotaEnviadaDelCredito`; lee `Recogida.CuotaCausada` con la línea del
+  crédito recogido (`CuotaCausadaConfigurada`), calcula todo menos la cuota con `ValorParaCancelarSalvoCuota` tal como está (sin tocar el motor) y lo guarda en
+  `SalvoCuota` (cuota, vencimiento, valor, desglose, lo que queda en la cuota). **`ValorARecoger` sigue siendo el total**; lo que rige con un tratamiento lo da
+  `Segun(tratamiento)` (valor, desglose, cuota, cuota dejada, renglones del interés sin los de la cuota dejada y la explicación). El **desglose de todo menos la
+  cuota** es cada concepto sin lo de la cuota dejada, lo devuelto por período calendario de las demás y, como cierre al peso con lo que cobra el contrato, el
+  anticipo que usa (si la resta saliera negativa iría a otros cargos). `AdmiteDejarLaCuota` ahora exige además que haya cuota causada a D
+  (`MotivoSinCuotaQueDejar`), no sólo que no sea vivienda.
+- **Resolver el tratamiento** (`ResolverTratamiento`): «Excluir» lo excluye solo; «Preguntar» toma lo pedido (sin pedir, incluir); «Incluir» rechaza que se pida
+  excluir (`Lending.Payoff.InstallmentTreatmentNotAdmitted`, código nuevo). Después `TratamientoEfectivo`: si el crédito no admite dejarla, se incluye. La
+  solicitud lo aplica estricto al guardar (`PrepararAsync`) y sin rechazar al radicar (`ReproyectarAsync`); el desembolso lo vuelve a resolver con el parámetro
+  de la fecha valor y la elección guardada, sin rechazar: así una solicitud proyectada a una D sin cuota causada, con «Excluir», la deja si al desembolsar la
+  hay (con la causa `CurrentInstallment`). Un parcial nunca la toca; el validador de la solicitud admite `Exclude` sólo en una recogida total.
+- **Candidatos**: `toPayOff` y `breakdown` son los del tratamiento que rige sin elegir («Excluir» → todo menos la cuota); `toPayOffExcludingCurrentInstallment` y
+  `breakdownExcludingCurrentInstallment` (nuevo), los de dejarla; `currentInstallment` gana `left`, `parameter`, `explanation`, `includedExplanation`,
+  `leftExplanation` y `notLeftReason`; `sent` gana la cuota, el convenio, lo corriente y vencido, la corrida y la frase. Con lo marcado (el PDF), un «Preguntar»
+  marcado dejándola se muestra con los valores de dejarla y `selectedInstallmentTreatment`. El PDF agrega la explicación de la cuota.
+- **Desembolso**: `RecogidaEvaluada` gana `Tratamiento`, `CuotaDejada`, `ValorDejado` y `Segun`; la recogida aplica `PayoffExceptCurrentInstallment` con la cuota
+  que se deja (si al aplicar ya no es esa, el contrato cancela todo y `AppliedDiffers` lo detiene); la huella y la relectura bajo el cerrojo comparan la cuota
+  dejada; la respuesta lleva `leftInstallment` y `leftInstallmentNumber`; la vista previa, `currentInstallment.left`, `sent` y `explanation`. El texto de la
+  explicación vive en `TextosDeCuotaEnviada` (Application), y el detalle de la solicitud la arma con el estado y el archivo guardados (no vuelve a consultar).
+- **Vínculos y detalle**: `VinculoDeRecogida` y `LoanPayoffLinkDto` llevan la cuota dejada, su valor, cuándo se pagó y el canal (la forma de pago del recogido);
+  el detalle del crédito dice «Cuota dejada a la pagaduría/nómina: cuota N por $X» mientras no esté pagada. El informe `payoffs` dice «Dejada a su canal: cuota
+  N por $X».
+- **Pendiente o dudoso**: la pregunta abierta al dueño sobre el interés de la cuota dejada dentro del tope legal del prepago (no se tocó el motor); T067–T071 y la
+  parte de la caja de T072 son de otro bloque.

@@ -223,7 +223,14 @@
                                     {
                                         <tr>
                                             <td>@TextosDeDesembolso.ClaseDeProducto(a.Kind) @a.Number</td>
-                                            <td>@TextosDeDesembolso.ModoDeRecogida(a.Mode)</td>
+                                            <td>
+                                                @TextosDeDesembolso.ModoDeRecogida(a.Mode)
+                                                @* 2026-11-27 (feature 028, E2, T072): la cuota causada que se dejó a su canal. *@
+                                                @if (a.LeftInstallmentNumber is { } dejada)
+                                                {
+                                                    <span class="texto-tenue"> · cuota @dejada dejada a su canal (@TextosDeOriginacion.Pesos(a.LeftInstallment ?? 0m))</span>
+                                                }
+                                            </td>
                                             <td class="numero">@(a.Projected is { } proyectado ? TextosDeOriginacion.Pesos(proyectado) : "Sin proyección")</td>
                                             <td class="numero">@TextosDeOriginacion.Pesos(a.Current)</td>
                                             <td class="numero"><span class="@TextosDeDesembolso.ClaseDeDiferencia(a.Difference)">@TextosDeDesembolso.Diferencia(a.Difference)</span></td>

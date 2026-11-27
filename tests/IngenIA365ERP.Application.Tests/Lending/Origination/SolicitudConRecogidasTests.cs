@@ -294,8 +294,11 @@ public sealed class SolicitudConRecogidasTests : IAsyncLifetime
             .Should().BeFalse("en E1 sólo se recogen créditos");
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Total), new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Total)] })
             .IsValid.Should().BeFalse("un producto no va dos veces");
+        // 2026-11-27 (feature 028, E2, T066): dejar la cuota causada se pide en una recogida total (si la línea lo admite lo decide la recogida de la solicitud).
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Total, InstallmentTreatment: InstallmentTreatment.Exclude)] })
-            .IsValid.Should().BeFalse("dejar la cuota causada llega con E2");
+            .IsValid.Should().BeTrue("con E2 se puede pedir dejar la cuota causada");
+        v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Partial, 1_000m, InstallmentTreatment: InstallmentTreatment.Exclude)] })
+            .IsValid.Should().BeFalse("un parcial no deja la cuota causada");
         v.Validate(_o.Solicitud() with { OwnLoanPayoffs = [new OwnLoanPayoffInput(credito, "Partial")] }).IsValid.Should().BeFalse();
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Partial, 1_000m)] }).IsValid.Should().BeTrue();
     }

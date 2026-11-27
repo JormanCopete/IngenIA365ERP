@@ -77,9 +77,11 @@ public sealed class CreditApplicationInputValidator : AbstractValidator<CreditAp
             p.RuleFor(y => y.Amount).NotNull().GreaterThan(0m).When(y => y.Mode == PayoffMode.Partial)
                 .WithMessage("Una recogida parcial lleva un valor mayor que cero.");
             p.RuleFor(y => y.Amount).PrecisionScale(18, 2, true).When(y => y.Amount is not null);
-            // «Todo menos la cuota causada» (Recogida.CuotaCausada) llega con la entrega E2: en E1 la cuota causada siempre se incluye.
-            p.RuleFor(y => y.InstallmentTreatment).Must(t => t is null or InstallmentTreatment.Include)
-                .WithMessage("Dejar la cuota causada en el crédito que se recoge todavía no está disponible: la recogida la incluye.");
+            // 2026-11-27 (feature 028, E2, T066): «todo menos la cuota causada» (Recogida.CuotaCausada) sólo en una recogida total; si la línea del crédito lo
+            // admite lo decide RecogidasDeLaSolicitud.
+            p.RuleFor(y => y.InstallmentTreatment).IsInEnum().When(y => y.InstallmentTreatment is not null);
+            p.RuleFor(y => y.InstallmentTreatment).Must(t => t != InstallmentTreatment.Exclude).When(y => y.Mode != PayoffMode.Total)
+                .WithMessage("Dejar la cuota causada a su canal sólo aplica a una recogida total.");
         });
         RuleForEach(x => x.OwnLoanPayoffs).ChildRules(p =>
         {

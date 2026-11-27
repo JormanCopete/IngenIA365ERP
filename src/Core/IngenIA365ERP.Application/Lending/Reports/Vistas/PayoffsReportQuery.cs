@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Loans;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Payoffs;
 using MediatR;
@@ -159,7 +160,7 @@ public sealed class PayoffsReportQueryHandler(IApplicationDbContext db, IAlcance
                 r.ProductNumber, ClaseEnTexto(r.ProductKind), ModoEnTexto(r.Mode),
                 conProyeccion ? r.ProjectedAmount : null, r.AppliedAmount, conProyeccion ? r.Difference : null,
                 conProyeccion && r.DifferenceCause != PayoffDifferenceCause.None ? Mayuscula(RequisitosDelDesembolso.TextoDeCausas(r.DifferenceCause)) : string.Empty,
-                CuotaEnTexto(r.InstallmentTreatment),
+                CuotaEnTexto(r.InstallmentTreatment, r.LeftInstallmentNumber, r.LeftInstallmentAmount),
                 ahora?.InteresDevuelto, ahora?.InteresCobradoPorProporcionales,
                 Usuario(solicitud?.Asesor), Decisor(solicitud?.ApprovalDecisionId), Usuario(x.ActorUserId), estado, nuevo.PublicId.ToString(),
             ], Resaltada: r.EstaReversada || r.Omitted));
@@ -208,6 +209,12 @@ public sealed class PayoffsReportQueryHandler(IApplicationDbContext db, IAlcance
         InstallmentTreatment.Exclude => "Dejada a su canal",
         _ => string.Empty,
     };
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): con la cuota dejada, «Dejada a su canal: cuota 7 por $312.400». (nuevo)</summary>
+    public static string CuotaEnTexto(InstallmentTreatment? tratamiento, int? cuotaDejada, decimal? valorDejado) =>
+        tratamiento == InstallmentTreatment.Exclude && cuotaDejada is { } n
+            ? $"{CuotaEnTexto(tratamiento)}: cuota {n} por {ErroresDeRecogida.Pesos(valorDejado ?? 0m)}"
+            : CuotaEnTexto(tratamiento);
 
     private static string Mayuscula(string texto) => texto.Length == 0 ? texto : char.ToUpperInvariant(texto[0]) + texto[1..];
 }

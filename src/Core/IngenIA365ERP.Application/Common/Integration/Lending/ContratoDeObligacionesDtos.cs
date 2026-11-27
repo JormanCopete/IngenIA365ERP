@@ -71,7 +71,33 @@ public sealed record ObligacionListadaDto(
     /// <c>DueToday</c>. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
     /// </summary>
     public decimal? DueWithoutPeriodInProgress { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T065; R6, FR-021, FR-023; api.md §4): la cuota del período que ya va en un archivo de libranza o en la nómina propia —en qué
+    /// va, la cuota, la pagaduría, el archivo, el período y el valor—; nula si no hay nada enviado. La caja la avisa en «Todo para cancelar» y en la
+    /// cancelación. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
+    /// </summary>
+    public CuotaEnviadaDto? SentInstallment { get; init; }
 }
+
+/// <summary>
+/// 2026-11-27 (feature 028, T065; R6, FR-021; api.md §4): la cuota del período de una obligación que ya salió a su canal: en qué va, la cuota que nombra la
+/// línea o la novedad, su vencimiento, la pagaduría y el convenio, el archivo (número), el período y los valores de la línea (corriente, vencido y total);
+/// en la nómina propia, el período, la corrida y el valor (en <see cref="TotalAmount"/>). <see cref="Explanation"/>, en español. (nuevo)
+/// </summary>
+public sealed record CuotaEnviadaDto(
+    EstadoDeCuotaEnviada State,
+    int? InstallmentNumber,
+    DateOnly? DueDate,
+    string? Paymaster,
+    string? Agreement,
+    string? File,
+    string? Period,
+    decimal? CurrentAmount,
+    decimal? PastDueAmount,
+    decimal? TotalAmount,
+    Guid? PayrollRunPublicId,
+    string Explanation);
 
 // ------------------------------------------------------------------------------------------------------ simular (§3.6) --
 

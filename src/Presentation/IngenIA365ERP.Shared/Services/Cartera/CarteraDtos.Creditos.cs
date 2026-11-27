@@ -100,6 +100,25 @@ public sealed record VinculoDeRecogidaDto(string Kind, Guid? LoanPublicId, strin
 {
     private const string Reversado = " (reversado al anular el crédito nuevo)";
 
+    /// <summary>2026-11-27 (feature 028, E2, T072): la cuota causada que la recogida dejó a su canal, lo que debe, cuándo quedó pagada y el canal.</summary>
+    public int? LeftInstallmentNumber { get; init; }
+
+    public decimal? LeftInstallmentAmount { get; init; }
+
+    public DateTime? LeftInstallmentSettledAt { get; init; }
+
+    /// <summary>La forma de pago del crédito recogido (<c>PaymasterDeduction</c>, <c>OwnPayroll</c>, <c>Cashier</c>…).</summary>
+    public string? LeftInstallmentChannel { get; init; }
+
+    /// <summary>¿Dejó una cuota a su canal y todavía se debe?</summary>
+    public bool CuotaDejadaPendiente => LeftInstallmentNumber is not null && LeftInstallmentSettledAt is null && !Reversed;
+
+    /// <summary>«Cuota dejada a la pagaduría: cuota 7 por $ 312.400» (a la nómina, o a su canal si se paga en caja).</summary>
+    public string CuotaDejada => LeftInstallmentNumber is { } n
+        ? $"Cuota dejada {(LeftInstallmentChannel switch { "PaymasterDeduction" => "a la pagaduría", "OwnPayroll" => "a la nómina", _ => "a su canal" })}: "
+          + $"cuota {n} por {TextosDeRecogida.Pesos(LeftInstallmentAmount ?? 0m)}"
+        : string.Empty;
+
     /// <summary>«Recogido por el crédito {número} el {fecha}».</summary>
     public string RecogidoPor => $"Recogido por el crédito {Number} el {Date:dd/MM/yyyy}" + (Reversed ? Reversado : string.Empty);
 

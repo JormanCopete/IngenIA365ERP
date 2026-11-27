@@ -207,15 +207,40 @@ public sealed class GetPayoffCandidatesQueryHandler(
         avisos.InsertRange(0, l.Avisos.Where(a => !string.Equals(a, l.ExplicacionDeIntereses, StringComparison.Ordinal)));
 
         var bloqueoDelCredito = l.Bloqueo ?? (modos.Count == 0 ? ErroresDeRecogida.NoAdmitido(credito.Number) : null);
-        var cuotaCausada = l.CuotaCausada is { } c
-            ? new PayoffCurrentInstallmentDto(c.Numero, c.Vencimiento, c.Valor, InstallmentTreatment.Include, Choosable: false, Sent: null)
-            : null;
+        // 2026-11-27 (feature 028, E2, T066; HU4): la cuota causada con el tratamiento que rige (Recogida.CuotaCausada de la línea de este crédito), si el
+        // asesor lo elige («Preguntar»), la cuota enviada y lo que se recoge dejándola.
+        var segun = l.Segun(l.TratamientoPorDefecto);
+        var cuotaCausada = CuotaCausada(l, segun);
         return new PayoffCandidateDto(PayoffProductKind.Loan, credito.PublicId, credito.Number, linea, credito.Origin, canal, l.DiasDeMora, cuota,
-            bloqueoDelCredito is null, bloqueoDelCredito?.Motivo, modos, l.ValorARecoger, PayoffBreakdownDto.De(l.Desglose), l.Intereses.Efectivo,
-            l.Intereses.Motivo, cuotaCausada, null, otraSolicitud, l.Huella, avisos)
+            bloqueoDelCredito is null, bloqueoDelCredito?.Motivo, modos, segun.Valor, PayoffBreakdownDto.De(segun.Desglose), l.Intereses.Efectivo,
+            l.Intereses.Motivo, cuotaCausada, l.SalvoCuota?.ValorARecoger, otraSolicitud, l.Huella, avisos)
         {
             Status = credito.Status, BlockMessage = bloqueoDelCredito?.Mensaje, InterestModeExplanation = l.ExplicacionDeIntereses,
-            InterestExplanation = PayoffInterestLineDto.De(l.ExplicacionDelInteres), RecognizedReleased = l.ReconocidoQueSeLibera,
+            InterestExplanation = PayoffInterestLineDto.De(segun.ExplicacionDelInteres), RecognizedReleased = l.ReconocidoQueSeLibera,
+            BreakdownExcludingCurrentInstallment = l.SalvoCuota is { } salvo ? PayoffBreakdownDto.De(salvo.Desglose) : null,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; api.md §1 <c>currentInstallment</c>): la cuota causada como la ve el asesor: con el tratamiento que rige, si la elige,
+    /// la enviada, lo que deja debiendo si se deja y qué pasa con ella en cada caso. Sin cuota causada ni dejada, nula. Lo usa también la vista previa del
+    /// desembolso. (nuevo)
+    /// </summary>
+    public static PayoffCurrentInstallmentDto? CuotaCausada(LiquidacionDeCreditoRecogido l, RecogidaSegunCuota segun)
+    {
+        ArgumentNullException.ThrowIfNull(l);
+        ArgumentNullException.ThrowIfNull(segun);
+        if (segun.Cuota is not { } c) return null;
+        var incluida = l.Segun(InstallmentTreatment.Include);
+        var dejada = l.SalvoCuota is not null ? l.Segun(InstallmentTreatment.Exclude) : null;
+        return new PayoffCurrentInstallmentDto(c.Numero, c.Vencimiento, c.Valor, segun.Tratamiento, l.CuotaElegible, PayoffSentInstallmentDto.De(l.CuotaEnviada))
+        {
+            Left = l.SalvoCuota?.QuedaEnLaCuota,
+            Parameter = l.CuotaCausadaConfigurada,
+            Explanation = segun.ExplicacionDeLaCuota,
+            IncludedExplanation = incluida.ExplicacionDeLaCuota,
+            LeftExplanation = dejada?.ExplicacionDeLaCuota,
+            NotLeftReason = l.CuotaCausadaConfigurada != ParametrosDeCartera.CuotaIncluir && !l.AdmiteDejarLaCuota ? l.RecogidoCompletoPorque : null,
         };
     }
 
@@ -246,13 +271,35 @@ public sealed class GetPayoffCandidatesQueryHandler(
                 avisos.Add($"El crédito {p.Number} está marcado {TextoDelModo(marcado.Mode)}, pero la línea del crédito nuevo no admite recogerlo así.");
                 continue;
             }
-            var valor = marcado.Mode == PayoffMode.Total ? p.ToPayOff : Math.Min(marcado.Amount ?? 0m, p.ToPayOff);
+            // 2026-11-27 (feature 028, E2, T066): con «Preguntar», dejar la cuota causada recoge todo menos ella.
+            var dejaLaCuota = marcado.Mode == PayoffMode.Total && marcado.InstallmentTreatment == InstallmentTreatment.Exclude
+                              && p.CurrentInstallment is { Choosable: true } && p.ToPayOffExcludingCurrentInstallment is not null;
+            if (marcado.Mode == PayoffMode.Total && marcado.InstallmentTreatment == InstallmentTreatment.Exclude && !dejaLaCuota
+                && p.CurrentInstallment is not { Treatment: InstallmentTreatment.Exclude })
+                avisos.Add($"El crédito {p.Number} no admite que el asesor deje la cuota causada: se recoge con ella.");
+            var tratamiento = dejaLaCuota ? InstallmentTreatment.Exclude : p.CurrentInstallment?.Treatment ?? InstallmentTreatment.Include;
+            var paraRecoger = dejaLaCuota ? p.ToPayOffExcludingCurrentInstallment!.Value : p.ToPayOff;
+            var valor = marcado.Mode == PayoffMode.Total ? paraRecoger : Math.Min(marcado.Amount ?? 0m, p.ToPayOff);
             if (marcado.Mode == PayoffMode.Partial && marcado.Amount > p.ToPayOff)
                 avisos.Add($"El valor parcial del crédito {p.Number} pasa de lo que cuesta recogerlo: se toma {Pesos(p.ToPayOff)}.");
             total += valor;
             contados++;
             if (marcado.Mode == PayoffMode.Total) liberadas += p.Installment ?? 0m;
-            productos[i] = p with { Selected = true, SelectedMode = marcado.Mode, SelectedAmount = valor };
+            productos[i] = p with
+            {
+                Selected = true, SelectedMode = marcado.Mode, SelectedAmount = valor,
+                SelectedInstallmentTreatment = marcado.Mode == PayoffMode.Total ? tratamiento : null,
+            };
+            if (dejaLaCuota && p.CurrentInstallment is { } c)
+            {
+                // Lo marcado se muestra (y se imprime) con lo que se recoge dejándola: el valor, el desglose, la cuota con lo que deberá y su explicación.
+                productos[i] = productos[i] with
+                {
+                    ToPayOff = paraRecoger, Breakdown = p.BreakdownExcludingCurrentInstallment ?? p.Breakdown,
+                    CurrentInstallment = c with { Treatment = InstallmentTreatment.Exclude, Amount = c.Left ?? c.Amount, Explanation = c.LeftExplanation },
+                    InterestExplanation = p.InterestExplanation.Where(r => r.Installment != c.Number).ToList(),
+                };
+            }
         }
 
         decimal? neto = request.NewLoan is { } nuevo ? nuevo.Amount - total : null;

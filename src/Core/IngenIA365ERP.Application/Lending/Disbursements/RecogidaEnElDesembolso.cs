@@ -95,16 +95,20 @@ public sealed class RecogidaEnElDesembolso(IContratoDeObligaciones contrato)
         var aAplicar = recogidas.Where(r => !r.Omitida).ToList();
         if (aAplicar.Count == 0) return Result.Success<IReadOnlyList<RecogidaAplicada>>([]);
 
+        // 2026-11-27 (feature 028, E2, T066; FR-020): una cancelación que deja la cuota causada a su canal va como PayoffExceptCurrentInstallment con la cuota
+        // que se deja (si al aplicar ya no es esa, el contrato la cancela entera y la defensa de H4 lo detiene).
         var pagos = aAplicar.Select(r => new PagoAAplicar(
             Clave(operacion.PublicId, r.LoanPublicId),
             r.LoanPublicId,
-            r.Total ? ModalidadDePago.FullPayoff : ModalidadDePago.ExtraordinaryPrincipal,
+            !r.Total ? ModalidadDePago.ExtraordinaryPrincipal
+                : r.CuotaDejada is not null ? ModalidadDePago.PayoffExceptCurrentInstallment : ModalidadDePago.FullPayoff,
             r.AAplicar,
             operacion.ValueDate,
             ClaseDeMedioDeRecaudo.InternalOffset,
             deudor,
             new ReferenciaDeRecibo(operacion.Number, operacion.ValueDate, null, null, Common.InteresesAlCancelar.DocumentoDelDesembolso),
-            Choice: r.Total ? null : r.Eleccion ?? EleccionDeAbono.ReduceTerm)).ToList();
+            Choice: r.Total ? null : r.Eleccion ?? EleccionDeAbono.ReduceTerm,
+            InstallmentNumber: r.Total ? r.CuotaDejada : null)).ToList();
         var respuesta = await contrato.AplicarAsync(new SolicitudDeAplicacion(Recaudador, FormaDeAplicacion.NonInteractive, pagos, []), ct);
 
         var aplicadas = new List<RecogidaAplicada>(aAplicar.Count);

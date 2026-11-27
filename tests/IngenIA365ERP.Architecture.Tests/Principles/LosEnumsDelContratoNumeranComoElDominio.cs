@@ -94,6 +94,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountStatus))]
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountConcept))]
     [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.RolEnLaCuenta), typeof(IngenIA365ERP.Domain.Enums.Lending.MemberAccountPartyRole))]
+    // 2026-11-27 (feature 028, T065): la cuota enviada del listado del contrato de obligaciones.
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeCuotaEnviada), typeof(IngenIA365ERP.Domain.Enums.Lending.SentInstallmentState))]
     public void Cada_enum_del_contrato_numera_como_su_par_del_dominio(Type contrato, Type dominio)
     {
         static Dictionary<string, int> Valores(Type t) => Enum.GetNames(t).ToDictionary(n => n, n => Convert.ToInt32(Enum.Parse(t, n)));

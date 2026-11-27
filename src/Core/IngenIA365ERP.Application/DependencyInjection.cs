@@ -380,6 +380,8 @@ public static class DependencyInjection
         services.AddScoped<Receipts.Compliance.GeneracionDelReporteDeTransacciones>();
         // Feature 015, R1 (fase 31; E-05, D26): las consultas de sólo lectura del consolidado de Recaudo.
         services.AddScoped<Common.Integration.Payroll.IRecaudoDeNominaParaConsolidado, Payroll.Integration.RecaudoDeNominaParaConsolidado>();
+        // 2026-11-27 (feature 028, T064a; R6): los descuentos de cartera vivos de la nómina propia, que Cartera lee para la cuota enviada.
+        services.AddScoped<Common.Integration.Payroll.IDescuentosDeNominaParaCartera, Payroll.Integration.DescuentosDeNominaParaCartera>();
         services.AddScoped<Common.Integration.Lending.IDebitoAutomaticoParaConsolidado, Lending.Integration.DebitoAutomaticoParaConsolidado>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
@@ -928,6 +930,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payroll.Agreements.AltaDeVersionDeConvenio>();
         services.AddScoped<Lending.Payroll.Agreements.CopiaDeVersionDeConvenio>();
         services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
+        // 2026-11-27 (feature 028, T064; R6, FR-021): en qué va la cuota del período de cada crédito frente a su pagaduría o su nómina propia.
+        services.AddScoped<Lending.Payroll.CuotaEnviadaDelCredito>();
         services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
         services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
         // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.

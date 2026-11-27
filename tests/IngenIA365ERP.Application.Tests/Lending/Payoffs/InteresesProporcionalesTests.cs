@@ -63,7 +63,8 @@ public class InteresesProporcionalesTests
     private static async Task<LiquidacionDeCreditoRecogido> LiquidarAsync(PagosDePrueba p, DateOnly fecha)
     {
         var credito = await p.Db.Loans.AsNoTracking().SingleAsync(l => l.Id == p.Credito.Id);
-        var liquidada = await new LiquidacionDeRecogida(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj).LiquidarCreditoAsync(credito, fecha, null, default);
+        var liquidada = await new LiquidacionDeRecogida(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj, p.D.Parametros(), p.D.O.CuotaEnviada())
+            .LiquidarCreditoAsync(credito, fecha, null, default);
         liquidada.IsSuccess.Should().BeTrue(liquidada.IsFailure ? $"{liquidada.Error.Code}: {liquidada.Error.Message}" : string.Empty);
         return liquidada.Value;
     }
@@ -210,7 +211,8 @@ public class InteresesProporcionalesTests
         l.ReconocidoQueSeLibera.Should().Be(0m);
 
         var viejo = p.D.O.Credito(p.D.O.Ana, 1_000_000m, "CR-VIEJO");
-        var delLibro = await new LiquidacionDeRecogida(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj).LiquidarCreditoAsync(viejo, Hoy, null, default);
+        var delLibro = await new LiquidacionDeRecogida(p.Db, p.C.Cargador(), p.Intereses(), p.G.Reloj, p.D.Parametros(), p.D.O.CuotaEnviada())
+            .LiquidarCreditoAsync(viejo, Hoy, null, default);
         delLibro.Value.ExplicacionDelInteres.Should().BeEmpty("sin reconstrucción no hay días que contar");
     }
 

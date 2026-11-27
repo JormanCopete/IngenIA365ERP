@@ -48,7 +48,10 @@ public class DisbursementPayoffConfiguration : IEntityTypeConfiguration<Disburse
         builder.Property(e => e.IdempotencyKey).HasMaxLength(DisbursementPayoff.LargoDeLaClave).IsRequired();
         builder.Property(e => e.ReversalKey).HasMaxLength(DisbursementPayoff.LargoDeLaClaveDeReverso);
         builder.Property(e => e.AcknowledgedBy).HasMaxLength(DisbursementPayoff.LargoDeQuienReconoce);
+        // 2026-11-27 (feature 028, E2, T063; migración CuotaDejadaALaPagaduria, aditiva): la cuota dejada a su canal.
+        builder.Property(e => e.LeftInstallmentAmount).Monto();
         builder.Ignore(e => e.EstaReversada);
+        builder.Ignore(e => e.CuotaDejadaPendiente);
 
         builder.HasOne<LoanOperation>().WithMany().HasForeignKey(e => e.DisbursementOperationId).OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("FK_LND_DisbursementPayoffs_DisbursementOperation");

@@ -38,8 +38,11 @@ public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, dec
     /// <summary>2026-11-27 (feature 028, E4): el recibo de Recaudo de la factura recogida; nulo en un crédito. (nuevo)</summary>
     public Guid? ReceiptPublicId { get; init; }
 
-    /// <summary>2026-11-27 (feature 028, E2): la cuota causada que se dejó a su canal; nula en la entrega E1. (nuevo)</summary>
+    /// <summary>2026-11-27 (feature 028, E2, T066): lo que la cuota causada que se dejó a su canal debe al vencer; nulo si se recogió todo. (nuevo)</summary>
     public decimal? LeftInstallment { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): el número de la cuota causada que se dejó a su canal; nulo si se recogió todo. (nuevo)</summary>
+    public int? LeftInstallmentNumber { get; init; }
 }
 
 /// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
@@ -149,10 +152,17 @@ public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Numb
 }
 
 /// <summary>
-/// 2026-11-27 (feature 028, api.md §3): la cuota causada del crédito recogido: número, vencimiento, valor y qué se hace con ella (en la entrega E1 siempre
-/// se incluye; <see cref="Left"/>, la que se deja a su canal, llega con E2). (nuevo)
+/// 2026-11-27 (feature 028, api.md §3): la cuota causada del crédito recogido: número, vencimiento, valor y qué se hace con ella. 2026-11-27 (feature 028, E2,
+/// T066): <see cref="Left"/> es lo que la cuota que se deja a su canal debe al vencer (nulo si se incluye), con la cuota enviada y la explicación. (nuevo)
 /// </summary>
-public sealed record DisbursementPayoffInstallmentDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left);
+public sealed record DisbursementPayoffInstallmentDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left)
+{
+    /// <summary>La cuota que ya salió a la pagaduría o a la nómina propia; nula si no salió.</summary>
+    public PayoffSentInstallmentDto? Sent { get; init; }
+
+    /// <summary>Qué pasa con la cuota en la recogida («se deja en el crédito y la pagará la pagaduría…», «se recoge completa…»).</summary>
+    public string? Explanation { get; init; }
+}
 
 /// <summary>
 /// 2026-11-27 (feature 028, T034; api.md §3 <c>payoffDifferences</c>): cuántos productos cambiaron o se omiten, cuánto en total (ahora − proyectado), si

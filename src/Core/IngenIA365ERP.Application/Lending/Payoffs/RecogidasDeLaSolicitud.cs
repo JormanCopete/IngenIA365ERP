@@ -90,7 +90,7 @@ public sealed class RecogidasDeLaSolicitud(
         // R no pasa de ahora (lo que todavía no se sabe no se puede haber tomado).
         DateTime? r = null;
         if (e.PayoffProjection?.RecordedAsOf is { } pedida) r = Utc(pedida) > ahora ? ahora : Utc(pedida);
-        return await ProyectarAsync(unificadas.Value, solicitanteId, lineaId, e.Amount, d, r, ct);
+        return await ProyectarAsync(unificadas.Value, solicitanteId, lineaId, e.Amount, d, r, estricto: true, ct);
     }
 
     /// <summary>
@@ -113,7 +113,9 @@ public sealed class RecogidasDeLaSolicitud(
         if (filas.Count == 0) return Result.Success(RecogidasPreparadas.Ninguna(d, reloj.UtcNow));
         var pedidas = filas.Select(f => new PayoffInput(f.Fila.ProductKind, f.LoanPublicId, f.Fila.Mode, f.Fila.RequestedAmount,
             f.Fila.CommercialReceivableReference, f.Fila.InstallmentTreatment)).ToList();
-        return await ProyectarAsync(pedidas, s.ApplicantPersonId, s.CreditLineId, s.RequestedAmount, d, null, ct);
+        // 2026-11-27 (feature 028, E2, T066): al volver a proyectar lo guardado, la cuota causada sigue el parámetro de hoy sin rechazar (una «Excluir» guardada
+        // con la línea ya en «Incluir» se incluye): lo que se radica es lo que la solicitud tenía.
+        return await ProyectarAsync(pedidas, s.ApplicantPersonId, s.CreditLineId, s.RequestedAmount, d, null, estricto: false, ct);
     }
 
     /// <summary>
@@ -135,9 +137,12 @@ public sealed class RecogidasDeLaSolicitud(
             db.CreditApplicationPayoffs.Add(CreditApplicationPayoff.Proyectar(solicitudId, r.Producto, r.Modo, r.ValorPedido, orden++, r.Proyeccion));
     }
 
-    /// <summary>Las reglas de arriba sobre una lista ya unificada, con D y R resueltas.</summary>
+    /// <summary>
+    /// Las reglas de arriba sobre una lista ya unificada, con D y R resueltas. 2026-11-27 (feature 028, E2, T066): con <paramref name="estricto"/>, pedir que
+    /// se deje la cuota causada de un crédito cuya línea dice «Incluir» es un error (<c>Lending.Payoff.InstallmentTreatmentNotAdmitted</c>).
+    /// </summary>
     private async Task<Result<RecogidasPreparadas>> ProyectarAsync(IReadOnlyList<PayoffInput> pedidas, int solicitanteId, int lineaId, decimal monto,
-        DateOnly d, DateTime? r, CancellationToken ct)
+        DateOnly d, DateTime? r, bool estricto, CancellationToken ct)
     {
         if (pedidas.FirstOrDefault(p => p.Kind != PayoffProductKind.Loan) is { } otro)
             return Falla(ErroresDeRecogida.ClaseNoAdmitida(otro.Kind));
@@ -170,9 +175,18 @@ public sealed class RecogidasDeLaSolicitud(
             if (l.Bloqueo is { } bloqueo) return Falla(bloqueo.ComoError());
             informacion ??= l.InformacionHasta;
 
-            // E1: la cuota causada siempre se incluye; «todo menos la cuota causada» (Recogida.CuotaCausada) llega con E2 (T066).
-            var proyeccion = l.Proyeccion(InstallmentTreatment.Include);
-            if (p.Mode == PayoffMode.Partial && p.Amount < l.ValorARecoger)
+            // 2026-11-27 (feature 028, E2, T066; HU4, D1, D2): la cuota causada de una recogida total según Recogida.CuotaCausada de la línea del crédito que se
+            // recoge: «Excluir» la deja a su canal, «Preguntar» toma lo que eligió el asesor, «Incluir» no admite que se pida dejarla. Un crédito que no la
+            // admite (vivienda, sin cuota causada a D) se recoge completo. Un parcial no toca la cuota causada.
+            var tratamiento = InstallmentTreatment.Include;
+            if (p.Mode == PayoffMode.Total)
+            {
+                var resuelto = l.ResolverTratamiento(p.InstallmentTreatment);
+                if (resuelto.IsSuccess) tratamiento = resuelto.Value;
+                else if (estricto) return Falla(resuelto.Error);
+            }
+            var proyeccion = l.Proyeccion(tratamiento);
+            if (p.Mode == PayoffMode.Partial && p.Amount < l.Segun(tratamiento).Valor)
             {
                 // Un parcial cubre lo exigible a D y abona el resto a capital (D7). Un crédito que se puede recoger está al día, así que a D no tiene nada
                 // vencido: lo proyectado va a capital. El desembolso lo vuelve a liquidar y muestra la diferencia, si la hay. Si el parcial cubre todo, se

@@ -391,18 +391,51 @@ public static class ConsultasDeSolicitudes
         if (filas.Count == 0) return [];
         var enOtras = await Payoffs.RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync(db,
             filas.Where(f => f.Fila.LoanId is not null).Select(f => f.Fila.LoanId!.Value).ToList(), s.Id, null, ct);
+        // 2026-11-27 (feature 028, E2, T066): la cuota enviada como se proyectó (el estado y el archivo de libranza guardados, con su pagaduría y su período).
+        var archivos = filas.Where(f => f.Fila.PayrollDeductionFileId is not null).Select(f => f.Fila.PayrollDeductionFileId!.Value).Distinct().ToList();
+        var deArchivo = archivos.Count == 0
+            ? []
+            : (await (from a in db.PayrollDeductionFiles.AsNoTracking()
+                      join c in db.PayrollAgreements.AsNoTracking().IgnoreQueryFilters() on a.PayrollAgreementId equals c.Id
+                      join p in db.People.AsNoTracking().IgnoreQueryFilters() on c.PaymasterPersonId equals p.Id
+                      where archivos.Contains(a.Id)
+                      select new { a.Id, a.Number, a.PeriodYear, a.PeriodMonth, a.SubPeriodNumber, c.Code, Pagaduria = p })
+                .ToListAsync(ct))
+            .ToDictionary(a => a.Id, a => (a.Number, Periodo: Payroll.TextosDeCuotaEnviada.PeriodoDeLibranza(a.PeriodYear, a.PeriodMonth, a.SubPeriodNumber),
+                a.Code, Pagaduria: ReferenciasDeGobierno.Nombre(a.Pagaduria)));
         return filas.Select(x =>
         {
             var f = x.Fila;
             return new CreditApplicationPayoffDto(f.ProductKind, x.LoanPublicId, f.CommercialReceivableReference, f.ProductNumber, f.Mode, f.RequestedAmount,
                 f.ProjectedAmount, Payoffs.PayoffBreakdownDto.De(f.Desglose()), f.InstallmentTreatment, f.InterestMode,
-                f.CurrentInstallmentNumber is { } numero
-                    ? new Payoffs.PayoffCurrentInstallmentDto(numero, null, f.CurrentInstallmentAmount ?? 0m, f.InstallmentTreatment ?? InstallmentTreatment.Include,
-                        Choosable: false, Sent: null)
-                    : null,
+                f.CurrentInstallmentNumber is { } numero ? CuotaProyectada(f, numero, deArchivo) : null,
                 f.ProjectedDate, f.RecordedAsOf, f.TieneProyeccion,
                 f.LoanId is { } credito && enOtras.TryGetValue(credito, out var otra) ? otra : null, f.Order);
         }).ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066): la cuota causada como se proyectó: el tratamiento guardado, lo que deja debiendo si se dejó, la cuota enviada (el
+    /// estado guardado con el archivo, su pagaduría y su período) y qué pasa con ella en la recogida. No se vuelve a consultar el envío: lo vigente lo dice la
+    /// vista previa del desembolso.
+    /// </summary>
+    private static Payoffs.PayoffCurrentInstallmentDto CuotaProyectada(Domain.Entities.Lending.Payoffs.CreditApplicationPayoff f, int numero,
+        IReadOnlyDictionary<int, (string Number, string Periodo, string Code, string Pagaduria)> archivos)
+    {
+        var tratamiento = f.InstallmentTreatment ?? InstallmentTreatment.Include;
+        var valor = f.CurrentInstallmentAmount ?? 0m;
+        Payroll.CuotaEnviada? enviada = null;
+        if (f.SentInstallmentState != SentInstallmentState.None)
+        {
+            var archivo = f.PayrollDeductionFileId is { } id && archivos.TryGetValue(id, out var a) ? a : default;
+            enviada = new Payroll.CuotaEnviada(f.LoanId ?? 0, f.SentInstallmentState, numero, null, archivo.Pagaduria, archivo.Code, f.PayrollDeductionFileId,
+                archivo.Number, archivo.Periodo, null, null, null);
+        }
+        return new Payoffs.PayoffCurrentInstallmentDto(numero, null, valor, tratamiento, Choosable: false, Payoffs.PayoffSentInstallmentDto.De(enviada))
+        {
+            Left = tratamiento == InstallmentTreatment.Exclude ? valor : null,
+            Explanation = Payroll.TextosDeCuotaEnviada.EnLaRecogida(numero, valor, tratamiento, enviada),
+        };
     }
 
     /// <summary>2026-11-27 (feature 028, T027): el total recogido, el neto a girar contra el monto aprobado (o el pedido), D y R.</summary>

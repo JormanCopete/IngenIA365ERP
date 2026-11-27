@@ -268,7 +268,11 @@ internal sealed class OriginacionDePrueba : IDisposable
         new(Db, new Application.Lending.Engine.CargadorDeReconstruccion(Db,
                 new Application.Lending.Engine.SeriesRegulatoriasDeCartera(L.Valores(), L.Normativa(), new Application.Common.Calendar.CalendarioDeDiasHabiles(Db),
                     Parametros()), Parametros()),
-            new InteresesAlCancelar(Parametros(), L.Valores()), G.Reloj);
+            new InteresesAlCancelar(Parametros(), L.Valores()), G.Reloj, Parametros(), CuotaEnviada());
+
+    /// <summary>2026-11-27 (feature 028, T064, T064a): la cuota enviada, con los descuentos de la nómina propia reales sobre la misma base.</summary>
+    public Application.Lending.Payroll.CuotaEnviadaDelCredito CuotaEnviada() =>
+        new(Db, new Application.Payroll.Integration.DescuentosDeNominaParaCartera(Db));
 
     /// <summary>2026-11-27 (feature 028, T023): la recogida que pide la solicitud (validar, proyectar y guardar sus filas).</summary>
     public Application.Lending.Payoffs.RecogidasDeLaSolicitud Recogidas() => new(Db, LiquidacionDeRecogida(), Parametros(), G.Reloj);

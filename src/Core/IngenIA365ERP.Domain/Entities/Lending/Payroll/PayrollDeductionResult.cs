@@ -44,6 +44,12 @@ public class PayrollDeductionResult : AuditableEntity, IHechoInmutable
     /// <summary>El resultado anterior de la misma línea que éste corrige.</summary>
     public int? SupersedesResultId { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T063; R7, FR-022): el crédito ya no estaba vigente cuando llegó el resultado (se canceló —por ejemplo, lo recogió el
+    /// desembolso de otro— después de enviar la línea): es «descuento de un crédito cancelado». Lo sella quien consume la respuesta; falso de fábrica. (nuevo)
+    /// </summary>
+    public bool LoanClosedAtResult { get; init; }
+
     /// <summary>¿Lo descontado queda para girar? <c>Deducted</c> o <c>PartiallyDeducted</c> con algo descontado.</summary>
     public bool DejaPendienteDeGiro => Outcome is PayrollResultOutcome.Deducted or PayrollResultOutcome.PartiallyDeducted && DeductedAmount > 0m;
 

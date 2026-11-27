@@ -122,7 +122,7 @@ internal sealed class PagosDePrueba : IDisposable
 
     public ContratoDeObligacionesDeCartera Contrato() => new(Db, Transaccion, Registro, D.ValidacionPrevia(), D.O.Cerrojo, C.Cargador(), Aplicacion(), Reversion(),
         Resolucion(), NoDescontados(), Fechas(), Auditoria(), new SolicitudDeAplicacionValidator(), new SolicitudDeReversoValidator(),
-        new SolicitudDeResolucionValidator(), new SolicitudDeSimulacionValidator(), G.Reloj);
+        new SolicitudDeResolucionValidator(), new SolicitudDeSimulacionValidator(), G.Reloj, D.O.CuotaEnviada());
 
     public ObligacionesDeCartera Obligaciones() => new(Db, C.Cargador(), Intereses());
 

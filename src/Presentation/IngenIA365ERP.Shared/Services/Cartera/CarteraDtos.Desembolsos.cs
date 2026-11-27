@@ -76,8 +76,23 @@ public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, deci
     public decimal RecognizedReleased { get; init; }
 }
 
-/// <summary>2026-11-27 (feature 028): la cuota causada del crédito recogido y qué se hace con ella (<c>Include</c>; <c>Left</c> llega con E2). (nuevo)</summary>
-public sealed record CuotaCausadaDelDesembolsoDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left);
+/// <summary>
+/// 2026-11-27 (feature 028): la cuota causada del crédito recogido y qué se hace con ella (<c>Include</c> o <c>Exclude</c>). 2026-11-27 (feature 028, E2,
+/// T066): <see cref="Left"/> es lo que la cuota que se deja a su canal debe al vencer, con la cuota enviada y la explicación. (nuevo)
+/// </summary>
+public sealed record CuotaCausadaDelDesembolsoDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left)
+{
+    public CuotaEnviadaDto? Sent { get; init; }
+    public string? Explanation { get; init; }
+
+    /// <summary>¿Se deja a su canal? («todo menos la cuota causada»).</summary>
+    public bool SeDeja => Treatment == "Exclude";
+
+    /// <summary>«Cuota 7 (vence el 30/11/2026) por $ 312.400: se deja a su canal, como se envió.»</summary>
+    public string Texto =>
+        $"Cuota causada {Number}{(DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "")} por {TextosDeRecogida.Pesos(SeDeja ? Left ?? Amount : Amount)}: "
+        + (SeDeja ? "se deja a su canal, como se envió." : "se incluye en la recogida.");
+}
 
 /// <summary>2026-11-27 (feature 028, <c>payoffDifferences</c>): cuántos productos difieren o se omiten, el total y si confirmar exige reconocerlo. (nuevo)</summary>
 public sealed record DiferenciasDeRecogidasDto(int Count, decimal Total, bool RequiresAcknowledgement, bool AboveTolerance);
@@ -127,6 +142,9 @@ public sealed record RecogidaAplicadaDto(Guid LoanPublicId, string Number, decim
     public decimal? Difference { get; init; }
     public IReadOnlyList<string> Causes { get; init; } = [];
     public decimal? LeftInstallment { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): el número de la cuota causada que se dejó a su canal.</summary>
+    public int? LeftInstallmentNumber { get; init; }
 }
 
 /// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>

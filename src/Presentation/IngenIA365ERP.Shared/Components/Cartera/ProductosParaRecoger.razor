@@ -14,7 +14,10 @@
    2026-11-27 (feature 028, HU2, T028): al corregir abre con lo que la solicitud ya recoge (Inicial) y lo avisa sin volver a liquidar; con SoloLectura
    (el grupo «Recogidas» no se puede corregir) se ve pero no se marca ni se cambia, y lo marcado no se quita aunque ya no se pueda recoger (el servidor lo
    vuelve a revisar al guardar). La consulta ya no manda lo marcado: el resumen sale aquí con la misma regla del servidor, y así un crédito marcado que
-   dejó de ser del deudor (se canceló) no tumba la consulta. *@
+   dejó de ser del deudor (se canceló) no tumba la consulta.
+   2026-11-27 (feature 028, E2, T072; HU4): la cuota causada. La forma de pago avisa si la cuota del período ya va en la libranza o en la nómina; con
+   «Preguntar» (Recogida.CuotaCausada) el asesor elige por crédito «Incluir la cuota» o «Dejarla a su canal», y lo que cuesta recogerlo, el total y el neto
+   siguen esa elección; el detalle explica qué pasa con la cuota en cada caso. *@
 <div class="info-card">
     <h4>Productos que recoge</h4>
     <p class="texto-apoyo">
@@ -83,10 +86,16 @@
                                         @if (p.Origin is 2 or 4) { <span class="texto-tenue"> (@TextosDeRecogida.Origen(p.Origin))</span> }
                                     </td>
                                     <td>@p.Line</td>
-                                    <td>@TextosDeRecogida.Canal(p.Channel)</td>
+                                    <td>
+                                        @TextosDeRecogida.Canal(p.Channel)
+                                        @if (p.CurrentInstallment?.Sent is { } enviada)
+                                        {
+                                            <span class="texto-alerta" title="@enviada.Texto"> · cuota enviada</span>
+                                        }
+                                    </td>
                                     <td class="numero">@p.DaysPastDue</td>
                                     <td class="numero">@TextosDeRecogida.Pesos(p.Installment)</td>
-                                    <td class="numero">@TextosDeRecogida.Pesos(p.ToPayOff)</td>
+                                    <td class="numero">@TextosDeRecogida.Pesos(p.ParaRecoger(marcada?.InstallmentTreatment))</td>
                                     <td>
                                         @if (!p.Eligible)
                                         {
@@ -101,6 +110,15 @@
                                                     <option value="@modo">@TextosDeRecogida.Modo(modo)</option>
                                                 }
                                             </select>
+                                            @if (m.Mode == TextosDeRecogida.ModoTotal && p.CuotaElegible)
+                                            {
+                                                <select class="e-input" value="@p.TratamientoDeLaCuota(m.InstallmentTreatment)" disabled="@SoloLectura"
+                                                        aria-label="@($"Cuota causada del crédito {p.Number}")"
+                                                        @onchange="@(e => CambiarTratamientoAsync(p, LeerEntero(e.Value) ?? TextosDeRecogida.CuotaIncluida))">
+                                                    <option value="@TextosDeRecogida.CuotaIncluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaIncluida)</option>
+                                                    <option value="@TextosDeRecogida.CuotaExcluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaExcluida)</option>
+                                                </select>
+                                            }
                                             @if (m.Mode == TextosDeRecogida.ModoParcial)
                                             {
                                                 <input class="e-input" type="number" min="1" step="1000" max="@p.ToPayOff.ToString(CultureInfo.InvariantCulture)"
@@ -123,7 +141,7 @@
                                 {
                                     <tr>
                                         <td colspan="9">
-                                            <DetalleDeRecogida Producto="@p" />
+                                            <DetalleDeRecogida Producto="@p" Tratamiento="@marcada?.InstallmentTreatment" />
                                         </td>
                                     </tr>
                                 }
@@ -243,14 +261,20 @@
             // Sólo se ve: lo marcado queda como está, con el valor de ahora si el producto sigue entre los del deudor.
             var todos = respuesta.Products.ToDictionary(p => p.ProductPublicId);
             for (var i = 0; i < _marcadas.Count; i++)
-                if (todos.TryGetValue(_marcadas[i].ProductPublicId, out var producto)) _marcadas[i] = _marcadas[i] with { ToPayOff = producto.ToPayOff };
+                if (todos.TryGetValue(_marcadas[i].ProductPublicId, out var producto))
+                    _marcadas[i] = _marcadas[i] with { ToPayOff = producto.ParaRecoger(_marcadas[i].InstallmentTreatment) };
             await AvisarAsync();
             return;
         }
         // Lo marcado que ya no se puede recoger (otra fecha, otra línea) se desmarca; lo demás toma el valor de ahora.
         var vigentes = respuesta.Products.Where(p => p.Eligible).ToDictionary(p => p.ProductPublicId);
+        // 2026-11-27 (T072): la elección de la cuota causada sólo se conserva si el crédito la sigue dejando elegir.
         var siguen = _marcadas.Where(m => vigentes.ContainsKey(m.ProductPublicId) && vigentes[m.ProductPublicId].AdmittedModes.Contains(m.Mode))
-            .Select(m => m with { ToPayOff = vigentes[m.ProductPublicId].ToPayOff }).ToList();
+            .Select(m =>
+            {
+                var p = vigentes[m.ProductPublicId];
+                return p.CuotaElegible ? m with { ToPayOff = p.ParaRecoger(m.InstallmentTreatment) } : m with { ToPayOff = p.ToPayOff, InstallmentTreatment = null };
+            }).ToList();
         var quitadas = _marcadas.Count - siguen.Count;
         _marcadas.Clear();
         _marcadas.AddRange(siguen);
@@ -284,6 +308,15 @@
         var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
         if (i < 0 || !p.AdmittedModes.Contains(modo)) return;
         _marcadas[i] = _marcadas[i] with { Mode = modo, Amount = modo == TextosDeRecogida.ModoParcial ? _marcadas[i].Amount ?? p.ToPayOff : null };
+        await AvisarAsync();
+    }
+
+    /// <summary>2026-11-27 (feature 028, E2, T072): con «Preguntar», incluir la cuota causada o dejarla a su canal.</summary>
+    private async Task CambiarTratamientoAsync(ProductoParaRecogerDto p, int tratamiento)
+    {
+        var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
+        if (i < 0 || SoloLectura || !p.CuotaElegible) return;
+        _marcadas[i] = _marcadas[i] with { InstallmentTreatment = tratamiento, ToPayOff = p.ParaRecoger(tratamiento) };
         await AvisarAsync();
     }
 

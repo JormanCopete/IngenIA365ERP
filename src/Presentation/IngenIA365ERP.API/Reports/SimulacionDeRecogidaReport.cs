@@ -45,6 +45,8 @@ public static class SimulacionDeRecogidaReport
                     // 2026-11-27 (feature 028, T051): el interés de cada producto renglón a renglón, con sus días (el proporcional por la ley ya dice su motivo).
                     Avisos(col, filas.SelectMany(p => p.Warnings.Select(a => $"{p.Number}: {a}"))
                         .Concat(filas.SelectMany(p => p.InterestExplanation.Select(r => $"{p.Number}: {r.Text}")))
+                        // 2026-11-27 (feature 028, E2, T066): qué pasa con la cuota causada (enviada, dejada a su canal o incluida).
+                        .Concat(filas.Where(p => p.CurrentInstallment?.Explanation is not null).Select(p => $"{p.Number}: {p.CurrentInstallment!.Explanation}"))
                         .Concat(filas.Where(p => p.InterestModeExplanation is not null
                                                  && !p.InterestExplanation.Any(r => r.Kind == ClasesDeRenglonDeInteres.Proporcional))
                             .Select(p => $"{p.Number}: {p.InterestModeExplanation}"))

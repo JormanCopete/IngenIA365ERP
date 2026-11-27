@@ -4,10 +4,12 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Engine;
+using IngenIA365ERP.Application.Lending.Payroll;
 using IngenIA365ERP.Application.Saas.NationalValues;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 using IngenIA365ERP.Domain.Lending.DayCount;
@@ -58,6 +60,11 @@ public static class ErroresDeRecogida
     public const string MotivoViviendaCompleta =
         "Un crédito de vivienda (en UVR o en pesos) se recoge completo: dejar la cuota causada con el interés del período sobre todo el saldo cobraría "
         + "interés del capital que se prepaga, y la Ley 546 de 1999 no admite penalidad por prepago.";
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): por qué se recoge completo un crédito sin cuota causada que dejar a la fecha. (nuevo)</summary>
+    public const string MotivoSinCuotaQueDejar =
+        "A la fecha del desembolso el crédito no tiene una cuota causada que dejar (la fecha es un vencimiento, está en gracia o el período de la próxima no "
+        + "ha empezado): se recoge completo.";
 
     /// <summary>2026-11-27 (feature 028, T062): por qué un crédito sin condiciones selladas se recoge completo. (nuevo)</summary>
     public const string MotivoSinReconstruccionCompleta =
@@ -180,6 +187,15 @@ public static class ErroresDeRecogida
     };
 
     public static string Pesos(decimal valor) => (valor < 0m ? "-$" : "$") + Math.Abs(valor).ToString("#,##0.##", CultureInfo.GetCultureInfo("es-CO"));
+
+    // 2026-11-27 (feature 028, E2, T066; HU4-3): dejar la cuota causada se pide sólo con «Preguntar». (nuevo)
+
+    public const string CodigoTratamientoNoAdmitido = "Lending.Payoff.InstallmentTreatmentNotAdmitted";
+
+    /// <summary>Se pidió dejar la cuota causada de un crédito cuya línea dice «Incluir» (<c>Recogida.CuotaCausada</c>): no lo elige el asesor.</summary>
+    public static Error TratamientoNoAdmitido(string numero) => new ErrorConDatos(CodigoTratamientoNoAdmitido,
+        $"La línea del crédito {numero} recoge la cuota causada completa (parámetro Recogida.CuotaCausada = Incluir): no se puede dejar a su canal.",
+        new { number = numero });
 }
 
 /// <summary>
@@ -257,21 +273,99 @@ public sealed record LiquidacionDeCreditoRecogido
     /// <summary>2026-11-27 (feature 028, T062): por qué se recoge completo aunque se pida dejar la cuota causada; nulo si se puede dejar. (nuevo)</summary>
     public string? RecogidoCompletoPorque { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; HU4, D1): lo que dice <c>Recogida.CuotaCausada</c> con la línea de este crédito a D: <c>Incluir</c> (de fábrica),
+    /// <c>Excluir</c> o <c>Preguntar</c>. (nuevo)
+    /// </summary>
+    public string CuotaCausadaConfigurada { get; init; } = ParametrosDeCartera.CuotaIncluir;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; FR-020): lo que cuesta recoger todo menos la cuota causada (<see cref="AplicadorDePagos.ValorParaCancelarSalvoCuota"/>):
+    /// la cuota que se deja, lo que cuesta lo demás y su desglose, y lo que la cuota deja debiendo para su canal. Nulo si no se admite dejarla. (nuevo)
+    /// </summary>
+    public RecogidaSalvoCuota? SalvoCuota { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T064, T066; FR-021): en qué va la cuota del período frente a su pagaduría o su nómina propia; nula si no va. (nuevo)</summary>
+    public CuotaEnviada? CuotaEnviada { get; init; }
+
     public bool Recogible => Bloqueos.Count == 0;
 
     public BloqueoDeRecogida? Bloqueo => Bloqueos.Count == 0 ? null : Bloqueos[0];
 
+    /// <summary>2026-11-27 (feature 028, E2, T066; D2): con «Preguntar» y un crédito que admite dejar la cuota, el asesor elige. (nuevo)</summary>
+    public bool CuotaElegible => AdmiteDejarLaCuota && CuotaCausadaConfigurada == ParametrosDeCartera.CuotaPreguntar;
+
+    /// <summary>2026-11-27 (feature 028, E2, T066): el tratamiento que rige sin elección: «Excluir» lo excluye (si se admite); lo demás, incluirla. (nuevo)</summary>
+    public InstallmentTreatment TratamientoPorDefecto =>
+        TratamientoEfectivo(CuotaCausadaConfigurada == ParametrosDeCartera.CuotaExcluir ? InstallmentTreatment.Exclude : InstallmentTreatment.Include);
+
     /// <summary>
-    /// Lo que guarda la solicitud (<c>LND_CreditApplicationPayoffs</c>) con el tratamiento de la cuota causada ya resuelto (en E1, incluirla). 2026-11-27
-    /// (feature 028, T062): pedir que se excluya a un crédito que no lo admite (<see cref="AdmiteDejarLaCuota"/>) es incluirla: se recoge completo.
+    /// 2026-11-27 (feature 028, E2, T066; HU4-3): el tratamiento que rige con lo que se pidió: «Excluir» siempre lo excluye; «Preguntar», lo pedido (sin pedir,
+    /// incluirla); «Incluir» no admite que se pida excluirla (<c>Lending.Payoff.InstallmentTreatmentNotAdmitted</c>). Después, <see cref="TratamientoEfectivo"/>:
+    /// un crédito que no admite dejar la cuota se recoge completo. (nuevo)
     /// </summary>
-    public ProyeccionDeRecogida Proyeccion(InstallmentTreatment tratamiento = InstallmentTreatment.Include) =>
-        new(Fecha, InformacionHasta, Desglose, Huella, Intereses.Efectivo, TratamientoEfectivo(tratamiento), CuotaCausada);
+    public Result<InstallmentTreatment> ResolverTratamiento(InstallmentTreatment? pedido) => CuotaCausadaConfigurada switch
+    {
+        ParametrosDeCartera.CuotaExcluir => Result.Success(TratamientoEfectivo(InstallmentTreatment.Exclude)),
+        ParametrosDeCartera.CuotaPreguntar => Result.Success(TratamientoEfectivo(pedido ?? InstallmentTreatment.Include)),
+        _ => pedido == InstallmentTreatment.Exclude
+            ? Result.Failure<InstallmentTreatment>(ErroresDeRecogida.TratamientoNoAdmitido(Number))
+            : Result.Success(InstallmentTreatment.Include),
+    };
+
+    /// <summary>
+    /// Lo que guarda la solicitud (<c>LND_CreditApplicationPayoffs</c>) con el tratamiento de la cuota causada ya resuelto. 2026-11-27 (feature 028, T062):
+    /// pedir que se excluya a un crédito que no lo admite (<see cref="AdmiteDejarLaCuota"/>) es incluirla: se recoge completo. 2026-11-27 (feature 028, E2,
+    /// T066): excluyéndola, lo que cuesta todo menos la cuota y la cuota que se deja con lo que deberá; y siempre, la cuota enviada.
+    /// </summary>
+    public ProyeccionDeRecogida Proyeccion(InstallmentTreatment tratamiento = InstallmentTreatment.Include)
+    {
+        var segun = Segun(tratamiento);
+        return new(Fecha, InformacionHasta, segun.Desglose, Huella, Intereses.Efectivo, segun.Tratamiento, segun.Cuota,
+            CuotaEnviada?.Estado ?? SentInstallmentState.None, CuotaEnviada?.ArchivoId);
+    }
 
     /// <summary>2026-11-27 (feature 028, T062): el tratamiento que rige: excluir sólo si se admite dejar la cuota; si no, incluirla. (nuevo)</summary>
     public InstallmentTreatment TratamientoEfectivo(InstallmentTreatment pedido) =>
         pedido == InstallmentTreatment.Exclude && !AdmiteDejarLaCuota ? InstallmentTreatment.Include : pedido;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066): lo que se recoge con el tratamiento <paramref name="pedido"/> (ya efectivo): el valor, el desglose, la cuota causada
+    /// (la que se deja, con lo que deberá; o la que se incluye), la cuota dejada, el interés explicado (sin los renglones de la cuota dejada) y la explicación
+    /// de la cuota en la recogida. (nuevo)
+    /// </summary>
+    public RecogidaSegunCuota Segun(InstallmentTreatment pedido)
+    {
+        var tratamiento = TratamientoEfectivo(pedido);
+        if (tratamiento == InstallmentTreatment.Exclude && SalvoCuota is { } s)
+            return new RecogidaSegunCuota(tratamiento, s.ValorARecoger, s.Desglose, new CuotaCausadaDeRecogida(s.Cuota, s.QuedaEnLaCuota, s.Vencimiento),
+                s.Cuota, s.QuedaEnLaCuota, ExplicacionDelInteres.Where(r => r.Cuota != s.Cuota).ToList(),
+                TextosDeCuotaEnviada.EnLaRecogida(s.Cuota, s.QuedaEnLaCuota, tratamiento, CuotaEnviada));
+        return new RecogidaSegunCuota(InstallmentTreatment.Include, ValorARecoger, Desglose, CuotaCausada, null, null, ExplicacionDelInteres,
+            CuotaCausada is { } c ? TextosDeCuotaEnviada.EnLaRecogida(c.Numero, c.Valor, InstallmentTreatment.Include, CuotaEnviada) : null);
+    }
 }
+
+/// <summary>
+/// 2026-11-27 (feature 028, E2, T066; FR-019, FR-020): lo que cuesta recoger todo menos la cuota causada: la cuota que se deja y su vencimiento, lo que se
+/// recoge (lo mismo que aplica el contrato con <c>PayoffExceptCurrentInstallment</c>) y su desglose, y lo que la cuota deberá al vencer —lo que su canal paga
+/// para cerrarla al peso—. (nuevo)
+/// </summary>
+public sealed record RecogidaSalvoCuota(int Cuota, DateOnly Vencimiento, decimal ValorARecoger, DesgloseDeRecogida Desglose, decimal QuedaEnLaCuota);
+
+/// <summary>
+/// 2026-11-27 (feature 028, E2, T066): lo que se recoge con un tratamiento de la cuota causada: el tratamiento efectivo, el valor y su desglose, la cuota
+/// causada como se muestra, la cuota que se deja y su valor (nulos si se incluye), el interés explicado y el texto de la cuota en la recogida. (nuevo)
+/// </summary>
+public sealed record RecogidaSegunCuota(
+    InstallmentTreatment Tratamiento,
+    decimal Valor,
+    DesgloseDeRecogida Desglose,
+    CuotaCausadaDeRecogida? Cuota,
+    int? CuotaDejada,
+    decimal? ValorDejado,
+    IReadOnlyList<RenglonDeIntereses> ExplicacionDelInteres,
+    string? ExplicacionDeLaCuota);
 
 /// <summary>
 /// <b>Un solo sitio liquida una recogida</b> (feature 028, R3, T010; FR-003, FR-024): la consulta de productos (la proyección a D con R), la vista previa
@@ -287,7 +381,9 @@ public sealed class LiquidacionDeRecogida(
     IApplicationDbContext db,
     CargadorDeReconstruccion cargador,
     InteresesAlCancelar intereses,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ReglasDeParametrosDeCartera parametros,
+    CuotaEnviadaDelCredito cuotaEnviada)
 {
     private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
 
@@ -343,6 +439,10 @@ public sealed class LiquidacionDeRecogida(
         var valor = AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, calendario);
         var cobrado = modo.CuotaCompleta ? AplicadorDePagos.InteresDeLaCuotaCompleta(estado, calendario) : [];
         var devuelto = calendario ? AplicadorDePagos.InteresSinTramo(estado, d) : [];
+        // 2026-11-27 (feature 028, E2, T066): Recogida.CuotaCausada con la línea de este crédito, todo menos la cuota causada y la cuota enviada.
+        var cuotaCausada = await CuotaCausadaConfiguradaAsync(d, credito.CreditLineId, ct);
+        var salvo = SeRecogeCompleto(estado) ? null : SalvoCuota(estado, modo, calendario, devuelto);
+        var enviada = await cuotaEnviada.DeAsync(CuotaEnviadaDelCredito.CuotaDelEstado(credito, estado), d, ct);
         decimal S(params LoanConcept[] conceptos) => conceptos.Sum(c => estado.Saldo(c));
         var desglose = new DesgloseDeRecogida(
             Capital: S(LoanConcept.Principal),
@@ -379,6 +479,10 @@ public sealed class LiquidacionDeRecogida(
             .Texto("proporcionales", proporcionales)
             .Logico("periodoCalendario", calendario)
             .Decimal("valor", valor)
+            .Texto("cuotaCausada", cuotaCausada)
+            .Si(salvo is not null, h => h.Entero("cuotaDejada", salvo!.Cuota).Decimal("valorSalvoCuota", salvo.ValorARecoger)
+                .Decimal("quedaEnLaCuota", salvo.QuedaEnLaCuota))
+            .Si(enviada is not null, h => h.Enumeracion("envio", (SentInstallmentState?)enviada!.Estado).Entero("archivo", enviada.ArchivoId))
             .Canonico());
 
         return new LiquidacionDeCreditoRecogido
@@ -391,9 +495,56 @@ public sealed class LiquidacionDeRecogida(
             Huella = huella, Avisos = avisos, ExplicacionDelInteres = renglones, ReconocidoQueSeLibera = liberado,
             Fuente = FuenteDeLaLiquidacion.Reconstruccion,
             // 2026-11-27 (feature 028, T062): un crédito de vivienda se recoge completo (el motor aplica así la cancelación salvo cuota, con su aviso).
-            AdmiteDejarLaCuota = !SeRecogeCompleto(estado),
-            RecogidoCompletoPorque = SeRecogeCompleto(estado) ? ErroresDeRecogida.MotivoViviendaCompleta : null,
+            // 2026-11-27 (feature 028, E2, T066): tampoco se deja si a D no hay cuota causada (D es un vencimiento, gracia, el tramo no empezó).
+            AdmiteDejarLaCuota = salvo is not null,
+            RecogidoCompletoPorque = SeRecogeCompleto(estado) ? ErroresDeRecogida.MotivoViviendaCompleta
+                : salvo is null ? ErroresDeRecogida.MotivoSinCuotaQueDejar : null,
+            CuotaCausadaConfigurada = cuotaCausada,
+            SalvoCuota = salvo,
+            CuotaEnviada = enviada,
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; HU4, D1): <c>Recogida.CuotaCausada</c> con la línea del crédito que se recoge (cae a la general); ilegible o vacío,
+    /// «Incluir» (lo de siempre). (nuevo)
+    /// </summary>
+    public async Task<string> CuotaCausadaConfiguradaAsync(DateOnly fecha, int lineaId, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.RecogidaCuotaCausada, fecha, null, ParameterScopeKind.CreditLine, lineaId, ct);
+        return (leido.IsSuccess ? leido.Value.Texto?.Trim() : null) switch
+        {
+            ParametrosDeCartera.CuotaExcluir => ParametrosDeCartera.CuotaExcluir,
+            ParametrosDeCartera.CuotaPreguntar => ParametrosDeCartera.CuotaPreguntar,
+            _ => ParametrosDeCartera.CuotaIncluir,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; FR-019): lo que cuesta todo menos la cuota causada, sin aplicarlo, con el modo de intereses de la recogida
+    /// (<see cref="AplicadorDePagos.ValorParaCancelarSalvoCuota"/>: no se toca el motor). Nulo si no hay cuota causada que dejar. El desglose es el de cada
+    /// concepto sin lo de la cuota dejada (el capital de las siguientes, por cuota, como la cancelación), lo devuelto por período calendario de las demás y
+    /// —lo que cierra al peso con lo que cobra el contrato— el anticipo del crédito que se usa. (nuevo)
+    /// </summary>
+    private static RecogidaSalvoCuota? SalvoCuota(EstadoDelCredito estado, ModoDeInteresesAlCancelar modo, bool calendario,
+        IReadOnlyList<LineaDeDistribucion> devuelto)
+    {
+        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario);
+        if (v.Cuota is not { } n || estado.Plan is not { } plan) return null;
+        decimal S(params LoanConcept[] conceptos) => conceptos.Sum(c => estado.Saldo(c) - estado.Saldo(c, n));
+        var desglose = new DesgloseDeRecogida(
+            Capital: S(LoanConcept.Principal),
+            InteresCorriente: S(LoanConcept.CurrentInterest, LoanConcept.CurrentInterestInSuspense),
+            InteresDevuelto: devuelto.Where(l => l.Cuota != n).Sum(l => l.Monto),
+            Mora: S(LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense),
+            Seguro: S(LoanConcept.Insurance),
+            Administracion: S(LoanConcept.Administration),
+            OtrosCargos: S(LoanConcept.CollectionFee, LoanConcept.OtherCharge));
+        // Lo que el contrato no cobra de los conceptos es el anticipo del mismo crédito que usa: así el total es, al peso, lo que aplica.
+        var anticipo = desglose.Total - v.ParaCancelar;
+        desglose = anticipo >= 0m ? desglose with { Anticipo = anticipo } : desglose with { OtrosCargos = desglose.OtrosCargos - anticipo };
+        var vence = plan.Cuotas.First(c => c.Numero == n).Vencimiento;
+        return new RecogidaSalvoCuota(n, vence, v.ParaCancelar, desglose, v.QuedaEnLaCuota);
     }
 
     /// <summary>
@@ -405,6 +556,9 @@ public sealed class LiquidacionDeRecogida(
         CancellationToken ct)
     {
         var proporcionales = await intereses.RecogidaConfiguradaAsync(fecha, credito.CreditLineId, ct);
+        // 2026-11-27 (feature 028, E2, T066): el parámetro y la cuota enviada se informan aunque la cuota no se pueda dejar.
+        var cuotaCausada = await CuotaCausadaConfiguradaAsync(fecha, credito.CreditLineId, ct);
+        var enviada = await cuotaEnviada.DeAsync(new CuotaPorConsultar(credito.Id, credito.PublicId, null, fecha), fecha, ct);
         var posiciones = db.LoanDailyPositions.AsNoTracking().Where(p => p.LoanId == credito.Id && p.PositionDate <= fecha);
         if (r is { } corte) posiciones = posiciones.Where(p => p.RegisteredAt <= corte);
         var posicion = await posiciones.OrderByDescending(p => p.PositionDate).ThenByDescending(p => p.Version).FirstOrDefaultAsync(ct);
@@ -482,6 +636,8 @@ public sealed class LiquidacionDeRecogida(
             // 2026-11-27 (feature 028, T062): sin reconstrucción el contrato no tiene con qué dejar la cuota: se recoge completo.
             AdmiteDejarLaCuota = false,
             RecogidoCompletoPorque = ErroresDeRecogida.MotivoSinReconstruccionCompleta,
+            CuotaCausadaConfigurada = cuotaCausada,
+            CuotaEnviada = enviada,
         };
     }
 

@@ -23,7 +23,17 @@ public sealed record VinculoDeRecogida(
     PayoffMode Modo,
     decimal Aplicado,
     bool Reversada,
-    long? OperacionDePagoId);
+    long? OperacionDePagoId)
+{
+    /// <summary>2026-11-27 (feature 028, E2, T066, T072): la cuota causada que la recogida dejó a su canal; nula si recogió todo. (nuevo)</summary>
+    public int? CuotaDejada { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2): lo que la cuota dejada debe al vencer. (nuevo)</summary>
+    public decimal? ValorDejado { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2): cuándo quedó pagada la cuota dejada; nula mientras se deba. (nuevo)</summary>
+    public DateTime? CuotaDejadaPagadaEn { get; init; }
+}
 
 /// <summary>
 /// <b>Quién recogió a quién</b> (feature 028, T054; FR-029): lo leen el detalle del crédito («Recogido por el crédito … el …» y «Recogió: …»), el libro del
@@ -85,7 +95,7 @@ public static class VinculosDeRecogida
     // ------------------------------------------------------------------------------------------------------------------------------- piezas --
 
     private sealed record FilaDeRecogida(long DesembolsoId, int CreditoNuevoId, DateOnly Fecha, PayoffProductKind Clase, int? RecogidoId, string Numero,
-        PayoffMode Modo, decimal Aplicado, bool Reversada, long? PagoId, string Clave);
+        PayoffMode Modo, decimal Aplicado, bool Reversada, long? PagoId, string Clave, int? CuotaDejada, decimal? ValorDejado, DateTime? CuotaDejadaPagadaEn);
 
     private sealed record PagoDeRecogida(long Id, int RecogidoId, string Clave, decimal Aplicado, PaymentModality? Modalidad, bool Reversado);
 
@@ -97,7 +107,7 @@ public static class VinculosDeRecogida
                where !f.Omitted && !f.IsDeleted
                orderby f.Id
                select new FilaDeRecogida(o.Id, o.LoanId, o.ValueDate, f.ProductKind, f.LoanId, f.ProductNumber, f.Mode, f.AppliedAmount,
-                   f.ReversedAt != null, f.PaymentOperationId, f.IdempotencyKey))
+                   f.ReversedAt != null, f.PaymentOperationId, f.IdempotencyKey, f.LeftInstallmentNumber, f.LeftInstallmentAmount, f.LeftInstallmentSettledAt))
             .ToListAsync(ct);
 
     /// <summary>Los pagos de Cartera con una clave que empieza como la de una recogida (la gramática completa la mira <see cref="UnirAsync"/>).</summary>
@@ -140,7 +150,10 @@ public static class VinculosDeRecogida
             var pago = porClave.GetValueOrDefault(f.Clave);
             Guid? recogido = f.RecogidoId is { } r ? Credito(r).PublicId : null;
             vinculos.Add((f.PagoId ?? pago?.Id ?? long.MaxValue, new VinculoDeRecogida(f.CreditoNuevoId, nuevo.PublicId, nuevo.Number, f.Clase, f.RecogidoId,
-                recogido, f.Numero, f.DesembolsoId, f.Fecha, f.Modo, f.Aplicado, f.Reversada || pago?.Reversado == true, f.PagoId ?? pago?.Id)));
+                recogido, f.Numero, f.DesembolsoId, f.Fecha, f.Modo, f.Aplicado, f.Reversada || pago?.Reversado == true, f.PagoId ?? pago?.Id)
+            {
+                CuotaDejada = f.CuotaDejada, ValorDejado = f.ValorDejado, CuotaDejadaPagadaEn = f.CuotaDejadaPagadaEn,
+            }));
         }
         foreach (var p in sueltos)
         {
