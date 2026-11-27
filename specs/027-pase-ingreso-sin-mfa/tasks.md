@@ -18,7 +18,7 @@ Pruebas de punta a punta una sola vez al final (como en las features anteriores)
 - [x] T015 Permiso `Security.Users.GrantMfaBypass`; eventos de auditoría
 - [x] T016 `UpdateTenantMfaPolicyCommand`/`GetTenantMfaPolicyQuery`: campos nuevos y anulación al apagar
 - [x] T017 Endpoints `/api/admin/users/{id}/login-passes` y `/api/saas/tenants/{id}/login-passes`; `loginPassMaxHours` en la ficha
-- [ ] T018 Pruebas de conceder/anular/reenviar (las reglas tienen prueba unitaria; los manejadores, en la e2e T042)
+- [x] T018 Pruebas de conceder/anular/reenviar (las reglas tienen prueba unitaria; los manejadores, en la e2e T042)
 
 ## Fase 3 — Canje
 - [x] T020 `ICentralJwtIssuer` claim `login_pass_tenant`; `CentralRefreshSession.PaseDeIngresoCooperativa`; contexto actual
@@ -26,7 +26,7 @@ Pruebas de punta a punta una sola vez al final (como en las features anteriores)
 - [x] T022 `UsarPaseDeIngresoCommand` + `POST /api/auth/mfa/pass`
 - [x] T023 Refresh arrastra la marca; `SwitchTenant` rechaza otra cooperativa (la sesión del pase nunca pasa por `SelectTenant`: sólo ve una cooperativa)
 - [x] T024 `/api/auth/me` informa la marca
-- [ ] T025 Pruebas del canje y del bloqueo de cooperativa (la lectura del enlace tiene prueba unitaria; el canje, en la e2e T042)
+- [x] T025 Pruebas del canje y del bloqueo de cooperativa (la lectura del enlace tiene prueba unitaria; el canje, en la e2e T042)
 
 ## Fase 4 — Pantallas
 - [x] T030 Cliente: `CentralAuthClient.PaseDeIngreso`, `UsarPaseDeIngresoAsync`; clientes de la ficha y del maestro
@@ -39,6 +39,6 @@ Pruebas de punta a punta una sola vez al final (como en las features anteriores)
 
 ## Fase 5 — Cierre
 - [x] T040 Manual `docs/manual/pase-de-ingreso.md`, CLAUDE.md
-- [ ] T041 Suites sin contenedores verdes
-- [ ] T042 E2e `PaseDeIngresoTests` (PostgreSQL y SQL Server)
+- [x] T041 Suites sin contenedores verdes (2026-11-26: Architecture 927, Shared 728, Domain 3.183, Application 8.950)
+- [x] T042 E2e `PaseDeIngresoTests` (PostgreSQL y SQL Server) — verde en los dos motores el 2026-11-26
 - [ ] T043 Recorrido a mano en web y MAUI (del dueño)
