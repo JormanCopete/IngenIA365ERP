@@ -438,14 +438,19 @@ public sealed class ConfirmacionDeRecibo(
         var rechazos = new List<object>();
         var simulaciones = new List<object>();
 
-        var deCreditos = porciones.Where(p => p.Item.Target == ApplicationTarget.Loan).ToList();
+        // 2026-11-26 (pedido del dueño): en el orden de los ítems del recibo, así lo vencido de un crédito se aplica antes que su cuota anticipada.
+        var deCreditos = porciones.Where(p => p.Item.Target == ApplicationTarget.Loan).OrderBy(p => filasDeItems[p.Item.ItemId].Ordinal).ToList();
         if (deCreditos.Count > 0)
         {
             PagoAAplicar Pago((ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio) p, string? simulacion) => new(p.Fila.IdempotencyKey,
                 p.Item.ProductPublicId!.Value, p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, ClavesDeRecaudo.ClaseDelContrato(p.Fila.MeansClass),
                 pagadorPublicId, Referencia(p.Medio), p.Item.Choice, p.Item.InstallmentNumber, simulacion);
             var respuestasDeCreditos = new List<RespuestaDelContratoDto<ComprobanteDeAplicacionDto>?>(deCreditos.Count);
-            if (deCreditos.All(p => UnaPorcion(porciones, p.Item)))
+            // 2026-11-26 (pedido del dueño): la segunda porción y las siguientes de un mismo crédito (lo vencido y después la cuota anticipada) también se
+            // simulan justo antes de aplicarlas, sobre lo que ya aplicaron las anteriores: el paso de ítems las simuló encadenadas en memoria.
+            var vistos = new HashSet<Guid>();
+            var resimular = deCreditos.Select(p => !vistos.Add(p.Item.ProductPublicId!.Value) || !UnaPorcion(porciones, p.Item)).ToList();
+            if (resimular.TrueForAll(r => !r))
             {
                 var respuesta = await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador, FormaDeAplicacion.Interactive,
                     deCreditos.Select(p => Pago(p, p.Item.SimulationId)).ToList(), []), ct);
@@ -458,10 +463,11 @@ public sealed class ConfirmacionDeRecibo(
                 // porción de un ítem partido se simula por su valor justo antes de aplicarla, y se aplica sola, en orden: dentro de la misma transacción
                 // la simulación de la segunda ve la primera ya aplicada, que es lo que Cartera recalcula al aplicar. Todo o nada sigue igual (la transacción
                 // de IdempotencyBehavior).
-                foreach (var p in deCreditos)
+                for (var k = 0; k < deCreditos.Count; k++)
                 {
+                    var p = deCreditos[k];
                     var simulacion = p.Item.SimulationId;
-                    if (!UnaPorcion(porciones, p.Item))
+                    if (resimular[k])
                     {
                         var sim = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, p.Item.ProductPublicId!.Value,
                             p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, p.Item.Choice, p.Item.InstallmentNumber), ct);

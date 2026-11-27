@@ -142,6 +142,8 @@ public sealed class ContratoDeObligacionesDeCartera(
             {
                 // 2026-11-16 (feature 024, fase 4): la cuota del ciclo reconocida al inicio de su ciclo.
                 RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado, calendario),
+                // 2026-11-26 (pedido del dueño): la mora para la caja, sin el interés ya causado del período en curso.
+                DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
             });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
@@ -226,8 +228,13 @@ public sealed class ContratoDeObligacionesDeCartera(
             ComprobantesDePago.Exigible(estado, periodoCalendario: calendario), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
             estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
             proxima?.Vencimiento,
-            ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado), Admitidas(credito, cargado, estado),
-            cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos) { RecognizedPending = reconocido };
+            ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado, calendario), Admitidas(credito, cargado, estado),
+            cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos)
+        {
+            RecognizedPending = reconocido,
+            // 2026-11-26 (pedido del dueño): la mora para la caja, sin el interés ya causado del período en curso.
+            DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
+        };
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractDetailed, "Loan", credito.PublicId, solicitud.Collector,
             new { date = fecha, recordedAsOf = reloj.UtcNow, sha256 = estado.Huella }, ct);
         return new(ResultadoDelContrato.Answered, AuditEventTypes.LendingObligationContractDetailed, "Detalle de la obligación.", detalle);
@@ -278,8 +285,11 @@ public sealed class ContratoDeObligacionesDeCartera(
                 return Rechazo<SimulacionDePagoDto>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
             if (await fechas.ValidarAsync(solicitud.Collector.Class, solicitud.ValueDate, solicitud.Amount, ct) is { } fecha)
                 return Rechazo<SimulacionDePagoDto>(fecha);
+            // 2026-11-26 (pedido del dueño): sobre lo que dejan los pagos anteriores del mismo recibo a esta obligación, en su orden.
+            var previos = (solicitud.Previous ?? []).Select(x => new PagoPrevioDeDistribucion(ComprobantesDePago.Modalidad(x.Modality), x.Amount,
+                ComprobantesDePago.Eleccion(x.Choice), x.InstallmentNumber)).ToList();
             var d = await aplicacion.DistribuirAsync(credito, ComprobantesDePago.Modalidad(solicitud.Modality), solicitud.Amount, solicitud.ValueDate,
-                ComprobantesDePago.Eleccion(solicitud.Choice), solicitud.InstallmentNumber, usaPreferencia: false, ct);
+                ComprobantesDePago.Eleccion(solicitud.Choice), solicitud.InstallmentNumber, usaPreferencia: false, ct, previos: previos);
             if (d.IsFailure) return Rechazo<SimulacionDePagoDto>(d.Error);
             var avisos = d.Value.Estado.PrimerDiaSinUsura is not null ? new[] { "Lending.Usury.ProjectedWithLastKnown" } : [];
             simulacion = aplicacion.Simulacion(d.Value, avisos);

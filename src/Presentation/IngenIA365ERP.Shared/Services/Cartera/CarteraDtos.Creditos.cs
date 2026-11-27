@@ -163,6 +163,9 @@ public sealed record FilaDelLibroDto(
     public decimal? UvrAmount { get; init; }
 
     public decimal? UvrValue { get; init; }
+
+    /// <summary>2026-11-26 (pedido del dueño): el recibo del recaudador de la operación que dejó la fila; nulo sin recibo.</summary>
+    public string? ReceiptNumber { get; init; }
 }
 
 // ------------------------------------------------------------------------------------- estado de cuenta (FR-069) --

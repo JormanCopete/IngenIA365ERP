@@ -55,6 +55,12 @@ public static class ParametrosDeRecaudoYTesoreria
     // 2026-11-16 (pedido del dueño): las reglas de la caja sobre lo que se paga. Las aplica la pantalla y las vuelve a validar el servidor al guardar los
     // ítems y al confirmar (ReglasDeLaCaja).
     public const string CajaConMoraSoloExigible = "Caja.ConMoraSoloExigible";
+
+    /// <summary>
+    /// 2026-11-26 (pedido del dueño): con <see cref="CajaConMoraSoloExigible"/>, si el mismo recibo puede pagar lo vencido y además anticipar, abonar a capital
+    /// o usar cualquier otra modalidad, siempre que lo vencido se cubra primero. De fábrica «No»: con mora sólo lo exigible, como hasta ese día.
+    /// </summary>
+    public const string CajaConMoraPermiteAnticipar = "Caja.ConMoraPermiteAnticipar";
     public const string CajaCajeroCierraSuSesionOlvidada = "Caja.CajeroCierraSuSesionOlvidada";
     public const string CajaCajeroApruebaSuDiferencia = "Caja.CajeroApruebaSuDiferencia";
 
@@ -224,8 +230,11 @@ public static class ParametrosDeRecaudoYTesoreria
                 "Quien contó o cerró la sesión aprueba con motivo su propia diferencia de arqueo sobre la tolerancia (sin otra persona): para cooperativas donde una sola persona atiende la caja. El tope del permiso Receipts.Count.ApproveDifference sigue rigiendo.",
                 false, R1),
             SiNo(ModuloRecaudo, CajaConMoraSoloExigible,
-                "Un crédito con algo exigible (cuotas causadas o vencidas) sólo admite en caja la cancelación total, lo exigible o una cuota exigible: no se anticipa ni se abona a capital.",
+                "Un crédito con cuotas vencidas (o que vencen hoy) sólo admite en caja la cancelación total, lo exigible o una cuota exigible: no se anticipa ni se abona a capital. El interés ya causado de la cuota del período en curso no cuenta como mora.",
                 true, R1),
+            SiNo(ModuloRecaudo, CajaConMoraPermiteAnticipar,
+                "Con «Con mora sólo lo exigible» encendido, permite que el mismo recibo pague lo vencido y además anticipe cuotas, abone a capital o use otra modalidad. Anticipo, valor libre, cuota del ciclo y abono a capital cubren primero lo vencido; una cuota futura se anticipa sólo detrás de «Lo exigible» por lo vencido, en el mismo recibo.",
+                false, R1),
             SiNo(ModuloRecaudo, CajaAnticipoMinimoUnaCuota,
                 "Un crédito sin nada exigible exige en caja al menos una cuota completa en la cuota del ciclo, y en la cuota específica lo que cuesta anticiparla completa.",
                 true, R1),

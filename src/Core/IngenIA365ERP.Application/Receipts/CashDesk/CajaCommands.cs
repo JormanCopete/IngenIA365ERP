@@ -91,7 +91,9 @@ public sealed class GetPayablesQueryHandler(
             deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos, politica.PrelacionPorClase, politica.ConMoraSoloExigible,
             politica.AnticipoMinimoUnaCuota, politica.CargarExigibleAlElegir,
             // 2026-11-23 (pedido del dueño): los anticipos de concepto que la persona tiene para cruzar con su medio.
-            await CreditBalances.AnticiposDeConcepto.DisponiblesAsync(db, persona.Id, ct)));
+            await CreditBalances.AnticiposDeConcepto.DisponiblesAsync(db, persona.Id, ct),
+            // 2026-11-26 (pedido del dueño): con mora, lo vencido y además anticipar o abonar en el mismo recibo.
+            OverdueAllowsAdvance: politica.ConMoraPermiteAnticipar));
     }
 
     /// <summary>
@@ -285,6 +287,9 @@ public sealed class UpdateCashOperationItemsCommandHandler(
 
         var items = new List<ItemDeCajaDto>();
         var rechazos = new List<object>();
+        // 2026-11-26 (pedido del dueño): los ítems ya simulados de cada crédito, en orden: el siguiente se simula sobre lo que ellos dejan (lo vencido y después
+        // la cuota anticipada), como Cartera los aplica al confirmar.
+        var previos = new Dictionary<Guid, List<PagoPrevioDeSimulacion>>();
         foreach (var pedido in pedidos)
         {
             var id = pedido.ItemId!.Value;
@@ -294,9 +299,11 @@ public sealed class UpdateCashOperationItemsCommandHandler(
             {
                 case ApplicationTarget.Loan:
                 {
+                    if (!previos.TryGetValue(pedido.ProductPublicId!.Value, out var antes)) previos[pedido.ProductPublicId.Value] = antes = [];
                     var r = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, pedido.ProductPublicId!.Value, pedido.LoanModality!.Value,
-                        pedido.Amount, operacion.ValueDate, pedido.Choice, pedido.InstallmentNumber), ct);
+                        pedido.Amount, operacion.ValueDate, pedido.Choice, pedido.InstallmentNumber) { Previous = [.. antes] }, ct);
                     if (r.Result == ResultadoDelContrato.Rejected || r.Value is null) { rechazos.Add(new { itemId = id, code = r.Code, message = r.Message }); continue; }
+                    antes.Add(new PagoPrevioDeSimulacion(pedido.LoanModality.Value, pedido.Amount, pedido.Choice, pedido.InstallmentNumber));
                     var s = r.Value;
                     var alternativas = s.Alternatives.Select(a => new AlternativaDeAbonoDto(a.Choice, a.AppliedAmount, a.NewPlan)).ToList();
                     var anticipadoSinCapital = pedido.LoanModality == ModalidadDePago.Advance && s.Distribution.All(d => d.Concept != ConceptoDeObligacion.Principal);

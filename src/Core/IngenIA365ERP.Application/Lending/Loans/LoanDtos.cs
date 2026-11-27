@@ -191,6 +191,9 @@ public sealed record LoanTransactionDto(
     public decimal? UvrAmount { get; init; }
 
     public decimal? UvrValue { get; init; }
+
+    /// <summary>2026-11-26 (pedido del dueño): el recibo del recaudador de la operación que dejó la fila (un pago, un anticipo); nulo sin recibo. (nuevo)</summary>
+    public string? ReceiptNumber { get; init; }
 }
 
 /// <summary>El crédito en el alcance de quien consulta (404 genérico con <c>Lending.Access.OutOfScope</c> si no). (nuevo)</summary>
