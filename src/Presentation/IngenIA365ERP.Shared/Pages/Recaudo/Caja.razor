@@ -1174,7 +1174,7 @@
         {
             _items.Add(new ItemPedidoRequest(i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.AccountModality, i.Choice,
                 i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId,
-                i.PendingTarget, i.LoadObligationPublicId, i.ProductReference));
+                i.PendingTarget, i.LoadObligationPublicId, i.ProductReference, ApplyAdvanceDiscount: i.AdvanceDiscount > 0m));
             if (!_rotulos.ContainsKey(i.ItemId)) _rotulos[i.ItemId] = $"{CajaClient.Destino(i.Target)} {i.ProductNumber}";
         }
         _cobro.CambiarAPagar(TotalItems);
@@ -1243,6 +1243,9 @@
         }
         _operacion = r.Value;
         _pideDeclaracion = _operacion!.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
+        // 2026-11-27 (pedido del dueño): el descuento por pago anticipado lo trae la simulación; sin esto el cobro se quedaba con el total sin
+        // descuento que se fijó antes de simular, y el diálogo de medios pedía la cuota completa.
+        _cobro.CambiarAPagar(TotalItems);
         return true;
     }
 
