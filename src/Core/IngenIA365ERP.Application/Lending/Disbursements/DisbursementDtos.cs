@@ -10,7 +10,38 @@ public sealed record GarantiaPendienteDto(string Kind, string Reason);
 public sealed record RecogidaEnMoraDto(Guid LoanPublicId, string Number, int DaysPastDue);
 
 /// <summary>Un crédito recogido en el desembolso: lo aplicado y su comprobante de aplicación (<c>OwnLoanPayoff</c>).</summary>
-public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, decimal Applied, Guid ReceiptOperationPublicId);
+public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, decimal Applied, Guid ReceiptOperationPublicId)
+{
+    /// <summary>2026-11-27 (feature 028, api.md §3): la clase del producto; en la entrega E1, siempre <c>Loan</c>. (nuevo)</summary>
+    public string Kind { get; init; } = "Loan";
+
+    /// <summary>2026-11-27 (feature 028): cómo se aplicó: <c>Total</c> (cancelación) o <c>Partial</c> (lo exigible y el resto a capital). (nuevo)</summary>
+    public string Mode { get; init; } = "Total";
+
+    /// <summary>2026-11-27 (feature 028): lo que proyectó la solicitud; nulo si la solicitud no traía proyección. (nuevo)</summary>
+    public decimal? Projected { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): lo que costaba recogerlo a la fecha valor (en un parcial, el valor pedido). (nuevo)</summary>
+    public decimal Current { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): lo de ahora menos lo proyectado; nulo sin proyección. (nuevo)</summary>
+    public decimal? Difference { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): las causas de la diferencia (<c>Payments</c>, <c>Accrual</c>…). (nuevo)</summary>
+    public IReadOnlyList<string> Causes { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, E3): la operación de la cuenta recogida; nula en un crédito. (nuevo)</summary>
+    public Guid? AccountOperationPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4): el recibo de Recaudo de la factura recogida; nulo en un crédito. (nuevo)</summary>
+    public Guid? ReceiptPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2): la cuota causada que se dejó a su canal; nula en la entrega E1. (nuevo)</summary>
+    public decimal? LeftInstallment { get; init; }
+}
+
+/// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
+public sealed record DisbursementOmittedPayoffDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason);
 
 /// <summary>La orden de giro en la respuesta del desembolso.</summary>
 public sealed record DisbursementOrderRefDto(Guid PublicId, string Number, string Status);
@@ -35,7 +66,14 @@ public sealed record DisbursementResultDto(
     int ScheduleVersion,
     IReadOnlyList<EmittedMessageDto> Messages,
     PrevalidationDto Prevalidation,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, FR-012): los productos autorizados que ya estaban cancelados y no se recogieron (aparte de <see cref="Payoffs"/>, que son los
+    /// aplicados). (nuevo)
+    /// </summary>
+    public IReadOnlyList<DisbursementOmittedPayoffDto> OmittedPayoffs { get; init; } = [];
+}
 
 /// <summary>La usura del día del desembolso frente a la efectiva con cargos.</summary>
 public sealed record DisbursementUsuryDto(decimal Rate, decimal? Usury, bool Passes, Guid? UsuryValuePublicId);
@@ -46,8 +84,70 @@ public sealed record DisbursementApprovalDto(DateOnly? ExpiresAt, bool Valid);
 /// <summary>Las garantías: si están perfeccionadas y lo que falta.</summary>
 public sealed record DisbursementCollateralsDto(bool Perfected, IReadOnlyList<GarantiaPendienteDto> Pending);
 
-/// <summary>Un crédito a recoger con lo que hay que pagar para cancelarlo a la fecha valor.</summary>
-public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring);
+/// <summary>
+/// Un crédito a recoger con lo que hay que pagar para cancelarlo a la fecha valor. 2026-11-27 (feature 028, T034; api.md §3): con lo proyectado en la
+/// solicitud, lo de ahora, lo que se aplica, la diferencia por concepto con su causa, si se omite y la cuota causada; <see cref="ToPayOff"/>,
+/// <see cref="DaysPastDue"/> y <see cref="RequiresRestructuring"/> siguen como antes.
+/// </summary>
+public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring)
+{
+    /// <summary>La clase del producto; en la entrega E1, siempre <c>Loan</c>. (nuevo)</summary>
+    public string Kind { get; init; } = "Loan";
+
+    /// <summary>El producto (en un crédito, <see cref="LoanPublicId"/>). (nuevo)</summary>
+    public Guid ProductPublicId { get; init; }
+
+    /// <summary>Cómo se aplica: <c>Total</c> (cancelación) o <c>Partial</c> (lo exigible y el resto a capital). (nuevo)</summary>
+    public string Mode { get; init; } = "Total";
+
+    /// <summary>Cómo lo pidió la solicitud: <c>Total</c> o <c>Partial</c>. (nuevo)</summary>
+    public string RequestedMode { get; init; } = "Total";
+
+    /// <summary>Lo que proyectó la solicitud; nulo si no traía proyección (no hay con qué comparar). (nuevo)</summary>
+    public decimal? Projected { get; init; }
+
+    /// <summary>Lo de ahora a la fecha valor: todo en un total, el valor pedido en un parcial; cero si se omite. (nuevo)</summary>
+    public decimal Current { get; init; }
+
+    /// <summary>Lo que se le aplica (con <c>Recogida.AlDesembolsar = MantenerLoProyectado</c>, lo proyectado topado en lo de ahora). (nuevo)</summary>
+    public decimal ToApply { get; init; }
+
+    /// <summary>Lo de ahora menos lo proyectado; nulo sin proyección. (nuevo)</summary>
+    public decimal? Difference { get; init; }
+
+    /// <summary>Las causas de la diferencia: <c>Payments</c>, <c>Accrual</c>, <c>Arrears</c>, <c>CurrentInstallment</c>, <c>Parameters</c>, <c>ProductClosed</c>, <c>Other</c>. (nuevo)</summary>
+    public IReadOnlyList<string> Causes { get; init; } = [];
+
+    /// <summary>La diferencia por concepto, sólo los que cambiaron (<c>principal</c>, <c>currentInterest</c>…). (nuevo)</summary>
+    public IReadOnlyDictionary<string, decimal> Detail { get; init; } = new Dictionary<string, decimal>();
+
+    /// <summary>Ya estaba cancelado: no se recoge y el neto sube. (nuevo)</summary>
+    public bool Omitted { get; init; }
+
+    /// <summary>La diferencia pasa de <c>Recogida.ToleranciaDeDiferencia</c>. (nuevo)</summary>
+    public bool AboveTolerance { get; init; }
+
+    /// <summary>El modo de intereses con que se liquidó (<c>Corrido</c> o <c>CuotaCompleta</c>). (nuevo)</summary>
+    public string? InterestMode { get; init; }
+
+    /// <summary>La cuota causada del crédito a la fecha valor; nula sin cuota por vencer o sin plan. (nuevo)</summary>
+    public DisbursementPayoffInstallmentDto? CurrentInstallment { get; init; }
+
+    /// <summary>Lo que hay que saber de este producto (la diferencia y su causa, que se omite, que queda con saldo). (nuevo)</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, api.md §3): la cuota causada del crédito recogido: número, vencimiento, valor y qué se hace con ella (en la entrega E1 siempre
+/// se incluye; <see cref="Left"/>, la que se deja a su canal, llega con E2). (nuevo)
+/// </summary>
+public sealed record DisbursementPayoffInstallmentDto(int Number, DateOnly? DueDate, decimal Amount, string Treatment, decimal? Left);
+
+/// <summary>
+/// 2026-11-27 (feature 028, T034; api.md §3 <c>payoffDifferences</c>): cuántos productos cambiaron o se omiten, cuánto en total (ahora − proyectado), si
+/// confirmar exige reconocerlo y si alguno pasa de la tolerancia. (nuevo)
+/// </summary>
+public sealed record DisbursementPayoffDifferencesDto(int Count, decimal Total, bool RequiresAcknowledgement, bool AboveTolerance);
 
 /// <summary>Una cuota del plan propuesto.</summary>
 public sealed record DisbursementScheduleLineDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total)
@@ -76,7 +176,11 @@ public sealed record DisbursementPreviewDto(
     DisbursementSegregationDto Segregation,
     IReadOnlyList<string> Blocking,
     IReadOnlyList<string> Warnings,
-    string PreviewSha256);
+    string PreviewSha256)
+{
+    /// <summary>2026-11-27 (feature 028, T034): el resumen de las diferencias de las recogidas. (nuevo)</summary>
+    public DisbursementPayoffDifferencesDto PayoffDifferences { get; init; } = new(0, 0m, false, false);
+}
 
 /// <summary>Un tramo desembolsado (api.md §9.1, lista).</summary>
 public sealed record LoanDisbursementListItemDto(

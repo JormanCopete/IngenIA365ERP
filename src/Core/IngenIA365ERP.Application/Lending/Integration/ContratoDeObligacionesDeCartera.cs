@@ -557,39 +557,15 @@ public sealed class ContratoDeObligacionesDeCartera(
         CancellationToken ct)
     {
         if (pagos.Count == 0) return new Dictionary<Guid, DecisionDeValidacionPrevia>();
-        var publicos = pagos.Select(p => p.ObligationPublicId).Distinct().ToList();
-        var combinaciones = await (from l in db.Loans.AsNoTracking()
-                                   join c in db.CreditLines.AsNoTracking().IgnoreQueryFilters() on l.CreditLineId equals c.Id
-                                   join t in db.LoanTermsVersions.AsNoTracking() on l.Id equals t.LoanId
-                                   join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on l.BranchId equals b.Id
-                                   where publicos.Contains(l.PublicId) && t.VersionNumber == 1
-                                   select new { l.PublicId, c.Code, t.ModalityCode, t.SubsegmentCode, Branch = b.PublicId }).Distinct().ToListAsync(ct);
+        // 2026-11-27 (feature 028, T037): las combinaciones y su PagoAplicado salen de PagosParaLaValidacionPrevia, que comparte la vista previa del desembolso.
+        var combinaciones = await PagosParaLaValidacionPrevia.CombinacionesAsync(db, pagos.Select(p => p.ObligationPublicId).ToList(), ct);
         var decisiones = new Dictionary<Guid, DecisionDeValidacionPrevia>();
-        foreach (var grupo in combinaciones.GroupBy(c => (c.Code, c.ModalityCode, c.SubsegmentCode, c.Branch)))
+        foreach (var (combinacion, obligaciones) in combinaciones)
         {
-            var decision = await validacionPrevia.DecidirAsync([Hecho(recaudador, grupo.Key)], OrigenDeValidacionPrevia.Contrato,
+            var decision = await validacionPrevia.DecidirAsync([PagosParaLaValidacionPrevia.Hecho(recaudador, combinacion)], OrigenDeValidacionPrevia.Contrato,
                 $"el lote de {recaudador.Class}", ct);
-            foreach (var credito in grupo) decisiones[credito.PublicId] = decision;
+            foreach (var credito in obligaciones) decisiones[credito] = decision;
         }
         return decisiones;
     }
-
-    /// <summary>El <c>PagoAplicado</c> de una combinación (sin importes reales: la validación sólo mira hecho, sucursal y dimensiones).</summary>
-    private static MensajeContableDto Hecho(Recaudador recaudador, (string Code, string ModalityCode, string? SubsegmentCode, Guid Branch) c) =>
-        new(
-            new IntegrationEnvelopeV1
-            {
-                MessageId = Guid.Empty, Type = PagoAplicadoV1.Type, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
-                OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = c.Branch,
-            },
-            new PagoAplicadoV1
-            {
-                Dimensions = new LoanFactDimensionsV1
-                {
-                    CreditLineCode = c.Code, ModalityCode = c.ModalityCode, SubsegmentCode = c.SubsegmentCode,
-                    RiskCategory = CategoriaContableDeCartera.CategoriaDeCreditoNuevo, RiskSubcategory = "None", CollectorClass = recaudador.Class.ToString(),
-                    BranchPublicId = c.Branch, ImpairmentModel = "ArrearsAnnex1", RiskSegment = c.ModalityCode, ValueUnit = "Pesos",
-                },
-                Amounts = [new ConceptAmountV1 { Concept = nameof(LoanConcept.Principal), Amount = 1m }],
-            });
 }

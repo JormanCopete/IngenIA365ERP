@@ -108,10 +108,11 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public ReversoDeDesembolso Reverso() => new(Db, Registro(), Numerador(), MotorDelCredito(), Emision(), FechaContable(), G.Reloj,
         new Application.Lending.Documents.AnulacionDeDocumentosPorReverso(Db));
 
-    public ExecuteLoanDisbursementCommandHandler Desembolsar() =>
-        new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(Contrato), MotorDelCredito(), Emision(),
+    /// <summary>El comando con el contrato doble o, 2026-11-27 (feature 028), con <paramref name="contrato"/> (el real de <c>PagosDePrueba</c>).</summary>
+    public ExecuteLoanDisbursementCommandHandler Desembolsar(IContratoDeObligaciones? contrato = null) =>
+        new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(contrato ?? Contrato), MotorDelCredito(), Emision(),
             FechaContable(), G.Intervenciones(), G.Auditoria, G.Actor, G.Reloj);
-    public PreviewDisbursementQueryHandler VistaPrevia() => new(Requisitos());
+    public PreviewDisbursementQueryHandler VistaPrevia() => new(Requisitos(), G.Auditoria);
     public VoidDisbursementOrderCommandHandler AnularOrden() =>
         new(Db, O.Cerrojo, Emision(), FechaContable(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
     public ReissueDisbursementOrderCommandHandler GirarDeNuevo() =>
@@ -150,17 +151,17 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Beneficiary = new BeneficiaryInput(O.Ana.PublicId, Banco.PublicId, BeneficiaryInput.Ahorros, "0123456789"),
     };
 
-    public async Task<Result<DisbursementResultDto>> DesembolsarAsync(DisbursementInput entrada, bool limpiar = true)
+    public async Task<Result<DisbursementResultDto>> DesembolsarAsync(DisbursementInput entrada, bool limpiar = true, IContratoDeObligaciones? contrato = null)
     {
-        var r = await Desembolsar().Handle(new ExecuteLoanDisbursementCommand(entrada) { OperationKey = Guid.NewGuid() }, default);
+        var r = await Desembolsar(contrato).Handle(new ExecuteLoanDisbursementCommand(entrada) { OperationKey = Guid.NewGuid() }, default);
         if (limpiar) Db.ChangeTracker.Clear();
         return r;
     }
 
     /// <summary>Desembolsa y falla la prueba si no pudo.</summary>
-    public async Task<DisbursementResultDto> DesembolsadoAsync(DisbursementInput entrada)
+    public async Task<DisbursementResultDto> DesembolsadoAsync(DisbursementInput entrada, IContratoDeObligaciones? contrato = null)
     {
-        var r = await DesembolsarAsync(entrada);
+        var r = await DesembolsarAsync(entrada, contrato: contrato);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         return r.Value;
     }
@@ -199,7 +200,7 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Db.ChangeTracker.Clear();
     }
 
-    private static ComprobanteDeAplicacionDto Comprobante(PagoAAplicar p) => new(Guid.NewGuid(), "PAG-" + p.ObligationPublicId.ToString("N")[..6], p.ObligationPublicId,
+    public static ComprobanteDeAplicacionDto Comprobante(PagoAAplicar p) => new(Guid.NewGuid(), "PAG-" + p.ObligationPublicId.ToString("N")[..6], p.ObligationPublicId,
         "CR", p.IdempotencyKey, p.Modality, p.ValueDate, p.ValueDate, DateTime.UtcNow, p.Amount, p.Amount, 0m, 0m, 0m, [],
         new SaldosDeObligacionDto(0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0), null, p.Modality == ModalidadDePago.FullPayoff, p.ValueDate, "h", "LND-2026.1", []);
 

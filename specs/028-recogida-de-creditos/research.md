@@ -335,3 +335,41 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   `Lending.Payoffs.Read`), se mandan las guardadas tal cual. «Lo que recoge» del expediente es el componente `LoQueRecoge`.
 - **e2e**: `La_recogida_de_un_credito_en_mora_es_una_reestructuracion` radicaba con el crédito ya en mora; ahora se aprueba la víspera de la fecha exigible
   y entra en mora antes de desembolsar (sin correr: va con la fase 13).
+
+### E-07 — Desembolsar con recálculo y diferencias (T032–T037, T040, T041, T043, 2026-11-27)
+- **La lista del cuerpo** (`ownLoanPayoffs` o la nueva `payoffs`, que `DisbursementInput` gana) es opcional; si viene, «la misma» es: los mismos productos, el
+  mismo modo y, en un parcial, el mismo valor (al centavo). Las dos listas a la vez es `Request.BodyInvalid` (como en la solicitud, E-02). En un tramo
+  siguiente no hay nada autorizado: cualquier lista es `Lending.Payoff.MustMatchApplication`. Un crédito de una fila que no existe o ya no es del
+  solicitante sigue siendo `Lending.Payoff.NotRequested`.
+- **Omitido**: pagado, anulado, novado o activo sin saldo (`NoBalance`). Castigado, insolvencia que negocia o pendiente de giro bloquean con
+  `Lending.Payoff.NotPayable` (el motivo de `ErroresDeRecogida`); en mora, `RequiresRestructuring` con la lista de siempre. Un omitido se bloquea con el
+  cerrojo (nadie lo reabre mientras tanto) pero no se pone al día ni va al contrato.
+- **Lo de ahora de un parcial** es el valor pedido mientras no cubra el total (desglose `Capital = valor`, igual que la proyección de E-06); si lo cubre, es
+  un total. **La causa** se completa sólo si hay diferencia por concepto: `Payments` si hay una operación `Payment`, `PaymentReversal`,
+  `CreditBalanceResolution` o `ProvisionalCollection` registrada después de R; `Parameters` si cambió el modo de intereses guardado; `CurrentInstallment`
+  si cambió el número de la cuota causada.
+- **Reconocer** se exige con un omitido o con cualquier concepto distinto (`Causa != None`), aunque el total sea el mismo. **La tolerancia** no aplica al
+  omitido (sólo sube el neto) ni a una fila sin proyección. **Las filas sin proyección** (las copiadas de `PayoffRequest`) no tienen con qué compararse:
+  sin causa, sin reconocimiento, sin tolerancia; la vista previa lleva `projected` y `difference` nulos. La columna `Difference` de
+  `LND_DisbursementPayoffs` sigue la regla de la entidad (`CurrentAmount − ProjectedAmount`, con proyectado 0): el informe (T053) debe mostrar la
+  diferencia sólo con proyección (`ProjectedAmount > 0` o `DifferenceCause != None`).
+- **`MantenerLoProyectado`** aplica `min(proyectado, ahora)`; si no cancela, va como abono (`ExtraordinaryPrincipal`) y el aviso sale en el producto y en
+  los avisos de la vista previa. La fila guarda el modo **aplicado** (total o parcial).
+- **T036 sin claves derivadas**: un solo pago `ExtraordinaryPrincipal` cubre lo exigible y abona el resto a capital con la elección de la solicitud
+  (`PrepaymentChoice`, sin ella reducir plazo) y, si alcanza el capital por vencer, el contrato lo trata como cancelación. La gramática `CAR` no cambia.
+- **Bajo el cerrojo** (después de la puesta al día) las recogidas se vuelven a evaluar con `RequisitosDelDesembolso.ReevaluarRecogidasAsync`; si cambia el
+  crédito, el modo, lo que se aplica, la omisión o la diferencia, `Lending.Disbursement.PreviewChanged` con la huella nueva (`HuellaCon`). La defensa
+  `Lending.Payoff.AppliedDiffers` vive en `RecogidaEnElDesembolso` (lo aplicado por ítem frente a lo pedido) y aborta antes de guardar.
+- **La huella** suma por recogida el modo aplicado, la diferencia, sus causas y la omisión; sin recogidas es la de siempre.
+- **Las filas `LND_DisbursementPayoffs`** se escriben después del primer guardado (la operación ya tiene Id); la operación de pago se busca por el
+  `OperationPublicId` del comprobante. `AcknowledgedBy` es el nombre del actor (`Actor.Name`), sólo en las filas con diferencia u omisión.
+- **La respuesta de `/disbursements`** conserva `payoffs[]` con los aplicados (la pantalla lee `receiptOperationPublicId` como `Guid`) y gana
+  `omittedPayoffs[]`; los campos nuevos de cada recogida (`projected`, `current`, `difference`, `causes`, `mode`) van como en la vista previa. En la vista
+  previa `kind`, `mode` y `causes` salen como texto, como el resto de `DisbursementDtos`; `detail` lleva sólo los conceptos que cambiaron, con los nombres
+  de `breakdown` (api.md §1); `currentInstallment.left` va nulo hasta E2.
+- **T037**: la pregunta del contrato se extrajo a `Lending/Integration/PagosParaLaValidacionPrevia` (una combinación por línea, modalidad, sub-segmento y
+  sucursal del crédito con condiciones selladas, y la clase del recaudador). La vista previa hace una segunda `DecidirAsync` (pantalla, sin alerta) para
+  los recogidos no omitidos; su resultado (`PrevalidacionDeRecogidas`) no se sella en la operación del desembolso —el contrato sella el suyo al aplicar— y
+  se suma en `prevalidation` de la respuesta. Su bloqueo entra si no está ya el mismo código.
+- **T040**: se marcan las filas de las recogidas que el contrato reversó (por la clave); las omitidas no se tocan.
+- `ErroresDeRecogida.Pesos` quedó público y pone el signo antes del «$».

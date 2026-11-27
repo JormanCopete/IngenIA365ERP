@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Application.Lending.Disbursements;
@@ -27,8 +28,21 @@ public sealed record DisbursementInput
     /// <summary>Nulo = el deudor, con la cuenta registrada en su persona.</summary>
     public BeneficiaryInput? Beneficiary { get; init; }
 
-    /// <summary>Créditos propios a recoger (FR-046); deben estar en la recogida aprobada de la solicitud.</summary>
+    /// <summary>
+    /// Créditos propios a recoger (FR-046), la lista de antes. 2026-11-27 (feature 028, T032; D9): <b>opcional</b>: las recogidas salen de la solicitud
+    /// (<c>LND_CreditApplicationPayoffs</c>), todas las autorizadas; si viene, debe ser la misma —mismos productos y modos, y el valor de un parcial—: si no,
+    /// <c>Lending.Payoff.MustMatchApplication</c>. Con <see cref="Payoffs"/> a la vez, <c>Request.BodyInvalid</c>.
+    /// </summary>
     public IReadOnlyList<OwnLoanPayoffInput> OwnLoanPayoffs { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T032; api.md §3): la lista nueva (<see cref="PayoffInput"/>); opcional, con la misma regla que <see cref="OwnLoanPayoffs"/>. (nuevo)</summary>
+    public IReadOnlyList<PayoffInput>? Payoffs { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T032, T035; FR-015): quien desembolsa revisó las diferencias entre lo proyectado y lo de ahora y los productos que se omiten.
+    /// Si la vista previa los tuvo y viene en falso, <c>Lending.Payoff.DifferencesNotAcknowledged</c>. (nuevo)
+    /// </summary>
+    public bool AcknowledgedPayoffDifferences { get; init; }
 
     /// <summary>Si la transferencia sale en un archivo de desembolsos de Cartera (C10); sólo en <c>Transfer</c>.</summary>
     public bool PaidByFile { get; init; }

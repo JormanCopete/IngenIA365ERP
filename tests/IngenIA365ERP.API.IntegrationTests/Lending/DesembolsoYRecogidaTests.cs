@@ -247,18 +247,26 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
         // US3-3: la recogida del crédito al día, el mismo día: lo que cuesta cancelarlo sale del bruto.
         var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, recogido);
         var cuerpo = Desembolso(esc, solicitud, persona, transferencia: true); // T0299: el rechazo de Tesorería real es de una transferencia
-        cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = recogido, mode = "Full" } };
+        // 2026-11-27 (feature 028, T032): las recogidas salen de la solicitud (la lista del cuerpo es opcional); si la vista previa trae diferencias con lo
+        // proyectado, se reconocen (acknowledgedPayoffDifferences).
+        cuerpo["acknowledgedPayoffDifferences"] = true;
         var previa = await CarteraE2E.ExitoAsync(http, jefe, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);
         var enPrevia = previa.GetProperty("payoffs").EnumerateArray().Single();
         enPrevia.GetProperty("requiresRestructuring").GetBoolean().Should().BeFalse();
+        enPrevia.GetProperty("loanPublicId").GetGuid().Should().Be(recogido);
+        enPrevia.GetProperty("omitted").GetBoolean().Should().BeFalse();
+        enPrevia.GetProperty("projected").GetDecimal().Should().BePositive("la solicitud guardó lo proyectado");
         var aCancelar = enPrevia.GetProperty("toPayOff").GetDecimal();
         aCancelar.Should().BePositive();
+        enPrevia.GetProperty("toApply").GetDecimal().Should().Be(aCancelar);
+        previa.GetProperty("payoffDifferences").GetProperty("aboveTolerance").GetBoolean().Should().BeFalse();
 
         var hecho = await DesembolsarAsync(http, esc, cuerpo);
         var recogida = hecho.GetProperty("payoffs").EnumerateArray().Single();
         recogida.GetProperty("loanPublicId").GetGuid().Should().Be(recogido);
         recogida.GetProperty("applied").GetDecimal().Should().Be(aCancelar);
         hecho.GetProperty("netToDisburse").GetDecimal().Should().Be(3_000_000m - aCancelar, "el neto descuenta lo recogido");
+        hecho.GetProperty("netToDisburse").GetDecimal().Should().Be(previa.GetProperty("netToDisburse").GetDecimal(), "la orden sale por el neto que mostró la vista previa");
         hecho.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("type").GetString())
             .Should().Contain(["CreditoDesembolsado", "OrdenDeGiroEmitida"]);
         (await PagosE2E.EstadoAsync(fx, esc, recogido)).Should().Be(LoanStatus.PaidOff);
@@ -302,7 +310,9 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
         using (CausacionE2E.RelojEn(fx, exigible.AddDays(3)))
         {
             var cuerpo = Desembolso(esc, solicitud, persona);
+            // La lista del cuerpo es opcional; si viene, es la misma que autorizó la solicitud (feature 028, T032).
             cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = enMora, mode = "Full" } };
+            cuerpo["acknowledgedPayoffDifferences"] = true;
             var previa = await CarteraE2E.ExitoAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);
             var recogida = previa.GetProperty("payoffs").EnumerateArray().Single();
             recogida.GetProperty("requiresRestructuring").GetBoolean().Should().BeTrue();

@@ -24,7 +24,8 @@ public sealed record VoidedLoanDto(Guid LoanPublicId, string Number, string Stat
 /// (<c>Lending.Loan.NotPendingDisbursement</c>). En la misma transacción reversa cada pago de recogida de sus desembolsos por
 /// <see cref="IContratoDeObligaciones.ReversarAsync"/> (recaudador <c>CAR</c>, clave <c>{clave CAR}:reverso</c>; el contrato emite
 /// <c>PagoReversado</c> y nunca <c>PagoReversadoPorCartera</c>) y los recogidos vuelven a su estado (C11; interfaces.md §4.3); el crédito queda
-/// <c>Voided</c> con <c>VoidedOn</c> y <c>VoidReason</c>. Un reverso de recogida rechazado aborta todo. (nuevo)
+/// <c>Voided</c> con <c>VoidedOn</c> y <c>VoidReason</c>. Un reverso de recogida rechazado aborta todo. 2026-11-27 (feature 028, T040; FR-018): cada
+/// recogida reversada marca su fila <c>LND_DisbursementPayoffs</c> con el instante y la clave del reverso. (nuevo)
 /// </summary>
 public sealed record VoidPendingLoanCommand(Guid LoanPublicId, string Reason) : IRequest<Result<VoidedLoanDto>>, IOperacionIdempotente
 {
@@ -90,6 +91,11 @@ public sealed class VoidPendingLoanCommandHandler(
                         : new Error(respuesta.Code, respuesta.Message));
                 reversos.Add(respuesta.Value.OperationPublicId);
             }
+            // 2026-11-27 (feature 028, T040): la fila de cada recogida reversada queda marcada con la clave de su reverso (las de antes de la 028 no la tienen).
+            var claves = recogidas.Select(r => r.IdempotencyKey!).ToList();
+            if (claves.Count > 0)
+                foreach (var fila in await db.DisbursementPayoffs.Where(f => claves.Contains(f.IdempotencyKey) && !f.Omitted).ToListAsync(ct))
+                    fila.Reversar(reloj.UtcNow, ClavesDeRecaudador.Reverso(fila.IdempotencyKey));
 
             var hoy = reloj.HoyLocal;
             RegistroDeCartera.CambiarEstado(credito, LoanStatus.Voided, hoy, request.Reason);

@@ -120,6 +120,45 @@ public static class ErroresDeRecogida
         + "recoja menos.",
         new { amount = monto, payoffTotal = recogido, net = monto - recogido });
 
+    // 2026-11-27 (feature 028, T032–T035; api.md §3): los del desembolso que recoge lo que autorizó la solicitud. (nuevo)
+
+    public const string CodigoDebeCoincidirConLaSolicitud = "Lending.Payoff.MustMatchApplication";
+    public const string CodigoDiferenciasSinReconocer = "Lending.Payoff.DifferencesNotAcknowledged";
+    public const string CodigoDiferenciaSobreLaTolerancia = "Lending.Payoff.DifferenceAboveTolerance";
+    public const string CodigoAplicadoDistinto = "Lending.Payoff.AppliedDiffers";
+
+    /// <summary>
+    /// El cuerpo del desembolso trae una lista de recogidas distinta de la que autorizó la solicitud (D9: todas, del mismo modo; un tramo siguiente no
+    /// recoge nada). La lista es opcional: sin ella se recoge lo autorizado.
+    /// </summary>
+    public static Error DebeCoincidirConLaSolicitud(IReadOnlyList<string> autorizados) => new ErrorConDatos(CodigoDebeCoincidirConLaSolicitud,
+        autorizados.Count == 0
+            ? "Este desembolso no recoge nada: la solicitud no autoriza recoger créditos o es un tramo siguiente (las recogidas van con el primero). "
+              + "Quite los créditos que envió."
+            : $"El desembolso recoge lo que autorizó la solicitud, todo y del mismo modo ({string.Join(", ", autorizados)}): no se elige de nuevo. Quite la "
+              + "lista o envíe la de la solicitud; para cambiar lo que recoge, devuélvala para corregirla.",
+        new { authorized = autorizados });
+
+    /// <summary>Lo que se recoge cambió desde la proyección de la solicitud (o un producto ya se canceló) y quien desembolsa no dijo que lo revisó.</summary>
+    public static Error DiferenciasSinReconocer(int productos, decimal total) => new ErrorConDatos(CodigoDiferenciasSinReconocer,
+        $"Lo que se recoge cambió desde la proyección de la solicitud en {productos} {(productos == 1 ? "producto" : "productos")} ({Pesos(total)} en total). "
+        + "Revise las diferencias en la vista previa y confirme que las revisó.",
+        new { count = productos, total });
+
+    /// <summary>Una diferencia pasa de <c>Recogida.ToleranciaDeDiferencia</c>: hay que devolver la solicitud y volver a mostrarle al asociado lo que recibe.</summary>
+    public static Error DiferenciaSobreLaTolerancia(decimal tolerancia, IReadOnlyList<(string Numero, decimal Diferencia)> productos) => new ErrorConDatos(
+        CodigoDiferenciaSobreLaTolerancia,
+        $"Lo que se recoge cambió más de {Pesos(tolerancia)} desde la proyección de la solicitud en "
+        + string.Join(", ", productos.Select(p => $"el crédito {p.Numero} ({Pesos(p.Diferencia)})"))
+        + ". Devuelva la solicitud para corregirla y mostrarle al asociado lo que recibe.",
+        new { tolerance = tolerancia, products = productos.Select(p => new { number = p.Numero, difference = p.Diferencia }).ToList() });
+
+    /// <summary>Defensa del desembolso (H4): Cartera aplicó a un crédito recogido algo distinto de lo que se liquidó bajo el cerrojo; nada queda hecho.</summary>
+    public static Error AplicadoDistinto(Guid credito, string numero, decimal liquidado, decimal aplicado) => new ErrorConDatos(CodigoAplicadoDistinto,
+        $"Al crédito {numero} se le aplicaron {Pesos(aplicado)} y se habían liquidado {Pesos(liquidado)}: el desembolso no se hizo. Pida otra vez la vista "
+        + "previa y confirme.",
+        new { loanPublicId = credito, number = numero, expected = liquidado, applied = aplicado });
+
     private static string TextoDelModo(PayoffMode modo) => modo switch
     {
         PayoffMode.Total => "total",
@@ -129,7 +168,7 @@ public static class ErroresDeRecogida
         _ => modo.ToString(),
     };
 
-    private static string Pesos(decimal valor) => "$" + valor.ToString("#,##0.##", CultureInfo.GetCultureInfo("es-CO"));
+    public static string Pesos(decimal valor) => (valor < 0m ? "-$" : "$") + Math.Abs(valor).ToString("#,##0.##", CultureInfo.GetCultureInfo("es-CO"));
 }
 
 /// <summary>

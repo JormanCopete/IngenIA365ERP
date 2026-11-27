@@ -67,18 +67,18 @@ cambia el valor y el neto.
 **Prueba independiente**: proyectada el 20/11, pago en caja el 25/11, desembolso el 28/11: diferencia con causa «Pagos», neto mayor, orden por
 el neto mostrado.
 
-- [ ] T032 [US3] `DisbursementInput.Payoffs` opcional y `AcknowledgedPayoffDifferences` en `App/Lending/Disbursements/DisbursementInput.cs`; validador en `ExecuteLoanDisbursementCommand.cs`
-- [ ] T033 [US3] `RequisitosDelDesembolso`: recogidas desde `LND_CreditApplicationPayoffs` (`MustMatchApplication`), liquidación por `LiquidacionDeRecogida`, comparación con `DiferenciaDeRecogida`, causa leyendo las operaciones del producto entre R y ahora, omitidos, `Recogida.AlDesembolsar`, `Recogida.ToleranciaDeDiferencia`, huella con diferencias, concentración sobre bruto − recogido, en `App/Lending/Disbursements/RequisitosDelDesembolso.cs`
-- [ ] T034 [US3] Vista previa con `payoffs[]` ampliado y `payoffDifferences` en `App/Lending/Disbursements/PreviewDisbursementQuery.cs` y `DisbursementDtos.cs`; emite `Lending.Payoff.Viewed`
-- [ ] T035 [US3] Comando: reconocimiento obligatorio (`DifferencesNotAcknowledged`), relectura bajo el cerrojo, defensa `AppliedDiffers`, orden por bruto − aplicado (H4), filas `DisbursementPayoff`, tramos siguientes sin recogidas, en `App/Lending/Disbursements/ExecuteLoanDisbursementCommand.cs`
-- [ ] T036 [US3] Recogida parcial de crédito como lo exigible + `ExtraordinaryPrincipal` con la elección del deudor (D7) en `App/Lending/Disbursements/RecogidaEnElDesembolso.cs`
-- [ ] T037 [US3] Validación contable previa que incluye los `PagoAplicado` de las recogidas (FR-027a) en `RequisitosDelDesembolso.HechoParaValidar` y su llamada
+- [X] T032 [US3] `DisbursementInput.Payoffs` opcional y `AcknowledgedPayoffDifferences` en `App/Lending/Disbursements/DisbursementInput.cs`; validador en `ExecuteLoanDisbursementCommand.cs`
+- [X] T033 [US3] `RequisitosDelDesembolso`: recogidas desde `LND_CreditApplicationPayoffs` (`MustMatchApplication`), liquidación por `LiquidacionDeRecogida`, comparación con `DiferenciaDeRecogida`, causa leyendo las operaciones del producto entre R y ahora, omitidos, `Recogida.AlDesembolsar`, `Recogida.ToleranciaDeDiferencia`, huella con diferencias, concentración sobre bruto − recogido, en `App/Lending/Disbursements/RequisitosDelDesembolso.cs`
+- [X] T034 [US3] Vista previa con `payoffs[]` ampliado y `payoffDifferences` en `App/Lending/Disbursements/PreviewDisbursementQuery.cs` y `DisbursementDtos.cs`; emite `Lending.Payoff.Viewed`
+- [X] T035 [US3] Comando: reconocimiento obligatorio (`DifferencesNotAcknowledged`), relectura bajo el cerrojo, defensa `AppliedDiffers`, orden por bruto − aplicado (H4), filas `DisbursementPayoff`, tramos siguientes sin recogidas, en `App/Lending/Disbursements/ExecuteLoanDisbursementCommand.cs`
+- [X] T036 [US3] Recogida parcial de crédito como lo exigible + `ExtraordinaryPrincipal` con la elección del deudor (D7) en `App/Lending/Disbursements/RecogidaEnElDesembolso.cs`
+- [X] T037 [US3] Validación contable previa que incluye los `PagoAplicado` de las recogidas (FR-027a) en `RequisitosDelDesembolso.HechoParaValidar` y su llamada
 - [ ] T038 [US3] Giro nuevo con las recogidas de la operación original y el mismo neto (H6) en `App/Lending/Disbursements/ReissueDisbursementOrderCommand.cs`
 - [ ] T039 [US3] Garantías y pagaré del recogido se liberan al quedar `Paid` la orden del crédito nuevo (D12, H7) en `App/Lending/Disbursements/Collaterals/GarantiasDeCartera.cs` y `App/Lending/Integration/ConsumeTreasuryResultCommand.cs`; texto «por liberar al girar el crédito …»
-- [ ] T040 [US3] Anulación: marca `ReversedAt`/`ReversalKey` en `DisbursementPayoff` en `App/Lending/Disbursements/VoidPendingLoanCommand.cs`
-- [ ] T041 [US3] Auditoría del desembolso con proyectado, actual, aplicado, diferencia, causa y quién reconoció en `ExecuteLoanDisbursementCommand.Distribucion`
+- [X] T040 [US3] Anulación: marca `ReversedAt`/`ReversalKey` en `DisbursementPayoff` en `App/Lending/Disbursements/VoidPendingLoanCommand.cs`
+- [X] T041 [US3] Auditoría del desembolso con proyectado, actual, aplicado, diferencia, causa y quién reconoció en `ExecuteLoanDisbursementCommand.Distribucion`
 - [ ] T042 [US3] `Sh/Pages/Cartera/Desembolsos.razor`: quita el letrero; tabla de recogidas (proyectado / actual / diferencia / causa / omitido / cuota causada), casilla «Revisé las diferencias», neto real, resultado con lo aplicado por producto; `IndicadorDeCarga`; DTO en `Sh/Services/Cartera/CarteraDtos.Desembolsos.cs`
-- [ ] T043 [P] [US3] Pruebas del desembolso: recalcular, mantener lo proyectado, omitido, tolerancia, reconocimiento, `MustMatchApplication`, orden por lo aplicado, parcial a capital, tramos, en `TA/Lending/Disbursements/DesembolsoConDiferenciasTests.cs` (ampliar `RecogidaEnElDesembolsoTests.cs`)
+- [X] T043 [P] [US3] Pruebas del desembolso: recalcular, mantener lo proyectado, omitido, tolerancia, reconocimiento, `MustMatchApplication`, orden por lo aplicado, parcial a capital, tramos, en `TA/Lending/Disbursements/DesembolsoConDiferenciasTests.cs` (ampliar `RecogidaEnElDesembolsoTests.cs`)
 - [ ] T044 [P] [US3] Pruebas del giro nuevo y de la liberación diferida de garantías en `TA/Lending/Disbursements/GiroNuevoYGarantiasConRecogidaTests.cs`
 
 ## Fase 6 — Contabilidad del desembolso con recogidas (FR-027, E1)

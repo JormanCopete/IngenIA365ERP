@@ -197,6 +197,9 @@ public sealed class OrdenesYAnulacionTests : IAsyncLifetime
         (pedida!.Collector.Code, pedida.Collector.Class, pedida.PaymentIdempotencyKey).Should().Be(("CAR", ClaseDeRecaudador.OwnLoanPayoff, clave));
         var credito = await _d.Db.Loans.SingleAsync(l => l.PublicId == d.LoanPublicId);
         (credito.Status, credito.VoidedOn, credito.VoidReason).Should().Be((LoanStatus.Voided, (DateOnly?)DesembolsoDePrueba.Hoy, "El asociado desistió"));
+        // 2026-11-27 (feature 028, T040): la fila de la recogida queda reversada con la clave de su reverso.
+        var fila = await _d.Db.DisbursementPayoffs.SingleAsync(f => f.LoanId == viejo.Id);
+        (fila.ReversalKey, fila.ReversedAt).Should().Be(($"{clave}:reverso", (DateTime?)_d.G.UtcNow));
     }
 
     [Fact]

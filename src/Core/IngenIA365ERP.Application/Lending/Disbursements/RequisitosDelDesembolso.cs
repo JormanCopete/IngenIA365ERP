@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -17,24 +19,75 @@ using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
+using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
+using IngenIA365ERP.Domain.Entities.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Configuration;
 using IngenIA365ERP.Domain.Lending.Parameters;
+using IngenIA365ERP.Domain.Lending.Payoffs;
 using IngenIA365ERP.Domain.Lending.Segregation;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Disbursements;
 
-/// <summary>Un crédito propio que el desembolso recoge: lo que se le aplica y lo que costaba cancelarlo. (nuevo)</summary>
+/// <summary>
+/// Un crédito propio que el desembolso recoge: lo que se le aplica (<see cref="AAplicar"/>, en el modo <see cref="Modo"/> con que se aplica) y lo que
+/// costaba cancelarlo. 2026-11-27 (feature 028, T033; FR-012–FR-015): con lo que proyectó la solicitud, lo de ahora, la diferencia por concepto con su causa,
+/// si se omite porque ya se canceló por otro camino y si pasa de la tolerancia. (nuevo)
+/// </summary>
 public sealed record RecogidaEvaluada(int LoanId, Guid LoanPublicId, string Number, string Modo, decimal AAplicar, LiquidacionParaRecogida Liquidacion)
 {
     /// <summary>En mora o con pérdida de capacidad: recogerlo es una reestructuración (hasta K3, rechazada).</summary>
     public bool RequiereReestructuracion => Liquidacion.DiasDeMora > 0 || Liquidacion.PerdioCapacidad;
 
+    /// <summary>Se aplica como cancelación (<c>FullPayoff</c>); si no, como abono (lo exigible y el resto a capital, D7).</summary>
     public bool Total => Modo != RequisitosDelDesembolso.ModoParcial;
+
+    /// <summary>2026-11-27 (feature 028): la recogida proyectada de la que viene (<c>LND_CreditApplicationPayoffs.Id</c>). (nuevo)</summary>
+    public int? ProyectadaId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): cómo la pidió la solicitud (total o parcial). (nuevo)</summary>
+    public PayoffMode ModoPedido { get; init; } = PayoffMode.Total;
+
+    /// <summary>2026-11-27 (feature 028): el valor pedido de un parcial. (nuevo)</summary>
+    public decimal? ValorPedido { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): si la solicitud traía proyección (las filas copiadas de <c>PayoffRequest</c> no: no hay con qué comparar). (nuevo)</summary>
+    public bool ConProyeccion { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): lo que proyectó la solicitud (cero sin proyección). (nuevo)</summary>
+    public decimal Proyectado { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): lo de ahora, a la fecha valor: todo en un total, el valor pedido en un parcial (topado); cero si se omite. (nuevo)</summary>
+    public decimal Actual { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): la diferencia por concepto con su causa (ninguna sin proyección). (nuevo)</summary>
+    public ResultadoDeDiferencia Diferencia { get; init; } = SinDiferencia;
+
+    /// <summary>2026-11-27 (feature 028, FR-012): el crédito ya se canceló por otro camino (pagado, anulado, novado o sin saldo): no se recoge. (nuevo)</summary>
+    public bool Omitida { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): el modo de intereses con que se liquidó (<c>Corrido</c> o <c>CuotaCompleta</c>). (nuevo)</summary>
+    public string? ModoDeIntereses { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D7): la elección del deudor con que un abono baja el capital (la de la solicitud; sin ella, reducir plazo). (nuevo)</summary>
+    public EleccionDeAbono? Eleccion { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, FR-015): la diferencia pasa de <c>Recogida.ToleranciaDeDiferencia</c>. (nuevo)</summary>
+    public bool SobreLaTolerancia { get; init; }
+
+    /// <summary>2026-11-27 (feature 028): lo que la vista previa dice de este producto. (nuevo)</summary>
+    public IReadOnlyList<string> Avisos { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, FR-015): confirmar exige reconocerla: una diferencia u omisión. (nuevo)</summary>
+    public bool PorReconocer => Omitida || Diferencia.HayDiferencia;
+
+    /// <summary>Sin diferencia: lo de una fila sin proyección o igual a lo de ahora.</summary>
+    public static ResultadoDeDiferencia SinDiferencia { get; } = new(0m, DesgloseDeRecogida.Vacio, PayoffDifferenceCause.None);
 }
 
 /// <summary>El beneficiario del giro resuelto: la persona del maestro con su copia y la cuenta, tal como se sellará en la orden (I-1). (nuevo)</summary>
@@ -89,6 +142,12 @@ public sealed record RequisitosEvaluados
     public CompraSubsidiada? Compra { get; init; }
     public Guid? SucursalPublicId { get; init; }
     public required ResultadoDeValidacionPreviaDeCartera Prevalidacion { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T037; FR-027a): la validación previa de los <c>PagoAplicado</c> con que el contrato aplicará las recogidas (clase
+    /// <c>OwnLoanPayoff</c>); nula sin recogidas que preguntar. No se sella en el desembolso: el contrato sella la suya al aplicar. (nuevo)
+    /// </summary>
+    public ResultadoDeValidacionPreviaDeCartera? PrevalidacionDeRecogidas { get; init; }
     public required bool BloquearSinRegla { get; init; }
     public IntervencionVerificada? Intervencion { get; init; }
     public string? ConflictoDeSegregacion { get; init; }
@@ -96,8 +155,16 @@ public sealed record RequisitosEvaluados
     public required IReadOnlyList<string> Avisos { get; init; }
     public required string Huella { get; init; }
 
+    /// <summary>2026-11-27 (feature 028): <c>Recogida.ToleranciaDeDiferencia</c> a la fecha valor; nula = nunca bloquea. (nuevo)</summary>
+    public decimal? Tolerancia { get; init; }
+
     public bool EsElPrimero => CreditoId is null;
-    public decimal Recogido => Recogidas.Sum(r => r.AAplicar);
+
+    /// <summary>Lo que se aplica a los productos recogidos (los omitidos no suman).</summary>
+    public decimal Recogido => Recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
+
+    /// <summary>2026-11-27 (feature 028, FR-015): hay una diferencia o un producto omitido: confirmar exige reconocerlo. (nuevo)</summary>
+    public bool RequiereReconocimiento => Recogidas.Any(r => r.PorReconocer);
     public decimal Neto => Bruto - Recogido;
     public decimal Desembolsado => YaDesembolsado + Bruto;
 
@@ -121,9 +188,13 @@ public sealed record RequisitosEvaluados
 /// <item>listas sin liberar, bloqueos vigentes y concentración con patrimonio técnico vigente (T59);</item>
 /// <item>el monto operativo de <c>Lending.Disbursements.Execute</c> (<c>SEC_PermissionAmountLimits</c>), la sucursal contable de la oficina y la
 /// cuenta del beneficiario en transferencia;</item>
-/// <item>las recogidas autorizadas por la solicitud, su liquidación y si alguna es reestructuración (FR-046), y el neto positivo;</item>
+/// <item>las recogidas autorizadas por la solicitud, su liquidación y si alguna es reestructuración (FR-046), y el neto positivo. 2026-11-27 (feature 028,
+/// T033; FR-012–FR-015): <b>todas</b> las de la solicitud y sólo en el primer tramo; la lista del cuerpo es opcional y, si viene, debe ser la misma
+/// (<c>Lending.Payoff.MustMatchApplication</c>); cada una se liquida a la fecha valor con lo de ahora, se compara con lo proyectado (la diferencia por
+/// concepto y su causa) y se aplica según <c>Recogida.AlDesembolsar</c>; la ya cancelada se omite; castigada o en insolvencia bloquea; una diferencia
+/// sobre <c>Recogida.ToleranciaDeDiferencia</c> bloquea;</item>
 /// <item>la validación previa contable (<see cref="ValidacionPreviaContableDeCartera"/>): bloquea sólo con <c>Contabilidad.FaltaDeRegla =
-/// Bloquear</c> (A8); sin respuesta sigue (D7).</item>
+/// Bloquear</c> (A8); sin respuesta sigue (D7). 2026-11-27 (feature 028, T037; FR-027a): también la de los <c>PagoAplicado</c> de las recogidas.</item>
 /// </list>
 /// Lo que impide seguir evaluando (solicitud inexistente o no aprobada, la usura del día sin publicar) es una falla; lo demás va a
 /// <see cref="RequisitosEvaluados.Bloqueos"/>. (nuevo)
@@ -167,6 +238,9 @@ public sealed class RequisitosDelDesembolso(
         var dentro = await alcance.AsegurarAsync(s.BranchId, s.CreditLineId, ErroresDeOriginacion.SolicitudInexistente(), auditoria,
             nameof(CreditApplication), s.PublicId, ct);
         if (dentro.IsFailure) return Falla(dentro.Error);
+        // 2026-11-27 (feature 028, T032): la lista del cuerpo es opcional; las dos listas a la vez son un cuerpo que no se puede leer (400).
+        var pedidas = RecogidasPedidas.Unificar(e.Payoffs, e.OwnLoanPayoffs);
+        if (pedidas.IsFailure) return Falla(pedidas.Error);
 
         var hoy = reloj.HoyLocal;
         var fechaValor = e.ValueDate ?? hoy;
@@ -262,8 +336,10 @@ public sealed class RequisitosDelDesembolso(
         // capital del crédito; parcial: lo que se le aplica, topado)—, así que las recogidas se evalúan aquí; sus bloqueos se anotan en su paso (7), en el
         // mismo orden de siempre.
         var bloqueosDeRecogidas = new List<Error>();
-        var recogidas = await RecogidasAsync(s, e, fechaValor, bloqueosDeRecogidas, ct);
-        var recogidasQueLiberan = recogidas.Select(r => new RecogidaEnLaValidacion(r.LoanId, r.Number, r.Total, r.AAplicar)).ToList();
+        var avisosDeRecogidas = new List<string>();
+        var (recogidas, tolerancia) = await RecogidasAsync(s, pedidas.Value, creditoId is null, fechaValor, bloqueosDeRecogidas, avisosDeRecogidas, ct);
+        // Un producto omitido (ya cancelado) no libera nada: ya no estaba.
+        var recogidasQueLiberan = recogidas.Where(r => !r.Omitida).Select(r => new RecogidaEnLaValidacion(r.LoanId, r.Number, r.Total, r.AAplicar)).ToList();
         var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, bruto, conGarantia, fechaValor, s.Id,
             recogidasQueLiberan.Count > 0 ? recogidasQueLiberan : null, ct);
         if (medida.IsFailure) bloqueosHallados.Add(medida.Error);
@@ -279,7 +355,8 @@ public sealed class RequisitosDelDesembolso(
 
         // 7. Recogidas (evaluadas con la concentración, arriba).
         bloqueosHallados.AddRange(bloqueosDeRecogidas);
-        var recogido = recogidas.Sum(r => r.AAplicar);
+        avisos.AddRange(avisosDeRecogidas);
+        var recogido = recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
         if (recogidas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
 
         // 7b. 2026-11-23 (descuento condicionado): el giro al proveedor por el valor del bien; el fondo pone la diferencia.
@@ -297,8 +374,11 @@ public sealed class RequisitosDelDesembolso(
         var bloquearSinRegla = decision.Bloqueo?.Code == ErroresDeValidacionPreviaDeCartera.CodigoNoContabilizable;
         if (decision.Bloqueo is { } bloqueoContable) bloqueosHallados.Add(bloqueoContable);
         avisos.AddRange(decision.Avisos);
+        // 2026-11-27 (feature 028, T037; FR-027a): los PagoAplicado con que el contrato aplicará las recogidas (clase OwnLoanPayoff), con la misma pregunta
+        // que hace el contrato al aplicar; lo que bloquearía allá se ve aquí, antes de confirmar. No se sella en el desembolso.
+        var prevalidacionDeRecogidas = await PrevalidacionDeRecogidasAsync(s, recogidas, bloqueosHallados, avisos, ct);
 
-        var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion,
+        var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e.Form, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion,
             compra?.Subsidio ?? 0m);
         return Result.Success(new RequisitosEvaluados
         {
@@ -322,6 +402,8 @@ public sealed class RequisitosDelDesembolso(
             Compra = compra,
             SucursalPublicId = sucursal.IsSuccess ? sucursal.Value : null,
             Prevalidacion = prevalidacion,
+            PrevalidacionDeRecogidas = prevalidacionDeRecogidas,
+            Tolerancia = tolerancia,
             BloquearSinRegla = bloquearSinRegla,
             Intervencion = verificada.IsSuccess ? verificada.Value : null,
             ConflictoDeSegregacion = conflicto,
@@ -447,52 +529,283 @@ public sealed class RequisitosDelDesembolso(
     }
 
     /// <summary>
-    /// Las recogidas pedidas: sólo las que autoriza la solicitud (FR-046), del deudor, vivas, con su liquidación a la fecha valor. 2026-11-27 (feature 028,
-    /// T010): la liquidación sale de <see cref="LiquidacionDeRecogida"/> —el único sitio que liquida una recogida—, que cobra lo mismo que aplica el
-    /// contrato con el modo de <c>Recogida.InteresesProporcionales</c>; lo que no se puede liquidar bloquea con su código. 2026-11-27 (feature 028, T023):
-    /// lo autorizado son los créditos de las recogidas proyectadas vivas de la solicitud (<c>LND_CreditApplicationPayoffs</c>), no el JSON
-    /// <c>PayoffRequest</c>, que ya no se escribe.
+    /// Las recogidas del desembolso (FR-046). 2026-11-27 (feature 028, T010): la liquidación sale de <see cref="LiquidacionDeRecogida"/> —el único sitio que
+    /// liquida una recogida—, que cobra lo mismo que aplica el contrato con el modo de <c>Recogida.InteresesProporcionales</c>. 2026-11-27 (feature 028, T023):
+    /// lo autorizado son las recogidas proyectadas vivas de la solicitud (<c>LND_CreditApplicationPayoffs</c>), no el JSON <c>PayoffRequest</c>.
+    /// 2026-11-27 (feature 028, T032–T033; D9): se recogen <b>todas</b> las autorizadas —nadie las elige de nuevo— y sólo en el primer tramo; la lista del
+    /// cuerpo es opcional y, si viene, debe ser la de la solicitud (<c>Lending.Payoff.MustMatchApplication</c>). Cada una se evalúa con
+    /// <see cref="EvaluarRecogidasAsync"/>. Devuelve también la tolerancia leída (nula si no hay recogidas o el parámetro está vacío).
     /// </summary>
-    private async Task<IReadOnlyList<RecogidaEvaluada>> RecogidasAsync(CreditApplication s, DisbursementInput e, DateOnly fecha, List<Error> hallados,
-        CancellationToken ct)
+    private async Task<(IReadOnlyList<RecogidaEvaluada> Recogidas, decimal? Tolerancia)> RecogidasAsync(CreditApplication s, IReadOnlyList<PayoffInput> pedidas,
+        bool primerTramo, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
     {
-        var resultado = new List<RecogidaEvaluada>();
-        if (e.OwnLoanPayoffs.Count == 0) return resultado;
+        var autorizadas = primerTramo ? await AutorizadasAsync(s.Id, ct) : [];
+        if (pedidas.Count > 0 && !Coinciden(pedidas, autorizadas))
+            hallados.Add(ErroresDeRecogida.DebeCoincidirConLaSolicitud(autorizadas.Select(Descripcion).ToList()));
+        if (autorizadas.Count == 0) return ([], null);
+        var contexto = await ContextoAsync(s, fecha, ct);
+        return (await EvaluarRecogidasAsync(s, autorizadas, contexto, fecha, hallados, avisos, ct), contexto.Tolerancia);
+    }
 
-        var autorizadas = await (from f in db.CreditApplicationPayoffs.AsNoTracking()
-                                 join l in db.Loans.AsNoTracking() on f.LoanId equals l.Id
-                                 where f.CreditApplicationId == s.Id && !f.IsDeleted && f.ProductKind == PayoffProductKind.Loan
-                                 select l.PublicId)
-            .ToListAsync(ct);
+    /// <summary>
+    /// 2026-11-27 (feature 028, T035): vuelve a evaluar las recogidas de <paramref name="r"/> con lo de ahora y las mismas reglas. El comando la llama bajo el
+    /// cerrojo, después de la puesta al día: si lo que se aplica cambió desde la vista previa, se pide otra (<c>Lending.Disbursement.PreviewChanged</c>). Falla
+    /// con el primer bloqueo que aparezca.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<RecogidaEvaluada>>> ReevaluarRecogidasAsync(RequisitosEvaluados r, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        if (!r.EsElPrimero || r.Recogidas.Count == 0) return Result.Success<IReadOnlyList<RecogidaEvaluada>>([]);
+        var autorizadas = await AutorizadasAsync(r.Solicitud.Id, ct);
+        var contexto = await ContextoAsync(r.Solicitud, r.FechaValor, ct);
+        var hallados = new List<Error>();
+        var nuevas = await EvaluarRecogidasAsync(r.Solicitud, autorizadas, contexto, r.FechaValor, hallados, [], ct);
+        return hallados.Count > 0 ? Result.Failure<IReadOnlyList<RecogidaEvaluada>>(hallados[0]) : Result.Success(nuevas);
+    }
+
+    /// <summary>Una recogida autorizada por la solicitud y su crédito (nulo si no existe).</summary>
+    private sealed record RecogidaAutorizada(CreditApplicationPayoff Fila, Loan? Credito);
+
+    /// <summary>Con qué se evalúan las recogidas a la fecha valor: <c>Recogida.AlDesembolsar</c> de la línea del crédito nuevo, la tolerancia y la elección.</summary>
+    private sealed record ContextoDeRecogidas(bool MantenerLoProyectado, decimal? Tolerancia, EleccionDeAbono Eleccion);
+
+    /// <summary>Las recogidas proyectadas vivas de la solicitud, en el orden de la pantalla, con su crédito.</summary>
+    private async Task<IReadOnlyList<RecogidaAutorizada>> AutorizadasAsync(int solicitudId, CancellationToken ct)
+    {
+        var filas = await db.CreditApplicationPayoffs.AsNoTracking().Where(f => f.CreditApplicationId == solicitudId && !f.IsDeleted)
+            .OrderBy(f => f.Order).ThenBy(f => f.Id).ToListAsync(ct);
+        var ids = filas.Where(f => f.LoanId != null).Select(f => f.LoanId!.Value).Distinct().ToList();
+        var creditos = ids.Count == 0
+            ? new Dictionary<int, Loan>()
+            : await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.Id)).ToDictionaryAsync(l => l.Id, ct);
+        return filas.Select(f => new RecogidaAutorizada(f, f.LoanId is { } id ? creditos.GetValueOrDefault(id) : null)).ToList();
+    }
+
+    /// <summary>
+    /// <c>Recogida.AlDesembolsar</c> con la línea del crédito nuevo (caída al general), <c>Recogida.ToleranciaDeDiferencia</c> (general; vacía, nula) y la
+    /// elección del deudor de la solicitud para el abono a capital de un parcial (D7; sin ella, reducir plazo).
+    /// </summary>
+    private async Task<ContextoDeRecogidas> ContextoAsync(CreditApplication s, DateOnly fecha, CancellationToken ct)
+    {
+        var alDesembolsar = await parametros.LeerAsync(ParametrosDeCartera.RecogidaAlDesembolsar, fecha, null, ParameterScopeKind.CreditLine, s.CreditLineId, ct);
+        var tolerancia = await parametros.LeerAsync(ParametrosDeCartera.RecogidaToleranciaDeDiferencia, fecha, ct: ct);
+        return new ContextoDeRecogidas(
+            alDesembolsar.IsSuccess
+            && string.Equals(alDesembolsar.Value.Texto?.Trim(), ParametrosDeCartera.AlDesembolsarMantenerLoProyectado, StringComparison.Ordinal),
+            tolerancia.IsSuccess ? tolerancia.Value.Valor as decimal? : null,
+            s.PrepaymentChoice == PrepaymentChoice.ReduceInstallment ? EleccionDeAbono.ReduceInstallment : EleccionDeAbono.ReduceTerm);
+    }
+
+    /// <summary>
+    /// Cada recogida autorizada a la fecha valor con lo de ahora (feature 028, T033):
+    /// <list type="number">
+    /// <item>el crédito ya cancelado por otro camino (pagado, anulado, novado o sin saldo) se <b>omite</b>: no se recoge, la causa es <c>ProductClosed</c> y
+    /// el neto sube;</item>
+    /// <item>se liquida con <see cref="LiquidacionDeRecogida"/>; en mora es una reestructuración (<c>Lending.Payoff.RequiresRestructuring</c>, como siempre);
+    /// castigado, en insolvencia que negocia o no vigente, <c>Lending.Payoff.NotPayable</c>;</item>
+    /// <item>lo de ahora es lo que cuesta recogerlo todo o, en un parcial, el valor pedido mientras no lo cubra todo (si lo cubre, es un total);</item>
+    /// <item>se compara con lo proyectado (<see cref="DiferenciaDeRecogida"/>) y la causa se completa con lo que pasó en el crédito desde R: pagos, el modo de
+    /// intereses que cambió (parámetros) o la cuota causada; una fila sin proyección no tiene con qué compararse;</item>
+    /// <item><c>Recogida.AlDesembolsar</c>: «Recalcular» aplica lo de ahora; «MantenerLoProyectado», lo proyectado topado en lo de ahora, y si no alcanza
+    /// a cancelar, se abona (lo exigible y el resto a capital) y el crédito queda con saldo;</item>
+    /// <item>con <c>Recogida.ToleranciaDeDiferencia</c>, una diferencia absoluta mayor bloquea (no la de un omitido: ésa sólo sube el neto).</item>
+    /// </list>
+    /// Se aplica como cancelación si lo que se aplica cubre lo que cuesta recogerlo; si no, como abono con la elección del deudor (D7).
+    /// </summary>
+    private async Task<IReadOnlyList<RecogidaEvaluada>> EvaluarRecogidasAsync(CreditApplication s, IReadOnlyList<RecogidaAutorizada> autorizadas,
+        ContextoDeRecogidas contexto, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
+    {
+        var resultado = new List<RecogidaEvaluada>(autorizadas.Count);
         var enMora = new List<RecogidaEnMoraDto>();
-        foreach (var pedido in e.OwnLoanPayoffs)
+        var sobreLaTolerancia = new List<(string Numero, decimal Diferencia)>();
+        foreach (var (fila, credito) in autorizadas)
         {
-            if (!autorizadas.Contains(pedido.LoanPublicId))
+            if (fila.ProductKind != PayoffProductKind.Loan)
             {
-                hallados.Add(ErroresDeDesembolso.RecogidaNoAutorizada(pedido.LoanPublicId));
+                hallados.Add(ErroresDeRecogida.ClaseNoAdmitida(fila.ProductKind));
                 continue;
             }
-            var credito = await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == pedido.LoanPublicId, ct);
-            if (credito is null || credito.DebtorPersonId != s.ApplicantPersonId || credito.Status != LoanStatus.Active)
+            if (credito is null || credito.IsDeleted || credito.DebtorPersonId != s.ApplicantPersonId)
             {
-                hallados.Add(ErroresDeDesembolso.RecogidaNoAutorizada(pedido.LoanPublicId));
+                hallados.Add(ErroresDeDesembolso.RecogidaNoAutorizada(credito?.PublicId ?? Guid.Empty));
                 continue;
             }
+
+            var proyectado = fila.TieneProyeccion ? fila.Desglose() : DesgloseDeRecogida.Vacio;
+            var pedida = new RecogidaEvaluada(credito.Id, credito.PublicId, credito.Number, ModoTotal, 0m, new LiquidacionParaRecogida(0m, 0, false))
+            {
+                ProyectadaId = fila.Id, ModoPedido = fila.Mode, ValorPedido = fila.RequestedAmount, ConProyeccion = fila.TieneProyeccion,
+                Proyectado = proyectado.Total, ModoDeIntereses = fila.InterestMode,
+            };
+            if (credito.Status is LoanStatus.PaidOff or LoanStatus.Voided or LoanStatus.Novated)
+            {
+                resultado.Add(Omitida(pedida, proyectado, ErroresDeRecogida.NoActivo(credito.Number, credito.Status).Mensaje, avisos));
+                continue;
+            }
+
             var liquidada = await liquidacionDeRecogida.LiquidarCreditoAsync(credito, fecha, null, ct);
             if (liquidada.IsFailure)
             {
                 hallados.Add(liquidada.Error);
                 continue;
             }
-            var liquidacion = new LiquidacionParaRecogida(liquidada.Value.ValorARecoger, liquidada.Value.DiasDeMora, false) { Detalle = liquidada.Value };
-            var modo = string.Equals(pedido.Mode, ModoParcial, StringComparison.OrdinalIgnoreCase) ? ModoParcial : ModoTotal;
-            var aplicar = modo == ModoParcial ? Math.Min(pedido.Amount ?? 0m, liquidacion.ParaCancelar) : liquidacion.ParaCancelar;
-            var r = new RecogidaEvaluada(credito.Id, credito.PublicId, credito.Number, modo, aplicar, liquidacion);
-            if (r.RequiereReestructuracion) enMora.Add(new RecogidaEnMoraDto(credito.PublicId, credito.Number, liquidacion.DiasDeMora));
-            resultado.Add(r);
+            var l = liquidada.Value;
+            var liquidacion = new LiquidacionParaRecogida(l.ValorARecoger, l.DiasDeMora, false) { Detalle = l };
+            if (l.Bloqueos.Count > 0 && l.Bloqueos.All(b => b.Motivo == ErroresDeRecogida.MotivoSinSaldo))
+            {
+                resultado.Add(Omitida(pedida with { Liquidacion = liquidacion }, proyectado, l.Bloqueos[0].Mensaje, avisos));
+                continue;
+            }
+            foreach (var bloqueo in l.Bloqueos.Where(b => b.Motivo is not (ErroresDeRecogida.MotivoEnMora or ErroresDeRecogida.MotivoSinSaldo)))
+                hallados.Add(bloqueo.ComoError());
+
+            var parcial = fila.Mode == PayoffMode.Partial && fila.RequestedAmount is { } pedido && pedido < l.ValorARecoger;
+            var desgloseActual = parcial ? new DesgloseDeRecogida(Capital: fila.RequestedAmount!.Value) : l.Desglose;
+            var actual = parcial ? fila.RequestedAmount!.Value : l.ValorARecoger;
+            var diferencia = fila.TieneProyeccion
+                ? await CausasAsync(DiferenciaDeRecogida.Comparar(proyectado, desgloseActual), fila, credito, l, ct)
+                : RecogidaEvaluada.SinDiferencia;
+            var aplicar = contexto.MantenerLoProyectado && fila.TieneProyeccion ? Math.Min(proyectado.Total, actual) : actual;
+            var cancela = aplicar >= l.ValorARecoger;
+
+            var avisosDelProducto = new List<string>();
+            if (diferencia.HayDiferencia)
+                avisosDelProducto.Add($"Recoger el crédito {credito.Number} cuesta {ErroresDeRecogida.Pesos(actual)} y la solicitud proyectó "
+                    + $"{ErroresDeRecogida.Pesos(proyectado.Total)} (diferencia de {ErroresDeRecogida.Pesos(diferencia.Total)}): {TextoDeCausas(diferencia.Causa)}.");
+            if (aplicar < actual)
+            {
+                var aviso = $"Se mantiene lo proyectado: al crédito {credito.Number} se le abonan {ErroresDeRecogida.Pesos(aplicar)} y queda con un saldo de "
+                    + $"{ErroresDeRecogida.Pesos(l.ValorARecoger - aplicar)}.";
+                avisosDelProducto.Add(aviso);
+                avisos.Add(aviso);
+            }
+            var sobre = contexto.Tolerancia is { } tope && fila.TieneProyeccion && Math.Abs(diferencia.Total) > tope;
+            if (sobre) sobreLaTolerancia.Add((credito.Number, diferencia.Total));
+
+            var evaluada = pedida with
+            {
+                Modo = cancela ? ModoTotal : ModoParcial,
+                AAplicar = cancela ? l.ValorARecoger : aplicar,
+                Liquidacion = liquidacion,
+                Actual = actual,
+                Diferencia = diferencia,
+                ModoDeIntereses = l.Intereses.Efectivo,
+                Eleccion = cancela ? null : contexto.Eleccion,
+                SobreLaTolerancia = sobre,
+                Avisos = avisosDelProducto,
+            };
+            if (evaluada.RequiereReestructuracion) enMora.Add(new RecogidaEnMoraDto(credito.PublicId, credito.Number, l.DiasDeMora));
+            resultado.Add(evaluada);
         }
         if (enMora.Count > 0) hallados.Add(ErroresDeDesembolso.RequiereReestructuracion(enMora));
+        if (sobreLaTolerancia.Count > 0) hallados.Add(ErroresDeRecogida.DiferenciaSobreLaTolerancia(contexto.Tolerancia!.Value, sobreLaTolerancia));
         return resultado;
+    }
+
+    /// <summary>Un producto ya cancelado: no se recoge, la diferencia es todo lo proyectado (el neto sube) y la causa, <c>ProductClosed</c>.</summary>
+    private static RecogidaEvaluada Omitida(RecogidaEvaluada r, DesgloseDeRecogida proyectado, string motivo, List<string> avisos)
+    {
+        var aviso = r.Proyectado > 0m
+            ? $"{motivo} No se recoge: el neto a girar sube {ErroresDeRecogida.Pesos(r.Proyectado)}."
+            : $"{motivo} No se recoge.";
+        avisos.Add(aviso);
+        return r with
+        {
+            Omitida = true, Modo = ModoTotal, AAplicar = 0m, Actual = 0m,
+            Diferencia = DiferenciaDeRecogida.Comparar(proyectado, DesgloseDeRecogida.Vacio, productoCerrado: true), Avisos = [aviso],
+        };
+    }
+
+    /// <summary>Las operaciones que, registradas desde la proyección, explican la diferencia como pagos recibidos.</summary>
+    private static readonly LoanOperationKind[] OperacionesDePago =
+        [LoanOperationKind.Payment, LoanOperationKind.PaymentReversal, LoanOperationKind.CreditBalanceResolution, LoanOperationKind.ProvisionalCollection];
+
+    /// <summary>
+    /// Completa la causa de una diferencia con lo que el comparador no ve en los conceptos (R9): un pago registrado en el crédito después de R
+    /// (<c>Payments</c>), el modo de intereses que cambió desde la proyección (<c>Parameters</c>) y la cuota causada distinta (<c>CurrentInstallment</c>).
+    /// </summary>
+    private async Task<ResultadoDeDiferencia> CausasAsync(ResultadoDeDiferencia d, CreditApplicationPayoff fila, Loan credito, LiquidacionDeCreditoRecogido l,
+        CancellationToken ct)
+    {
+        if (!d.HayDiferencia) return d;
+        var causa = d.Causa;
+        var desde = fila.RecordedAsOf;
+        if (await db.LoanOperations.AsNoTracking().AnyAsync(o => o.LoanId == credito.Id && o.RegisteredAt > desde && OperacionesDePago.Contains(o.Kind), ct))
+            causa |= PayoffDifferenceCause.Payments;
+        if (fila.InterestMode is { Length: > 0 } antes && !string.Equals(antes, l.Intereses.Efectivo, StringComparison.Ordinal))
+            causa |= PayoffDifferenceCause.Parameters;
+        if (fila.CurrentInstallmentNumber is { } proyectada && l.CuotaCausada?.Numero is { } ahora && proyectada != ahora)
+            causa |= PayoffDifferenceCause.CurrentInstallment;
+        return d with { Causa = causa };
+    }
+
+    /// <summary>
+    /// La lista del cuerpo es la autorizada (D9): los mismos productos, del mismo modo y, en un parcial o un abono, con el mismo valor. Las cuentas (E3) se
+    /// compararán por su identificador cuando lleguen.
+    /// </summary>
+    private static bool Coinciden(IReadOnlyList<PayoffInput> pedidas, IReadOnlyList<RecogidaAutorizada> autorizadas)
+    {
+        var deLaSolicitud = autorizadas.Select(a => Llave(a.Fila.ProductKind, a.Fila.ProductKind switch
+            {
+                PayoffProductKind.Loan => a.Credito?.PublicId.ToString("N"),
+                PayoffProductKind.CommercialReceivable => a.Fila.CommercialReceivableReference,
+                _ => a.Fila.AccountId?.ToString(CultureInfo.InvariantCulture),
+            }, a.Fila.Mode, a.Fila.RequestedAmount))
+            .Order(StringComparer.Ordinal).ToList();
+        var delCuerpo = pedidas.Select(p => Llave(p.Kind, p.Kind == PayoffProductKind.CommercialReceivable ? p.Reference?.Trim() : p.ProductPublicId?.ToString("N"),
+                p.Mode, p.Amount))
+            .Order(StringComparer.Ordinal).ToList();
+        return deLaSolicitud.SequenceEqual(delCuerpo, StringComparer.Ordinal);
+
+        static string Llave(PayoffProductKind clase, string? producto, PayoffMode modo, decimal? valor) =>
+            $"{clase}|{producto}|{modo}|"
+            + (modo is PayoffMode.Partial or PayoffMode.Deposit && valor is { } v ? decimal.Round(v, 2).ToString("0.00", CultureInfo.InvariantCulture) : string.Empty);
+    }
+
+    /// <summary>Cómo nombra el error de la lista una recogida autorizada: «número total» o «número parcial $valor».</summary>
+    private static string Descripcion(RecogidaAutorizada a) =>
+        a.Fila.Mode == PayoffMode.Partial && a.Fila.RequestedAmount is { } valor
+            ? $"{a.Fila.ProductNumber} parcial {ErroresDeRecogida.Pesos(valor)}"
+            : $"{a.Fila.ProductNumber} total";
+
+    /// <summary>Las causas de una diferencia por su nombre (<c>Payments</c>, <c>Accrual</c>…), en el orden de las banderas.</summary>
+    public static IReadOnlyList<string> Causas(PayoffDifferenceCause causa) =>
+        Enum.GetValues<PayoffDifferenceCause>().Where(c => c != PayoffDifferenceCause.None && causa.HasFlag(c)).Select(c => c.ToString()).ToList();
+
+    /// <summary>Las causas de una diferencia en palabras.</summary>
+    public static string TextoDeCausas(PayoffDifferenceCause causa)
+    {
+        var textos = Enum.GetValues<PayoffDifferenceCause>().Where(c => c != PayoffDifferenceCause.None && causa.HasFlag(c)).Select(c => c switch
+        {
+            PayoffDifferenceCause.Payments => "pagos recibidos desde la proyección",
+            PayoffDifferenceCause.Accrual => "la causación de los días que pasaron",
+            PayoffDifferenceCause.Arrears => "mora",
+            PayoffDifferenceCause.CurrentInstallment => "cambió la cuota causada",
+            PayoffDifferenceCause.Parameters => "cambió cómo se cobran los intereses al recoger",
+            PayoffDifferenceCause.ProductClosed => "el producto ya se canceló",
+            _ => "otros movimientos del crédito",
+        }).ToList();
+        return textos.Count == 0 ? "sin causa" : string.Join(", ", textos);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T037; FR-027a): la validación previa de los <c>PagoAplicado</c> con que el contrato aplicará las recogidas no omitidas, con
+    /// el recaudador de la recogida (<c>CAR</c>, <c>OwnLoanPayoff</c>) y la misma pregunta del contrato (<see cref="PagosParaLaValidacionPrevia"/>). Su
+    /// bloqueo (con <c>Contabilidad.FaltaDeRegla = Bloquear</c>) entra a <paramref name="bloqueos"/> si no está ya el mismo código; sus avisos, a
+    /// <paramref name="avisos"/>. Nula si no hay nada que preguntar.
+    /// </summary>
+    private async Task<ResultadoDeValidacionPreviaDeCartera?> PrevalidacionDeRecogidasAsync(CreditApplication s, IReadOnlyList<RecogidaEvaluada> recogidas,
+        List<Error> bloqueos, List<string> avisos, CancellationToken ct)
+    {
+        var obligaciones = recogidas.Where(r => !r.Omitida).Select(r => r.LoanPublicId).ToList();
+        if (obligaciones.Count == 0) return null;
+        var hechos = (await PagosParaLaValidacionPrevia.CombinacionesAsync(db, obligaciones, ct))
+            .Select(c => PagosParaLaValidacionPrevia.Hecho(RecogidaEnElDesembolso.Recaudador, c.Combinacion)).ToList();
+        if (hechos.Count == 0) return null;
+        var decision = await validacionPrevia.DecidirAsync(hechos, OrigenDeValidacionPrevia.Pantalla, s.Number ?? s.PublicId.ToString("N"), alertar: false, ct);
+        if (decision.Bloqueo is { } bloqueo && bloqueos.All(b => b.Code != bloqueo.Code)) bloqueos.Add(bloqueo);
+        avisos.AddRange(decision.Avisos.Where(a => !avisos.Contains(a)));
+        return decision.Resultado;
     }
 
     /// <summary>
@@ -541,8 +854,11 @@ public sealed class RequisitosDelDesembolso(
         return new MensajeContableDto(sobre, contenido);
     }
 
-    /// <summary>La huella de la vista previa (<c>expectedPreviewSha256</c>): lo que, si cambia, cambia lo que se confirma.</summary>
-    private static string Huella(CreditApplication s, int? credito, int tramo, decimal bruto, DateOnly fecha, DisbursementInput e,
+    /// <summary>
+    /// La huella de la vista previa (<c>expectedPreviewSha256</c>): lo que, si cambia, cambia lo que se confirma. 2026-11-27 (feature 028, T033): por cada
+    /// recogida, además de lo que se aplica, cómo se aplica, la diferencia con su causa y si se omite (sin recogidas, la huella de siempre).
+    /// </summary>
+    private static string Huella(CreditApplication s, int? credito, int tramo, decimal bruto, DateOnly fecha, DisbursementForm forma,
         BeneficiarioResuelto? beneficiario, IReadOnlyList<RecogidaEvaluada> recogidas, SimulacionCalculada sim, decimal subsidio) =>
         new HuellaDeCartera()
             .Identificador("application", s.PublicId)
@@ -550,14 +866,23 @@ public sealed class RequisitosDelDesembolso(
             .Entero("tranche", tramo)
             .Decimal("gross", bruto)
             .Fecha("valueDate", fecha)
-            .Enumeracion("form", (DisbursementForm?)e.Form)
+            .Enumeracion("form", (DisbursementForm?)forma)
             .Identificador("payee", beneficiario?.PersonPublicId)
             .Entero("bank", beneficiario?.BankId)
             .Texto("account", beneficiario?.AccountNumber)
-            .Lista("payoffs", recogidas.OrderBy(r => r.LoanId), (h, r) => h.Identificador("loan", r.LoanPublicId).Decimal("amount", r.AAplicar))
+            .Lista("payoffs", recogidas.OrderBy(r => r.LoanId), (h, r) => h.Identificador("loan", r.LoanPublicId).Decimal("amount", r.AAplicar)
+                .Texto("mode", r.Modo).Decimal("difference", r.Diferencia.Total).Enumeracion("causes", (PayoffDifferenceCause?)r.Diferencia.Causa)
+                .Logico("omitted", r.Omitida))
             .Texto("simulation", sim.Huella)
             .Si(subsidio > 0m, h => h.Decimal("subsidy", subsidio))
             .Calcular();
+
+    /// <summary>2026-11-27 (feature 028, T035): la huella de <paramref name="r"/> con otras recogidas (las que se releen bajo el cerrojo). (nuevo)</summary>
+    public static string HuellaCon(RequisitosEvaluados r, IReadOnlyList<RecogidaEvaluada> recogidas)
+    {
+        ArgumentNullException.ThrowIfNull(r);
+        return Huella(r.Solicitud, r.CreditoId, r.Tramo, r.Bruto, r.FechaValor, r.Forma, r.Beneficiario, recogidas, r.Simulacion, r.Subsidio);
+    }
 
     /// <summary>
     /// 2026-11-23 (descuento condicionado, el caso del SOAT): la compra de la solicitud con la opción de la versión que selló. Se gira al proveedor

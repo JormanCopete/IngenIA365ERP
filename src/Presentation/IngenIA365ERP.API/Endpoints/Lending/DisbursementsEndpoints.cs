@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -46,7 +47,8 @@ public class DisbursementsEndpoints : ICarterModule
     }
 
     /// <summary>
-    /// <c>DisbursementInput</c> (§9.1) con <c>acknowledgeWarnings</c> al lado. En la vista previa la solicitud sale de la ruta.
+    /// <c>DisbursementInput</c> (§9.1) con <c>acknowledgeWarnings</c> al lado. En la vista previa la solicitud sale de la ruta. 2026-11-27 (feature 028,
+    /// T032; api.md §3): las recogidas son opcionales (salen de la solicitud) y llega <c>acknowledgedPayoffDifferences</c>.
     /// </summary>
     public sealed record DesembolsoRequest
     {
@@ -57,6 +59,8 @@ public class DisbursementsEndpoints : ICarterModule
         public DisbursementForm Form { get; init; } = DisbursementForm.Transfer;
         public BeneficiaryInput? Beneficiary { get; init; }
         public IReadOnlyList<OwnLoanPayoffInput>? OwnLoanPayoffs { get; init; }
+        public IReadOnlyList<PayoffInput>? Payoffs { get; init; }
+        public bool AcknowledgedPayoffDifferences { get; init; }
         public bool PaidByFile { get; init; }
         public string? ExpectedPreviewSha256 { get; init; }
         public bool AcknowledgeWarnings { get; init; }
@@ -70,6 +74,8 @@ public class DisbursementsEndpoints : ICarterModule
             Form = Form,
             Beneficiary = Beneficiary,
             OwnLoanPayoffs = OwnLoanPayoffs ?? [],
+            Payoffs = Payoffs,
+            AcknowledgedPayoffDifferences = AcknowledgedPayoffDifferences,
             PaidByFile = PaidByFile,
             ExpectedPreviewSha256 = ExpectedPreviewSha256,
         };

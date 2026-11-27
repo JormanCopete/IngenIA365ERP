@@ -526,7 +526,7 @@ public sealed class SolicitudConRecogidasTests : IAsyncLifetime
         var noAutorizada = await d.DesembolsarAsync(d.Entrada(s) with { OwnLoanPayoffs = [new OwnLoanPayoffInput(otro.PublicId)] });
         var autorizada = await d.DesembolsarAsync(d.Entrada(s) with { OwnLoanPayoffs = [new OwnLoanPayoffInput(viejo.PublicId)] });
 
-        noAutorizada.Error.Code.Should().Be(ErroresDeDesembolso.CodigoRecogidaNoAutorizada);
+        noAutorizada.Error.Code.Should().Be(ErroresDeRecogida.CodigoDebeCoincidirConLaSolicitud, "la lista del cuerpo, si viene, es la de la solicitud (D9)");
         autorizada.IsSuccess.Should().BeTrue(autorizada.IsFailure ? $"{autorizada.Error.Code}: {autorizada.Error.Message}" : string.Empty);
         autorizada.Value.Payoffs.Should().ContainSingle(p => p.LoanPublicId == viejo.PublicId);
     }
