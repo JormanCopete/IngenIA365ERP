@@ -25,6 +25,8 @@ public class ElectronicEmissionSettingConfiguration : IEntityTypeConfiguration<E
         builder.Property(e => e.TestSetAcceptedAt);
         builder.Property(e => e.CredentialKey).HasMaxLength(120);
         builder.Property(e => e.CredentialVerifiedAt);
+        builder.Property(e => e.ChannelTenantId);
+        builder.Property(e => e.ChannelEndpoint).HasMaxLength(40);
         builder.Property(e => e.EmailDeliveryBy).HasConversion<int>().IsRequired();
         builder.Property(e => e.IssuerTaxId).HasMaxLength(15).IsRequired();
         builder.Property(e => e.IssuerCheckDigit).HasMaxLength(1).IsRequired();

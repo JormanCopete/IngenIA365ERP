@@ -328,6 +328,56 @@ public class ConstructorDelCanonicoTests
         SerializadorCanonico.Serializar(leido).Should().Be(construido.Json);
     }
 
+    // ------------------------------------------------------------------------------- esquema v2 de Conecta (028) --
+
+    private static FotoFiscalDeEntrada FotoConNombres() => Foto() with
+    {
+        LegalName = "ANA MARÍA PÉREZ GÓMEZ", FirstName = "ANA", LastName = "PÉREZ", CityName = "CALI", DepartmentName = "VALLE DEL CAUCA",
+    };
+
+    private static ContextoDelCanonico ContextoConecta() =>
+        Contexto() with { Configuracion = new ElectronicEmissionSetting
+        {
+            Mode = Contexto().Configuracion.Mode, ChannelCode = "CONECTA-PRUEBAS", Environment = DianEnvironment.Testing,
+            IssuerTaxId = "890300001", IssuerCheckDigit = "3", IssuerBusinessName = "COOPERATIVA DE PRUEBA", IssuerAddress = "CRA 1 # 2-3",
+            IssuerMunicipalityDaneCode = "76001", IssuerEmail = "facturacion@coop.co", ValidFrom = new DateOnly(2026, 10, 1),
+        } };
+
+    [Fact]
+    public void Con_el_canal_simulado_el_canonico_sigue_en_v1_sin_los_campos_nuevos_aunque_la_entrada_los_traiga()
+    {
+        var sinNombres = Construir(Factura());
+        var conNombres = Construir(Factura() with { Contrapartes = [FotoConNombres() with { LegalName = "ANA PÉREZ" }] });
+
+        conNombres.Json.Should().Be(sinNombres.Json, "un v1 ya emitido tiene que dar los mismos bytes al reconstruirse");
+        conNombres.Documento.SchemaVersion.Should().Be(1);
+        conNombres.Json.Should().NotContain("givenNames").And.NotContain("familyNames").And.NotContain("cityName").And.NotContain("departmentCode");
+    }
+
+    [Fact]
+    public void Con_el_canal_de_Conecta_el_canonico_es_v2_con_nombres_apellidos_municipio_y_departamento()
+    {
+        var c = Construir(Factura() with { Contrapartes = [FotoConNombres()] }, ContextoConecta());
+
+        c.Documento.SchemaVersion.Should().Be(DocumentoElectronicoCanonico.VersionConDatosDeConecta);
+        c.Documento.Counterparty.GivenNames.Should().Be("ANA MARÍA");
+        c.Documento.Counterparty.FamilyNames.Should().Be("PÉREZ GÓMEZ");
+        c.Documento.Counterparty.Address.Should().Be(new DireccionCanonica("CALLE 5 # 10-20", "76001", "CO", "CALI", "76", "VALLE DEL CAUCA"));
+        c.Documento.Issuer.GivenNames.Should().BeNull("el emisor es jurídico");
+        c.Json.Should().Contain("\"givenNames\":\"ANA MARÍA\"").And.Contain("\"departmentCode\":\"76\"");
+        Construir(Factura() with { Contrapartes = [FotoConNombres()] }, ContextoConecta()).Json.Should().Be(c.Json, "determinista");
+    }
+
+    [Fact]
+    public void Una_persona_juridica_no_lleva_nombres_ni_apellidos_ni_en_v2()
+    {
+        var juridica = FotoConNombres() with { OrganizationType = "1", IdTypeCode = "31", TaxId = "900123456", CheckDigit = "8", LegalName = "COOP S.A." };
+        var c = Construir(Factura() with { Contrapartes = [juridica] }, ContextoConecta());
+
+        c.Documento.Counterparty.GivenNames.Should().BeNull();
+        c.Json.Should().NotContain("givenNames");
+    }
+
     // ------------------------------------------------------------------------------------------ datos --
 
     private static CanonicoConstruido Construir(EntradaDeDocumentoElectronico entrada, ContextoDelCanonico? contexto = null)

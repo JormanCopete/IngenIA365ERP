@@ -12,6 +12,8 @@ using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
 using Microsoft.EntityFrameworkCore;
+using IngenIA365ERP.Application.Lending.Adapters;
+using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing;
 
@@ -65,7 +67,9 @@ public sealed record FotoDeEmision(
     IReadOnlyList<DianNumberingResolution> Resoluciones,
     DianContingencyEvent? Contingencia03,
     bool CajaConsultada,
-    string? PrefijoDeContingenciaDeLaCaja);
+    string? PrefijoDeContingenciaDeLaCaja,
+    IDeclaraParametrosDelCanal? Parametros = null,
+    bool ProcesoDePruebas = true);
 
 /// <summary>
 /// La decisión única de emitir (feature 012; I3, T609; I4, T706; contracts/dian.md §10.4; patrón de <c>GuardiaDeMetodos.Evaluar</c>): la
@@ -86,7 +90,8 @@ public sealed class GuardiaDeEmisionFiscal(
     ILectorDeParametros parametros,
     IApplicationDbContext db,
     ICanalesDeEmision? canales = null,
-    EntregaDelComercio entregaVigente = CatalogoDeParametros.EntregaVigente)
+    EntregaDelComercio entregaVigente = CatalogoDeParametros.EntregaVigente,
+    IOptions<CanalesExternosOptions>? proceso = null)
 {
     public const string ObligadaSinI4Code = "ElectronicInvoicing.I4NotActive";
 
@@ -106,6 +111,11 @@ public sealed class GuardiaDeEmisionFiscal(
     public const string DocumentTypeNotSupportedCode = "ElectronicInvoicing.Readiness.DocumentTypeNotSupported";
     public const string SimulatedInProductionCode = "ElectronicInvoicing.Readiness.SimulatedInProduction";
     public const string ClassNotAllowedCode = "ElectronicInvoicing.Readiness.ClassNotAllowed";
+
+    // Feature 028 (contracts/canal-conecta.md §9): canales con parámetros (IngenIA Conecta).
+    public const string ChannelEnvironmentMismatchCode = "ElectronicInvoicing.Readiness.ChannelEnvironmentMismatch";
+    public const string ProductionChannelNotAllowedHereCode = "ElectronicInvoicing.Readiness.ProductionChannelNotAllowedHere";
+    public const string ChannelParametersMissingCode = "ElectronicInvoicing.Readiness.ChannelParametersMissing";
 
     /// <summary>I5 (T804; api.md §24.7): el canal vigente no ofrece los eventos RADIAN. (nuevo en api.md)</summary>
     public const string EventsNotSupportedCode = "ElectronicInvoicing.Readiness.EventsNotSupported";
@@ -183,7 +193,8 @@ public sealed class GuardiaDeEmisionFiscal(
 
         var codigo = ReglasDeResolucion.Canal(configuracion.ChannelCode);
         var registrado = canales is not null && canales.Codigos.Contains(codigo, StringComparer.OrdinalIgnoreCase);
-        var capacidades = registrado ? canales!.Resolver(codigo).Capacidades : null;
+        var adaptador = registrado ? canales!.Resolver(codigo) : null;
+        var capacidades = adaptador?.Capacidades;
         var resoluciones = await db.DianNumberingResolutions.AsNoTracking().Include(r => r.Channels)
             .Where(r => r.IsActive && r.Environment == configuracion.Environment)
             .ToListAsync(ct);
@@ -212,7 +223,9 @@ public sealed class GuardiaDeEmisionFiscal(
         }
 
         return new FotoDeEmision(fecha, tipo, electronico, configuracion, registrado, capacidades, resoluciones, contingencia,
-            cajaConsultada, prefijoDeContingencia);
+            cajaConsultada, prefijoDeContingencia, adaptador as IDeclaraParametrosDelCanal,
+            // Sin la opción del proceso se asume pruebas: el defecto seguro es no dar validez legal.
+            proceso?.Value.AmbienteDePruebas ?? true);
     }
 
     /// <summary>
@@ -242,6 +255,21 @@ public sealed class GuardiaDeEmisionFiscal(
         if (!foto.CanalRegistrado)
             motivos.Add(Motivo(ChannelUnknownCode, $"El canal «{canal}» de la configuración vigente no está disponible en esta instalación.",
                 "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (foto.Parametros is { } parametros)
+        {
+            if (!ReglasDeParametrosDelCanal.AdmitidoEnEsteProceso(parametros, foto.ProcesoDePruebas))
+                motivos.Add(Motivo(ProductionChannelNotAllowedHereCode,
+                    $"El canal {canal} emite con validez legal y esta instalación no es la de producción.",
+                    "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+            if (!ReglasDeParametrosDelCanal.AmbienteAdmitido(parametros, cfg.Environment))
+                motivos.Add(Motivo(ChannelEnvironmentMismatchCode,
+                    $"El canal {canal} sólo se usa en el ambiente {(parametros.AmbienteExigido == DianEnvironment.Production ? "de producción" : "de pruebas")}.",
+                    "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+            if (cfg.ChannelTenantId is null || cfg.ChannelTenantId == Guid.Empty || !ReglasDeParametrosDelCanal.ExtremoAdmitido(parametros, cfg.ChannelEndpoint))
+                motivos.Add(Motivo(ChannelParametersMissingCode,
+                    $"Al canal {canal} le falta la cooperativa en el servicio o el servicio elegido no está habilitado en esta instalación.",
+                    "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        }
         if (cfg.CredentialVerifiedAt is null)
             motivos.Add(Motivo(CredentialNotVerifiedCode, $"La credencial del canal {canal} no está verificada.",
                 "Administración › Facturación electrónica › Verificar credencial", PermisoDeConfiguracion, PaginaDeConfiguracion));

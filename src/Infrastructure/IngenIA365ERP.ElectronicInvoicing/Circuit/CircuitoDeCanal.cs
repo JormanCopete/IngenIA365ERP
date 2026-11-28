@@ -199,7 +199,7 @@ public sealed class CircuitoDeCanal(
 
             var contexto = new ContextoDeCanal(cooperativa, configuracion.IssuerTaxId, configuracion.IssuerCheckDigit, configuracion.Mode,
                 configuracion.Environment, configuracion.SoftwareId, configuracion.TestSetId, null, null,
-                credencial.IsSuccess ? credencial.Value : null);
+                credencial.IsSuccess ? credencial.Value : null, ContextoDeCanal.ParametrosDe(configuracion));
             return (await canales.Resolver(canal).ProbarAsync(contexto, ct)).Outcome;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)

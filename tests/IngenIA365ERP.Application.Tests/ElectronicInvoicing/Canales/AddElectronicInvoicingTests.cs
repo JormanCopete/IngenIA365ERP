@@ -53,6 +53,39 @@ public sealed class AddElectronicInvoicingTests
         Assert.Throws<InvalidOperationException>(() => canales.Resolver("NINGUNO"));
     }
 
+    [Theory]
+    [InlineData(false, new[] { "CONECTA-PRUEBAS", "SIMULADO" })]
+    [InlineData(true, new[] { "CONECTA", "CONECTA-PRUEBAS", "SIMULADO" })]
+    public void Los_canales_de_Conecta_se_registran_con_sus_extremos_y_el_real_solo_en_produccion(bool produccion, string[] esperados)
+    {
+        // Feature 028: la sección se escribe con guion bajo en las variables de entorno (CONECTA_PRUEBAS) y vale igual.
+        var services = ConDefectosDeApplication();
+        services.AddLogging();
+        services.AddElectronicInvoicing(Configuracion(new()
+        {
+            ["ElectronicInvoicing:Channels:CONECTA_PRUEBAS:Endpoints:QA"] = "https://conecta-qa.ingenia365.com",
+            ["ElectronicInvoicing:Channels:CONECTA:Endpoints:PDN"] = "https://conecta.ingenia365.com",
+        }), procesoDeProduccion: produccion);
+        using var sp = services.BuildServiceProvider();
+
+        var canales = sp.GetRequiredService<ICanalesDeEmision>();
+
+        Assert.Equal(esperados, canales.Codigos);
+        var pruebas = Assert.IsType<IngenIA365ERP.ElectronicInvoicing.Channels.Conecta.CanalConecta>(canales.Resolver("CONECTA-PRUEBAS"));
+        Assert.Equal(["QA"], pruebas.Extremos);
+    }
+
+    [Fact]
+    public void Sin_extremos_ningun_canal_de_Conecta_se_registra()
+    {
+        var services = ConDefectosDeApplication();
+        services.AddLogging();
+        services.AddElectronicInvoicing(Configuracion(new() { ["ElectronicInvoicing:Channels:CONECTA:SyncWaitSeconds"] = "3" }), procesoDeProduccion: true);
+        using var sp = services.BuildServiceProvider();
+
+        Assert.Equal(["SIMULADO"], sp.GetRequiredService<ICanalesDeEmision>().Codigos);
+    }
+
     [Fact]
     public void Lee_la_seccion_tecnica_con_sus_defectos()
     {

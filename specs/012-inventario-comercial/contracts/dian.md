@@ -23,9 +23,8 @@ Reparto de responsabilidades:
   transacción y dentro de una resolución vigente (§9). Así el documento tiene número aunque el canal
   no conteste, y eso es lo que permite reintentar sin duplicar y facturar en contingencia.
 - **El canal emite.** En modo proveedor tecnológico, el proveedor arma su XML, calcula el CUFE con la
-  clave técnica, firma, transmite a la DIAN y devuelve artefactos. En modo software propio, el mismo
-  papel lo cumple el servicio central sin estado de la 010 (§15). El ERP **no habla con la DIAN** en
-  modo proveedor.
+  clave técnica, firma, transmite a la DIAN y devuelve artefactos. Desde la 028 ese canal es IngenIA
+  Conecta, que lo hace con su motor propio o con un proveedor (§15). El ERP **nunca habla con la DIAN**.
 - **El ERP guarda todo lo de la cooperativa** en su base: configuración, resoluciones, documentos,
   versiones, transmisiones y contingencias (Principio IV). Los archivos van por `IBlobStore` como
   adjuntos del módulo que no se borran (§12).
@@ -34,8 +33,8 @@ Reparto de responsabilidades:
 
 Lo que **no** es: Ingenia365 como proveedor tecnológico (C6); POS fuera de línea; los eventos RADIAN
 distintos de 030 y 032; la recepción de facturas de proveedores (el XML del proveedor se lee para
-prellenar y no se guarda, E10); la nómina electrónica (N3 de la 010, que comparte el servicio central
-pero no estas tablas).
+prellenar y no se guarda, E10); la nómina electrónica (N3 de la 010, que no comparte
+estas tablas).
 
 > **Diferencia con la 010 que nadie debe copiar al revés.** En la nómina electrónica un documento
 > rechazado genera un documento nuevo con número nuevo. Aquí **un número rechazado no se consume**:
@@ -88,7 +87,7 @@ Sovos y la oferta de los proveedores lo contradicen).
 | `GuardiaDeEmisionFiscal`, `IRepresentacionGraficaRenderer` | `Application/ElectronicInvoicing` | Decisión única de emitir (§10.4) y puerto del PDF (§13) |
 | `TransicionesDelDocumentoElectronico`, `ReglaDeCorreccionFiscal`, `PlazoDeContingencia` | `Domain/ElectronicInvoicing` (puros) | Máquina de estados (§5), huella económica (§8.2), plazo (§7.3) |
 | Comandos y consultas | `Application/ElectronicInvoicing/{Documents,Contingencies,Settings,Numeracion}` | §17 |
-| Proyecto `IngenIA365ERP.ElectronicInvoicing` | `src/Infrastructure` | `Channels/Simulado/CanalSimulado`, `Channels/<Proveedor>/…`, `Channels/ServicioCentral/CanalServicioCentral` (cuando exista), `Credentials/CredencialesEnArchivo`, `Processor/ProcesadorDeDocumentosElectronicos`, `Circuit/CircuitoDeCanal` |
+| Proyecto `IngenIA365ERP.ElectronicInvoicing` | `src/Infrastructure` | `Channels/Simulado/CanalSimulado`, `Channels/Conecta/CanalConecta` (feature 028: `CONECTA-PRUEBAS` y `CONECTA`), `Credentials/CredencialesEnArchivo`, `Processor/ProcesadorDeDocumentosElectronicos`, `Circuit/CircuitoDeCanal` |
 | `RepresentacionGraficaReport` | `API/Reports` | QuestPDF + QRCoder (se agrega a `IngenIA365ERP.API.csproj`) |
 
 `ElProveedorTecnologicoSoloLoConoceSuAdaptador` impide que Domain y Application referencien el
@@ -106,7 +105,7 @@ namespace IngenIA365ERP.Application.ElectronicInvoicing.Channels;
 
 public interface ICanalDeEmisionElectronica
 {
-    /// Código estable del adaptador; es el que se sella en cada documento ("SIMULADO", "<PROVEEDOR>", "SERVICIO-CENTRAL").
+    /// Código estable del adaptador; es el que se sella en cada documento ("SIMULADO", "CONECTA-PRUEBAS", "CONECTA").
     string ChannelCode { get; }
     CapacidadesDelCanal Capacidades { get; }
 
@@ -204,8 +203,11 @@ Reglas para todo adaptador (las verifica su propia batería de pruebas contra `C
 | `ChannelCode` | Entrega | Qué es |
 |---|---|---|
 | `SIMULADO` | I4 (primero) | Obligatorio para CI, e2e y el ensayo de COOFLOPAL. **Sólo admite `Environment = Testing`**: `ConfigureEmissionCommand` rechaza configurarlo en producción y la guardia responde `Blocked` si lo encontrara. Decide el resultado por el último dígito de la identificación de la contraparte: 1 `Rejected` (con una regla de ejemplo), 2 `ValidatedWithNotices`, 3 `InProcess` y luego `NotFound` en la primera consulta, 4 `DianUnavailable`, 5 `ChannelUnavailable`, cualquier otro `Validated`. Produce código único, QR y artefactos de ejemplo marcados «SIMULADO». |
-| `<PROVEEDOR>` | I4 | El adaptador del proveedor que contrate la cooperativa (§16); su código lo fija su clase. Hasta el contrato no hay adaptador real. |
-| `SERVICIO-CENTRAL` | cuando exista el servicio de la 010 | Modo software propio (§15). |
+| `CONECTA-PRUEBAS` | 028 | IngenIA Conecta con el tenant en habilitación. **Sólo `Environment = Testing`**, en cualquier proceso. Contrato: `specs/028-canal-conecta/contracts/canal-conecta.md`. |
+| `CONECTA` | 028 | IngenIA Conecta en producción, con validez legal. **Sólo `Environment = Production`**, y sólo en un proceso de producción que declare la sección `ElectronicInvoicing:Channels:CONECTA`; activarlo exige `ElectronicInvoicing.Settings.ActivateProduction` y la confirmación `PRODUCCION`. |
+
+El adaptador de un proveedor tecnológico externo y el `SERVICIO-CENTRAL` de la 010 se retiraron del diseño con la 028
+(§15 y §16): Conecta es el canal único y elige internamente su motor o su proveedor.
 
 ## 4. Modelo canónico `DocumentoElectronicoCanonico` v1
 
@@ -658,7 +660,7 @@ una fecha**. Es la condición de FR-064 para cambiar de canal. En las resolucion
 `TechnicalKey`, con vigencia, ligada a la resolución y al software con que se obtuvo: marcada
 `[NoAuditar]` (fuera del diff), **enmascarada** en toda respuesta (sólo los 4 últimos caracteres) y
 guardada en la base de la cooperativa (propuesta I4 aceptada por defecto; en modo proveedor la usa el
-proveedor, en modo propio la envía el ERP al servicio central, §15).
+proveedor; con Conecta la guarda Conecta y la del ERP no viaja, §15).
 
 Numeración (`NumeradorFiscal`, T16):
 
@@ -790,8 +792,12 @@ reenvía lo pendiente por el canal nuevo de forma automática.
   `kubectl patch secret` que agrega o reemplaza **sólo esa clave**. En producción exige escribir
   `PRODUCCION`. Nada queda en disco local, en el historial, en `appsettings*` ni en GitOps en claro. El
   overlay de GitOps monta el volumen.
-- Modo software propio: el certificado `.p12`, su clave y el PIN siguen en los Secrets del servicio
-  central de la 010 (`erp-ne-<tenant>`, ampliado); la API del ERP no los ve (§15).
+- **Conecta (028)**: `{ "clientId", "clientSecret", "webhookSecret"? }` de un cliente API de Conecta con rol
+  `Operator` y scopes `documents:*` limitados al tenant (nunca un cliente con `tenants:admin`). La URL a la que viaja el
+  secreto **no sale de la base**: la vigencia guarda sólo la clave de un extremo (`QA`, `PDN`) de la lista blanca de
+  `ElectronicInvoicing:Channels:{canal}:Endpoints`, que fija GitOps.
+- Modo software propio: el certificado `.p12`, su clave y el PIN viven en Conecta (Vault); la API del ERP no los ve
+  (§15).
 - Se exigen **credenciales por empresa**, no una llave maestra de socio que pueda emitir a nombre de
   cualquier NIT (criterio eliminatorio, §16).
 - Pruebas: `LasCredencialesDeFacturacionNoTocanLaBase` (ninguna propiedad `Password`, `Token` o
@@ -899,46 +905,40 @@ el contador y el proveedor, y su generación la dispararía `ProgramadorDeTareas
   Implementado en I5 sobre `CanalSimulado` (T802–T806; reglas en decisiones-transversales T42f); el adaptador del proveedor
   tecnológico (T807) espera la decisión del canal real.
 
-## 15. Modo software propio: el servicio central de la 010
+## 15. Modo software propio: a través de IngenIA Conecta (feature 028)
 
-Cuando exista el servicio (hoy no existe `src/Servicios`; N3 de la 010, T108 a T115, sin empezar), se
-suma **un adaptador más**, `CanalServicioCentral : ICanalDeEmisionElectronica`, **sin cambiar tablas,
-estados, pantallas ni comandos**:
+**Decisión D6 de la 028 (2026-11-27):** el «servicio central sin estado» que esta sección planeaba para la 010 (el ERP
+armaba UBL sin firmar y un servicio firmaba, transmitía y olvidaba) **se retira del diseño**. Su papel lo cumple
+**IngenIA Conecta**, la plataforma de facturación electrónica de IngenIA365. Para el ERP, Conecta es un canal más del
+puerto (§3), de modo `TechnologyProvider`, con los códigos `CONECTA-PRUEBAS` y `CONECTA` (§3.4):
 
-- Convierte el canónico en **UBL 2.1 sin firmar** con constructores puros en Domain
-  (`UblInvoiceBuilder`, `UblCreditNoteBuilder` y los de DEE, DS y `ApplicationResponse` de eventos),
-  con casos dorados byte a byte en `tests/IngenIA365ERP.Domain.Tests/ElectronicInvoicing/Casos/`,
-  regenerables sólo a propósito (patrón `PILA_ESCRIBIR_ESPERADO`).
-- Llama al servicio con el **mismo sobre** del contrato de la 010: JWT RS256 de 5 minutos acuñado por
-  la API con claim `tenant`, audiencia propia de facturación, `habilitacion` (NIT, DV, modo,
-  ambiente, `softwareId`, `testSetId`), `secretos` **por nombre** bajo la carpeta del tenant y
-  `X-Idempotency-Key` (§6.2).
-- Rutas nuevas del servicio, en un contrato hermano (`servicio-documentos-electronicos.md`, a escribir
-  cuando exista el servicio): `/v1/facturacion/documentos/{validar | firmar-y-transmitir |
-  consultar-estado}`, `/v1/facturacion/eventos`, `/v1/facturacion/rangos` (`GetNumberingRange`) y
-  `/v1/facturacion/adquirente` (`GetAcquirer`), con los XSD de los anexos 1.9, DEE 1.0 y DS embebidos;
-  operaciones SOAP `SendBillSync` o `SendBillAsync` + `GetStatusZip`, `SendTestSetAsync` y
-  `SendEventUpdateStatus`.
-- El servicio completa CUFE, CUDE o CUDS: el CUFE con la clave técnica que el ERP envía desde
-  `COR_DianResolutionChannels`; el CUDE y el CUDS con el PIN, que es secreto del servicio. Firma
-  XAdES-EPES, transmite, devuelve los artefactos y **olvida**. Nunca reintenta; ante un tiempo agotado
-  responde 200 con `EnProceso` y los artefactos ya producidos, igual que en la 010.
-- Correspondencia de resultados: `Aceptado` → `Validated` (o `ValidatedWithNotices` si trae
-  notificaciones), `Rechazado` → `Rejected`, `EnProceso` → `InProcess`, `NoEncontrado` → `NotFound`.
-  En modo propio **el canal es el servicio**: el contrato hermano debe fijar cuándo responde «DIAN no
-  disponible» (con el documento firmado y su código) para que siga valiendo que la contingencia 04
-  sólo la declara el canal.
-- Aplica a lo numerado desde su vigencia y sólo con resoluciones cuyo prefijo esté asociado al
-  `SoftwareId` (FR-064). La habilitación del software, el set de pruebas (`TestSetId`) y la asociación
-  de prefijos son trámites de la cooperativa.
+- El ERP envía su canónico traducido al esquema de entrada de Conecta (JSON de negocio). **No arma UBL, no calcula
+  CUFE, no firma**, y no guarda certificado, PIN ni `SoftwareId`.
+- Conecta resuelve el resto: emite con su motor propio (UBL 2.1, XAdES-EPES, `SendBillSync`, que es el «software
+  propio») o delega en un proveedor tecnológico (hoy Factible, ADR-017 de Conecta); custodia y devuelve el estado, el
+  código único y los artefactos. Elegir o cambiar el motor de Conecta **no cambia nada en el ERP** (FR-064).
+- La clave técnica de la resolución la guarda Conecta (Vault). `COR_DianResolutionChannels.TechnicalKey` no viaja a
+  Conecta y queda como dato de referencia.
+- El ERP **sigue numerando** (§0, §9). Conecta debe aceptar el número del ERP: es el pedido D1 de la 028
+  (`specs/028-canal-conecta/pedido-a-conecta.md`). Mientras Conecta no lo acepte, la verificación de la credencial falla
+  y la guardia bloquea el canal.
+- La habilitación ante la DIAN (set de pruebas, asociación de prefijos al software) es un trámite que se hace en
+  Conecta. `SoftwareId`, `TestSetId` y `TestSetAcceptedAt` de la configuración aplican sólo a `Mode = OwnSoftware`, que
+  ningún canal del ERP usa hoy.
+- Contrato del canal: `specs/028-canal-conecta/contracts/canal-conecta.md`.
 
-Firmar dentro de la API del ERP queda descartado (la 010 lo descartó en R10: certificado y PIN en el
-mismo proceso).
+La nómina electrónica (N3 de la 010) **no** se decide aquí. Conecta tiene `/v1/payrolls`; usarlo será otra feature
+con su propio contrato.
+
+Firmar dentro de la API del ERP sigue descartado (la 010 lo descartó en R10: certificado y PIN en el mismo proceso).
 
 ## 16. Selección del proveedor tecnológico
 
-Es decisión del dueño y de COOFLOPAL (A3, D-05, D-07). Mientras tanto se desarrolla y se ensaya con
-`CanalSimulado`, para no bloquear la entrega ni el ensayo por el contrato.
+**Resuelto con la 028 (A3):** el ERP habla con un solo canal, IngenIA Conecta. El proveedor tecnológico, si lo hay, lo
+elige y lo opera Conecta por tenant (ADR-017 de Conecta; hoy Factible). Los criterios de abajo se conservan como
+**requisitos que Conecta debe cumplir frente al ERP**: el número del ERP (D1 de la 028); 01, 91 y 92 en la primera
+entrega, y DEE, DS, contingencias y eventos trazados; respuesta con código único y artefactos descargables;
+credenciales por empresa.
 
 **Criterios eliminatorios** (salen de FR-038, FR-064, FR-067 y FR-068):
 
@@ -952,19 +952,8 @@ Es decisión del dueño y de COOFLOPAL (A3, D-05, D-07). Mientras tanto se desar
    por API del XML firmado, el `ApplicationResponse` y el `AttachedDocument`.
 5. Credenciales por empresa, no sólo una llave maestra de socio.
 
-**Criterios de puntuación**: latencia p95 ≤ 5 s medida en sandbox con 30 cajas a la vez (condición de
-SC-004 y SC-019); acuerdo de servicio y precio por documento a ~150.000 documentos al mes por
-cooperativa; ISO 27001; que el ERP pueda desactivar el PDF y el correo del proveedor; salida de datos
-al terminar el contrato.
-
-**Lista corta para una prueba pagada en sandbox**: The Factory HKA (numeración manual, códigos 201
-asíncrono y 208 contingencia, métodos de descarga y contenedor, manuales de DEE) y Dataico (REST JSON,
-número en el cuerpo, DS, eventos y POS). Factus sólo si admite el número del ERP (hoy lo asigna desde
-su rango). Carvajal y Facturatech son viables, con SOAP o layout propio y costo corporativo. Siigo,
-Alegra y Loggro se descartan como canal: son ERP o POS completos que exigen tener clientes y productos
-en su sistema. Ninguno de los revisados ofrece webhooks como vía principal de estado: el estado se
-consulta; un webhook podría sumarse después como aviso para consultar antes, nunca como fuente de
-verdad.
+El estado se consulta. El webhook firmado de Conecta (`X-Conecta-Signature`) se suma en la entrega C5 de la 028 sólo
+como aviso para consultar antes, nunca como fuente de verdad.
 
 ## 17. Permisos, rutas y comandos (resumen; el detalle en `api.md`)
 
@@ -1018,11 +1007,18 @@ destinatarios por permiso (`ElectronicInvoicing.Documents.View` por defecto).
   documentos pendientes; dos emisiones concurrentes del mismo documento (POS y procesador) producen
   una sola transmisión efectiva; una cooperativa no usa credenciales de otra.
 - **Manual en sandbox del proveedor** (no hay DIAN en CI): latencia p95 con 30 cajas; habilitación.
+- **Canal Conecta (028)**: conformidad (`CanalConectaConformidadTests` contra `ConectaStubHandler`), casos
+  dorados del traductor, una prueba por fila de la traducción de resultados, la guardia por modo, ambiente y proceso,
+  `ElSecretoDeConectaSoloViajaALaListaBlanca`, e integración `CanalConectaTests` en los dos motores. La prueba contra
+  Conecta QA y Conecta PDN en habilitación es manual (`docs/operaciones/conecta-puesta-en-marcha.md`).
 
 ## 19. Pendientes del dueño e incertidumbres
 
-- **A3**: proveedor tecnológico (lista corta y prueba pagada en sandbox). Bloquea el adaptador real y
-  la salida, no el desarrollo.
+- **A3**: resuelto con la 028. El canal es IngenIA Conecta (§15, §16). Queda pendiente **D1 en Conecta**
+  (aceptar el número del ERP), que bloquea activar `CONECTA-PRUEBAS` y `CONECTA`, no el desarrollo.
+- **028, por cotejar con el contador antes del modo real**: régimen 48/49 derivado del tributo 01/ZZ; tarifa 0 =
+  exento; escala del porcentaje del descuento; `referencedInvoice.id` de la nota; que el correo del adquirente pueda
+  omitirse en el XML cuando lo entrega el ERP.
 - **A4**: cómo factura COOFLOPAL hoy (el sistema anterior no lo hace), sus resoluciones, prefijos, software
   asociado, resolución de contingencia y numeración del DEE POS. Bloquea el ensayo de I4.
 - **A5**: buzón y dominio del correo al comprador (SPF/DKIM del relay).
