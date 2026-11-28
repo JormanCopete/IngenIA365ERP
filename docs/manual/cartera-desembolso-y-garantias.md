@@ -10,7 +10,7 @@
 
 El desembolso es el momento en que una solicitud **aprobada y vigente** se vuelve un crédito. En una sola
 transacción el sistema sella las condiciones (tasa, usura del día, sobretasa de cargos, versión de las reglas) y
-el plan de pagos, recoge los créditos propios que la solicitud autorizó, emite la **orden de giro** para Tesorería
+el plan de pagos, recoge los productos que la solicitud autorizó (§5), emite la **orden de giro** para Tesorería
 y deja los hechos para Contabilidad. Nada de eso se edita después: lo que sale mal se reversa desde su origen.
 
 Prerrequisitos: la originación ([cartera-originacion.md](cartera-originacion.md)), la oficina vinculada a su
@@ -47,7 +47,8 @@ con la lista de admitidas). Un constituyente distinto del deudor necesita su aut
 crédito. Cada garantía nace **constituida** y sigue `Constituida → Perfeccionada → Extinguida | Ejecutada`; sus
 documentos (avalúo, póliza, certificado de registro) se suben directo al almacén como adjuntos de la garantía y se
 bloquean cuando la garantía deja de estar viva. Se **libera** sólo cuando el crédito está pagado **y en firme**
-(pasados los días de firmeza del último pago sin reverso): antes responde `Lending.Collateral.NotFinal` con la fecha.
+(pasados los días de firmeza del último pago sin reverso): antes responde `Lending.Collateral.NotFinal` con la fecha. Si lo canceló el
+desembolso de otro crédito, además tiene que estar **girado** ese crédito nuevo (§5, `Lending.Collateral.PendingNewLoanDisbursement`).
 La tarea `cartera.garantias-por-vencer` alerta las garantías y pólizas que vencen en los próximos días.
 
 **El pagaré** es uno vivo por solicitud o crédito:
@@ -84,10 +85,12 @@ exigir para no confirmar algo distinto de lo que se vio. Impiden desembolsar:
 | El tramo supera el monto operativo de quien desembolsa | `Lending.AmountLimit.Exceeded` |
 | La oficina no tiene sucursal contable · la transferencia no tiene cuenta destino | `Lending.Branch.AccountingBranchMissing` · `Lending.Disbursement.BeneficiaryAccountMissing` |
 | Un crédito a recoger está en mora · la solicitud no autorizó esa recogida · lo recogido no deja neto | `Lending.Payoff.RequiresRestructuring` · `Lending.Payoff.NotRequested` · `Lending.Disbursement.NetNotPositive` |
+| Un producto a recoger está castigado, en insolvencia o pendiente de giro · la lista no es la de la solicitud · una diferencia pasa de la tolerancia (feature 028) | `Lending.Payoff.NotPayable` · `Lending.Payoff.MustMatchApplication` · `Lending.Payoff.DifferenceAboveTolerance` |
 | Contabilidad no tiene regla y la cooperativa eligió bloquear | `Lending.Prevalidation.NotPostable` |
 
 Los **avisos** (Contabilidad sin regla con la política «advertir», o sin respuesta a tiempo) no bloquean: la
-pantalla los muestra y pide reconocerlos antes de confirmar.
+pantalla los muestra y pide reconocerlos antes de confirmar. Las **diferencias de lo que se recoge** (feature 028) se reconocen con su propia
+casilla (§5).
 
 ## 4. Desembolsar y los tramos
 
@@ -104,21 +107,41 @@ plan** sobre lo desembolsado. Sin tramos en la línea, desembolsar menos de lo a
 El resultado trae el número del crédito (`CR-…`), el de la operación, el neto a girar y la orden (`OG-…`). La solicitud
 pasa a *Desembolsada* y su pagaré y garantías pasan al crédito.
 
-## 5. Recogida de créditos propios y reestructuración
+## 5. Recogida de créditos y productos en el desembolso
 
-La recogida **no se mide contra el tope legal del abono sin penalidad** (FR-075, Ley 2032): no es un abono del deudor sino
-Cartera pagándose un crédito con el desembolso de otro. No se sella el tope y no se bloquea porque falte el SMMLV o el límite
-`PREPAGO_TOPE_SMMLV` (respuesta del dueño del 2026-10-14).
+> Reescrita con la feature 028 (2026-11-27). La receta completa —vender, radicar, desembolsar, la cuota causada, los intereses, los
+> parámetros y los códigos— es [cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md). Aquí, lo que cambia para quien desembolsa.
 
-La solicitud puede autorizar **recoger** créditos propios del deudor con el desembolso (total o parcial). Cada
-recogida se paga **por el mismo contrato que usa cualquier recaudador** (clase de recaudador «recogida propia», clave
-`CAR:{desembolso}:{obligación}`), dentro de la transacción del desembolso: si una no se aplica, el desembolso no existe.
-El neto de la orden es el bruto menos lo recogido, y los créditos quedan enlazados. Un crédito **en mora** o que perdió
-capacidad no se recoge: eso es una **reestructuración**, que llega con la entrega K3; hasta entonces responde «requiere
-reestructuración».
+La solicitud puede autorizar **recoger** con el desembolso productos vivos del mismo deudor: sus créditos (total o parcial) y, si la
+cooperativa lo parametriza (`Recogida.ProductosAdmitidos`), cuotas o abonos de aportes y ahorros y facturas a crédito de Comercial. Cada
+recogida se paga **por el contrato de siempre** —los créditos por el contrato de obligaciones (clase de recaudador «recogida propia», clave
+`CAR:{desembolso}:{obligación}`), las cuentas por su registro y las facturas con un recibo de Recaudo sin caja— dentro de la transacción del
+desembolso: si una no se aplica, el desembolso no existe.
 
-> Estado en K1: la recogida queda construida sobre el contrato de obligaciones, que se completa con los pagos (fase 9,
-> US5). Hasta entonces una recogida responde «Cartera no activada» y el desembolso que la pide no se registra.
+- **Las recogidas salen de la solicitud**, todas: no se eligen en el desembolso. Si el cuerpo trae otra lista responde
+  `Lending.Payoff.MustMatchApplication`; para cambiar lo que se recoge, se devuelve la solicitud. Sólo el primer tramo recoge.
+- **La vista previa recalcula** cada recogida a la fecha valor y la compara con lo proyectado en la solicitud: por producto, lo proyectado, lo
+  actual, la diferencia y su causa (pagos, causación, mora, cuota causada, parámetros, ya cancelado). Un producto ya cancelado se **omite** y el
+  neto sube. Con una diferencia o un omitido, desembolsar exige marcar «Revisé las diferencias de lo que se recoge»
+  (`Lending.Payoff.DifferencesNotAcknowledged`); con `Recogida.ToleranciaDeDiferencia` y una diferencia mayor, se bloquea
+  (`Lending.Payoff.DifferenceAboveTolerance`) y hay que devolver la solicitud.
+- **La orden de giro es el bruto menos lo realmente aplicado**, al peso; la vista previa, el resultado y la orden dicen lo mismo. Antes se
+  emitía por lo evaluado antes del cerrojo y podía no cuadrar con las recogidas.
+- **La recogida parcial** de un crédito cubre lo exigible y abona el resto **a capital** con la preferencia de abono de la solicitud (antes
+  quedaba como anticipo).
+- **Un crédito en mora** no se recoge: es una **reestructuración** y se tramita en Novedades como una refinanciación que lo recoge
+  (`Lending.Payoff.RequiresRestructuring`). Castigado, en insolvencia que negocia o pendiente de giro: `Lending.Payoff.NotPayable`.
+- **El tope legal del prepago.** La recogida no **sella** el tope del abono sin penalidad ni se bloquea porque falte el SMMLV o
+  `PREPAGO_TOPE_SMMLV` (respuesta del dueño del 2026-10-14): no es un abono del deudor sino Cartera pagándose un crédito con el desembolso de
+  otro. Pero el tope sí decide **el interés**: dentro del tope, o sin los valores para saberlo, se cobra el proporcional (y la cuota causada que
+  se deja a la pagaduría lleva el interés proporcional). Ver la receta, §6.3 y §7.
+- **Los créditos quedan enlazados**: el recogido dice «Recogido por el crédito …» y el nuevo «Recogió: …».
+
+**Las garantías y el pagaré del crédito recogido se liberan al girar el crédito nuevo**, no al aplicarse la recogida (D12). Liberarlos sigue
+siendo un acto de una persona, con su permiso y su motivo, pero mientras el crédito nuevo no esté girado la liberación responde
+`Lending.Collateral.PendingNewLoanDisbursement` y el detalle del recogido los muestra «Por liberar al girar el crédito N». Así, si el crédito nuevo
+se anula antes del giro, el viejo vuelve vivo con sus garantías. Un cheque girado que pasa a «no cobrado» vuelve a dejarlos pendientes hasta que
+el giro nuevo quede pagado.
 
 ## 6. La orden de giro, Tesorería y el archivo de desembolsos
 
@@ -159,9 +182,11 @@ sigue *emitida* hasta que Tesorería responda. Una orden que va en un archivo vi
 
 Con el crédito **pendiente de giro** hay dos caminos:
 
-- **Giro nuevo**: otra orden del mismo tramo (que nombra a la anterior) y el crédito vuelve a *Activo*.
+- **Giro nuevo**: otra orden del mismo tramo (que nombra a la anterior) y el crédito vuelve a *Activo*. Desde la feature 028 la orden y el
+  hecho del giro nuevo llevan las mismas recogidas vivas y el mismo neto (bruto menos lo recogido).
 - **Anular el crédito** (`Lending.Disbursements.Void`, con motivo): queda *Anulado* y, en la misma transacción, se
-  reversan las recogidas del desembolso por el contrato y los créditos recogidos vuelven a su estado.
+  reversan las recogidas del desembolso —los pagos de los créditos por el contrato, las consignaciones de las cuentas por su registro y el
+  recibo de las facturas en Recaudo— y los productos recogidos vuelven a su estado.
 
 La tarea `cartera.giros-sin-resultado` alerta las órdenes sin resultado pasados los días hábiles del parámetro
 `Giros.DiasSinResultado`.
@@ -184,5 +209,8 @@ pide.
 - El desembolso deja el evento de la operación con la distribución completa por cuota y concepto, y la intervención
   *Desembolsar* en el expediente (segregación).
 - La bandeja recibe `CreditoDesembolsado` (Contabilidad), `OrdenDeGiroEmitida` (Tesorería) y, si hubo recogidas,
-  `PagoAplicado` por cada crédito recogido; el reverso, `DesembolsoReversado` con el mismo modo de paso del original.
+  `PagoAplicado` por cada crédito recogido (la consignación de cada cuenta y el `ReciboEmitido` de las facturas, feature 028); el reverso,
+  `DesembolsoReversado` con el mismo modo de paso del original y, desde la 028, con las mismas recogidas para que sea el espejo del `DS`.
+- Desde la feature 028 el evento del desembolso lleva, por producto recogido, lo proyectado, lo actual, lo aplicado, la diferencia, su causa y
+  quién la reconoció.
 - La descarga del archivo de desembolsos queda auditada (`Lending.DisbursementFile.Downloaded`).

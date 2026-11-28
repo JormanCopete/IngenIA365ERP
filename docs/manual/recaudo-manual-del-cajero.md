@@ -233,3 +233,29 @@ El desglose sale de la simulación que se confirmó; un recibo anterior a este c
   mismos de la simulación de pago del crédito en Cartera.
 - **Recibos por pagador.** En Recibos (`/recaudo/recibos`), el campo **«Pagador (documento o nombre)»** busca la persona y lista sus
   recibos. Las fechas siguen filtrando; bórrelas para ver todos los recibos de esa persona.
+
+## 13. La caja desde el 2026-11-27 (feature 028): la cuota ya enviada a la pagaduría o a la nómina
+
+Un crédito por libranza o por nómina propia puede tener **la cuota del período ya en su canal**: salió en el archivo de descuentos y la
+pagaduría no ha respondido, o la nómina propia ya la tiene (novedad o corrida en borrador). Si en caja se cancela todo, esa cuota se le cobra
+también al asociado aunque la pagaduría o la nómina ya se la vayan a descontar.
+
+- **La caja siempre avisa.** La lista de lo que puede pagar dice «cuota N enviada a la pagaduría» (o «a la nómina») junto al valor para cancelar,
+  y al cancelar ese crédito (con **F7** o desde la lista) el ítem explica dónde va la cuota y qué pasará con ella.
+- **Qué hace la cancelación lo decide la línea del crédito**, con el parámetro de Cartera `Pagos.CuotaEnviadaAlCancelar` (Parámetros de Cartera,
+  general o por línea):
+  - **Incluir** (de fábrica): se cancela todo, como siempre. Lo que la pagaduría gire después por esa cuota queda como saldo de la pagaduría;
+    en nómina propia, si el crédito queda cancelado antes de aprobar la nómina, su descuento baja a cero con aviso.
+  - **Excluir**: F7 propone la modalidad **«Todo menos la cuota enviada»**: cancela todo lo demás y la cuota queda en el crédito para que la pague
+    su canal. El crédito queda cancelado cuando la pagaduría la gira o la nómina la aplica.
+  - **Preguntar**: el ítem trae la casilla **«Dejar la cuota enviada para que la pague su canal»**. Marcada, se cancela todo menos esa cuota;
+    sin marcar, la cancelación la cobra.
+- **Cuánto queda en la cuota.** Dentro del tope legal del prepago sin penalidad (Ley 1555 de 2012), la cuota queda con el **interés
+  proporcional**: el aviso dice el valor y qué pasa con lo de más si su canal la paga completa (en la pagaduría, saldo de la pagaduría; en la
+  nómina, vuelve al neto del empleado). Fuera del tope, queda **tal como se envió**. El ejemplo con cifras está en
+  [cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §6.3.
+- **Cuándo no se ofrece**: si la cuota ya no está en su canal sin respuesta (la pagaduría ya respondió o la nómina ya se aprobó), si el crédito
+  es de vivienda o si no hay cuota del período en curso. En esos casos se cancela completo. Si se intenta por fuera de la pantalla, se rechaza con
+  `Receipts.Receipt.ModalityNotAdmitted`.
+- **El recibo de una recogida en el desembolso** (el que paga facturas a crédito cuando un crédito nuevo las recoge) no se anula desde la caja:
+  responde `Receipts.LoanPayoff.VoidWithTheLoan` y se anula anulando el crédito nuevo antes del giro.

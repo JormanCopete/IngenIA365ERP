@@ -1010,6 +1010,54 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     aditiva `CargosMasivos`. Receta: `docs/manual/cartera-cargos-masivos.md`. E2e `CargosMasivosTests` verde en PostgreSQL y SQL
     Server. Pendiente: la cuenta de contrapartida de `FDOSOL` (contadora) y la exportación a Excel y PDF del detalle.
 
+- **Recogida de créditos y productos en el desembolso (feature 028, rama `028-recogida-de-creditos`, E1–E4, 2026-11-27; sin merge ni
+  despliegue)**: un crédito nuevo cancela o abona («recoge»), con su desembolso y **en la misma transacción**, créditos vivos del mismo deudor
+  y, si `Recogida.ProductosAdmitidos` lo dice, cuotas o abonos de aportes y ahorros y facturas a crédito de Comercial. Reemplaza «desembolsar y
+  cancelar en caja con F7». **De fábrica nada cambia.** Decisiones D1–D13 del dueño = las recomendadas (`research.md` §3), enmiendas E-01 a E-16.
+  - **Una sola liquidación**: `Lending/Payoffs/LiquidacionDeRecogida` (`LiquidarCreditoAsync(Loan, D, R)`) la usan la consulta de productos
+    (`POST /api/lending/payoffs/candidates`, `Lending.Payoffs.Read`, audita `Lending.Payoff.Viewed`; PDF de la simulación), la solicitud
+    (`RecogidasDeLaSolicitud`) y el desembolso (`RequisitosDelDesembolso`): proyección, vista previa y aplicación dicen lo mismo al peso
+    (`LaRecogidaSeLiquidaEnUnSoloSitio`). Bloqueos: mora = `Lending.Payoff.RequiresRestructuring` (es reestructuración, D10); castigado,
+    insolvencia, sin saldo, no vigente = `Lending.Payoff.NotPayable`; el CDAT no se lista.
+  - **La solicitud guarda la proyección** en filas (`LND_CreditApplicationPayoffs`: producto, modo, valor pedido, tratamiento de la cuota,
+    modo de intereses, desglose, D, R, huella); `PayoffRequest` se conserva sin escribirse (la migración la copió a filas sin proyección).
+    Capacidad, descuento, endeudamiento, cupo y concentración miden **después de recoger** (`RecogidaEnLaValidacion`, `releasedByPayoffs`); el
+    enrutamiento sigue con el bruto. Se corrige con el grupo «Recogidas» de `Originacion.GruposEditablesAlDevolver`.
+  - **El desembolso toma todas las recogidas de la solicitud** (D9; otra lista = `Lending.Payoff.MustMatchApplication`; sólo el primer tramo),
+    las **recalcula** a la fecha valor con causa por concepto (`PayoffDifferenceCause`), omite lo ya cancelado, exige
+    `AcknowledgedPayoffDifferences` con cualquier diferencia u omitido, bloquea sobre `Recogida.ToleranciaDeDiferencia` y relee bajo el cerrojo
+    (`PreviewChanged`, defensa `AppliedDiffers`). Lo aplicado queda en `LND_DisbursementPayoffs` y **la orden sale por bruto − aplicado**. El
+    parcial abona a capital con la preferencia de abono (D7). El giro nuevo lleva las mismas recogidas vivas; anular el crédito nuevo reversa
+    todas con su clave derivada. Las garantías del recogido quedan en firme al **girar** el nuevo (`Lending.Collateral.PendingNewLoanDisbursement`).
+  - **Los pagos entran por los contratos de siempre**: créditos por `IContratoDeObligaciones` (`CAR`/`OwnLoanPayoff`, clave
+    `CAR:{desembolso:N}:{obligación:N}`; `La_recogida_del_desembolso_paga_por_el_contrato`), cuentas por `ConsignacionEnCuentas` +
+    `RegistroDeCuentas` con el camino interno (`RecogidaDeCuentas`), facturas por un recibo sin caja de Recaudo por el puerto nuevo
+    **`IRecogidaEnRecaudo`** (`Common/Integration/Receipts`, cuatro métodos con `TomarCerrojosAsync`: Cartera toma los cerrojos de Recaudo antes
+    que los suyos; canal `LoanDisbursement`, clase de documento `LoanDisbursementReceipt` que **cada cooperativa crea** en Tipos de documento, medio
+    sembrado `RECOGIDA` de la clase `InternalOffset`, `ReciboEmitido`).
+  - **El DS acredita «desembolsos por girar» por el neto** y el puente `RecaudoPorAplicar`/`OwnLoanPayoff` por cada recogida (tercero el deudor,
+    cruce el recogido con el tipo de su recibo, sucursal del recogido): el mismo rol y dimensiones que debita la recogida, **el puente cuadra
+    solo**. El `DRV` es su espejo; la conciliación cuenta como abiertas sólo las órdenes `Issued`. Excepción: las facturas, dos matrices (rol de
+    Recaudo `RecogidaEnElDesembolso`; aviso `Accounting.LendingRule.InvoicePayoffBridgeMismatch`). Un comprobante opcional:
+    `Accounting.LendingDisbursementWithPayoffsInOneVoucher` (`COR_SystemSettings`, `ACC`, `false`). Cartera sigue sin conocer cuentas.
+  - **La cuota causada y la enviada** (E2): modalidad del contrato `PayoffExceptCurrentInstallment = 8` («todo menos la cuota causada»: corta el
+    plan tras ella y la congela). `Recogida.CuotaCausada` (`Incluir` de fábrica/`Excluir`/`Preguntar`, línea del **recogido**) y en la caja
+    `Pagos.CuotaEnviadaAlCancelar` (igual; F7 la propone). **La ley**: dentro del tope legal del prepago (Ley 1555) o sin los valores para saberlo,
+    la cuota se deja con el interés proporcional (`InteresesAlCancelar.CuotaDejadaAsync`, E-15); fuera, tal como se envió (D13-A); vivienda, nunca se
+    deja. `CuotaEnviadaDelCredito` dice si la cuota está enviada sin respuesta, descontada pendiente de giro o en la nómina propia; ésta por el
+    puerto nuevo de Nómina **`IDescuentosDeNominaParaCartera`** (`Common/Integration/Payroll`, un método; Cartera no lee `PAY_`). El resultado de
+    libranza sobre un crédito cerrado sella `LoanClosedAtResult` y no deja no aplicado, aviso, pendiente de giro, alerta ni centrales; lo que la
+    pagaduría gire después sigue `Recogida.GiroPosteriorDeCreditoRecogido` (`SaldoDeLaPagaduria` de fábrica, `AlCreditoNuevo`,
+    `AFavorDelAsociado`; el rechazo del contrato trae el sucesor).
+  - **Parámetros** (todos con su defecto = lo de siempre): además de los anteriores, `Recogida.InteresesProporcionales` (`ComoAlCancelar`/`Si`/`No`,
+    línea del recogido), `Recogida.ProductosAdmitidos` (`Creditos:Total,Parcial`, línea del nuevo), `Recogida.AlDesembolsar`
+    (`Recalcular`/`MantenerLoProyectado`, línea del nuevo) y `Recogida.ToleranciaDeDiferencia` (vacía = sólo avisar). Sin permisos nuevos.
+  - Informe `payoffs` («Recogidas», `/cartera/informes?vista=payoffs`), vínculos «Recogido por / Recogió» en el detalle del crédito
+    (`VinculosDeRecogida`). Pantallas: `ProductosParaRecoger`, `LoQueRecoge`, `RecogidasDelDesembolso`, aviso de cuota enviada en la caja.
+    Migraciones aditivas `RecogidaDeCreditos` y `CuotaDejadaALaPagaduria`. Recetas: `docs/manual/cartera-recogida-de-creditos.md`, runbook
+    `docs/operaciones/recogida-de-creditos-despliegue.md` (diagnóstico antes de promover). Pendiente: e2e T096–T099, la contadora (puente propio o
+    el mismo, reglas de los productos admitidos), el dueño (vivienda en pesos, `GiroPosterior` de COOFLOPAL).
+
 - **Captaciones y aportes (feature 014, rama `014-ahorros-aportes-cdt`, K7 a K11 y Polish, 2026-10-19; rama local, sin
   merge ni despliegue)**: ahorro a la vista, permanente, contractual, CDAT y aportes sociales **dentro de la Cartera de la
   013**, en reemplazo de las captaciones heredadas, retiradas con `RetiroDeCaptacionesHeredadas` (destructiva con guarda;

@@ -333,6 +333,21 @@ auxiliar, se comparan juntas), y explica cada diferencia hecho por hecho con lo 
 pasa; los puentes deben quedar en cero, y lo que los hechos no explican en ellos es «del otro lado». Con todo
 procesado, la diferencia es cero.
 
+**El desembolso que recoge** (feature 028, 2026-11-27; receta en
+[cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §10 y [cartera-integracion-contable.md](cartera-integracion-contable.md) §5a).
+El `DS` acredita `DesembolsoPorGirar` **sólo por el neto** que gira Tesorería y, por cada producto recogido, el puente de la recogida propia
+(`RecaudoPorAplicar` con la clase `OwnLoanPayoff`) con el deudor como tercero, el producto recogido como cruce (con el tipo de cruce del mapeo de
+su recibo, `Partida.HechoDelCruce`) y la sucursal del recogido: el mismo rol y las mismas dimensiones que debita el `RC` de la recogida (o la
+consignación de una cuenta recogida). **El puente cuadra solo**: ya no hace falta que la regla `OwnLoanPayoff` apunte a la cuenta de
+`DesembolsoPorGirar`, y la validación de la regla y la completitud no avisan naturaleza distinta ni «puente con cruce» para ese rol
+(`ReglasDeLaMatrizDeCartera.NaturalezaIndiferente`). El `DRV` es el espejo (`DesembolsoReversadoV1.PayoffDeductions`), y el giro nuevo emite el
+hecho con las mismas recogidas vivas que su orden. En la conciliación, `DesembolsoPorGirar` espera la suma de las órdenes **emitidas** (una
+rechazada ya no cuenta: su `DRV` ya la devolvió). **La excepción son las facturas a crédito**: el débito del puente lo pone Recaudo con su matriz
+(rol `RecogidaEnElDesembolso` en `ReciboEmitido` y `ReciboAnulado`) y el crédito el `DS` con la de Cartera; la completitud de Cartera avisa
+`Accounting.LendingRule.InvoicePayoffBridgeMismatch` si no resuelven a la misma cuenta. Con el parámetro del sistema
+`Accounting.LendingDisbursementWithPayoffsInOneVoucher` (`ACC`, `false` de fábrica) el `DS` y los recibos de sus recogidas salen en un solo
+comprobante del tipo del `DS` (`DesembolsoConSusRecogidas`, en `Lotes/ComprobantePorRecibo.cs`); el recibo de las facturas sigue aparte.
+
 **Nómina** (enmienda D-08 de la 010): `DESC_CARTERA` vuelve a contabilizar en el `NM` y en la definitiva, débito
 salarios por pagar y crédito el puente «recaudos por nómina para Cartera»; Cartera contabiliza su lado en `DN` contra el
 mismo puente.

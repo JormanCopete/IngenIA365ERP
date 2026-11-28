@@ -411,7 +411,7 @@ la misma pantalla de la solicitud nueva con lo guardado (`/cartera/solicitudes/{
 | Seguros | los seguros elegidos |
 | Capacidad | ingresos, gastos y cuotas externas del solicitante |
 | Codeudores | los codeudores y avalistas, con sus datos |
-| Créditos que recoge | los créditos que recoge |
+| Créditos que recoge | los créditos y demás productos que recoge el desembolso, con su modo y la cuota causada (feature 028) |
 | Excepción a la política | la excepción y su motivo |
 | Preferencia de abono | la preferencia de abono a capital |
 | Documentos | adjuntar y quitar documentos |
@@ -425,8 +425,10 @@ De fábrica se puede corregir **todo**, línea y oficina incluidas (desde el 202
   dato, para que quien decide vea lo que se corrigió. Una devolución nueva reemplaza la foto anterior.
 - **Al radicar de nuevo se vuelve a validar todo**, como la primera vez: la simulación con la línea vigente, la usura, los documentos y el
   nivel de atribución.
-- **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia, créditos que recoge o convenio de libranza, porque no
-  maneja esos datos. Esas se corrigen por la integración, o se anulan y se radica otra.
+- **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia o convenio de libranza, porque no maneja esos datos. Esas
+  se corrigen por la integración, o se anulan y se radica otra. Las que **recogen** créditos u otros productos sí se corrigen desde el
+  2026-11-27 (feature 028): la tabla «Productos que recoge» se puede cambiar si el grupo «Créditos que recoge» es editable y, si no, se conserva
+  tal como estaba ([cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §4).
 
 ## Editar una solicitud radicada sin devolverla (2026-11-25)
 
@@ -466,8 +468,8 @@ Errores que puede ver quien edita:
 | `Lending.Application.UseSubmittedEditRoute` | Se intentó por la ruta del borrador (`PUT /{id}`); la radicada va por `PUT /{id}/submitted`. |
 | `Lending.CreditLine.Closed` | La línea de la solicitud se cerró después de crearla. Editar vuelve a simular y una línea cerrada no simula, ni siquiera para cambiar sólo el destino: elija otra línea en el simulador, simule y pulse «Usar en la solicitud». |
 
-Lo de la devuelta también vale aquí: el solicitante no cambia y la pantalla no edita las solicitudes con cuotas extraordinarias, gracia,
-créditos que recoge o convenio de libranza. Ya aprobada, negada o desembolsada, una solicitud no se edita.
+Lo de la devuelta también vale aquí: el solicitante no cambia y la pantalla no edita las solicitudes con cuotas extraordinarias, gracia o
+convenio de libranza (las que recogen productos sí, desde la feature 028). Ya aprobada, negada o desembolsada, una solicitud no se edita.
 
 ## Descuento condicionado: financiar un bien con un fondo (2026-11-23)
 

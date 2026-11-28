@@ -109,8 +109,9 @@ Tres reglas que no se negocian:
    `notas` quién lo decidió y por qué. Una fila que vuelve sin cuenta se ignora. Puede abrir una fila sugerida en
    varias (por línea, por empleado, por sucursal) o dejar dimensiones en `*` para que una sola regla cubra más.
 4. Agregue las reglas que la plantilla no puede sugerir: un `RecaudoPorAplicar` por cada clase de recaudador registrada
-   (`Receipts`, `Payroll`, `Contributions`) y siempre `OwnLoanPayoff` (la recogida de un crédito al desembolsar otro,
-   que conviene llevar a la misma cuenta que `DesembolsoPorGirar`: así el neto es lo que queda por girar);
+   (`Receipts`, `Payroll`, `Contributions`) y siempre `OwnLoanPayoff` (la recogida de un crédito al desembolsar otro; desde la
+   feature 028 el desembolso lo acredita y la recogida lo debita, así que **cuadra solo** en cualquier cuenta: puede ser la misma de
+   `DesembolsoPorGirar` o una cuenta puente propia, con tercero y cruce si se quiere; ver §5a);
    `DesembolsoPorGirar` por motivo (`Transfer`, `Check`, `ThirdPartyPayment`); los pasivos, los resultados y, si se
    decide que pasen, los contingentes. De Captaciones, las que decide la contadora: `RecaudoPorAplicar` de la clase `Treasury`,
    `DevolucionPorPagar`, `EmbargosPorConsignar`, `IngresoPorCargos`, `CargoDeCuentaPorCobrar`, `IngresoPorPenalidad` y `PerdidaAbsorbida`.
@@ -195,7 +196,9 @@ banco y pagaduría (`RB`), los reversos y anulaciones, Nómina y lo que no trae 
 cambia al encender o apagar el parámetro.
 
 El cruce sólo aparece en las líneas cuya cuenta lo exige. Los puentes de recaudo y de desembolso conviene que **no**
-lo exijan: el otro lado contabiliza con su propio documento y no saldarían.
+lo exijan: el otro lado contabiliza con su propio documento y no saldarían. La excepción, desde la feature 028, es el puente de la recogida
+propia (`RecaudoPorAplicar` con la clase `OwnLoanPayoff`): lo acredita el `DS` y lo debita la recogida, los dos de Cartera y con el mismo cruce,
+así que puede exigir tercero y documento cruce (§5a).
 
 ## 5. Asientos de ejemplo
 
@@ -205,7 +208,7 @@ mismos quince son casos dorados que las pruebas automáticas verifican.
 
 | # | Hecho (comprobante) | Débito | Crédito |
 |---|---|---|---|
-| 1 | Desembolso por transferencia (`DS`) que recoge otro crédito | `Capital` | `DesembolsoPorGirar` (`Transfer`); la recogida es un pago (`RC`): `RecaudoPorAplicar` (`OwnLoanPayoff`) contra `Capital` e `InteresPorCobrar` del crédito recogido |
+| 1 | Desembolso por transferencia (`DS`) que recoge otro crédito (desde la feature 028, §5a) | `Capital` (el bruto) | `DesembolsoPorGirar` (`Transfer`) **por el neto** y `RecaudoPorAplicar` (`OwnLoanPayoff`) por lo recogido, con el deudor de tercero y el recogido de cruce; la recogida es un pago (`RC`): `RecaudoPorAplicar` (`OwnLoanPayoff`) contra `Capital` e `InteresPorCobrar` del crédito recogido |
 | 2 | Causación del día (`CA` resumido) | `InteresPorCobrar` (una línea por crédito si la cuenta exige tercero y cruce) | `Ingreso` (sumado) |
 | 3 | Pago por caja con anticipo (`RC`) | `RecaudoPorAplicar` (`Receipts`) | `Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado` (seguro) y `Anticipo` |
 | 4 | Anticipo aplicado al vencer la cuota (`RC`) | `Anticipo` | los conceptos de la cuota, con la prelación |
@@ -240,6 +243,34 @@ anulación) fechado antes de un pago ya aplicado: la reasignación de ese pago v
 Dos efectos que conviene tener presentes: un reverso lleva las dimensiones **vigentes** del saldo que restituye (ejemplo
 5), nunca el espejo del original; y si la contadora lleva dos categorías o los dos sub-segmentos a la misma auxiliar, la
 reclasificación entre ellas no produce líneas (el recibo dice «mismas cuentas»).
+
+## 5a. El desembolso que recoge: el puente cuadra solo (feature 028, 2026-11-27)
+
+Receta completa para la contadora en [cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §10. Lo esencial:
+
+- **El `DS` lleva a «desembolsos por girar» sólo el neto** que gira Tesorería. Lo recogido va al **puente de la recogida propia**
+  (`RecaudoPorAplicar`, clase `OwnLoanPayoff`), una línea por producto, con el deudor como tercero, el producto recogido como documento cruce
+  (con el tipo de cruce del mapeo del recibo, no el del `DS`) y la sucursal del producto recogido. El `RC` de cada crédito recogido, y la
+  consignación de cada cuenta recogida, debitan ese mismo puente con las mismas dimensiones: **el puente queda en cero sin hacer coincidir dos
+  reglas**. Caso dorado 01: bruto 10.000.000, «desembolsos por girar» 7.700.000 y el puente 2.300.000.
+- **Antes de la 028** el `DS` acreditaba el bruto a «desembolsos por girar» y el neto cuadraba sólo si `OwnLoanPayoff` apuntaba a la misma
+  cuenta; no cuadraba en giro a tercero, con regla por línea ni con documento cruce. Hoy la regla `OwnLoanPayoff` puede **seguir en la misma
+  cuenta** (cuadra con una línea por crédito) **o pasar a una cuenta puente propia**, que puede exigir tercero y cruce; la naturaleza de esa cuenta
+  no importa y la completitud no avisa por ella. **Si se cambia la regla**, la vigencia nueva empieza después del último desembolso con
+  recogidas ya contabilizado (diagnóstico en [recogida-de-creditos-despliegue.md](../operaciones/recogida-de-creditos-despliegue.md)).
+- **El reverso del desembolso (`DRV`) es su espejo**: «desembolsos por girar» vuelve por el neto y el puente recibe lo recogido. Un saldo en el
+  puente son recogidas que esperan un giro nuevo tras un rechazo o una anulación de la orden; el giro nuevo lo cierra y, si se anula el crédito,
+  lo cierran los reversos de las recogidas.
+- **Aportes y ahorros recogidos**: la consignación sale con su hecho (`AporteRecibido` o `ConsignacionEnCuentaAplicada`) y la clase
+  `OwnLoanPayoff`; la completitud pide su mapeo con esa clase cuando la cooperativa admite recoger cuentas.
+- **Facturas a crédito recogidas** (la única excepción al «cuadra solo»): el débito del puente lo pone el recibo de Recaudo con su matriz (rol
+  «Recogida en el desembolso») y el crédito el `DS` con la de Cartera (cruce `FV` + factura). Póngales la misma cuenta: la completitud avisa
+  `Accounting.LendingRule.InvoicePayoffBridgeMismatch` si falta la regla de Recaudo o no coinciden.
+- **Un solo comprobante** (parámetro del sistema `Accounting.LendingDisbursementWithPayoffsInOneVoucher`, módulo `ACC`, `false` de fábrica):
+  encendido, el `DS` lleva también el `RC` de cada crédito recogido y la consignación de cada cuenta; el puente entra y sale en él y la
+  descripción dice «· recoge N créditos». El recibo de las facturas sigue en el lote de Recaudo. Si algo impide juntarlos, salen separados y
+  cuadran igual.
+- **Antes de confirmar**: sin la regla `OwnLoanPayoff` y con `Contabilidad.FaltaDeRegla = Bloquear`, la vista previa del desembolso lo dice.
 
 ## 6. Cuando un hecho no se contabiliza
 
@@ -295,6 +326,11 @@ capital; intereses; pagos por cuenta y cargos; deterioro individual, general y a
 suspenso y castigada; con la cuota reconocida al inicio del ciclo (feature 024, fase 4), la cuenta por cobrar de cada rubro suma lo
 reconocido por causar y `IngresoDiferidoDeLaCuota` se compara con lo reconocido por causar contra el diferido; los puentes (que deben quedar en cero; en `DesembolsoPorGirar`, las órdenes de giro emitidas que
 Tesorería no ha girado) y, si pasan, los contingentes.
+
+Desde la feature 028: «desembolsos por girar» es la suma de las órdenes **emitidas**; una orden rechazada o un cheque no cobrado ya no cuentan,
+porque su reverso ya le devolvió el valor a la cuenta (antes se contaban y la conciliación descuadraba por el neto, con recogidas o sin ellas). El
+puente `OwnLoanPayoff` se espera en cero salvo lo recogido de los tramos cuyos desembolsos están todos reversados, que espera el giro nuevo. Un
+`DS` explica «desembolsos por girar» por su neto y el puente por lo recogido; un `DRV`, al revés.
 
 Cada diferencia se explica **hecho por hecho** con lo pendiente, en lote, rechazado o que no pasa. Con todo procesado,
 la diferencia es **cero**. En los puentes, lo que los hechos de Cartera no explican es **del otro lado**: el recaudador o

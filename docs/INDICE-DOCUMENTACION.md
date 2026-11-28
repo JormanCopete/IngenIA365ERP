@@ -269,6 +269,18 @@ El índice para la cooperativa es [docs/manual/canal-digital.md](manual/canal-di
 | `docs/operaciones/canal-digital-revision-de-seguridad.md` | fase 17 | Revisión de seguridad por puntos. |
 | `docs/operaciones/certificacion-pasarela-avalpay.md` | fase 8 | Lista de la certificación de Avalpay (T111, del dueño). |
 
+### Feature 028: Recogida de créditos y productos en el desembolso (CONSTRUIDA — E1 a E4, rama `028-recogida-de-creditos`; sin merge ni despliegue)
+Un crédito nuevo cancela o abona con su desembolso, en la misma transacción, otros créditos del deudor y, si la cooperativa lo parametriza,
+sus aportes, ahorros y facturas a crédito de Comercial: proyección guardada en la solicitud, validaciones después de recoger, recálculo y
+diferencias antes de confirmar, orden de giro por lo aplicado, la cuota ya enviada a la pagaduría (también en la caja) y contabilidad que cuadra
+sola. De fábrica nada cambia.
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `specs/028-recogida-de-creditos/` | — | Spec (8 historias, decisiones D1–D13), plan, research con las enmiendas E-01 a E-16, modelo de datos, API y tareas. |
+| `docs/manual/cartera-recogida-de-creditos.md` | E1–E4 | **El manual**: qué se recoge, vender y simular, radicar y decidir, desembolsar con diferencias, la cuota causada y la enviada (con el interés proporcional dentro del tope legal), intereses proporcionales, aportes, ahorros y facturas, contabilidad para la contadora, informe, parámetros y códigos. |
+| `docs/operaciones/recogida-de-creditos-despliegue.md` | E1–E4 | **El despliegue**: las dos migraciones aditivas, el diagnóstico de sólo lectura antes de promover (desembolsos con recogidas contabilizados y solicitudes con `PayoffRequest`, por motor), qué configurar y cómo verificar. |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|
