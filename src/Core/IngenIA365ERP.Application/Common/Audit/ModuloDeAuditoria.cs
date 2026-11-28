@@ -54,6 +54,9 @@ public static class ModuloDeAuditoria
 
     /// <summary>Feature 020 (R2): Transporte (vehículos, conductores, servicios, facturación y envíos).</summary>
     public const string Transport = "Transport";
+
+    /// <summary>Implantación (2026-11-28): el cotejo con cifras de referencia.</summary>
+    public const string Implantacion = "Implantacion";
     public const string Core = "Core";
 
     /// <summary>Lo que devuelve <see cref="Inferir"/> cuando nada coincide y no se pide otra cosa.</summary>

@@ -116,6 +116,7 @@ public static partial class MapaDelMenu
         "Compliance" => "Cumplimiento",
         "Core" => "Maestros y personas",
         "ElectronicInvoicing" => "Facturación electrónica",
+        "Implantacion" => "Implantación",
         "Inventory" => "Inventario, compras y ventas",
         "Lending" => "Cartera y captaciones",
         "Payroll" => "Nómina",

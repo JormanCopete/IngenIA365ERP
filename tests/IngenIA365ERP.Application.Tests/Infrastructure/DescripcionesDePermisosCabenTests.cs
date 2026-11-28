@@ -27,6 +27,7 @@ public class DescripcionesDePermisosCabenTests
                      ("Platform", PlatformPermissionCatalogSeeder.Catalog),
                      ("ElectronicInvoicing", ElectronicInvoicingPermissionCatalogSeeder.Catalog),
                      ("Channel", ChannelPermissionCatalogSeeder.Catalog),
+                     ("Implantacion", ImplantacionPermissionCatalogSeeder.Catalog),
                  })
         {
             foreach (var f in filas) datos.Add(catalogo, $"{f.Resource}.{f.Action}", f.Description.Length);

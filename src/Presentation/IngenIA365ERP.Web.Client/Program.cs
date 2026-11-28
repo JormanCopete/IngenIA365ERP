@@ -197,6 +197,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CaptacionesClie
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Implantacion.CotejoClient>();
 // Feature 012, US7 (T532): el lado contable de la integración con Inventario (matriz, tipos de comprobante, completitud, lotes).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
 // Feature 013, US7 (T0663): el lado contable de la integración con Cartera (matriz, tipos de comprobante, completitud, lotes, indicadores)
