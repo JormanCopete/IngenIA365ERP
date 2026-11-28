@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Tests.ElectronicInvoicing.Canales.Conecta;
 using System.Data.Common;
 using IngenIA365ERP.Application.Common.Interfaces.Notifications;
 using IngenIA365ERP.Persistence.Identity;
@@ -243,6 +244,17 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                 // Feature 012, I4 (T687): un segundo canal, PRUEBA, para ensayar el cambio de canal con vigencia sobre el simulado.
                 services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.Channels.ICanalDeEmisionElectronica>(sp =>
                     new ElectronicInvoicing.CanalDePruebaE2E(sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Channels.Simulado.CanalSimulado>()));
+
+                // Feature 028 (T050): el canal CONECTA-PRUEBAS contra un IngenIA Conecta falso en memoria. Se construye aquí con sus propias
+                // opciones (la configuración del host no trae extremos de Conecta, así la raíz de composición no registra otro).
+                services.AddSingleton<ConectaStubHandler>();
+                services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.Channels.ICanalDeEmisionElectronica>(sp =>
+                    new IngenIA365ERP.ElectronicInvoicing.Channels.Conecta.CanalConecta(
+                        IngenIA365ERP.Application.ElectronicInvoicing.Canonical.EsquemaDelCanonico.CanalConectaPruebas,
+                        new FabricaDeClientesDePrueba(sp.GetRequiredService<ConectaStubHandler>()),
+                        Microsoft.Extensions.Options.Options.Create(ElectronicInvoicing.CanalConectaE2E.Opciones()),
+                        new IngenIA365ERP.ElectronicInvoicing.Channels.Conecta.TokensDeConecta(),
+                        sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<IngenIA365ERP.ElectronicInvoicing.Channels.Conecta.CanalConecta>>()));
             });
 
             ConfigurarHost(builder);

@@ -65,7 +65,8 @@ public sealed class VerifyChannelCredentialCommandHandler(
             return Falla(ErroresDeNumeracionYConfiguracion.CredentialMismatch(esperada));
 
         var contexto = new ContextoDeCanal(cooperativa.Value, configuracion.IssuerTaxId, configuracion.IssuerCheckDigit, configuracion.Mode,
-            configuracion.Environment, configuracion.SoftwareId, configuracion.TestSetId, null, null, resuelta.Value);
+            configuracion.Environment, configuracion.SoftwareId, configuracion.TestSetId, null, null, resuelta.Value,
+            ContextoDeCanal.ParametrosDe(configuracion));
         var resultado = await canales.Resolver(canal).ProbarAsync(contexto, ct);
 
         var verificada = resultado.Outcome is ChannelOutcome.Validated or ChannelOutcome.ValidatedWithNotices;

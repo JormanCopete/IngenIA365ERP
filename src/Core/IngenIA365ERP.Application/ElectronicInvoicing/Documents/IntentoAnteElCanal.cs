@@ -396,7 +396,8 @@ public sealed class IntentoAnteElCanal(
             ? ReglasDeResolucion.AsociacionVigente(r, documento.ChannelCode, documento.SoftwareId, documento.IssueDate)?.TechnicalKey
             : null;
         return Result.Success(new ContextoDeCanal(cooperativa, configuracion.IssuerTaxId, configuracion.IssuerCheckDigit, documento.Mode,
-            documento.Environment, documento.SoftwareId, configuracion.TestSetId, claveTecnica, clave, credencial));
+            documento.Environment, documento.SoftwareId, configuracion.TestSetId, claveTecnica, clave, credencial,
+            ContextoDeCanal.ParametrosDe(configuracion)));
     }
 
     private Task<string?> UltimaReferenciaAsync(int documentoId, CancellationToken ct) =>

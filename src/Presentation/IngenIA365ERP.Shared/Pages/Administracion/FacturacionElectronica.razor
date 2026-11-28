@@ -84,6 +84,10 @@
                     <div class="kpi-card"><span class="label">Vigente</span><span>desde @v.ValidFrom.ToString("dd/MM/yyyy")@(v.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</span></div>
                     <div class="kpi-card"><span class="label">Software</span><span>@(v.SoftwareId ?? "—")@(v.TestSetId is { } t ? $" · set {t}" : "")@(v.TestSetAcceptedAt is { } a ? $" · aceptado {a.ToLocalTime():dd/MM/yyyy}" : "")</span></div>
                     <div class="kpi-card"><span class="label">Emisor</span><span>@v.IssuerBusinessName · NIT @v.IssuerTaxId-@v.IssuerCheckDigit · @v.IssuerMunicipalityDaneCode · @v.IssuerEmail</span></div>
+                    @if (v.ChannelTenantId is { } tc)
+                    {
+                        <div class="kpi-card"><span class="label">Conecta</span><span>servicio @v.ChannelEndpoint · cooperativa @tc</span></div>
+                    }
                 </div>
             }
             else
@@ -160,13 +164,25 @@
                         <select class="e-input" @bind="_f.Modo">@foreach (var (v, t) in Modos) { <option value="@v">@t</option> }</select>
                     </label>
                     <label class="campo">Canal *
-                        <select class="e-input" @bind="_f.Canal">
+                        <select class="e-input" @bind="_f.Canal" @bind:after="AlCambiarCanal">
                             @foreach (var c in _config?.AvailableChannels ?? []) { <option value="@c.ChannelCode">@c.ChannelCode · @c.Name</option> }
                         </select>
                     </label>
                     <label class="campo">Ambiente *
-                        <select class="e-input" @bind="_f.Ambiente">@foreach (var (v, t) in Ambientes) { <option value="@v">@t</option> }</select>
+                        <select class="e-input" @bind="_f.Ambiente" disabled="@(CanalElegido?.RequiredEnvironment is not null)">@foreach (var (v, t) in Ambientes) { <option value="@v">@t</option> }</select>
                     </label>
+                    @if (CanalElegido is { Endpoints: { Count: > 0 } extremos })
+                    {
+                        <label class="campo campo-ancho">Cooperativa en Conecta (identificador) *
+                            <input class="e-input" @bind="_f.TenantDelCanal" maxlength="36" placeholder="00000000-0000-0000-0000-000000000000" />
+                        </label>
+                        <label class="campo">Servicio de Conecta *
+                            <select class="e-input" @bind="_f.Extremo">
+                                <option value="">Elija…</option>
+                                @foreach (var e in extremos) { <option value="@e">@e</option> }
+                            </select>
+                        </label>
+                    }
                     <label class="campo">Software (software propio) <input class="e-input" @bind="_f.Software" maxlength="36" /></label>
                     <label class="campo">Set de pruebas <input class="e-input" @bind="_f.SetDePruebas" maxlength="36" /></label>
                     <label class="campo">Correo al comprador
@@ -182,12 +198,23 @@
                     <label class="campo">Correo del emisor <input class="e-input" type="email" @bind="_f.CorreoEmisor" maxlength="150" /></label>
                     <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="500" /></label>
                 </div>
+                @if (CanalElegido is { IsProduction: true })
+                {
+                    <div class="aviso aviso-alerta">
+                        <p>Este canal emite facturas <strong>con validez legal</strong> ante la DIAN. Antes de activarlo confirme que las pruebas con
+                            «Conecta – pruebas» salieron bien, que la cooperativa en Conecta está en producción y que las resoluciones de producción
+                            están asociadas a este canal.</p>
+                        <label class="campo">Escriba PRODUCCION para confirmar *
+                            <input class="e-input" @bind="_f.Confirmacion" @bind:event="oninput" maxlength="20" />
+                        </label>
+                    </div>
+                }
                 @if (_kindsSinResolucion.Count > 0)
                 {
                     <p class="aviso aviso-alerta">Faltan resoluciones vigentes asociadas al canal para: @string.Join(", ", _kindsSinResolucion.Select(TipoPorNombre)). <a href="/maestros/resoluciones-dian">Ir a Resoluciones</a></p>
                 }
                 <div class="toolbar">
-                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_f.Motivo) || string.IsNullOrWhiteSpace(_f.Canal))" OnClick="@GuardarVigenciaAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !FormularioCompleto)" OnClick="@GuardarVigenciaAsync">Guardar</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVigencia = false)">Cancelar</SfButton>
                 </div>
             </IndicadorDeCarga>
@@ -214,6 +241,34 @@
         public string? Municipio { get; set; }
         public string? CorreoEmisor { get; set; }
         public string? Motivo { get; set; }
+        public string? TenantDelCanal { get; set; }
+        public string? Extremo { get; set; }
+        public string? Confirmacion { get; set; }
+    }
+
+    /// <summary>El canal elegido en el formulario (feature 028: si pide ambiente, cooperativa y servicio, o confirmación de producción).</summary>
+    private CanalDisponibleDto? CanalElegido => _config?.AvailableChannels.FirstOrDefault(c => c.ChannelCode == _f.Canal);
+
+    private bool FormularioCompleto
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_f.Motivo) || string.IsNullOrWhiteSpace(_f.Canal)) return false;
+            if (CanalElegido is { Endpoints: { Count: > 0 } }
+                && (!Guid.TryParse(_f.TenantDelCanal, out var t) || t == Guid.Empty || string.IsNullOrWhiteSpace(_f.Extremo))) return false;
+            return CanalElegido is not { IsProduction: true } || _f.Confirmacion?.Trim() == "PRODUCCION";
+        }
+    }
+
+    /// <summary>Un canal que exige ambiente lo fija; el modo de Conecta es siempre el de proveedor.</summary>
+    private void AlCambiarCanal()
+    {
+        if (CanalElegido?.RequiredEnvironment is { } exigido)
+        {
+            _f.Ambiente = NombresDeAmbiente.FirstOrDefault(p => p.Value == exigido).Key;
+            _f.Modo = 1;
+        }
+        _f.Confirmacion = null;
     }
 
     private readonly EstadoDeCarga _carga = new(), _cargaPreparacion = new(), _guardado = new();
@@ -264,7 +319,9 @@
             Activa = actual?.IsEnabled ?? true, Desde = DateOnly.FromDateTime(DateTime.Today.AddDays(1)),
             Nit = actual?.IssuerTaxId, Dv = actual?.IssuerCheckDigit, RazonSocial = actual?.IssuerBusinessName, Direccion = actual?.IssuerAddress,
             Municipio = actual?.IssuerMunicipalityDaneCode, CorreoEmisor = actual?.IssuerEmail,
+            TenantDelCanal = actual?.ChannelTenantId?.ToString(), Extremo = actual?.ChannelEndpoint,
         };
+        AlCambiarCanal();
         _kindsSinResolucion = [];
         _mostrarVigencia = true;
     }
@@ -276,7 +333,8 @@
         var request = new ConfiguracionDeEmisionRequest(
             Nombre(NombresDeModo, _f.Modo)!, _f.Canal, Nombre(NombresDeAmbiente, _f.Ambiente)!, Limpio(_f.Software), Limpio(_f.SetDePruebas),
             Nombre(NombresDeEntregaDeCorreo, _f.Correo)!, _f.Activa, _f.Desde, _f.Motivo.Trim(), Limpio(_f.Nit), Limpio(_f.Dv), Limpio(_f.RazonSocial),
-            Limpio(_f.Direccion), Limpio(_f.Municipio), Limpio(_f.CorreoEmisor));
+            Limpio(_f.Direccion), Limpio(_f.Municipio), Limpio(_f.CorreoEmisor),
+            Guid.TryParse(_f.TenantDelCanal, out var tenantDelCanal) ? tenantDelCanal : null, Limpio(_f.Extremo), Limpio(_f.Confirmacion));
         var r = await Facturacion.ConfigurarAsync(request, _claveVigencia);
         if (!r.IsSuccess)
         {
