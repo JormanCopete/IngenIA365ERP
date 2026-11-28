@@ -490,8 +490,9 @@ public static partial class ConstructorDeLineasDeCartera
 
         /// <summary>
         /// 2026-11-27 (feature 028, T046): las recogidas que el comprobante del desembolso (o de su reverso) asienta. En especie no hay giro ni recogidas.
-        /// En E1 sólo se recogían créditos; desde E3 (T080) también cuentas de aportes y ahorros. Otra clase de producto (una factura, que llega con E4) es
-        /// un fallo con su código y no se asienta (el hecho sigue cuadrando: «desembolso por girar» no la descuenta).
+        /// En E1 sólo se recogían créditos; desde E3 (T080) también cuentas de aportes y ahorros y desde E4 (T088) facturas a crédito de Comercial. Otra clase
+        /// de producto, o una cuenta o factura sin su referencia, es un fallo con su código y no se asienta (el hecho sigue cuadrando: «desembolso por girar» no la
+        /// descuenta).
         /// </summary>
         private IReadOnlyList<PayoffDeductionV1> RecogidasContables(IReadOnlyList<PayoffDeductionV1>? recogidas, InKindDisbursementV1? especie)
         {
@@ -502,7 +503,9 @@ public static partial class ConstructorDeLineasDeCartera
             return recogidas.Where(r => Asentable(r) && r.Amount != 0m).ToList();
 
             static bool Asentable(PayoffDeductionV1 r) => r.ClaseDeProducto() == PayoffDeductionV1.Credito
-                                                          || r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado && r.AccountRef is not null;
+                                                          || r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado && r.AccountRef is not null
+                                                          || r.ClaseDeProducto() == PayoffDeductionV1.FacturaComercial
+                                                          && !string.IsNullOrWhiteSpace(r.ReceivableRef?.Number);
         }
 
         /// <summary>
@@ -515,12 +518,19 @@ public static partial class ConstructorDeLineasDeCartera
         /// 2026-11-27 (feature 028, E3, T080; FR-027): en una cuenta recogida, el cruce es el número de la cuenta y su tipo, el del mapeo del hecho de la
         /// consignación (<c>AporteRecibido</c> o <c>ConsignacionEnCuentaAplicada</c> con la clase <c>OwnLoanPayoff</c>), como lo debita la consignación; la
         /// sucursal, la de la oficina de la cuenta.
+        /// <para>
+        /// 2026-11-27 (feature 028, E4, T088; R14): en una factura a crédito de Comercial, el puente lleva la factura de cruce (<see cref="CruceDeFactura"/>, el
+        /// tipo de los roles de Comercial) y el deudor de tercero; quien lo debita es el recibo sin caja de Recaudo (rol <c>RecogidaEnElDesembolso</c>, con la
+        /// misma factura y el mismo tercero), así que las dos reglas —la de Recaudo y ésta— deben dar la misma cuenta: la completitud de la matriz lo avisa.
+        /// </para>
         /// </remarks>
         private Lado PuenteDeLaRecogida(LoanFactDimensionsV1 d, PayoffDeductionV1 r, Guid deudor)
         {
             var valores = new ValoresDeCartera(CollectorClass: ClaseDeLaRecogidaPropia,
                 BranchPublicId: r.BranchPublicId is { } s && s != Guid.Empty ? s : Sucursal(d.BranchPublicId));
             var pagador = r.PayerPersonPublicId is { } p && p != Guid.Empty ? p : deudor;
+            if (r.ClaseDeProducto() == PayoffDeductionV1.FacturaComercial)
+                return new Lado(R.RecaudoPorAplicar, valores, null, null, pagador, Factura: Texto(r.ReceivableRef?.Number));
             return r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado
                 ? new Lado(R.RecaudoPorAplicar, valores, null, null, pagador, Cuenta: Texto(r.AccountRef?.AccountNumber),
                     HechoDelCruce: Texto(r.DepositFactType) ?? IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionEnCuentaAplicadaV1.Type)
@@ -1136,7 +1146,8 @@ public static partial class ConstructorDeLineasDeCartera
             string? tipoDeCruce = null, numeroDeCruce = null;
             if (cuenta.RequiresCrossDocument)
             {
-                if (rol?.Cruce == CruceDeRol.Factura && p.Factura is { } factura)
+                // 2026-11-27 (feature 028, E4, T088): el puente de la recogida de una factura cruza también contra la factura, como lo debita el recibo de Recaudo.
+                if ((rol?.Cruce == CruceDeRol.Factura || p.Rol == R.RecaudoPorAplicar) && p.Factura is { } factura)
                 {
                     tipoDeCruce = CruceDeFactura;
                     numeroDeCruce = factura;
@@ -1159,7 +1170,8 @@ public static partial class ConstructorDeLineasDeCartera
                 Debit = debito ? valor : 0m,
                 Credit = debito ? 0m : valor,
                 Detail = p.Credito is { } n ? $"{principal.Sobre.Origin.Number} · crédito {n}"
-                    : p.Cuenta is { } cta ? $"{principal.Sobre.Origin.Number} · cuenta {cta}" : principal.Sobre.Origin.Number,
+                    : p.Cuenta is { } cta ? $"{principal.Sobre.Origin.Number} · cuenta {cta}"
+                    : p.Factura is { } fv && p.Rol == R.RecaudoPorAplicar ? $"{principal.Sobre.Origin.Number} · factura {fv}" : principal.Sobre.Origin.Number,
                 PersonId = persona,
                 BranchId = regla.BranchId,
                 CostCenterId = cuenta.RequiresCostCenter ? regla.CostCenterId : null,

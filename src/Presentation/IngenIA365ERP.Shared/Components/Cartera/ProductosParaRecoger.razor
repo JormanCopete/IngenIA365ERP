@@ -19,12 +19,14 @@
    «Preguntar» (Recogida.CuotaCausada) el asesor elige por crédito «Incluir la cuota» o «Dejarla a su canal», y lo que cuesta recogerlo, el total y el neto
    siguen esa elección; el detalle explica qué pasa con la cuota en cada caso.
    2026-11-27 (feature 028, E3, T081; HU6): también las cuentas del titular (aportes, ahorro a la vista, permanente y contractual; nunca el CDAT), con sus
-   modos —por cuotas (lo pendiente a la fecha) o abono (con su valor)—; de fábrica se ven sin poder marcarse («La cooperativa no los recoge»). *@
+   modos —por cuotas (lo pendiente a la fecha) o abono (con su valor)—; de fábrica se ven sin poder marcarse («La cooperativa no los recoge»).
+   2026-11-27 (feature 028, E4, T089; HU7): y las facturas a crédito de Comercial pendientes, total o parcial; de fábrica se ven sin poder marcarse («La
+   cooperativa no las recoge»). Sin zonas de carga nuevas: todo llega con la consulta. *@
 <div class="info-card">
     <h4>Productos que recoge</h4>
     <p class="texto-apoyo">
         Marque los créditos del deudor que el crédito nuevo cancela o abona con su desembolso y, si la cooperativa los recoge, las cuotas de aportes y
-        ahorros o un abono a ellos. Los valores son una proyección a la fecha de desembolso:
+        ahorros o un abono a ellos y sus facturas a crédito. Los valores son una proyección a la fecha de desembolso:
         al desembolsar se vuelven a calcular y se muestran las diferencias.
     </p>
     <div class="form-grid">
@@ -58,7 +60,7 @@
         {
             @if (r.Products.Count == 0)
             {
-                <p class="texto-tenue">@(r.Person?.Nombre ?? "El deudor") no tiene créditos vivos como deudor ni cuentas que se puedan recoger.</p>
+                <p class="texto-tenue">@(r.Person?.Nombre ?? "El deudor") no tiene créditos vivos como deudor, ni cuentas ni facturas a crédito que se puedan recoger.</p>
             }
             else
             {
@@ -81,12 +83,13 @@
                                 <tr>
                                     <td>
                                         <input type="checkbox" checked="@(marcada is not null)" disabled="@(!p.Eligible || SoloLectura)"
-                                               title="@(p.Eligible ? (p.EsCuenta ? "Recoger esta cuenta" : "Recoger este crédito") : p.BlockMessage)"
-                                               aria-label="@($"Recoger {(p.EsCuenta ? "la cuenta" : "el crédito")} {p.Number}")"
+                                               title="@(p.Eligible ? (p.EsCuenta ? "Recoger esta cuenta" : p.EsFactura ? "Recoger esta factura" : "Recoger este crédito") : p.BlockMessage)"
+                                               aria-label="@($"Recoger {(p.EsCuenta ? "la cuenta" : p.EsFactura ? "la factura" : "el crédito")} {p.Number}")"
                                                @onchange="@(e => MarcarAsync(p, e.Value is true))" />
                                     </td>
                                     <td>
                                         @if (p.EsCuenta) { <span class="texto-tenue">@TextosDeRecogida.ProductoDeCuenta(p.AccountProduct) </span> }
+                                        @if (p.EsFactura) { <span class="texto-tenue">Factura </span> }
                                         @p.Number
                                         @if (p.Origin is 2 or 4) { <span class="texto-tenue"> (@TextosDeRecogida.Origen(p.Origin))</span> }
                                     </td>
@@ -133,7 +136,8 @@
                                             @if (m.Mode == TextosDeRecogida.ModoParcial)
                                             {
                                                 <input class="e-input" type="number" min="1" step="1000" max="@p.ToPayOff.ToString(CultureInfo.InvariantCulture)"
-                                                       disabled="@SoloLectura" value="@m.Amount?.ToString(CultureInfo.InvariantCulture)" aria-label="@($"Valor parcial del crédito {p.Number}")"
+                                                       disabled="@SoloLectura" value="@m.Amount?.ToString(CultureInfo.InvariantCulture)"
+                                                       aria-label="@($"Valor parcial {(p.EsFactura ? "de la factura" : "del crédito")} {p.Number}")"
                                                        @onchange="@(e => CambiarValorAsync(p, LeerDecimal(e.Value)))" />
                                             }
                                         }
@@ -311,7 +315,9 @@
             var modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoTotal) ? TextosDeRecogida.ModoTotal : p.AdmittedModes.FirstOrDefault();
             // 2026-11-27 (feature 028, E3): una cuenta se marca por cuotas si lo admite (si no, abono, con el valor por digitar).
             if (p.EsCuenta) modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoCuotas) && p.ToPayOff > 0m ? TextosDeRecogida.ModoCuotas : p.AdmittedModes.FirstOrDefault();
-            _marcadas.Add(new RecogidaMarcada(p.ProductPublicId, p.Number, modo, modo == TextosDeRecogida.ModoParcial ? p.ToPayOff : null, p.ToPayOff, Kind: p.Kind));
+            // 2026-11-27 (feature 028, E4, T089): una factura va por su número.
+            _marcadas.Add(new RecogidaMarcada(p.ProductPublicId, p.Number, modo, modo == TextosDeRecogida.ModoParcial ? p.ToPayOff : null, p.ToPayOff, Kind: p.Kind,
+                Reference: p.Reference));
         }
         await AvisarAsync();
     }
@@ -348,7 +354,9 @@
         }
         if (!p.EsCuenta && valor > p.ToPayOff)
         {
-            await Notification.WarningAsync($"El valor parcial pasa de lo que cuesta recoger el crédito {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}.");
+            await Notification.WarningAsync(p.EsFactura
+                ? $"El valor parcial pasa de lo pendiente de la factura {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}."
+                : $"El valor parcial pasa de lo que cuesta recoger el crédito {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}.");
             valor = p.ToPayOff;
         }
         _marcadas[i] = _marcadas[i] with { Amount = valor };

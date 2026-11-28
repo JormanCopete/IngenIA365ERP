@@ -177,7 +177,8 @@ canal `LoanDisbursement` y una clase de medio nueva `InternalOffset` en el catá
 el rol de su medio y el DS acredita el puente de Cartera; la completitud de las dos matrices avisa si no resuelven a la misma cuenta (única
 excepción al «cuadra solo», documentada). El saldo de las facturas se lee por el puerto nuevo, no por `IContabilidadParaCartera`.
 **Riesgo**: `AplicacionNoInteractiva` toma sus propios cerrojos y numera; hay que probar que corre dentro de la transacción explícita del
-desembolso antes de construir la entrega (tarea de exploración al inicio de E4).
+desembolso antes de construir la entrega (tarea de exploración al inicio de E4). 2026-11-27 (T084): verificado; corre en la transacción del desembolso con los
+cerrojos de Recaudo tomados antes que los de Cartera (cuarto método del puerto) y una clase de documento propia; la decisión, en la enmienda E-16.
 
 ### R15 — Parámetros
 **Decisión**: en `ParametrosDeCartera.Definiciones` (módulo Lending, con vigencia): `Recogida.CuotaCausada` (`Eleccion`, General + Línea),
@@ -704,3 +705,53 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   los valores nacionales ya son proporcionales y siguen verdes (liquidación y contrato dicen lo mismo).
 - **Puerta (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.277, Application (filtro `Lending|Receipts.CashDesk|Receipts.Paymasters`)
   3.145, Architecture 933 y Shared 791, todas verdes.
+
+### E-16 — Facturas a crédito de Comercial en el desembolso (T084–T091, 2026-11-27)
+- **T084, la exploración: sirve, con dos condiciones.** `AplicacionNoInteractiva` no abre transacción (corre en la del que llama, como en el canal y el cruce de
+  anticipos), usa el mismo `IApplicationDbContext` de la petición, guarda varias veces dentro de ella (como la consignación de E-14), emite `ReciboEmitido` por
+  `EmisorDeMensajes` en la misma unidad de trabajo con el actor del desembolso y admite `CerrojosTomados`. Los dos riesgos y cómo se cierran:
+  - **Cerrojos.** El orden global de la 015 (data-model §0.5) pone Recaudo (configuración → pagadores → orígenes) antes que los contratos de Cartera. Si el
+    desembolso, con el deudor y los créditos de Cartera tomados, tomara después el pagador de Recaudo, un recibo de caja del mismo deudor (pagador tomado,
+    esperando a Cartera) se cruzaría con él. Por eso el puerto tiene un **cuarto método**, `TomarCerrojosAsync` (como `IPartidasDesdeConciliacion` en CH16): el
+    desembolso y la anulación lo llaman **antes** de sus cerrojos y la aplicación corre con `CerrojosTomados: true`. Lo vigila
+    `Cartera_toma_los_cerrojos_de_Recaudo_antes_que_los_suyos_al_recoger_facturas`. `OrdenDeCerrojos` sólo anota Recaudo y Tesorería, y el desembolso no toma
+    ninguno de los dos después de la numeración de Recaudo.
+  - **Numeración.** El desembolso numera el crédito y su operación antes que las recogidas, y el recibo numera después. No hay ciclo porque el recibo usa una
+    **clase de documento propia** (`LoanDisbursementReceipt`), cuya fila de `COR_Sequences` no numera ningún otro camino. La anulación del recibo numera con la de
+    las anulaciones (`AN`), que la caja toma antes de llegar a Cartera: por eso la anulación del crédito nuevo anula el recibo **primero** (cerrojos de Recaudo,
+    número de la anulación) y después toma los cerrojos y hace los reversos de Cartera; si la anulación del crédito no procede, la transacción revierte también la
+    del recibo.
+- **El puerto** `Common/Integration/Receipts/IRecogidaEnRecaudo` (`PendientesAsync`, `TomarCerrojosAsync`, `AplicarAsync`, `ReversarAsync`; los fija
+  `Las_facturas_se_recogen_por_el_puerto_de_Recaudo`) lo implementa `Receipts/Integration/RecogidaEnRecaudo`, que valida y audita (`Receipts.LoanPayoff.Applied`,
+  `.Voided`). Un recibo por desembolso (clave `CAR:{desembolso:N}`) con una porción por factura (`CAR:{desembolso:N}:{factura}`). Relee el saldo bajo el cerrojo del
+  pagador: si ya no alcanza, `Receipts.LoanPayoff.InvoiceChanged`; sin un tipo de documento activo de la clase nueva o sin el medio, `Receipts.LoanPayoff.NotReady`
+  con el motivo, que también da `PendientesAsync` (la consulta de productos muestra la factura sin poder marcarla). La anulación es la de la 015 sin aprobación
+  (`AplicacionDeAnulacion`, como el reverso del canal) con `DineroDeLaAnulacion.SinDinero`: el espejo exacto, sin saldo a favor. Desde la caja este recibo no se
+  anula (`Receipts.LoanPayoff.VoidWithTheLoan`).
+- **Canal, clase de documento y medio.** `ReceiptChannel.LoanDisbursement = 8`, con el hecho `ReciboEmitido` (como la caja y el cruce de anticipos);
+  `ReceiptDocumentKind.LoanDisbursementReceipt = 12`, que **no se siembra** (la cooperativa lo crea en Tipos de documento, como el del cruce de anticipos: sembrarlo
+  pedía una migración de datos); `PaymentMeansClass.InternalOffset = 22` (el número de `ClaseDeMedioDeRecaudo.InternalOffset`) con su medio `RECOGIDA`, que siembra
+  `DefaultPaymentMeansSeeder`: sin arqueo, no se ofrece en ningún punto, canal ni tipo (`DisponibilidadDeMedio` y los medios del punto de Recaudo lo excluyen
+  siempre) y no se crea a mano ni se pasa a esa clase (`Core.PaymentMeans.Invalid`, regla `SystemClass`). No se usó el patrón del cruce de anticipos (un medio
+  configurado por concepto): aquí el medio es fijo y su rol es propio.
+- **Contabilidad.** Rol nuevo de Recaudo `RecogidaEnElDesembolso`: el débito del recibo, sin dimensiones, posible en `ReciboEmitido` y en `ReciboAnulado`, con el
+  deudor de tercero y la factura de cruce. El DS acredita `RecaudoPorAplicar`/`OwnLoanPayoff` por la factura con el mismo tercero y la factura de cruce (tipo `FV`,
+  el de los roles de Comercial; el recibo cruza con el tipo de su mapeo de `ReciboEmitido`, que debe ser `FV` para que la cuenta por cobrar salde contra la factura).
+  Son reglas de dos matrices: la completitud de Cartera avisa `Accounting.LendingRule.InvoicePayoffBridgeMismatch` si falta la de Recaudo o las cuentas no
+  coinciden, sólo con facturas admitidas (`CatalogoDeDimensionesDeCarteraDto.PayoffCommercialReceivablesAdmitted`). Es la única excepción al «cuadra solo» de
+  FR-027. `PayoffKindNotSupported` queda para un producto desconocido o sin su referencia.
+- **Cartera** (`Lending/Payoffs/RecogidaDeFacturas`): lee, valida (de fábrica «la cooperativa no las recoge»), evalúa al desembolsar (lo pendiente de ahora contra
+  lo proyectado; sin saldo se omite con la causa `ProductClosed`; menos, `Payments`; más, `Other`), aplica y anula por el puerto. Las vivas salen de sus filas
+  `LND_DisbursementPayoffs` (las facturas nacen con la 028) y entran al giro nuevo y a la conciliación por `RecogidaEnElDesembolso.VivasAsync`. En el hecho,
+  `PayoffDeductionV1` lleva `ProductKind = CommercialReceivable`, `ReceivableRef` (módulo `REC`, el recibo, clase `CommercialReceivable`, el número de la factura) y
+  el recibo como `OperationPublicId`. La factura se pide por su número (`reference`); en la consulta de productos su `productPublicId` es un identificador estable
+  derivado del número (`FacturaRecogible.IdentificadorDe`, el mismo en Shared, `IdentificadoresDeRecogida.DeFactura`). La solicitud acepta facturas (total o
+  parcial) y la huella de la vista previa las suma sólo si las hay.
+- **Pendiente o dudoso.** (1) La validación previa contable de la vista previa (FR-027a) no pregunta por la regla de Recaudo del recibo: lo dice la completitud y,
+  al aplicar, `AplicacionNoInteractiva` rechaza con `Receipts.Prevalidation.NotPostable` si la matriz de Recaudo no tiene regla con «Bloquear» (el desembolso no
+  existe y se dice por qué). (2) Con `Contabilidad.RecogidaEnUnComprobante` el recibo de la factura sale aparte, en el lote de Recaudo. (3) La consulta de listas de
+  `AplicacionNoInteractiva` corre dentro de la transacción del desembolso. (4) La e2e de facturas va con T098.
+- **T091, puerta de E4 (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.277, Application 9.221, Architecture 935 y Shared 791, todas verdes.
+  Cambiaron, por las facturas admitidas desde E4: los validadores de la solicitud y de la consulta de productos (ya no rechazan facturas), la semilla de medios
+  (dos medios), `LosEnumsDelContratoNumeranComoElDominio` y `EnumeracionesDelComercioTests` (`InternalOffset = 22` en `PaymentMeansClass`), los textos de clases de
+  medio y la marca de una factura al corregir en Shared.

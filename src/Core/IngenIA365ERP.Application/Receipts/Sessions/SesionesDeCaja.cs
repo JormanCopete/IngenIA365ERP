@@ -207,7 +207,8 @@ public static class SesionesDeCaja
     {
         var filas = await (from o in db.PaymentMeansCollectionPoints.AsNoTracking()
                            join m in db.PaymentMeans.AsNoTracking() on o.PaymentMeansId equals m.Id
-                           where o.CollectionPointId == puntoId && m.IsActive
+                           // 2026-11-27 (feature 028, E4, T086): el cruce interno del desembolso nunca se ofrece en la caja.
+                           where o.CollectionPointId == puntoId && m.IsActive && m.Class != PaymentMeansClass.InternalOffset
                            select new { o.ValidFrom, o.ValidTo, Medio = m }).ToListAsync(ct);
         return filas.Where(f => VigenciaDeRecaudo.Incluye(f.ValidFrom, f.ValidTo, hoy))
             .Select(f => f.Medio).DistinctBy(m => m.Id).OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code)

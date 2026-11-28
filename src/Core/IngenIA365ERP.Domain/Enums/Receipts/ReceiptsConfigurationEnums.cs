@@ -20,6 +20,12 @@ public enum ReceiptDocumentKind
 
     /// <summary>2026-11-23: el recibo con que el proceso cruza un anticipo de concepto contra la obligación que acaba de nacer (su propio consecutivo).</summary>
     AdvanceCrossingReceipt = 11,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T085; HU7): el recibo sin caja con que el desembolso de un crédito nuevo recoge facturas a crédito de Comercial (su propio
+    /// consecutivo: lo crea la cooperativa en Tipos de documento, como el del cruce de anticipos). (nuevo)
+    /// </summary>
+    LoanDisbursementReceipt = 12,
 }
 
 /// <summary>El canal por el que entra el dinero de un recibo (FR-198). (data-model §20)</summary>
@@ -37,6 +43,13 @@ public enum ReceiptChannel
     /// el del recibo de caja (<c>ReciboEmitido</c>), así la matriz es la misma que la del cruce a mano.
     /// </summary>
     AdvanceCrossing = 7,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T085; HU7, FR-026): la recogida de facturas a crédito de Comercial en el desembolso de un crédito nuevo. No entra dinero: el
+    /// medio es el cruce interno (<c>InternalOffset</c>) y el hecho es el del recibo de caja (<c>ReciboEmitido</c>), así Contabilidad y Transporte se enteran
+    /// como con un pago en la caja. Nace en la transacción del desembolso y sólo se anula anulando el crédito nuevo. (nuevo)
+    /// </summary>
+    LoanDisbursement = 8,
 }
 
 /// <summary>A qué se aplica una aplicación de un recibo (y una regla de modalidad por canal). (data-model §20)</summary>

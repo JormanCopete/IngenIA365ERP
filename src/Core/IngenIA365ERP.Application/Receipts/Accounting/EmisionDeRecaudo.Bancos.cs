@@ -24,7 +24,7 @@ public sealed partial class EmisionDeRecaudo
     /// <summary>El tipo del hecho del recibo de un canal no interactivo: banco y otros canales <c>ReciboDeBancoEmitido</c>; la contingencia, <c>ReciboEmitido</c>.</summary>
     public static string TipoDelHechoDelCanal(ReceiptChannel canal) => canal switch
     {
-        ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing => ReciboEmitidoV1.Type,
+        ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing or ReceiptChannel.LoanDisbursement => ReciboEmitidoV1.Type,
         ReceiptChannel.Paymaster => ReciboDePagaduriaEmitidoV1.Type,
         _ => ReciboDeBancoEmitidoV1.Type,
     };
@@ -55,7 +55,8 @@ public sealed partial class EmisionDeRecaudo
         if (recibo.Channel == ReceiptChannel.Paymaster)
             return await ReciboDePagaduriaEmitidoAsync(recibo, aplicaciones, medio, porciones, naturalezas, codigoDelTipo, ct);
         // 2026-11-23: el cruce automático de un anticipo es el mismo hecho que el cruce a mano en la caja (medio del anticipo contra el puente del módulo).
-        if (recibo.Channel is ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing)
+        // 2026-11-27 (feature 028, E4, T085): la recogida de facturas en el desembolso, también: así Contabilidad y Transporte se enteran como con la caja.
+        if (recibo.Channel is ReceiptChannel.Contingency or ReceiptChannel.CashDesk or ReceiptChannel.AdvanceCrossing or ReceiptChannel.LoanDisbursement)
             return await ReciboEmitidoAsync(recibo, aplicaciones, [medio], porciones, naturalezas, null, codigoDelTipo, ct);
 
         var personas = aplicaciones.Select(a => a.BeneficiaryPersonId).Append(recibo.PayerPersonId).Distinct().ToList();

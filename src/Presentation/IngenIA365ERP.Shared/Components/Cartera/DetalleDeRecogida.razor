@@ -6,7 +6,33 @@
    2026-11-27 (feature 028, E2, T072; HU4): con el tratamiento de la cuota causada que eligió el asesor (o el de la línea): el desglose de todo menos la
    cuota si se deja, la cuota con lo que deberá, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella.
    2026-11-27 (feature 028, E3, T081; HU6): una cuenta de aportes o ahorros muestra sus cuotas pendientes a la fecha (lo que se recoge «por cuotas») y si su
-   línea admite un abono; no tiene intereses ni cuota causada. *@
+   línea admite un abono; no tiene intereses ni cuota causada.
+   2026-11-27 (feature 028, E4, T089; HU7): una factura a crédito de Comercial muestra su fecha, lo pendiente y cómo se paga (un recibo de Recaudo sin caja que
+   nace del desembolso); no tiene intereses ni cuota causada. *@
+@if (Producto.EsFactura)
+{
+    <div class="form-grid">
+        <div class="campo">
+            <span class="etiqueta-campo">Factura a crédito</span>
+            <span>@Producto.Number@(Producto.InvoiceDate is { } fecha ? $" del {fecha:dd/MM/yyyy}" : "")</span>
+            <span class="etiqueta-campo">Saldo pendiente</span>
+            <span>@TextosDeRecogida.Pesos(Producto.ToPayOff)</span>
+        </div>
+        <div class="campo">
+            <span class="etiqueta-campo">Cómo se recoge</span>
+            <span>Con un recibo de Recaudo sin caja que nace del desembolso: la factura queda pagada (o con el resto, si es parcial) igual que con un pago en la caja.</span>
+        </div>
+    </div>
+    @if (!Producto.Eligible && Producto.BlockMessage is { } motivoDeLaFactura)
+    {
+        <p class="aviso aviso-alerta">@motivoDeLaFactura</p>
+    }
+    @foreach (var aviso in Producto.Warnings)
+    {
+        <p class="aviso aviso-info">@aviso</p>
+    }
+    return;
+}
 @if (Producto.EsCuenta)
 {
     <div class="form-grid">

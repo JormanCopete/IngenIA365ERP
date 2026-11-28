@@ -62,7 +62,11 @@ public sealed partial class EmisionDeRecaudo
                 }, cruce: anulacion.Number));
             lineas.Add(aSaldo
                 ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, p.Amount, dim, pagador, anulacion.Number)
-                : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
+                // 2026-11-27 (feature 028, E4, T087): la anulación de la recogida en el desembolso devuelve el puente con el mismo tercero y la misma factura.
+                : medio.MeansClass == PaymentMeansClass.InternalOffset
+                    ? Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, dim, await PersonaPublicaAsync(a.BeneficiaryPersonId, ct),
+                        a.CrossDocumentReference ?? a.ProductNumber ?? anulacion.Number)
+                    : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
             // 2026-11-26 (pedido del dueño): con la porción que llevó el descuento por pago anticipado se reversa también el descuento.
             if (await DescuentoDeLaPorcionAsync(a, p.Id, ct) is > 0m and var descuento)
                 lineas.AddRange(ReversoDelDescuento(a, descuento, recibo.CashBoxId is { } c ? await DimensionesDeCajaAsync(c, null, ct) : dim, anulacion.Number));

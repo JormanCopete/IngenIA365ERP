@@ -17,6 +17,12 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// La tabla llega con el par <c>VentasYPuntoDeVenta</c> (T586): hasta que esa migración esté aplicada en la base, la semilla no
 /// hace nada.
 /// </para>
+/// <para>
+/// 2026-11-27 (feature 028, E4, T086; R14): siembra también <c>RECOGIDA</c>, el medio del cruce interno (clase <c>InternalOffset</c>) con que el
+/// desembolso de un crédito nuevo recoge facturas a crédito de Comercial en un recibo sin caja de Recaudo. No mueve dinero, no se arquea y no se ofrece
+/// en ningún punto, canal ni tipo de documento (la caja y el punto de venta nunca lo muestran). Es del sistema: no se crea otro ni se cambia su clase.
+/// Idempotente por código, como el efectivo.
+/// </para>
 /// </summary>
 public sealed class DefaultPaymentMeansSeeder : IDataSeeder
 {
@@ -26,6 +32,15 @@ public sealed class DefaultPaymentMeansSeeder : IDataSeeder
     public const string CodigoDianSugerido = "10";
 
     public const string Nota = "Sembrado por el sistema. Código DIAN 10 (efectivo) pendiente de validar por la contadora.";
+
+    /// <summary>2026-11-27 (feature 028, E4, T086): el medio del cruce interno de la recogida de facturas en el desembolso.</summary>
+    public const string CodigoRecogida = "RECOGIDA";
+
+    /// <summary>El código DIAN «acuerdo mutuo» (ZZZ): el cruce interno nunca va en una factura electrónica; queda por completitud del catálogo.</summary>
+    public const string CodigoDianRecogida = "ZZZ";
+
+    public const string NotaRecogida = "Sembrado por el sistema. Lo usa el recibo sin caja con que el desembolso de un crédito recoge facturas a crédito de "
+        + "Comercial: no entra dinero y no se ofrece en la caja ni en el punto de venta.";
 
     public int Order => 86;
     public SeedCategory Category => SeedCategory.Parametric;
@@ -41,7 +56,8 @@ public sealed class DefaultPaymentMeansSeeder : IDataSeeder
     /// <summary>La semilla sobre cualquier contexto de la cooperativa (probable con InMemory).</summary>
     public static async Task<int> AplicarAsync(IApplicationDbContext db, CancellationToken ct)
     {
-        if (await db.PaymentMeans.IgnoreQueryFilters().AnyAsync(m => m.Code == CodigoEfectivo, ct)) return 0;
+        var sembrados = await RecogidaAsync(db, ct);
+        if (await db.PaymentMeans.IgnoreQueryFilters().AnyAsync(m => m.Code == CodigoEfectivo, ct)) return sembrados;
 
         db.PaymentMeans.Add(new PaymentMeans
         {
@@ -63,6 +79,39 @@ public sealed class DefaultPaymentMeansSeeder : IDataSeeder
             IsActive = true,
             ValidFrom = CashDenominationsSeeder.VigenciaDeLaSemilla,
             Notes = Nota,
+            CreatedBy = SeedContext.ParametricCreatedBy,
+        });
+        await db.SaveChangesAsync(ct);
+        return sembrados + 1;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T086): el medio <see cref="CodigoRecogida"/> de la clase <c>InternalOffset</c>, si no hay ninguno de esa clase ni otro medio con
+    /// ese código (también de baja): no se ofrece en ningún lado, sin arqueo, sin vueltas, activo. Devuelve cuántos sembró.
+    /// </summary>
+    public static async Task<int> RecogidaAsync(IApplicationDbContext db, CancellationToken ct)
+    {
+        if (await db.PaymentMeans.IgnoreQueryFilters().AnyAsync(m => m.Code == CodigoRecogida || m.Class == PaymentMeansClass.InternalOffset, ct)) return 0;
+        db.PaymentMeans.Add(new PaymentMeans
+        {
+            Code = CodigoRecogida,
+            Name = "Recogida en el desembolso",
+            DisplayOrder = 999,
+            Class = PaymentMeansClass.InternalOffset,
+            RequiresReference = false,
+            AllowsChange = false,
+            AllowsPartial = true,
+            UniqueReference = false,
+            CountMethod = CashCountMethod.None,
+            RequiresTerminalBatchAtClose = false,
+            ToleranceAmount = 0m,
+            DianPaymentMeansCode = CodigoDianRecogida,
+            OfferedAtAllPointsOfSale = false,
+            OfferedInAllChannels = false,
+            OfferedForAllDocumentTypes = false,
+            IsActive = true,
+            ValidFrom = CashDenominationsSeeder.VigenciaDeLaSemilla,
+            Notes = NotaRecogida,
             CreatedBy = SeedContext.ParametricCreatedBy,
         });
         await db.SaveChangesAsync(ct);

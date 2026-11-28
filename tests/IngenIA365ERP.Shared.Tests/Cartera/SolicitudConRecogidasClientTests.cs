@@ -111,8 +111,13 @@ public class SolicitudConRecogidasClientTests
         // 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada que guardó (en una recogida total).
         total.ComoMarcada().Should().Be(new RecogidaMarcada(Credito, "65-78925", 1, null, 1_015_000m, TextosDeRecogida.CuotaIncluida));
         parcial.ComoMarcada()!.Amount.Should().Be(400_000m);
-        (total with { Kind = TextosDeRecogida.ClaseFactura, ProductPublicId = null, Reference = "FE-1" }).ComoMarcada()
-            .Should().BeNull("la tabla de productos sólo marca créditos");
+        // 2026-11-27 (feature 028, E4, T089): una factura se marca por su número, con el identificador que da el servidor.
+        var factura = (total with { Kind = TextosDeRecogida.ClaseFactura, ProductPublicId = null, Reference = "FE-1", Number = "FE-1" }).ComoMarcada();
+        factura.Should().Be(new RecogidaMarcada(IdentificadoresDeRecogida.DeFactura("FE-1"), "FE-1", 1, null, 1_015_000m, Kind: TextosDeRecogida.ClaseFactura,
+            Reference: "FE-1"));
+        factura!.ComoPedido().Should().Be(new RecogidaElegidaRequest(TextosDeRecogida.ClaseFactura, null, 1, null, "FE-1"), "una factura se pide por su número");
+        // El mismo identificador que da el servidor (FacturaRecogible.IdentificadorDe; RecogidaDeFacturasTests fija el mismo valor).
+        IdentificadoresDeRecogida.DeFactura("FV-1001").Should().Be(Guid.Parse("6a85d6f9-d2a5-f33d-a7d1-496853c57e16"));
     }
 
     [Fact]

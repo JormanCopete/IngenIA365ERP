@@ -55,13 +55,15 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             s.Plan.Cuotas.Select(c => new DisbursementScheduleLineDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Total)
                 { Administration = c.Administracion }).ToList());
         var porReconocer = r.Recogidas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)
-            .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
+            .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total))
+            .Concat(r.RecogidasDeFacturas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
         return Result.Success(new DisbursementPreviewDto(
             new DisbursementUsuryDto(s.Usura.EfectivaConCargos, s.Usura.Usura, s.Usura.Pasa, s.Usura.UsuraPublicId),
             new DisbursementApprovalDto(r.Solicitud.ApprovalValidUntil, !r.Solicitud.AprobacionVencida(r.FechaValor)),
             new DisbursementCollateralsDto(r.Pendientes.Count == 0, r.Pendientes),
             // 2026-11-27 (feature 028, E3, T077): las cuentas recogidas, detrás de los créditos.
-            r.Recogidas.Select(x => Recogida(x)).Concat(r.RecogidasDeCuentas.Select(x => Recogida(x))).ToList(),
+            // 2026-11-27 (feature 028, E4, T087): y las facturas a crédito, al final.
+            r.Recogidas.Select(x => Recogida(x)).Concat(r.RecogidasDeCuentas.Select(x => Recogida(x))).Concat(r.RecogidasDeFacturas.Select(x => Recogida(x))).ToList(),
             r.Tramo,
             r.Bruto,
             r.Neto,
@@ -73,7 +75,8 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             r.Huella)
         {
             PayoffDifferences = new DisbursementPayoffDifferencesDto(porReconocer.Count, porReconocer.Sum(), r.RequiereReconocimiento,
-                r.Recogidas.Any(x => x.SobreLaTolerancia) || r.RecogidasDeCuentas.Any(x => x.SobreLaTolerancia)),
+                r.Recogidas.Any(x => x.SobreLaTolerancia) || r.RecogidasDeCuentas.Any(x => x.SobreLaTolerancia)
+                || r.RecogidasDeFacturas.Any(x => x.SobreLaTolerancia)),
         });
     }
 
@@ -91,6 +94,33 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             ProductPublicId = x.AccountPublicId,
             Mode = x.Modo.ToString(),
             RequestedMode = x.Modo.ToString(),
+            Projected = x.ConProyeccion ? x.Proyectado : null,
+            Current = x.Actual,
+            ToApply = x.AAplicar,
+            Difference = x.ConProyeccion || x.Omitida ? x.Diferencia.Total : null,
+            Causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            Detail = Detalle(x.Diferencia.PorConcepto),
+            Omitted = x.Omitida,
+            AboveTolerance = x.SobreLaTolerancia,
+            Warnings = x.Avisos,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T087, T089; api.md §3): una factura a crédito como la muestra la vista previa: <c>kind = CommercialReceivable</c>, su número (en
+    /// <c>number</c> y <c>reference</c>), el identificador estable de la consulta de productos, el modo, lo proyectado, lo pendiente de ahora, lo que se le aplica, la
+    /// diferencia con su causa y si se omite. Sin mora, intereses ni cuota causada.
+    /// </summary>
+    public static DisbursementPreviewPayoffDto Recogida(RecogidaDeFacturaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        return new DisbursementPreviewPayoffDto(Guid.Empty, x.Numero, x.Actual, 0, false)
+        {
+            Kind = nameof(PayoffProductKind.CommercialReceivable),
+            ProductPublicId = x.Identificador,
+            Reference = x.Numero,
+            Mode = x.Modo.ToString(),
+            RequestedMode = x.ModoPedido.ToString(),
             Projected = x.ConProyeccion ? x.Proyectado : null,
             Current = x.Actual,
             ToApply = x.AAplicar,

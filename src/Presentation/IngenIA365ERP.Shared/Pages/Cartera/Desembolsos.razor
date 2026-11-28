@@ -230,6 +230,11 @@
                                                 {
                                                     <span class="texto-tenue"> · cuota @dejada dejada a su canal (@TextosDeOriginacion.Pesos(a.LeftInstallment ?? 0m))</span>
                                                 }
+                                                @* 2026-11-27 (feature 028, E4, T089): la factura se pagó con un recibo de Recaudo sin caja. *@
+                                                @if (a.ReceiptNumber is { } recibo)
+                                                {
+                                                    <span class="texto-tenue"> · recibo @recibo</span>
+                                                }
                                             </td>
                                             <td class="numero">@(a.Projected is { } proyectado ? TextosDeOriginacion.Pesos(proyectado) : "Sin proyección")</td>
                                             <td class="numero">@TextosDeOriginacion.Pesos(a.Current)</td>

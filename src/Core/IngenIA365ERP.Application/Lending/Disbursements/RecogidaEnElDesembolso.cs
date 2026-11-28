@@ -76,6 +76,8 @@ public sealed class RecogidaEnElDesembolso(IContratoDeObligaciones contrato)
         }
         // 2026-11-27 (feature 028, E3, T077): también las consignaciones vivas en cuentas de aportes y ahorros (detrás de los créditos).
         var deCuentas = (await RecogidaDeCuentas.VivasAsync(db, desembolsos, ct)).Select(c => RecogidaDeCuentas.ComoDeduccion(c)).ToList();
+        // 2026-11-27 (feature 028, E4, T087): y las facturas a crédito recogidas (sus recibos de Recaudo sin anular), detrás de las cuentas.
+        deCuentas.AddRange((await RecogidaDeFacturas.VivasAsync(db, desembolsos, ct)).Select(f => RecogidaDeFacturas.ComoDeduccion(f)));
         if (pagos.Count == 0) return deCuentas;
 
         var ids = pagos.Select(p => p.LoanId).Distinct().ToList();

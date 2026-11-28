@@ -64,7 +64,25 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
         {
             PayoffDepositFactTypes = await HechosDeLasCuentasRecogidasAsync(
                 lineas.Where(l => l.Nature == LineNature.Placement && l.Status == CreditLineStatus.Active).Select(l => l.Id).ToList(), ct),
+            PayoffCommercialReceivablesAdmitted = await RecogeFacturasAsync(
+                lineas.Where(l => l.Nature == LineNature.Placement && l.Status == CreditLineStatus.Active).Select(l => l.Id).ToList(), ct),
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T088): si la cooperativa recoge facturas a crédito con un crédito nuevo (<c>Recogida.ProductosAdmitidos</c> general o de alguna
+    /// línea de colocación activa, a hoy). Falso de fábrica o sin el lector de parámetros.
+    /// </summary>
+    private async Task<bool> RecogeFacturasAsync(IReadOnlyList<int> lineasDeColocacion, CancellationToken ct)
+    {
+        if (parametros is null) return false;
+        var hoy = reloj.HoyLocal;
+        if ((await Payoffs.AdmisionDeRecogidaVigente.LeerAsync(parametros, hoy, null, ct)).Admite(Domain.Lending.Payoffs.ProductoDeRecogida.FacturasComerciales))
+            return true;
+        foreach (var linea in lineasDeColocacion)
+            if ((await Payoffs.AdmisionDeRecogidaVigente.LeerAsync(parametros, hoy, linea, ct)).Admite(Domain.Lending.Payoffs.ProductoDeRecogida.FacturasComerciales))
+                return true;
+        return false;
     }
 
     /// <summary>

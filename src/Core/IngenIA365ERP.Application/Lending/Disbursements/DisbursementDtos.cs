@@ -47,6 +47,12 @@ public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, dec
     /// <summary>2026-11-27 (feature 028, E4): el recibo de Recaudo de la factura recogida; nulo en un crédito. (nuevo)</summary>
     public Guid? ReceiptPublicId { get; init; }
 
+    /// <summary>2026-11-27 (feature 028, E4, T089): el número del recibo de Recaudo de la factura recogida; nulo en un crédito o una cuenta. (nuevo)</summary>
+    public string? ReceiptNumber { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): en una factura, su número (el documento cruce); nulo en un crédito o una cuenta. (nuevo)</summary>
+    public string? Reference { get; init; }
+
     /// <summary>2026-11-27 (feature 028, E2, T066): lo que la cuota causada que se dejó a su canal debe al vencer; nulo si se recogió todo. (nuevo)</summary>
     public decimal? LeftInstallment { get; init; }
 
@@ -62,6 +68,9 @@ public sealed record DisbursementOmittedPayoffDto(Guid LoanPublicId, string Numb
 
     /// <summary>2026-11-27 (feature 028, E3): en una cuenta, su <c>PublicId</c> (<see cref="LoanPublicId"/> va vacío). (nuevo)</summary>
     public Guid? ProductPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4): en una factura, su número. (nuevo)</summary>
+    public string? Reference { get; init; }
 }
 
 /// <summary>La orden de giro en la respuesta del desembolso.</summary>
@@ -117,6 +126,9 @@ public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Numb
 
     /// <summary>El producto (en un crédito, <see cref="LoanPublicId"/>). (nuevo)</summary>
     public Guid ProductPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T087): en una factura a crédito, su número (el documento cruce); nulo en los demás productos. (nuevo)</summary>
+    public string? Reference { get; init; }
 
     /// <summary>Cómo se aplica: <c>Total</c> (cancelación) o <c>Partial</c> (lo exigible y el resto a capital). (nuevo)</summary>
     public string Mode { get; init; } = "Total";

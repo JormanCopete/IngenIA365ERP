@@ -7,7 +7,9 @@
    lo que trajo la vista previa (su zona de carga es la de la pantalla).
    2026-11-27 (feature 028, E2, T072; HU4): la cuota causada que se deja a su canal («todo menos la cuota causada») va en el modo y en el detalle, con lo que
    debe, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella.
-   2026-11-27 (feature 028, E3, T081; HU6): las cuentas de aportes y ahorros que recoge, por cuotas o como abono, con lo que se les consigna. *@
+   2026-11-27 (feature 028, E3, T081; HU6): las cuentas de aportes y ahorros que recoge, por cuotas o como abono, con lo que se les consigna.
+   2026-11-27 (feature 028, E4, T089; HU7): las facturas a crédito de Comercial, total o parcial, con lo pendiente y lo que les aplica el recibo de Recaudo sin
+   caja que nace del desembolso. *@
 @if (Recogidas.Count > 0)
 {
     <h4>Lo que recoge</h4>
@@ -67,7 +69,15 @@
                                 {
                                     <p class="texto-tenue">@(r.Projected is null ? "La solicitud no guardó proyección: no hay con qué comparar." : "Ningún concepto cambió desde la proyección.")</p>
                                 }
-                                @if (r.Kind == "Account")
+                                @if (r.Kind == "CommercialReceivable")
+                                {
+                                    @* 2026-11-27 (feature 028, E4, T089): una factura se paga con un recibo de Recaudo sin caja que nace del desembolso. *@
+                                    <p class="texto-apoyo">
+                                        @(r.Mode == "Partial" ? "Parcial pedido" : "Saldo pendiente a la fecha valor"): @TextosDeOriginacion.Pesos(r.Current) ·
+                                        se le aplica @TextosDeOriginacion.Pesos(r.ToApply) con un recibo de Recaudo sin caja que nace del desembolso.
+                                    </p>
+                                }
+                                else if (r.Kind == "Account")
                                 {
                                     @* 2026-11-27 (feature 028, E3, T081): una cuenta recibe una consignación por sus cuotas pendientes o un abono. *@
                                     <p class="texto-apoyo">

@@ -74,6 +74,9 @@ public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, deci
 
     /// <summary>2026-11-27 (feature 028, T051): lo reconocido al inicio del ciclo y no causado que se libera (informativo).</summary>
     public decimal RecognizedReleased { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): en una factura a crédito, su número (el documento cruce). (nuevo)</summary>
+    public string? Reference { get; init; }
 }
 
 /// <summary>
@@ -153,12 +156,18 @@ public sealed record RecogidaAplicadaDto(Guid LoanPublicId, string Number, decim
 
     /// <summary>2026-11-27 (feature 028, E2, T066): el número de la cuota causada que se dejó a su canal.</summary>
     public int? LeftInstallmentNumber { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): en una factura, el recibo de Recaudo sin caja que la pagó. (nuevo)</summary>
+    public Guid? ReceiptPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): el número de ese recibo. (nuevo)</summary>
+    public string? ReceiptNumber { get; init; }
 }
 
 /// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
 public sealed record RecogidaOmitidaDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason)
 {
-    /// <summary>2026-11-27 (feature 028, E3, T081): <c>Loan</c> o <c>Account</c>. (nuevo)</summary>
+    /// <summary>2026-11-27 (feature 028, E3, T081; E4, T089): <c>Loan</c>, <c>Account</c> o <c>CommercialReceivable</c>. (nuevo)</summary>
     public string Kind { get; init; } = "Loan";
 }
 

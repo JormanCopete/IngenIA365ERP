@@ -102,7 +102,10 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);
     public RequisitosDelDesembolso Requisitos() =>
         new(Db, O.Simulador(), O.Concentracion(), O.Bloqueos, G.Intervenciones(), O.Guardia(), Parametros(), G.Parametros(), ValidacionPrevia(),
-            LiquidacionDeRecogida(), Emision(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+            LiquidacionDeRecogida(), Emision(), G.Alcance, G.Auditoria, G.Actor, G.Reloj, facturas: Facturas());
+
+    /// <summary>2026-11-27 (feature 028, E4, T090): la recogida de facturas sobre el puerto de Recaudo de la originación (nula sin él).</summary>
+    public Application.Lending.Payoffs.RecogidaDeFacturas? Facturas() => O.Recaudo is { } recaudo ? new(Db, recaudo) : null;
     public RegistroDeCartera Registro() => new(Db);
     public NumeradorDeCartera Numerador() => new(Db, O.Cerrojo);
     public TramoDeDesembolso Tramos() => new(Db, Registro(), Numerador(), Parametros(), new CalendarioDeDiasHabiles(Db), G.Actor, G.Reloj, Cargador());
@@ -112,13 +115,13 @@ internal sealed class DesembolsoDePrueba : IDisposable
     /// <summary>El comando con el contrato doble o, 2026-11-27 (feature 028), con <paramref name="contrato"/> (el real de <c>PagosDePrueba</c>).</summary>
     public ExecuteLoanDisbursementCommandHandler Desembolsar(IContratoDeObligaciones? contrato = null) =>
         new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(contrato ?? Contrato), MotorDelCredito(), Emision(),
-            FechaContable(), G.Intervenciones(), G.Auditoria, G.Actor, G.Reloj);
+            FechaContable(), G.Intervenciones(), G.Auditoria, G.Actor, G.Reloj, recogidaDeFacturas: Facturas());
     public PreviewDisbursementQueryHandler VistaPrevia() => new(Requisitos(), G.Auditoria);
     public VoidDisbursementOrderCommandHandler AnularOrden() =>
         new(Db, O.Cerrojo, Emision(), FechaContable(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
     public ReissueDisbursementOrderCommandHandler GirarDeNuevo() =>
         new(Db, Tramos(), O.Cerrojo, Emision(), FechaContable(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Reloj);
-    public VoidPendingLoanCommandHandler AnularCredito() => new(Db, Contrato, O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
+    public VoidPendingLoanCommandHandler AnularCredito() => new(Db, Contrato, O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj, recogidaDeFacturas: Facturas());
     public ConsumeTreasuryResultCommandHandler Consumir() => new(Db, new MensajesEntrantes(Db), O.Cerrojo, Reverso(), G.Reloj);
     public EmitTestDisbursementResultCommandHandler EmitirResultado(bool dobleRegistrado = true) =>
         new(Db, Emisor(), Emision(), dobleRegistrado ? [new TesoreriaDePrueba()] : []);

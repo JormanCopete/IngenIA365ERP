@@ -121,12 +121,13 @@ public static class ErroresDeRecogida
     public const string CodigoNetoNoPositivo = "Lending.Payoff.NetNotPositive";
 
     /// <summary>
-    /// En la entrega E1 sólo se recogían créditos; desde E3 (2026-11-27, T077) también las cuentas de aportes y ahorros. Una factura todavía no (llega con E4).
+    /// En la entrega E1 sólo se recogían créditos; desde E3 (2026-11-27, T077) también las cuentas de aportes y ahorros y desde E4 (T087) las facturas a crédito de
+    /// Comercial. Queda para el camino que no tiene con qué recogerlas (sin el servicio de cuentas o el puerto de Recaudo).
     /// </summary>
     public static Error ClaseNoAdmitida(PayoffProductKind clase) => new ErrorConDatos(CodigoProductoNoAdmitido,
         clase == PayoffProductKind.Account
             ? "La recogida de cuentas de aportes y ahorros no está disponible aquí."
-            : "Por ahora el crédito nuevo no recoge facturas a crédito: se recogerán en otra entrega.",
+            : "La recogida de facturas a crédito no está disponible aquí.",
         new { kind = clase.ToString() });
 
     /// <summary>La línea del crédito nuevo admite recoger créditos, pero no de ese modo (<c>Recogida.ProductosAdmitidos</c>).</summary>
@@ -168,10 +169,11 @@ public static class ErroresDeRecogida
     /// <summary>Una diferencia pasa de <c>Recogida.ToleranciaDeDiferencia</c>: hay que devolver la solicitud y volver a mostrarle al asociado lo que recibe.</summary>
     /// <remarks>2026-11-27 (feature 028, E3): los números de <paramref name="cuentas"/> se nombran como cuentas.</remarks>
     public static Error DiferenciaSobreLaTolerancia(decimal tolerancia, IReadOnlyList<(string Numero, decimal Diferencia)> productos,
-        IReadOnlyCollection<string>? cuentas = null) => new ErrorConDatos(
+        IReadOnlyCollection<string>? cuentas = null, IReadOnlyCollection<string>? facturas = null) => new ErrorConDatos(
         CodigoDiferenciaSobreLaTolerancia,
         $"Lo que se recoge cambió más de {Pesos(tolerancia)} desde la proyección de la solicitud en "
-        + string.Join(", ", productos.Select(p => $"{(cuentas?.Contains(p.Numero) == true ? "la cuenta" : "el crédito")} {p.Numero} ({Pesos(p.Diferencia)})"))
+        + string.Join(", ", productos.Select(p =>
+            $"{(cuentas?.Contains(p.Numero) == true ? "la cuenta" : facturas?.Contains(p.Numero) == true ? "la factura" : "el crédito")} {p.Numero} ({Pesos(p.Diferencia)})"))
         + ". Devuelva la solicitud para corregirla y mostrarle al asociado lo que recibe.",
         new { tolerance = tolerancia, products = productos.Select(p => new { number = p.Numero, difference = p.Diferencia }).ToList() });
 
@@ -262,6 +264,35 @@ public static class ErroresDeRecogida
             ? new ErrorConDatos(error.Code, $"Cuenta {numero}: {error.Message}", conDatos.Data)
             : new ErrorConDatos(error.Code, $"Cuenta {numero}: {error.Message}", new { accountPublicId = cuenta, number = numero });
     }
+
+    // 2026-11-27 (feature 028, E4, T087; HU7): los de recoger facturas a crédito de Comercial. (nuevo)
+
+    /// <summary>El motivo de una factura que Recaudo no puede recoger todavía (falta su tipo de documento o el medio del cruce interno).</summary>
+    public const string MotivoRecaudoSinConfigurar = "ReceiptsNotReady";
+
+    /// <summary>HU7: la cooperativa no recoge facturas a crédito con la línea del crédito nuevo (de fábrica, «la cooperativa no las recoge»).</summary>
+    public static BloqueoDeRecogida FacturaNoAdmitida(string numero) => new(CodigoProductoNoAdmitido, MotivoNoAdmitido,
+        $"La cooperativa no recoge facturas a crédito con el crédito nuevo (parámetro Recogida.ProductosAdmitidos): la factura {numero} no se puede recoger.");
+
+    /// <summary>Recaudo no puede emitir el recibo sin caja de la recogida (FR-026): sin él la factura no se recoge y se dice por qué.</summary>
+    public static BloqueoDeRecogida RecaudoSinConfigurar(string numero, string motivo) => new(CodigoNoPagable, MotivoRecaudoSinConfigurar,
+        $"La factura {numero} no se puede recoger: {motivo}");
+
+    /// <summary>La línea del crédito nuevo admite facturas, pero no de ese modo.</summary>
+    public static Error ModoDeFacturaNoAdmitido(string numero, PayoffMode modo, IReadOnlyList<PayoffMode> admitidos) => new ErrorConDatos(CodigoModoNoAdmitido,
+        $"La línea del crédito nuevo no admite recoger la factura {numero} {TextoDelModo(modo)}."
+        + (admitidos.Count > 0 ? $" Admite: {string.Join(", ", admitidos.Select(TextoDelModo))}." : string.Empty),
+        new { number = numero, mode = modo.ToString(), admittedModes = admitidos.Select(m => m.ToString()).ToList() });
+
+    /// <summary>La factura que se pide no tiene saldo pendiente a nombre del solicitante (no es suya, no existe o ya se pagó).</summary>
+    public static Error FacturaSinSaldo(string numero, string persona) => new ErrorConDatos(CodigoNoEsDelSolicitante,
+        $"La factura {numero} no tiene saldo pendiente a nombre de {persona}: sólo se recogen sus propias facturas a crédito.", new { invoice = numero });
+
+    /// <summary>Defensa del desembolso (H4): Recaudo aplicó a una factura algo distinto de lo evaluado; nada queda hecho.</summary>
+    public static Error FacturaAplicadaDistinta(string numero, decimal evaluado, decimal aplicado) => new ErrorConDatos(CodigoAplicadoDistinto,
+        $"A la factura {numero} se le aplicaron {Pesos(aplicado)} y se habían evaluado {Pesos(evaluado)}: el desembolso no se hizo. Pida otra vez la vista "
+        + "previa y confirme.",
+        new { invoice = numero, expected = evaluado, applied = aplicado });
 
     /// <summary>El producto en palabras («aportes», «ahorro a la vista»…).</summary>
     public static string TextoDelProducto(ProductoDeRecogida producto) => producto switch

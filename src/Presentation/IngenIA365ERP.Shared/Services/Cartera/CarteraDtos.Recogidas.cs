@@ -182,6 +182,15 @@ public sealed record ProductoParaRecogerDto(
 
     /// <summary>2026-11-27 (feature 028, E3): ¿es una cuenta de aportes o ahorros? (nuevo)</summary>
     public bool EsCuenta => Kind == TextosDeRecogida.ClaseCuenta;
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): en una factura a crédito, su número (con él se pide en la solicitud). (nuevo)</summary>
+    public string? Reference { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): en una factura, su fecha. (nuevo)</summary>
+    public DateOnly? InvoiceDate { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T089): ¿es una factura a crédito de Comercial? (nuevo)</summary>
+    public bool EsFactura => Kind == TextosDeRecogida.ClaseFactura;
 }
 
 /// <summary>2026-11-27 (feature 028, E3, T081): una cuota pendiente de una cuenta que se recoge por cuotas. (nuevo)</summary>
@@ -232,15 +241,17 @@ public sealed record ProductosParaRecogerDto(
 /// lo que la tabla ya sabe de él (número y valor a recoger) para mostrarlo sin volver a consultar. (nuevo)
 /// </summary>
 public sealed record RecogidaMarcada(Guid ProductPublicId, string Number, int Mode, decimal? Amount, decimal ToPayOff, int? InstallmentTreatment = null,
-    int Kind = TextosDeRecogida.ClaseCredito)
+    int Kind = TextosDeRecogida.ClaseCredito, string? Reference = null)
 {
     /// <summary>
     /// Lo que pide el servidor. 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada elegido, sólo en una recogida total. 2026-11-27
-    /// (E3, T081): una cuenta, por cuotas o con el valor del abono.
+    /// (E3, T081): una cuenta, por cuotas o con el valor del abono. 2026-11-27 (E4, T089): una factura, por su número (sin producto).
     /// </summary>
-    public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
-        Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? Amount : null,
-        InstallmentTreatment: Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null);
+    public RecogidaElegidaRequest ComoPedido() => Kind == TextosDeRecogida.ClaseFactura
+        ? new(Kind, null, Mode, Mode == TextosDeRecogida.ModoParcial ? Amount : null, Reference ?? Number)
+        : new(Kind, ProductPublicId, Mode,
+            Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? Amount : null,
+            InstallmentTreatment: Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null);
 
     /// <summary>Lo que se recoge de lo marcado: por cuotas, lo pendiente; como abono o parcial, el valor; total, lo que cuesta recogerlo.</summary>
     public decimal Valor => Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? Amount ?? 0m : ToPayOff;
@@ -272,6 +283,13 @@ public sealed record SeleccionDeRecogida(IReadOnlyList<RecogidaMarcada> Marcadas
         foreach (var m in marcadas)
         {
             if (!porProducto.TryGetValue(m.ProductPublicId, out var p) || !p.AdmittedModes.Contains(m.Mode)) continue;
+            // 2026-11-27 (feature 028, E4, T089): una factura, lo pendiente (total) o el parcial topado en lo pendiente; no libera cuotas de crédito.
+            if (p.EsFactura)
+            {
+                total += m.Mode == TextosDeRecogida.ModoTotal ? p.ToPayOff : Math.Min(m.Amount ?? 0m, p.ToPayOff);
+                contadas++;
+                continue;
+            }
             // 2026-11-27 (feature 028, E3, T081): una cuenta, lo pendiente a la fecha (por cuotas) o el abono; no libera cuotas de crédito.
             if (p.EsCuenta)
             {
@@ -329,6 +347,8 @@ public sealed record RecogidaDeSolicitudDto(
     public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
         Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? RequestedAmount : null, Reference, InstallmentTreatment);
 
+    private static Guid IdentificadorDeFactura(string numero) => IdentificadoresDeRecogida.DeFactura(numero);
+
     /// <summary>
     /// Como lo marca la tabla de productos al abrir la corrección (créditos con el tratamiento de la cuota causada que guardó; 2026-11-27, E3: también
     /// cuentas, por cuotas o con su abono).
@@ -339,8 +359,26 @@ public sealed record RecogidaDeSolicitudDto(
             Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount, Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null),
         TextosDeRecogida.ClaseCuenta when ProductPublicId is { } cuenta => new RecogidaMarcada(cuenta, Number, Mode,
             Mode == TextosDeRecogida.ModoAbono ? RequestedAmount : null, ProjectedAmount, Kind: TextosDeRecogida.ClaseCuenta),
+        // 2026-11-27 (feature 028, E4, T089): una factura, por su número (el identificador de la tabla sale de la consulta de productos, que la nombra igual).
+        TextosDeRecogida.ClaseFactura when !string.IsNullOrWhiteSpace(Reference ?? Number) => new RecogidaMarcada(IdentificadorDeFactura(Reference ?? Number), Number,
+            Mode, Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount, Kind: TextosDeRecogida.ClaseFactura, Reference: Reference ?? Number),
         _ => null,
     };
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, E4, T089): el identificador de una factura en la tabla de productos: el mismo que da el servidor (<c>FacturaRecogible.IdentificadorDe</c>,
+/// derivado de su número), así lo que ya recoge la solicitud se marca al abrir la corrección. (nuevo)
+/// </summary>
+public static class IdentificadoresDeRecogida
+{
+    public static Guid DeFactura(string numero)
+    {
+        var bytes = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes("LND.Recogida.Factura|" + numero.Trim()));
+        bytes[6] = (byte)((bytes[6] & 0x0F) | 0x30);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return new Guid(bytes);
+    }
 }
 
 /// <summary>2026-11-27 (feature 028, HU2, T029): lo que recoge la solicitud en total, el neto a girar, D y R (<c>payoffSummary</c>).</summary>
@@ -402,11 +440,22 @@ public static class TextosDeRecogida
     /// 2026-11-27 (feature 028, E3, T081; HU6-1): el motivo corto de un producto que no se recoge; en una cuenta que la cooperativa no admite, «La cooperativa
     /// no los recoge».
     /// </summary>
-    public static string Motivo(string? motivo, int clase) => clase != ClaseCuenta ? Motivo(motivo) : motivo switch
+    public static string Motivo(string? motivo, int clase) => clase switch
     {
-        "NotAdmitted" => "La cooperativa no los recoge",
-        "NoBalance" => "Sin cuotas pendientes",
-        "NotActive" => "No recibe operaciones",
+        ClaseCuenta => motivo switch
+        {
+            "NotAdmitted" => "La cooperativa no los recoge",
+            "NoBalance" => "Sin cuotas pendientes",
+            "NotActive" => "No recibe operaciones",
+            _ => Motivo(motivo),
+        },
+        // 2026-11-27 (feature 028, E4, T089; HU7): una factura que la cooperativa no recoge, o Recaudo sin el recibo de la recogida configurado.
+        ClaseFactura => motivo switch
+        {
+            "NotAdmitted" => "La cooperativa no las recoge",
+            "ReceiptsNotReady" => "Recaudo no está listo para recogerla",
+            _ => Motivo(motivo),
+        },
         _ => Motivo(motivo),
     };
 

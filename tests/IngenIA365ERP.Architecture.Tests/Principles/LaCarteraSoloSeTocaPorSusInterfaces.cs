@@ -213,6 +213,30 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.DoesNotMatch(@"\bdb\.(Payroll(Novelties|Runs|LoanDeductions)|PayPeriods)\b", FuenteSinComentarios.Leer(cuotaEnviada));
     }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T085; R14, E-16): Cartera recoge facturas a crédito de Comercial sólo por el puerto que Recaudo ofrece
+    /// (<c>IRecogidaEnRecaudo</c>, cuatro métodos: leer lo pendiente, tomar los cerrojos de Recaudo antes que los suyos, aplicar el recibo sin caja y anularlo), en
+    /// <c>Application.Common.Integration.Receipts</c>, implementado por Recaudo (<c>Application.Receipts.Integration.RecogidaEnRecaudo</c>) y registrado en
+    /// <c>DependencyInjection</c>. El lado de Cartera (<c>Lending/Payoffs/RecogidaDeFacturas</c>) no nombra a Recaudo ni a Contabilidad ni lee sus tablas.
+    /// </summary>
+    [Fact]
+    public void Las_facturas_se_recogen_por_el_puerto_de_Recaudo()
+    {
+        var puerto = typeof(IngenIA365ERP.Application.Common.Integration.Receipts.IRecogidaEnRecaudo);
+        Assert.Equal(["AplicarAsync", "PendientesAsync", "ReversarAsync", "TomarCerrojosAsync"], MetodosDe(puerto));
+        Assert.Equal("IngenIA365ERP.Application.Common.Integration.Receipts", puerto.Namespace);
+        var implementaciones = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && puerto.IsAssignableFrom(t)).ToList();
+        Assert.Equal(["IngenIA365ERP.Application.Receipts.Integration.RecogidaEnRecaudo"], implementaciones.Select(t => t.FullName));
+        var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IRecogidaEnRecaudo>\(sp\s*=>\s*sp\.GetRequiredService<Receipts\.Integration\.RecogidaEnRecaudo>\(\)\)", di);
+        var cartera = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending", "Payoffs", "RecogidaDeFacturas.cs");
+        var texto = FuenteSinComentarios.Leer(cartera);
+        Assert.Contains("IRecogidaEnRecaudo", texto, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"IngenIA365ERP\.Application\.(Receipts|Accounting)\b", texto);
+        Assert.DoesNotMatch(@"\bdb\.(IssuedReceipts|ReceiptApplications|CommercialReceivableApplications|ReceiptVoidings|JournalEntries)\b", texto);
+    }
+
     [Fact]
     public void Fuera_de_Cartera_solo_los_provisionales_del_mismo_espacio_implementan_los_puertos()
     {

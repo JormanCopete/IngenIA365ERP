@@ -108,8 +108,9 @@ public sealed record PayoffCurrentInstallmentDto(int Number, DateOnly? DueDate, 
 }
 
 /// <summary>
-/// Un producto del deudor que el crédito nuevo podría recoger (api.md §1): créditos (<see cref="PayoffProductKind.Loan"/>) y, desde E3, cuentas de aportes y
-/// ahorros del titular (<see cref="PayoffProductKind.Account"/>, sin el CDAT); las facturas llegan con E4. Trae lo que cuesta recogerlo a D con lo conocido hasta R, su desglose, el modo de intereses, la cuota causada, la
+/// Un producto del deudor que el crédito nuevo podría recoger (api.md §1): créditos (<see cref="PayoffProductKind.Loan"/>), desde E3 cuentas de aportes y
+/// ahorros del titular (<see cref="PayoffProductKind.Account"/>, sin el CDAT) y desde E4 facturas a crédito de Comercial
+/// (<see cref="PayoffProductKind.CommercialReceivable"/>). Trae lo que cuesta recogerlo a D con lo conocido hasta R, su desglose, el modo de intereses, la cuota causada, la
 /// huella de la liquidación, si se puede recoger (y por qué no) y, si la consulta trajo una selección, lo que se recoge de él. (nuevo)
 /// </summary>
 public sealed record PayoffCandidateDto(
@@ -181,6 +182,15 @@ public sealed record PayoffCandidateDto(
 
     /// <summary>2026-11-27 (feature 028, E3, T078; HU6-2): por qué la cuenta no admite un abono (la línea de aportes sin extraordinarios); nulo si lo admite. (nuevo)</summary>
     public string? DepositNotAllowedReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T087; HU7): en una factura a crédito de Comercial, su número (el documento cruce con que se pide en la solicitud: <c>reference</c>
+    /// de <c>payoffs[]</c>); nulo en un crédito o una cuenta. Su <see cref="PayoffCandidateDto.ProductPublicId"/> es un identificador estable derivado de él. (nuevo)
+    /// </summary>
+    public string? Reference { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E4, T087): en una factura, su fecha. (nuevo)</summary>
+    public DateOnly? InvoiceDate { get; init; }
 }
 
 /// <summary>2026-11-27 (feature 028, E3, T078): una cuota pendiente de una cuenta que se recoge por cuotas: su período, su vencimiento y lo que se debe. (nuevo)</summary>

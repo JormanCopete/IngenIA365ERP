@@ -106,7 +106,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
     IDateTimeService reloj,
-    RecogidaDeCuentas? recogidaDeCuentas = null) : IRequestHandler<ExecuteLoanDisbursementCommand, Result<DisbursementResultDto>>
+    RecogidaDeCuentas? recogidaDeCuentas = null,
+    RecogidaDeFacturas? recogidaDeFacturas = null) : IRequestHandler<ExecuteLoanDisbursementCommand, Result<DisbursementResultDto>>
 {
     public async Task<Result<DisbursementResultDto>> Handle(ExecuteLoanDisbursementCommand request, CancellationToken ct)
     {
@@ -121,7 +122,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
         if (r.RequiereReconocimiento && !e.AcknowledgedPayoffDifferences)
         {
             var porReconocer = r.Recogidas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)
-                .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
+                .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total))
+                .Concat(r.RecogidasDeFacturas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
             return Falla(ErroresDeRecogida.DiferenciasSinReconocer(porReconocer.Count, porReconocer.Sum()));
         }
         var contable = await fechaContable.CalcularAsync(r.FechaValor, ct);
@@ -131,6 +133,15 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             var s = await db.CreditApplications.FirstAsync(a => a.Id == r.Solicitud.Id, ct);
+            // 2026-11-27 (feature 028, E4, T087; research E-16): con facturas que recoger, los cerrojos de Recaudo (su configuración y el deudor como pagador) van
+            // ANTES que los de Cartera —el orden global de la 015: Recaudo y luego los contratos de Cartera—; si no, este desembolso y un recibo de caja del mismo
+            // deudor se esperarían en cruz.
+            var facturasARecoger = r.RecogidasDeFacturas.Where(x => !x.Omitida).ToList();
+            if (facturasARecoger.Count > 0)
+            {
+                if (recogidaDeFacturas is null) return Falla(ErroresDeRecogida.ClaseNoAdmitida(PayoffProductKind.CommercialReceivable));
+                await recogidaDeFacturas.TomarCerrojosAsync(r.Personas[s.ApplicantPersonId].PublicId, [], ct);
+            }
             var deudores = r.Partes.Select(p => p.PersonId).Append(s.ApplicantPersonId).Distinct().Order().ToList();
             var creditos = r.Recogidas.Select(x => x.LoanId).Concat(r.CreditoId is { } c ? [c] : []).Distinct().Order().ToList();
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
@@ -152,8 +163,10 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             // la confirmación), se pide otra vista previa.
             var releidas = await requisitos.ReevaluarRecogidasAsync(r, ct);
             if (releidas.IsFailure) return Falla(releidas.Error);
-            if (!MismasRecogidas(r.Recogidas, releidas.Value.Creditos) || !MismasCuentas(r.RecogidasDeCuentas, releidas.Value.Cuentas))
-                return Falla(ErroresDeDesembolso.VistaPreviaCambio(RequisitosDelDesembolso.HuellaCon(r, releidas.Value.Creditos, releidas.Value.Cuentas)));
+            if (!MismasRecogidas(r.Recogidas, releidas.Value.Creditos) || !MismasCuentas(r.RecogidasDeCuentas, releidas.Value.Cuentas)
+                || !MismasFacturas(r.RecogidasDeFacturas, releidas.Value.Facturas))
+                return Falla(ErroresDeDesembolso.VistaPreviaCambio(RequisitosDelDesembolso.HuellaCon(r, releidas.Value.Creditos, releidas.Value.Cuentas,
+                    releidas.Value.Facturas)));
 
             var deudor = r.Personas[s.ApplicantPersonId];
             var actor = await actorActual.ObtenerAsync(ct);
@@ -198,7 +211,9 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 account = r.Beneficiario?.AccountNumber,
                 // 2026-11-27 (feature 028, E3): las cuentas recogidas detrás de los créditos (sin cuentas, lo de siempre).
                 payoffs = r.Recogidas.Select(x => (object)new { loan = x.LoanPublicId, mode = x.Modo, amount = x.AAplicar, omitted = x.Omitida, leftInstallment = x.CuotaDejada })
-                    .Concat(r.RecogidasDeCuentas.Select(x => (object)new { account = x.AccountPublicId, mode = x.Modo.ToString(), amount = x.AAplicar, omitted = x.Omitida })),
+                    .Concat(r.RecogidasDeCuentas.Select(x => (object)new { account = x.AccountPublicId, mode = x.Modo.ToString(), amount = x.AAplicar, omitted = x.Omitida }))
+                    // 2026-11-27 (feature 028, E4): las facturas detrás de las cuentas (sin facturas, lo de siempre).
+                    .Concat(r.RecogidasDeFacturas.Select(x => (object)new { invoice = x.Numero, mode = x.Modo.ToString(), amount = x.AAplicar, omitted = x.Omitida })),
                 rate = r.Simulacion.TasaPactada,
                 usury = r.Simulacion.Usura.UsuraPublicId,
                 simulation = r.Simulacion.Huella,
@@ -228,13 +243,26 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 if (consignadas.IsFailure) return Falla(consignadas.Error);
                 deCuentas = consignadas.Value;
             }
+            // 2026-11-27 (feature 028, E4, T087; FR-026): las facturas a crédito de Comercial, con un recibo sin caja de Recaudo en esta transacción (sus cerrojos ya
+            // se tomaron, antes que los de Cartera); si Recaudo no lo emite, el desembolso no existe y se dice por qué.
+            IReadOnlyList<RecogidaDeFacturaAplicada> deFacturas = [];
+            if (facturasARecoger.Count > 0)
+            {
+                var pagadas = await recogidaDeFacturas!.AplicarAsync(operacion, deudor.PublicId, r.SucursalPublicId!.Value, credito.Number, r.RecogidasDeFacturas, ct);
+                if (pagadas.IsFailure) return Falla(pagadas.Error);
+                deFacturas = pagadas.Value;
+            }
             await db.SaveChangesAsync(ct);
 
             // 2026-11-27 (feature 028, T035): la fila de cada producto recogido (también el omitido), con lo que se aplicó y quién reconoció la diferencia.
-            var aplicado = aplicadas.Value.Sum(a => a.Comprobante.AppliedAmount) + deCuentas.Sum(a => a.Comprobante.Amount);
+            var aplicado = aplicadas.Value.Sum(a => a.Comprobante.AppliedAmount) + deCuentas.Sum(a => a.Comprobante.Amount) + deFacturas.Sum(a => a.Aplicado);
             var reconocio = r.RequiereReconocimiento ? Recortar(actor.Name, DisbursementPayoff.LargoDeQuienReconoce) : null;
             await FilasDeRecogidaAsync(operacion, r.Recogidas, aplicadas.Value, reconocio, ahora, ct);
             await FilasDeCuentasAsync(operacion, r.RecogidasDeCuentas, deCuentas, reconocio, ahora, ct);
+            // 2026-11-27 (feature 028, E4, T087): la fila de cada factura (también la omitida), con lo aplicado y el recibo de Recaudo.
+            foreach (var x in r.RecogidasDeFacturas)
+                db.DisbursementPayoffs.Add(RecogidaDeFacturas.Fila(operacion.Id, operacion.PublicId, x,
+                    deFacturas.FirstOrDefault(a => string.Equals(a.Recogida.Numero, x.Numero, StringComparison.Ordinal)), reconocio, ahora));
 
             // La puesta al día calculada antes del tramo (US4, C04): sus partes LoanCatchUp apuntan a esta operación, ya guardada.
             var puestaAlDia = await motor.RegistrarPuestaAlDiaAsync(operacion, ct);
@@ -272,6 +300,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             }).ToList();
             // 2026-11-27 (feature 028, E3, T077, T080): cada cuenta recogida, con su operación de consignación: el DS acredita el puente que ella debitó.
             recogidas.AddRange(deCuentas.Select(a => RecogidaDeCuentas.ComoDeduccion(a)));
+            // 2026-11-27 (feature 028, E4, T088): cada factura, con el recibo de Recaudo: el DS acredita el puente que el recibo debitó, con la factura de cruce.
+            recogidas.AddRange(deFacturas.Select(a => RecogidaDeFacturas.ComoDeduccion(a, r.SucursalPublicId!.Value)));
             var emitidos = await emision.DesembolsoAsync(new DesembolsoAEmitir(hecho, operacion, r.Tramo, r.EsElUltimo, r.Forma, r.Beneficiario!.ComoPayee(),
                 r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan, planDelTramo), r.Prevalidacion.Outcome,
                 Subsidio: r.Compra?.ComoHecho()), ct);
@@ -280,7 +310,7 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
 
             await db.SaveChangesAsync(ct);
             await auditoria.EmitirOperacionRegistradaAsync(operacion.PublicId, operacion.Number, nameof(LoanOperationKind.Disbursement),
-                Distribucion(r, operacion, recogidas, aplicadas.Value, reconocio, deCuentas), ct);
+                Distribucion(r, operacion, recogidas, aplicadas.Value, reconocio, deCuentas, deFacturas), ct);
 
             return Result.Success(new DisbursementResultDto(
                 credito.PublicId, credito.Number, operacion.PublicId, operacion.Number, r.Tramo, r.Bruto,
@@ -308,6 +338,20 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                     Causes = RequisitosDelDesembolso.Causas(a.Recogida.Diferencia.Causa),
                     AccountOperationPublicId = a.Comprobante.OperationPublicId,
                 }))
+                // 2026-11-27 (feature 028, E4, T087, T089; api.md §3): cada factura con el recibo de Recaudo que la pagó (en el campo del comprobante, y aparte).
+                .Concat(deFacturas.Select(a => new DisbursementPayoffDto(Guid.Empty, a.Recogida.Numero, a.Aplicado, a.Recibo)
+                {
+                    Kind = nameof(PayoffProductKind.CommercialReceivable),
+                    ProductPublicId = a.Recogida.Identificador,
+                    Reference = a.Recogida.Numero,
+                    Mode = a.Recogida.Modo.ToString(),
+                    Projected = a.Recogida.ConProyeccion ? a.Recogida.Proyectado : null,
+                    Current = a.Recogida.Actual,
+                    Difference = a.Recogida.ConProyeccion ? a.Recogida.Diferencia.Total : null,
+                    Causes = RequisitosDelDesembolso.Causas(a.Recogida.Diferencia.Causa),
+                    ReceiptPublicId = a.Recibo,
+                    ReceiptNumber = a.NumeroDeRecibo,
+                }))
                 .ToList(),
                 orden.NetAmount,
                 new DisbursementOrderRefDto(orden.PublicId, orden.Number, orden.Status.ToString()),
@@ -320,6 +364,11 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                         x.ConProyeccion ? x.Proyectado : null, x.Avisos.FirstOrDefault() ?? string.Empty))
                     .Concat(r.RecogidasDeCuentas.Where(x => x.Omitida).Select(x => new DisbursementOmittedPayoffDto(Guid.Empty, x.Number,
                         x.ConProyeccion ? x.Proyectado : null, x.Avisos.FirstOrDefault() ?? string.Empty) { Kind = nameof(PayoffProductKind.Account), ProductPublicId = x.AccountPublicId }))
+                    .Concat(r.RecogidasDeFacturas.Where(x => x.Omitida).Select(x => new DisbursementOmittedPayoffDto(Guid.Empty, x.Numero,
+                        x.ConProyeccion ? x.Proyectado : null, x.Avisos.FirstOrDefault() ?? string.Empty)
+                    {
+                        Kind = nameof(PayoffProductKind.CommercialReceivable), ProductPublicId = x.Identificador, Reference = x.Numero,
+                    }))
                     .ToList(),
             });
         }, ct);
@@ -351,7 +400,8 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
     /// </summary>
     /// <remarks>2026-11-27 (feature 028, E3, T077): con cuentas recogidas, cada una con su modo, las cuotas que cubre y lo consignado (<c>accountPayoffs</c>).</remarks>
     private static object Distribucion(RequisitosEvaluados r, Domain.Entities.Lending.Operations.LoanOperation operacion, IReadOnlyList<PayoffDeductionV1> recogidas,
-        IReadOnlyList<RecogidaAplicada> aplicadas, string? reconocio, IReadOnlyList<RecogidaDeCuentaAplicada> deCuentas) => new
+        IReadOnlyList<RecogidaAplicada> aplicadas, string? reconocio, IReadOnlyList<RecogidaDeCuentaAplicada> deCuentas,
+        IReadOnlyList<RecogidaDeFacturaAplicada> deFacturas) => new
     {
         operation = operacion.Number,
         tranche = r.Tramo,
@@ -395,7 +445,28 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             omitted = x.Omitida,
             acknowledgedBy = x.PorReconocer ? reconocio : null,
         }).ToList(),
+        // 2026-11-27 (feature 028, E4, T087): las facturas a crédito, con el recibo de Recaudo que las pagó.
+        invoicePayoffs = r.RecogidasDeFacturas.Count == 0 ? null : r.RecogidasDeFacturas.Select(x => new
+        {
+            invoice = x.Numero,
+            mode = x.Modo.ToString(),
+            projected = x.ConProyeccion ? x.Proyectado : (decimal?)null,
+            current = x.Actual,
+            applied = deFacturas.FirstOrDefault(a => a.Recogida.Numero == x.Numero)?.Aplicado ?? 0m,
+            receipt = deFacturas.FirstOrDefault(a => a.Recogida.Numero == x.Numero)?.NumeroDeRecibo,
+            difference = x.Diferencia.Total,
+            causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            omitted = x.Omitida,
+            acknowledgedBy = x.PorReconocer ? reconocio : null,
+        }).ToList(),
     };
+
+    /// <summary>2026-11-27 (feature 028, E4): ¿las facturas releídas bajo el cerrojo aplican lo mismo que las de la vista previa? (nuevo)</summary>
+    private static bool MismasFacturas(IReadOnlyList<RecogidaDeFacturaEvaluada> antes, IReadOnlyList<RecogidaDeFacturaEvaluada> ahora) =>
+        antes.Count == ahora.Count
+        && antes.Zip(ahora).All(p => string.Equals(p.First.Numero, p.Second.Numero, StringComparison.Ordinal) && p.First.Modo == p.Second.Modo
+                                     && p.First.AAplicar == p.Second.AAplicar && p.First.Omitida == p.Second.Omitida
+                                     && p.First.Diferencia.Total == p.Second.Diferencia.Total);
 
     /// <summary>2026-11-27 (feature 028, E3): ¿las cuentas releídas bajo el cerrojo consignan lo mismo que las de la vista previa? (nuevo)</summary>
     private static bool MismasCuentas(IReadOnlyList<RecogidaDeCuentaEvaluada> antes, IReadOnlyList<RecogidaDeCuentaEvaluada> ahora) =>

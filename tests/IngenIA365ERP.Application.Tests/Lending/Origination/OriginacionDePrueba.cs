@@ -275,7 +275,14 @@ internal sealed class OriginacionDePrueba : IDisposable
         new(Db, new Application.Payroll.Integration.DescuentosDeNominaParaCartera(Db));
 
     /// <summary>2026-11-27 (feature 028, T023): la recogida que pide la solicitud (validar, proyectar y guardar sus filas).</summary>
-    public Application.Lending.Payoffs.RecogidasDeLaSolicitud Recogidas() => new(Db, LiquidacionDeRecogida(), Parametros(), G.Reloj);
+    public Application.Lending.Payoffs.RecogidasDeLaSolicitud Recogidas() => new(Db, LiquidacionDeRecogida(), Parametros(), G.Reloj,
+        facturas: Recaudo is null ? null : new Application.Lending.Payoffs.RecogidaDeFacturas(Db, Recaudo));
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T090): el puerto de Recaudo de la recogida de facturas (un doble); nulo, la solicitud no recoge facturas (como las pruebas de
+    /// antes).
+    /// </summary>
+    public Application.Common.Integration.Receipts.IRecogidaEnRecaudo? Recaudo { get; set; }
 
     public CreateCreditApplicationCommandHandler Crear() => new(Db, Armado(), Recogidas(), Autorizaciones, G.Actor, G.Reloj);
     public GruposEditablesDeSolicitud Editables() => new(Parametros());

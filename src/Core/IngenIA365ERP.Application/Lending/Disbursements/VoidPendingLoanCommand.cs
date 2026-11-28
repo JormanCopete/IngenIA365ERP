@@ -26,7 +26,9 @@ public sealed record VoidedLoanDto(Guid LoanPublicId, string Number, string Stat
 /// <see cref="IContratoDeObligaciones.ReversarAsync"/> (recaudador <c>CAR</c>, clave <c>{clave CAR}:reverso</c>; el contrato emite
 /// <c>PagoReversado</c> y nunca <c>PagoReversadoPorCartera</c>) y los recogidos vuelven a su estado (C11; interfaces.md §4.3); el crédito queda
 /// <c>Voided</c> con <c>VoidedOn</c> y <c>VoidReason</c>. Un reverso de recogida rechazado aborta todo. 2026-11-27 (feature 028, T040; FR-018): cada
-/// recogida reversada marca su fila <c>LND_DisbursementPayoffs</c> con el instante y la clave del reverso. (nuevo)
+/// recogida reversada marca su fila <c>LND_DisbursementPayoffs</c> con el instante y la clave del reverso. 2026-11-27 (feature 028, E4, T087): las facturas
+/// recogidas se devuelven anulando el recibo sin caja de Recaudo (por <see cref="RecogidaDeFacturas"/>), <b>antes</b> de los cerrojos de Cartera: la anulación
+/// numera con el consecutivo de las anulaciones de Recaudo, que la caja también toma antes de llegar a Cartera (research E-16). (nuevo)
 /// </summary>
 public sealed record VoidPendingLoanCommand(Guid LoanPublicId, string Reason) : IRequest<Result<VoidedLoanDto>>, IOperacionIdempotente
 {
@@ -49,7 +51,8 @@ public sealed class VoidPendingLoanCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IDateTimeService reloj,
-    Payoffs.RecogidaDeCuentas? recogidaDeCuentas = null) : IRequestHandler<VoidPendingLoanCommand, Result<VoidedLoanDto>>
+    Payoffs.RecogidaDeCuentas? recogidaDeCuentas = null,
+    RecogidaDeFacturas? recogidaDeFacturas = null) : IRequestHandler<VoidPendingLoanCommand, Result<VoidedLoanDto>>
 {
     public async Task<Result<VoidedLoanDto>> Handle(VoidPendingLoanCommand request, CancellationToken ct)
     {
@@ -77,6 +80,22 @@ public sealed class VoidPendingLoanCommandHandler(
             // 2026-11-27 (feature 028, E3, T079): las consignaciones de recogida en cuentas de aportes y ahorros, con la clave CAR del desembolso.
             var consignaciones = await Payoffs.RecogidaDeCuentas.VivasAsync(db, desembolsos.Select(d => d.PublicId).ToList(), ct);
 
+            // 2026-11-27 (feature 028, E4, T087): las facturas recogidas se devuelven primero, con los cerrojos de Recaudo (el deudor y sus recibos) antes que los de
+            // Cartera; si después la anulación del crédito no procede, la transacción revierte también la anulación de los recibos.
+            var facturas = await RecogidaDeFacturas.VivasAsync(db, desembolsos.Select(d => d.PublicId).ToList(), ct);
+            var reversos = new List<Guid>();
+            if (facturas.Count > 0)
+            {
+                if (recogidaDeFacturas is null) return Falla(ErroresDeRecogida.ClaseNoAdmitida(PayoffProductKind.CommercialReceivable));
+                if (leido.Status != LoanStatus.PendingDisbursement || desembolsos.Any(d => d.ReversedByOperationId is null))
+                    return Falla(ErroresDeDesembolso.CreditoNoPendiente(leido.Status.ToString()));
+                var deudorPublicId = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == leido.DebtorPersonId).Select(p => p.PublicId).FirstAsync(ct);
+                await recogidaDeFacturas.TomarCerrojosAsync(deudorPublicId, facturas.Select(f => f.Recibo).Distinct().ToList(), ct);
+                var anuladas = await recogidaDeFacturas.ReversarAsync(facturas, request.Reason.Trim(), ct);
+                if (anuladas.IsFailure) return Falla(anuladas.Error);
+                reversos.AddRange(anuladas.Value.Select(a => a.Anulacion).Distinct());
+            }
+
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync([leido.DebtorPersonId], ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCreditosAsync(recogidas.Select(r => r.LoanId).Append(leido.Id).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
@@ -88,7 +107,6 @@ public sealed class VoidPendingLoanCommandHandler(
             if (credito.Status != LoanStatus.PendingDisbursement || desembolsos.Any(d => d.ReversedByOperationId is null))
                 return Falla(ErroresDeDesembolso.CreditoNoPendiente(credito.Status.ToString()));
 
-            var reversos = new List<Guid>();
             foreach (var r in recogidas)
             {
                 var respuesta = await contrato.ReversarAsync(
@@ -110,7 +128,7 @@ public sealed class VoidPendingLoanCommandHandler(
             }
 
             // 2026-11-27 (feature 028, T040): la fila de cada recogida reversada queda marcada con la clave de su reverso (las de antes de la 028 no la tienen).
-            var claves = recogidas.Select(r => r.IdempotencyKey!).Concat(consignaciones.Select(c => c.Clave)).ToList();
+            var claves = recogidas.Select(r => r.IdempotencyKey!).Concat(consignaciones.Select(c => c.Clave)).Concat(facturas.Select(f => f.Clave)).ToList();
             if (claves.Count > 0)
                 foreach (var fila in await db.DisbursementPayoffs.Where(f => claves.Contains(f.IdempotencyKey) && !f.Omitted).ToListAsync(ct))
                     fila.Reversar(reloj.UtcNow, ClavesDeRecaudador.Reverso(fila.IdempotencyKey));

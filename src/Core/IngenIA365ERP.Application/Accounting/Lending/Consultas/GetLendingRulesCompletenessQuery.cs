@@ -92,6 +92,13 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
     /// <summary>Feature 014 (T144): el puente de Tesorería (recaudador <c>Treasury</c>) sin regla, con captaciones o aportes.</summary>
     public const string AvisoSinPuenteDeTesoreria = "Accounting.LendingRule.TreasuryBridgeMissing";
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T088; R14): la recogida de facturas en el desembolso no cuadra sola —el recibo de Recaudo debita su rol
+    /// <c>RecogidaEnElDesembolso</c> (matriz de Recaudo) y el comprobante del desembolso acredita el puente de la recogida propia (matriz de Cartera)—: las dos reglas
+    /// tienen que dar la misma cuenta. Falta la de Recaudo, o dan cuentas distintas. Es la única excepción al «cuadra solo» de FR-027.
+    /// </summary>
+    public const string AvisoPuenteDeFacturasCruzado = "Accounting.LendingRule.InvoicePayoffBridgeMismatch";
+
     /// <summary>Los roles de la causación de captaciones (sale resumida por día, D24).</summary>
     private static readonly HashSet<string> RolesDeLaCausacionDeCaptaciones = new(
         new[] { Common.Integration.Contracts.Lending.Deposits.InteresDeCaptacionCausadoV1.Type, Common.Integration.Contracts.Lending.Deposits.AjusteDeCausacionDeCaptacionV1.Type }
@@ -143,6 +150,7 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
             .ToList();
         var sinMapeo = await SinMapeoAsync(catalogo.PayoffDepositFactTypes, ct);
         var avisos = Avisos(reglas, cuentas).Concat(AvisosDeCaptaciones(catalogo.CreditLines, vigentes, cuentas)).ToList();
+        if (catalogo.PayoffCommercialReceivablesAdmitted) avisos.AddRange(await AvisosDeLaRecogidaDeFacturasAsync(vigentes, cuentas, fecha, ct));
 
         var porTipo = new Dictionary<string, int>(StringComparer.Ordinal)
         {
@@ -248,6 +256,36 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
             yield return new AvisoDeCompletitudDeCarteraDto(AvisoSinPuenteDeTesoreria,
                 "No hay regla para el puente de Tesorería (RecaudoPorAplicar con la clase Treasury): las transferencias que Tesorería consigne en cuentas no se contabilizarán.",
                 null, null);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T088; R14): con facturas admitidas, la completitud <b>cruzada</b>: las reglas vigentes de Recaudo para el rol
+    /// <c>RecogidaEnElDesembolso</c> (el débito del recibo sin caja con que el desembolso recoge facturas) y las del puente de la recogida propia de Cartera
+    /// (<c>RecaudoPorAplicar</c> con <c>OwnLoanPayoff</c>, que el desembolso acredita por la factura) tienen que dar las mismas cuentas; si falta la de Recaudo o
+    /// no coinciden, el puente no queda en cero solo. Contabilidad lee sus dos matrices; no lee tablas de Recaudo ni de Cartera.
+    /// </summary>
+    private async Task<IReadOnlyList<AvisoDeCompletitudDeCarteraDto>> AvisosDeLaRecogidaDeFacturasAsync(IReadOnlyList<LendingPostingRule> vigentes,
+        IReadOnlyDictionary<int, ChartOfAccount> cuentas, DateOnly fecha, CancellationToken ct)
+    {
+        var rol = Common.Integration.Contracts.Receipts.RolesDeRecaudo.RecogidaEnElDesembolso;
+        var deRecaudo = (await db.ReceiptsPostingRules.AsNoTracking().Where(r => r.Role == rol && !r.IsDeleted).ToListAsync(ct))
+            .Where(r => r.VigenteEn(fecha)).Select(r => r.AccountId).Distinct().ToList();
+        var puentes = vigentes.Where(r => r.Role == R.RecaudoPorAplicar && string.Equals(r.CollectorClass, nameof(ClaseDeRecaudador.OwnLoanPayoff), StringComparison.Ordinal))
+            .Select(r => r.AccountId).Distinct().ToList();
+        if (deRecaudo.Count == 0)
+            return [new AvisoDeCompletitudDeCarteraDto(AvisoPuenteDeFacturasCruzado,
+                "La cooperativa recoge facturas a crédito con el desembolso, pero la matriz de Recaudo no tiene regla para el rol «Recogida en el desembolso»: el recibo de "
+                + "la recogida no se contabilizará. Póngale la misma cuenta que el puente de la recogida propia (RecaudoPorAplicar con la clase OwnLoanPayoff).",
+                null, null)];
+        var codigos = await db.ChartOfAccounts.AsNoTracking().Where(a => deRecaudo.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Code, ct);
+        var distintas = deRecaudo.Concat(puentes).Distinct().Where(id => !deRecaudo.Contains(id) || !puentes.Contains(id)).ToList();
+        if (puentes.Count == 0 || distintas.Count == 0) return [];
+        var deCartera = string.Join(", ", puentes.Select(id => cuentas.GetValueOrDefault(id)?.Code ?? id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        var deRecaudoTexto = string.Join(", ", deRecaudo.Select(id => codigos.GetValueOrDefault(id) ?? id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        return [new AvisoDeCompletitudDeCarteraDto(AvisoPuenteDeFacturasCruzado,
+            $"La recogida de facturas en el desembolso no cuadra sola: el recibo de Recaudo debita {deRecaudoTexto} (rol «Recogida en el desembolso») y el desembolso "
+            + $"acredita el puente de la recogida propia en {deCartera}. Póngales la misma cuenta: si no, el puente no queda en cero.",
+            codigos.GetValueOrDefault(deRecaudo[0]), null)];
     }
 
     private async Task<List<RecaudadorSinPuenteDto>> RecaudadoresSinPuenteAsync(IReadOnlyList<LendingPostingRule> vigentes, DateOnly fecha, CancellationToken ct)

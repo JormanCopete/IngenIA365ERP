@@ -409,12 +409,16 @@ public sealed class GetPayoffCandidatesQueryTests
         var id = Guid.NewGuid();
 
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Loan, id, PayoffMode.Total))).IsValid.Should().BeTrue();
-        // 2026-11-27 (feature 028, E3, T078): una cuenta se marca por cuotas o con un abono; las facturas siguen fuera.
+        // 2026-11-27 (feature 028, E3, T078): una cuenta se marca por cuotas o con un abono; (E4, T087) una factura, total o parcial, por su número.
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Account, id, PayoffMode.Deposit, 1_000m))).IsValid
             .Should().BeTrue("desde E3 se recogen cuentas");
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Account, id, PayoffMode.Total))).IsValid.Should().BeFalse("una cuenta no va total");
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.CommercialReceivable, null, PayoffMode.Total, Reference: "FE-1"))).IsValid
-            .Should().BeFalse("las facturas llegan con E4");
+            .Should().BeTrue("desde E4 se recogen facturas");
+        validador.Validate(De(p, new PayoffInput(PayoffProductKind.CommercialReceivable, null, PayoffMode.Total))).IsValid
+            .Should().BeFalse("una factura se marca por su número");
+        validador.Validate(De(p, new PayoffInput(PayoffProductKind.CommercialReceivable, null, PayoffMode.Deposit, 1m, "FE-1"))).IsValid
+            .Should().BeFalse("una factura se recoge total o parcial");
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Loan, id, PayoffMode.Partial))).IsValid.Should().BeFalse("el parcial lleva valor");
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Loan, id, PayoffMode.Installments))).IsValid.Should().BeFalse();
         validador.Validate(De(p, new PayoffInput(PayoffProductKind.Loan, id, PayoffMode.Total), new PayoffInput(PayoffProductKind.Loan, id, PayoffMode.Total)))

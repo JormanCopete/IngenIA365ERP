@@ -96,6 +96,14 @@ public static class RolesDeRecaudo
     /// contadora: un fondo, un gasto o el ingreso por intereses al débito).
     /// </summary>
     public const string DescuentoPorPagoAnticipado = "DescuentoPorPagoAnticipado";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T086; R14): el débito del recibo sin caja con que el desembolso de un crédito nuevo recoge facturas a crédito de Comercial (el
+    /// medio <c>InternalOffset</c>): no entra dinero, la contrapartida es el puente de la recogida propia de Cartera (<c>RecaudoPorAplicar</c> con la clase
+    /// <c>OwnLoanPayoff</c>), que el comprobante del desembolso acredita por la factura. Las dos reglas deben dar la misma cuenta: la completitud de la matriz de
+    /// Cartera lo avisa (la única excepción al «cuadra solo» de FR-027). Con el deudor de tercero y la factura de cruce. (nuevo)
+    /// </summary>
+    public const string RecogidaEnElDesembolso = "RecogidaEnElDesembolso";
 }
 
 /// <summary>

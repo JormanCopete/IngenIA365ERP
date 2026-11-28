@@ -7,7 +7,16 @@ namespace IngenIA365ERP.Domain.Enums.Core;
 public enum PaymentMeansClass
 {
     Cash = 1, CreditCard = 2, DebitCard = 3, AssociateCredit = 4, CustomerCredit = 5,
-    BankDeposit = 6, Transfer = 7, Voucher = 8, Check = 9, Other = 99,
+    BankDeposit = 6, Transfer = 7, Voucher = 8, Check = 9,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T086; R14): el cruce interno sin dinero con que el desembolso de un crédito nuevo recoge facturas a crédito de Comercial
+    /// (el recibo de Recaudo del canal <c>LoanDisbursement</c>). Mismo número que <c>ClaseDeMedioDeRecaudo.InternalOffset</c> del contrato. Su medio lo deja
+    /// la semilla y nunca se ofrece en la caja ni en el punto de venta. (nuevo)
+    /// </summary>
+    InternalOffset = 22,
+
+    Other = 99,
 }
 
 /// <summary>Cómo se arquea un medio al cerrar la caja.</summary>

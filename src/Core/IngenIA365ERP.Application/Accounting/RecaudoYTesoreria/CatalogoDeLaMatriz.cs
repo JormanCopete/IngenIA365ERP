@@ -96,6 +96,9 @@ public static class MatricesDeRecaudoYTesoreria
             R(RolesDeRecaudo.DescuentoPorPagoAnticipado, "Descuento por pago anticipado", Oficina),
             // R1 (fase 30): las cuentas por cobrar comerciales que se cobran en el recibo, con tercero y factura.
             R(RolesDeRecaudo.CuentasPorCobrarComerciales, "Cuentas por cobrar comerciales"),
+            // 2026-11-27 (feature 028, E4, T086): el débito del recibo sin caja con que el desembolso de un crédito nuevo recoge facturas; la cuenta es la del puente
+            // de la recogida propia de Cartera (RecaudoPorAplicar con OwnLoanPayoff): la completitud de Cartera avisa si no coinciden.
+            R(RolesDeRecaudo.RecogidaEnElDesembolso, "Recogida en el desembolso (el puente de la recogida propia de Cartera)"),
             // R2 (fase 38): la comisión de los convenios (de resultado), su IVA descontable y las retenciones a favor, por cuenta propia y con el aliado como tercero.
             Resultado(RolesDeRecaudoR2.ComisionesDeConvenio, "Comisiones de convenios de recaudo", CuentaPropia),
             R(RolesDeRecaudoR2.IvaDescontable, "IVA descontable de comisiones de convenios", CuentaPropia),
@@ -104,7 +107,7 @@ public static class MatricesDeRecaudoYTesoreria
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
-                RolesDeRecaudo.CuentasPorCobrarComerciales, RolesDeRecaudo.DescuentoPorPagoAnticipado),
+                RolesDeRecaudo.CuentasPorCobrarComerciales, RolesDeRecaudo.DescuentoPorPagoAnticipado, RolesDeRecaudo.RecogidaEnElDesembolso),
             H(ReciboDeBancoEmitidoV1.Type, "Recibo de banco", "RB", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.PartidasPorIdentificar, RolesDeRecaudo.ConceptoVario),
             H(ReciboDePagaduriaEmitidoV1.Type, "Recibo de pagaduría", "RB", [RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.PuenteDelModulo]),
@@ -126,7 +129,7 @@ public static class MatricesDeRecaudoYTesoreria
             H(ReciboAnuladoV1.Type, "Recibo anulado", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar, RolesDeRecaudo.ConceptoVario,
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.CuentasPorCobrarComerciales,
-                RolesDeRecaudo.DescuentoPorPagoAnticipado),
+                RolesDeRecaudo.DescuentoPorPagoAnticipado, RolesDeRecaudo.RecogidaEnElDesembolso),
             H(AplicacionReversadaPorModuloV1.Type, "Aplicación reversada por el módulo", "AR", [RolesDeRecaudo.PuenteDelModulo],
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar,
                 RolesDeRecaudo.DescuentoPorPagoAnticipado),

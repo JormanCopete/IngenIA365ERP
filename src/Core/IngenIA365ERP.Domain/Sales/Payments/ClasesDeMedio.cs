@@ -19,6 +19,12 @@ public static class ClasesDeMedio
     public static bool PuedeDarVueltas(PaymentMeansClass clase) => clase == PaymentMeansClass.Cash;
 
     /// <summary>
+    /// 2026-11-27 (feature 028, E4, T086): el cruce interno sin dinero (<see cref="PaymentMeansClass.InternalOffset"/>) es del sistema: su medio lo deja la
+    /// semilla, no se crea a mano y nunca se ofrece en la caja ni en el punto de venta. (nuevo)
+    /// </summary>
+    public static bool EsInterna(PaymentMeansClass clase) => clase == PaymentMeansClass.InternalOffset;
+
+    /// <summary>
     /// Cómo se arquea por defecto (FR-099): efectivo y cheques por conteo físico; tarjetas por total del lote; consignaciones,
     /// transferencias, bonos y otros por referencias; créditos sin arqueo.
     /// </summary>
@@ -26,7 +32,7 @@ public static class ClasesDeMedio
     {
         PaymentMeansClass.Cash or PaymentMeansClass.Check => CashCountMethod.PhysicalCount,
         PaymentMeansClass.CreditCard or PaymentMeansClass.DebitCard => CashCountMethod.VoucherTotal,
-        PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit => CashCountMethod.None,
+        PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit or PaymentMeansClass.InternalOffset => CashCountMethod.None,
         _ => CashCountMethod.ByReference,
     };
 }

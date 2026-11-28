@@ -162,6 +162,8 @@ public sealed class AplicacionNoInteractiva(
         ReceiptChannel.Agreement => ReceiptDocumentKind.AgreementReceipt,
         ReceiptChannel.Online => ReceiptDocumentKind.OnlineReceipt,
         ReceiptChannel.AdvanceCrossing => ReceiptDocumentKind.AdvanceCrossingReceipt,
+        // 2026-11-27 (feature 028, E4, T085): la recogida de facturas en el desembolso, con su propio consecutivo.
+        ReceiptChannel.LoanDisbursement => ReceiptDocumentKind.LoanDisbursementReceipt,
         _ => ReceiptDocumentKind.CashReceipt,
     };
 

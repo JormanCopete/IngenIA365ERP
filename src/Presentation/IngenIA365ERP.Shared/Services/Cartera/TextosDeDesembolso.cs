@@ -193,6 +193,10 @@ public static class TextosDeDesembolso
     public static string EstadoDeRecogida(RecogidaPropuestaDto recogida)
     {
         ArgumentNullException.ThrowIfNull(recogida);
+        // 2026-11-27 (feature 028, E4, T089): una factura se paga con un recibo sin caja; omitida, ya no tenía saldo.
+        if (recogida.Kind == "CommercialReceivable")
+            return recogida.Omitted ? "Sin saldo: no se recoge" : recogida.AboveTolerance ? "Pasa de la tolerancia"
+                : recogida.Mode == "Partial" ? "Se abona con un recibo sin caja" : "Se paga con un recibo sin caja";
         // 2026-11-27 (feature 028, E3, T081): una cuenta recibe una consignación; omitida, ya no tenía nada que recoger.
         if (recogida.Kind == "Account")
             return recogida.Omitted ? "Nada que recoger: no se consigna" : recogida.AboveTolerance ? "Pasa de la tolerancia" : "Se consigna";

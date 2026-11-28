@@ -66,7 +66,9 @@ public sealed record RecogidasPreparadas(IReadOnlyList<RecogidaPreparada> Recogi
 /// <para>Las reglas, en este orden, con su código (<c>Lending.Payoff.*</c>):</para>
 /// <list type="number">
 /// <item>en la entrega E1 sólo se recogían créditos; desde E3 (T078) también cuentas de aportes y ahorros, que valida <see cref="RecogidaDeCuentas.ValidarAsync"/>
-/// (del solicitante como <b>titular</b>, admitidas, en un modo que el producto y su línea admiten); las facturas llegan con E4: <c>ProductNotAdmitted</c>;</item>
+/// (del solicitante como <b>titular</b>, admitidas, en un modo que el producto y su línea admiten); desde E4 (T087) facturas a crédito de Comercial, que valida
+/// <see cref="RecogidaDeFacturas.Validar"/> (con saldo pendiente a nombre del solicitante —si no, <c>NotOfApplicant</c>—, admitidas, total o parcial, y Recaudo
+/// listo para emitir el recibo);</item>
 /// <item>el crédito existe y es del <b>solicitante como deudor</b>: si no, <c>NotOfApplicant</c> (también si es codeudor);</item>
 /// <item>la línea de la solicitud lo admite (<c>Recogida.ProductosAdmitidos</c>, <see cref="AdmisionDeRecogidaVigente"/>): <c>ProductNotAdmitted</c>; y en
 /// ese modo: <c>ModeNotAdmitted</c>;</item>
@@ -84,7 +86,8 @@ public sealed class RecogidasDeLaSolicitud(
     LiquidacionDeRecogida liquidacion,
     ReglasDeParametrosDeCartera parametros,
     IDateTimeService reloj,
-    RecogidaDeCuentas? cuentas = null)
+    RecogidaDeCuentas? cuentas = null,
+    RecogidaDeFacturas? facturas = null)
 {
     /// <summary>
     /// Las recogidas que pide el cuerpo de la solicitud, validadas y proyectadas. Sin recogidas, <see cref="RecogidasPreparadas.Ninguna"/>: así se quitan
@@ -159,14 +162,19 @@ public sealed class RecogidasDeLaSolicitud(
     private async Task<Result<RecogidasPreparadas>> ProyectarAsync(IReadOnlyList<PayoffInput> pedidas, int solicitanteId, int lineaId, decimal monto,
         DateOnly d, DateTime? r, bool estricto, CancellationToken ct)
     {
-        // 2026-11-27 (feature 028, E3, T078): las cuentas de aportes y ahorros se recogen desde E3; las facturas, con E4.
-        if (pedidas.FirstOrDefault(p => p.Kind == PayoffProductKind.CommercialReceivable || p.Kind == PayoffProductKind.Account && cuentas is null) is { } otro)
+        // 2026-11-27 (feature 028, E3, T078; E4, T087): las cuentas de aportes y ahorros se recogen desde E3; las facturas, desde E4.
+        if (pedidas.FirstOrDefault(p => p.Kind == PayoffProductKind.CommercialReceivable && facturas is null || p.Kind == PayoffProductKind.Account && cuentas is null)
+            is { } otro)
             return Falla(ErroresDeRecogida.ClaseNoAdmitida(otro.Kind));
-        var repetido = pedidas.GroupBy(p => (p.Kind, p.ProductPublicId)).FirstOrDefault(g => g.Count() > 1);
+        var repetido = pedidas.GroupBy(p => (p.Kind, p.Kind == PayoffProductKind.CommercialReceivable ? p.Reference?.Trim() : p.ProductPublicId?.ToString("N")))
+            .FirstOrDefault(g => g.Count() > 1);
         if (repetido is not null)
-            return Falla(ErroresDeLineasDeCredito.Invalido("payoffs", repetido.Key.Kind == PayoffProductKind.Account
-                ? "Una cuenta está dos veces entre las que recoge la solicitud: déjela una sola vez."
-                : "Un crédito está dos veces entre los que recoge la solicitud: déjelo una sola vez."));
+            return Falla(ErroresDeLineasDeCredito.Invalido("payoffs", repetido.Key.Kind switch
+            {
+                PayoffProductKind.Account => "Una cuenta está dos veces entre las que recoge la solicitud: déjela una sola vez.",
+                PayoffProductKind.CommercialReceivable => "Una factura está dos veces entre las que recoge la solicitud: déjela una sola vez.",
+                _ => "Un crédito está dos veces entre los que recoge la solicitud: déjelo una sola vez.",
+            }));
 
         var publicos = pedidas.Where(p => p.Kind == PayoffProductKind.Loan).Select(p => p.ProductPublicId).OfType<Guid>().ToList();
         var creditos = await db.Loans.AsNoTracking().Where(l => publicos.Contains(l.PublicId) && !l.IsDeleted).ToDictionaryAsync(l => l.PublicId, ct);
@@ -179,8 +187,23 @@ public sealed class RecogidasDeLaSolicitud(
 
         var preparadas = new List<RecogidaPreparada>(pedidas.Count);
         DateTime? informacion = r;
+        FacturasRecogibles? deFacturas = null;
         foreach (var p in pedidas)
         {
+            if (p.Kind == PayoffProductKind.CommercialReceivable)
+            {
+                // 2026-11-27 (feature 028, E4, T087; HU7): la factura con saldo pendiente a nombre del solicitante (por el puerto de Recaudo), admitida por la línea
+                // del crédito nuevo, total o parcial, y con Recaudo listo para emitir el recibo de la recogida. Lo proyectado va a capital: lo pendiente o el parcial.
+                deFacturas ??= await facturas!.LeerAsync(await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == solicitanteId)
+                    .Select(x => x.PublicId).FirstOrDefaultAsync(ct), ct);
+                if (deFacturas.Buscar(p.Reference) is not { } factura) return Falla(ErroresDeRecogida.FacturaSinSaldo(p.Reference?.Trim() ?? string.Empty, nombre));
+                if (RecogidaDeFacturas.Validar(factura, p.Mode, p.Amount, admision, deFacturas.SinRecibo) is { } noSeRecoge) return Falla(noSeRecoge);
+                var deLaFactura = new ProyeccionDeRecogida(d, r ?? reloj.UtcNow, new DesgloseDeRecogida(Capital: factura.Valor(p.Mode, p.Amount)),
+                    factura.Huella(d, p.Mode, p.Amount));
+                preparadas.Add(new RecogidaPreparada(ProductoRecogido.Factura(factura.Numero, factura.Numero), p.Mode,
+                    p.Mode == PayoffMode.Partial ? p.Amount : null, deLaFactura));
+                continue;
+            }
             if (p.Kind == PayoffProductKind.Account)
             {
                 // 2026-11-27 (feature 028, E3, T078; HU6): la cuenta es del solicitante como titular; lo demás (admitida, modo, abono, cuotas, reparto) lo dice

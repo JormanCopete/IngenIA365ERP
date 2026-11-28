@@ -67,9 +67,15 @@ public sealed partial class EmisionDeRecaudo
             var dimDebito = RolDelMedio(medio.MeansClass) == RolesDeRecaudo.BancoRecaudo && medio.OwnBankAccountPublicId is { } cuenta
                 ? dimMedio with { OwnBankAccountPublicId = cuenta }
                 : dimMedio;
-            lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dimDebito, adquirentes.GetValueOrDefault(medio.PaymentMeansId),
-                cruce: recibo.Number));
             var tercero = publicos.GetValueOrDefault(aplicacion.BeneficiaryPersonId);
+            // 2026-11-27 (feature 028, E4, T086): el cruce interno de la recogida en el desembolso debita el puente con el deudor de tercero y la factura de cruce,
+            // como el comprobante del desembolso lo acredita: así el puente salda por tercero y documento.
+            if (medio.MeansClass == PaymentMeansClass.InternalOffset)
+                lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dimDebito, tercero,
+                    aplicacion.CrossDocumentReference ?? aplicacion.ProductNumber ?? recibo.Number));
+            else
+                lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dimDebito, adquirentes.GetValueOrDefault(medio.PaymentMeansId),
+                    cruce: recibo.Number));
             if (aplicacion.Target == ApplicationTarget.MiscConcept)
                 lineas.Add(Linea(RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.Credito, p.Amount,
                     dimMedio with { MiscConceptCode = codigos.GetValueOrDefault(aplicacion.MiscConceptId!.Value) }, tercero, aplicacion.CrossDocumentReference ?? recibo.Number));

@@ -146,14 +146,14 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 ## Fase 11 — HU7: facturas a crédito de Comercial (P3, E4)
 
-- [ ] T084 [US7] Exploración: `AplicacionNoInteractiva` dentro de la transacción explícita del desembolso (cerrojos, numeración); si no sirve, detener E4 y consultar al dueño; anotar en `research.md` R14
-- [ ] T085 [US7] Puerto `IRecogidaEnRecaudo` en `App/Common/Integration/Receipts/IRecogidaEnRecaudo.cs` e implementación en `App/Receipts/Integration/RecogidaEnRecaudo.cs` (canal `LoanDisbursement`, recibo sin caja, `ReciboEmitido`); regla de arquitectura de métodos del puerto
-- [ ] T086 [US7] Clase de medio `InternalOffset` en `Dom/Enums/Core/PaymentEnums.cs` y su semilla; regla de Recaudo para su rol
-- [ ] T087 [US7] Saldo de facturas por el puerto en `GetPayoffCandidatesQuery`; aplicación y anulación desde el desembolso
-- [ ] T088 [US7] Aviso de completitud cruzada (el rol del medio en Recaudo y el puente de Cartera a la misma cuenta) en `GetLendingRulesCompletenessQuery`
-- [ ] T089 [US7] Las facturas en `ProductosParaRecoger.razor` y `Desembolsos.razor`
-- [ ] T090 [P] [US7] Pruebas: recibo, factura en cero, cargo de Transporte pagado, falla de Recaudo aborta el desembolso, en `TA/Lending/Payoffs/RecogidaDeFacturasTests.cs`
-- [ ] T091 Puerta de E4: build y suites verdes; commit
+- [X] T084 [US7] Exploración: `AplicacionNoInteractiva` dentro de la transacción explícita del desembolso (cerrojos, numeración); si no sirve, detener E4 y consultar al dueño; anotar en `research.md` R14 — sirve con los cerrojos de Recaudo antes que los de Cartera y una clase de documento propia (E-16)
+- [X] T085 [US7] Puerto `IRecogidaEnRecaudo` en `App/Common/Integration/Receipts/IRecogidaEnRecaudo.cs` e implementación en `App/Receipts/Integration/RecogidaEnRecaudo.cs` (canal `LoanDisbursement`, recibo sin caja, `ReciboEmitido`); regla de arquitectura de métodos del puerto — cuatro métodos, con `TomarCerrojosAsync` (E-16)
+- [X] T086 [US7] Clase de medio `InternalOffset` en `Dom/Enums/Core/PaymentEnums.cs` y su semilla; regla de Recaudo para su rol — medio `RECOGIDA` en `DefaultPaymentMeansSeeder`, rol `RecogidaEnElDesembolso`
+- [X] T087 [US7] Saldo de facturas por el puerto en `GetPayoffCandidatesQuery`; aplicación y anulación desde el desembolso — `Lending/Payoffs/RecogidaDeFacturas`; también la solicitud (`RecogidasDeLaSolicitud`) y la vista previa
+- [X] T088 [US7] Aviso de completitud cruzada (el rol del medio en Recaudo y el puente de Cartera a la misma cuenta) en `GetLendingRulesCompletenessQuery` — y el DS acredita el puente por la factura (sin `PayoffKindNotSupported`)
+- [X] T089 [US7] Las facturas en `ProductosParaRecoger.razor` y `Desembolsos.razor` — también `DetalleDeRecogida`, `RecogidasDelDesembolso`, `LoQueRecoge` (genérico) y los textos de Recaudo y medios
+- [X] T090 [P] [US7] Pruebas: recibo, factura en cero, cargo de Transporte pagado, falla de Recaudo aborta el desembolso, en `TA/Lending/Payoffs/RecogidaDeFacturasTests.cs`
+- [X] T091 Puerta de E4: build y suites verdes; commit
 
 ## Fase 12 — Cierre
 

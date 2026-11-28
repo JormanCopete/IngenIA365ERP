@@ -76,14 +76,18 @@ public sealed class GetPayoffCandidatesQueryValidator : AbstractValidator<GetPay
             .WithMessage($"Se marcan a lo sumo {GetPayoffCandidatesQueryHandler.MaximoDeMarcados} productos.");
         RuleFor(x => x.Selected).Must(s => s is null || s.Where(p => p?.ProductPublicId is not null).GroupBy(p => (p.Kind, p.ProductPublicId)).All(g => g.Count() == 1))
             .WithMessage("Un producto está marcado dos veces.");
+        // 2026-11-27 (feature 028, E4, T087): una factura se nombra por su número.
+        RuleFor(x => x.Selected).Must(s => s is null || s.Where(p => p is { Kind: PayoffProductKind.CommercialReceivable } && !string.IsNullOrWhiteSpace(p.Reference))
+                .GroupBy(p => p.Reference!.Trim(), StringComparer.Ordinal).All(g => g.Count() == 1))
+            .WithMessage("Una factura está marcada dos veces.");
         RuleForEach(x => x.Selected).ChildRules(p =>
         {
-            // 2026-11-27 (feature 028, E3, T078): también cuentas de aportes y ahorros, por cuotas o como abono; las facturas llegan con E4.
-            p.RuleFor(x => x.Kind).Must(k => k is PayoffProductKind.Loan or PayoffProductKind.Account)
-                .WithMessage("Por ahora se recogen créditos y cuentas de aportes y ahorros: las facturas llegan en otra entrega.");
-            p.RuleFor(x => x.ProductPublicId).NotEmpty().WithMessage("Indique el producto marcado.");
-            p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).When(x => x.Kind == PayoffProductKind.Loan)
-                .WithMessage("Un crédito se recoge total o parcial.");
+            // 2026-11-27 (feature 028, E3, T078; E4, T087): créditos, cuentas de aportes y ahorros (por cuotas o como abono) y facturas a crédito de Comercial.
+            p.RuleFor(x => x.Kind).IsInEnum();
+            p.RuleFor(x => x.ProductPublicId).NotEmpty().When(x => x.Kind != PayoffProductKind.CommercialReceivable).WithMessage("Indique el producto marcado.");
+            p.RuleFor(x => x.Reference).NotEmpty().When(x => x.Kind == PayoffProductKind.CommercialReceivable).WithMessage("Indique el número de la factura marcada.");
+            p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).When(x => x.Kind is PayoffProductKind.Loan or PayoffProductKind.CommercialReceivable)
+                .WithMessage("Un crédito o una factura se recoge total o parcial.");
             p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Installments or PayoffMode.Deposit).When(x => x.Kind == PayoffProductKind.Account)
                 .WithMessage("Una cuenta se recoge por sus cuotas pendientes o con un abono.");
             p.RuleFor(x => x.Amount).NotNull().GreaterThan(0m).When(x => x.Mode is PayoffMode.Partial or PayoffMode.Deposit)
@@ -107,7 +111,8 @@ public sealed class GetPayoffCandidatesQueryHandler(
     IDateTimeService reloj,
     IBlobStore store,
     IAttachmentCipher? cifrado = null,
-    RecogidaDeCuentas? cuentas = null) : IRequestHandler<GetPayoffCandidatesQuery, Result<PayoffCandidatesDto>>
+    RecogidaDeCuentas? cuentas = null,
+    RecogidaDeFacturas? facturas = null) : IRequestHandler<GetPayoffCandidatesQuery, Result<PayoffCandidatesDto>>
 {
     public const int MaximoDeMarcados = 50;
 
@@ -176,6 +181,8 @@ public sealed class GetPayoffCandidatesQueryHandler(
         // 2026-11-27 (feature 028, E3, T078; HU6): las cuentas vivas del titular (aportes y ahorros, nunca el CDAT), con sus cuotas pendientes a D; de fábrica
         // se ven sin poder marcarse («la cooperativa no los recoge»).
         productos.AddRange(await CuentasAsync(request.PersonPublicId, d, admision, ct));
+        // 2026-11-27 (feature 028, E4, T087; HU7): las facturas a crédito de Comercial pendientes (por el puerto de Recaudo); de fábrica se ven sin poder marcarse.
+        productos.AddRange(await FacturasAsync(request.PersonPublicId, d, admision, ct));
 
         var resumen = Resumen(request, productos, persona.Nombre);
         if (resumen.IsFailure) return Result.Failure<PayoffCandidatesDto>(resumen.Error);
@@ -277,6 +284,37 @@ public sealed class GetPayoffCandidatesQueryHandler(
     }
 
     /// <summary>
+    /// 2026-11-27 (feature 028, E4, T087; HU7, FR-001, FR-002): las facturas a crédito de Comercial pendientes de la persona —lo que informa Contabilidad menos lo
+    /// que ya cobró Recaudo, por el puerto de Recaudo (Cartera no lee ninguno de los dos)—, con su número, su fecha, lo pendiente, los modos que admite la línea del
+    /// crédito nuevo (<c>FacturasComerciales</c>, total o parcial) y, si no se puede marcar, por qué: de fábrica, «la cooperativa no las recoge»; o Recaudo sin el
+    /// tipo de documento o el medio de la recogida. Ver saldos de la persona queda en la auditoría.
+    /// </summary>
+    private async Task<IReadOnlyList<PayoffCandidateDto>> FacturasAsync(Guid persona, DateOnly d, AdmisionDeRecogida admision, CancellationToken ct)
+    {
+        if (facturas is null) return [];
+        var leidas = await facturas.LeerAsync(persona, ct);
+        if (leidas.Facturas.Count == 0) return [];
+        var resultado = new List<PayoffCandidateDto>(leidas.Facturas.Count);
+        foreach (var f in leidas.Facturas)
+        {
+            var modos = f.Admitidos(admision);
+            var bloqueo = !admision.Admite(ProductoDeRecogida.FacturasComerciales) ? ErroresDeRecogida.FacturaNoAdmitida(f.Numero)
+                : leidas.SinRecibo is { } sinRecibo ? ErroresDeRecogida.RecaudoSinConfigurar(f.Numero, sinRecibo)
+                : null;
+            resultado.Add(new PayoffCandidateDto(PayoffProductKind.CommercialReceivable, f.Identificador, f.Numero, $"Factura a crédito del {f.Fecha:dd/MM/yyyy}", null,
+                null, 0, null, bloqueo is null, bloqueo?.Motivo, modos, f.Pendiente, PayoffBreakdownDto.De(new DesgloseDeRecogida(Capital: f.Pendiente)), null, null, null,
+                null, null, f.Huella(d), [])
+            {
+                BlockMessage = bloqueo?.Mensaje,
+                Reference = f.Numero,
+                InvoiceDate = f.Fecha,
+            });
+        }
+        await auditoria.EmitirSaldosDePersonaVistosAsync(persona, "payoff-candidates-invoices", new { invoices = resultado.Count, date = d }, ct);
+        return resultado;
+    }
+
+    /// <summary>
     /// 2026-11-27 (feature 028, E2, T066; api.md §1 <c>currentInstallment</c>): la cuota causada como la ve el asesor: con el tratamiento que rige, si la elige,
     /// la enviada, lo que deja debiendo si se deja y qué pasa con ella en cada caso. Sin cuota causada ni dejada, nula. Lo usa también la vista previa del
     /// desembolso. (nuevo)
@@ -317,20 +355,40 @@ public sealed class GetPayoffCandidatesQueryHandler(
         var contados = 0;
         foreach (var marcado in request.Selected ?? [])
         {
-            var i = productos.FindIndex(p => p.Kind == marcado.Kind && p.ProductPublicId == marcado.ProductPublicId);
+            // 2026-11-27 (feature 028, E4, T087): una factura se busca por su número.
+            var i = marcado.Kind == PayoffProductKind.CommercialReceivable
+                ? productos.FindIndex(p => p.Kind == marcado.Kind && string.Equals(p.Reference, marcado.Reference?.Trim(), StringComparison.Ordinal))
+                : productos.FindIndex(p => p.Kind == marcado.Kind && p.ProductPublicId == marcado.ProductPublicId);
             if (i < 0) return Result.Failure<(IReadOnlyList<PayoffCandidateDto>, PayoffSummaryDto)>(ErroresDeRecogida.NoEsDelSolicitante(persona));
             var p = productos[i];
-            var nombre = p.Kind == PayoffProductKind.Account ? $"La cuenta {p.Number}" : $"El crédito {p.Number}";
+            var femenino = p.Kind is PayoffProductKind.Account or PayoffProductKind.CommercialReceivable;
+            var nombre = p.Kind switch
+            {
+                PayoffProductKind.Account => $"La cuenta {p.Number}",
+                PayoffProductKind.CommercialReceivable => $"La factura {p.Number}",
+                _ => $"El crédito {p.Number}",
+            };
             if (!p.Eligible)
             {
-                avisos.Add($"{nombre} está {(p.Kind == PayoffProductKind.Account ? "marcada" : "marcado")} pero no se puede recoger: {p.BlockMessage}");
+                avisos.Add($"{nombre} está {(femenino ? "marcada" : "marcado")} pero no se puede recoger: {p.BlockMessage}");
                 continue;
             }
             if (!p.AdmittedModes.Contains(marcado.Mode))
             {
-                avisos.Add(p.Kind == PayoffProductKind.Account
+                avisos.Add(femenino
                     ? $"{nombre} está marcada {TextoDelModo(marcado.Mode)}, pero no admite recogerla así."
                     : $"{nombre} está marcado {TextoDelModo(marcado.Mode)}, pero la línea del crédito nuevo no admite recogerlo así.");
+                continue;
+            }
+            if (p.Kind == PayoffProductKind.CommercialReceivable)
+            {
+                // 2026-11-27 (feature 028, E4, T087): una factura, total (lo pendiente) o parcial (topado en lo pendiente); no libera cuotas de crédito.
+                var deLaFactura = marcado.Mode == PayoffMode.Total ? p.ToPayOff : Math.Min(marcado.Amount ?? 0m, p.ToPayOff);
+                if (marcado.Mode == PayoffMode.Partial && marcado.Amount > p.ToPayOff)
+                    avisos.Add($"El valor parcial de la factura {p.Number} pasa de lo pendiente: se toma {Pesos(p.ToPayOff)}.");
+                total += deLaFactura;
+                contados++;
+                productos[i] = p with { Selected = true, SelectedMode = marcado.Mode, SelectedAmount = deLaFactura };
                 continue;
             }
             if (p.Kind == PayoffProductKind.Account)

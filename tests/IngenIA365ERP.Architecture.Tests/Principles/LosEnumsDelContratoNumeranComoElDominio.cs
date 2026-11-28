@@ -60,7 +60,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
     /// <summary>
     /// <c>ClaseDeMedioDeRecaudo</c> son los valores de <c>PaymentMeansClass</c> de la 012 (mismo nombre y número) más los tres de
     /// Cartera con números fijados: <c>OwnPayrollDeduction = 20</c>, <c>ExternalPaymasterDeduction = 21</c>, <c>InternalOffset = 22</c>
-    /// (data-model §9.4 rige sobre interfaces.md §3.1).
+    /// (data-model §9.4 rige sobre interfaces.md §3.1). 2026-11-27 (feature 028, E4, T086): <c>InternalOffset = 22</c> pasó también a <c>PaymentMeansClass</c> (el
+    /// medio del cruce interno con que el desembolso recoge facturas), con el mismo número: el contrato tiene dos más que el comercio.
     /// </summary>
     [Fact]
     public void La_clase_de_medio_de_recaudo_es_la_de_la_012_mas_las_tres_de_Cartera()
@@ -74,7 +75,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
         Assert.Equal(20, puerto["OwnPayrollDeduction"]);
         Assert.Equal(21, puerto["ExternalPaymasterDeduction"]);
         Assert.Equal(22, puerto["InternalOffset"]);
-        Assert.Equal(comercio.Count + 3, puerto.Count);
+        Assert.Equal(22, comercio["InternalOffset"]);
+        Assert.Equal(comercio.Count + 2, puerto.Count);
     }
 
     /// <summary>
