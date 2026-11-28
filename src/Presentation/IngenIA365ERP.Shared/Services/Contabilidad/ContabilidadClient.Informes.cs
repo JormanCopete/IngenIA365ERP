@@ -20,6 +20,10 @@ public sealed partial class ContabilidadClient
     {
         public const string LibroAuxiliar = "ledger";
         public const string BalanceDePrueba = "trial-balance";
+        /// <summary>2026-11-27: el balance de prueba con cada auxiliar abierto en plano por tercero, documento cruce y centro de costo.</summary>
+        public const string BalanceDePruebaDetallado = "trial-balance-detailed";
+        /// <summary>2026-11-27: los saldos de una cuenta (o rango) con el mismo detalle; la cuenta es obligatoria.</summary>
+        public const string SaldosPorCuenta = "account-balances";
         public const string LibroDiario = "journal";
         public const string LibroMayor = "general-ledger";
         public const string RelacionDeComprobantes = "voucher-list";
