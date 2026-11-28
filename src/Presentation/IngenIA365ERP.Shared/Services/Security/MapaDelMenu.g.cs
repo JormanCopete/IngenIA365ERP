@@ -277,6 +277,7 @@ public static partial class MapaDelMenu
         new("Transporte", null, "Informes", "/transporte/informes", ["Transport.Vehicles.View"], ["Transport.Vehicles.View"], ["Transport.Vehicles.Export"]),
         new("Transporte", null, "Plantillas", "/transporte/plantillas", ["Transport.Vehicles.View"], [], []),
         new("Asociados", null, "Registro", "/asociados/registro", ["Core.Associates.View"], [], ["Core.Associates.Create", "Core.Associates.Update", "Core.People.Update", "Core.People.Delete"]),
+        new("Asociados", null, "Listado de asociados", "/cartera/informes?vista=associates", ["Lending.Reports.View", "Lending.Loans.Read"], ["Lending.Reports.View"], ["Lending.Reports.Export"]),
         new("Maestros Core", null, "Personas", "/maestros/personas", ["Core.People.View"], [], ["Core.People.Create", "Core.People.Update", "Core.PersonBankAccounts.View", "Core.People.Delete"]),
         new("Maestros Core", null, "Cuentas bancarias por aprobar", "/maestros/cuentas-bancarias-por-aprobar", ["Core.PersonBankAccounts.Approve"], ["Core.PersonBankAccounts.Approve"], []),
         new("Maestros Core", null, "Agencias", "/maestros/agencias", [], [], ["Core.Branches.Manage"]),
