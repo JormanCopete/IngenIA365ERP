@@ -157,6 +157,13 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(Application.Lending.PersonStatement.PersonStatementReportQueryHandler.Vista,
             (f, q) => new Application.Lending.PersonStatement.PersonStatementReportQuery(f, Id(q, "person"), Texto(q, "columns"),
                 string.Equals(Texto(q, "includeClosed"), "true", StringComparison.OrdinalIgnoreCase)));
+        // 2026-11-27 (pedido del dueño, implantación): el resumen de saldos por línea (que abre su detalle), el detalle por crédito, las cuotas
+        // pendientes (status), el listado de asociados (status) y el cuadre de Cartera con Contabilidad, todos exportables.
+        group.MapVistaDeCartera(PortfolioSummaryReportQueryHandler.Vista, (f, _) => new PortfolioSummaryReportQuery(f));
+        group.MapVistaDeCartera(PortfolioDetailReportQueryHandler.Vista, (f, _) => new PortfolioDetailReportQuery(f));
+        group.MapVistaDeCartera(PendingInstallmentsReportQueryHandler.Vista, (f, q) => new PendingInstallmentsReportQuery(f, Texto(q, "status")));
+        group.MapVistaDeCartera(AssociatesReportQueryHandler.Vista, (f, q) => new AssociatesReportQuery(f, Texto(q, "status")));
+        group.MapVistaDeCartera(AccountingReconciliationReportQueryHandler.Vista, (f, _) => new AccountingReconciliationReportQuery(f));
         foreach (var vista in Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQueryHandler.Todas)
             group.MapVistaDeCartera(vista,
                 (f, q) => new Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQuery(f, vista.Key, Entero(q, "year"), Entero(q, "month")));

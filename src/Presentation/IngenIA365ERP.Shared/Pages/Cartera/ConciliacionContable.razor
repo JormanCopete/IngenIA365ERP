@@ -31,6 +31,10 @@
             <PermissionGate Required="Lending.Messages.Read">
                 <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Hechos</SfButton>
             </PermissionGate>
+            @* 2026-11-27: la misma conciliación como informe, con los hechos que no han pasado y los saldos sin regla, para exportarla a Excel. *@
+            <PermissionGate Required="Lending.Reconciliation.View">
+                <a class="e-btn e-outline" href="@($"/cartera/informes?vista=accounting-reconciliation&asOf={_fecha:yyyy-MM-dd}")">Ver como informe y exportar a Excel</a>
+            </PermissionGate>
         </div>
     </div>
 
