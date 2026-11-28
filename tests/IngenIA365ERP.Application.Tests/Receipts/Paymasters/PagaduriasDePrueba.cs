@@ -126,7 +126,7 @@ internal sealed class PagaduriasDePrueba
 
     public RefreshPaymasterResponseStatusCommandHandler Evaluacion() => new(B.K.C.E.Db, B.K.C.E.Alcance, B.K.C.Cerrojo, B.Auditoria);
 
-    public GirosDePagaduria Giros => new(B.K.C.E.Db, B.K.C.Cerrojo, B.Aplicacion, B.Auditoria, B.K.C.E.Alertas, B.K.C.E.Reloj);
+    public GirosDePagaduria Giros => new(B.K.C.E.Db, B.K.C.Cerrojo, B.Aplicacion, B.Auditoria, B.K.C.E.Alertas, B.K.C.E.Reloj, B.Emision, B.K.Obligaciones);
 
     public RegisterPaymasterRemittanceCommandHandler RegistrarGiro() =>
         new(B.K.C.E.Db, B.K.C.E.Alcance, B.K.C.E.Actor, B.Movimientos, B.K.C.Cerrojo, B.K.C.Numerador, B.Emision, B.Auditoria, B.K.C.E.Reloj);

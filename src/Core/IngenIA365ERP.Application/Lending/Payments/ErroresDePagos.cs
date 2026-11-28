@@ -97,6 +97,22 @@ public static class ErroresDePagos
         $"La obligación {numero} ya no recibe pagos (está {estado}). Aplique el pago a otra obligación; un saldo a favor se resuelve aparte.",
         new { obligationNumber = numero, status = estado });
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069; R7, FR-022): el mismo rechazo para un crédito que recogió el desembolso de otro: dice cuál y qué pasa con lo que gire su
+    /// pagaduría; en <c>data</c>, además, el sucesor y la regla de <c>Recogida.GiroPosteriorDeCreditoRecogido</c> (<see cref="GiroPosteriorDeCreditoRecogido"/>).
+    /// (nuevo)
+    /// </summary>
+    public static Error NoPagableRecogido(string numero, string estado, Guid sucesor, string numeroDelSucesor, DateOnly desde, string regla) =>
+        new ErrorConDatos(CodigoNoPagable,
+            $"La obligación {numero} ya no recibe pagos: la recogió el crédito {numeroDelSucesor}. Lo que gire su pagaduría por ella "
+            + regla switch
+            {
+                GiroPosteriorDeCreditoRecogido.AlCreditoNuevo => $"se aplica al crédito {numeroDelSucesor}.",
+                GiroPosteriorDeCreditoRecogido.AFavorDelAsociado => "queda como saldo a favor del asociado.",
+                _ => "queda como saldo de la pagaduría.",
+            },
+            GiroPosteriorDeCreditoRecogido.Datos(numero, estado, sucesor, numeroDelSucesor, desde, regla));
+
     public static Error FechaValorFueraDeRango(DateOnly fecha, DateOnly minima, DateOnly maxima, int dias) => new ErrorConDatos(CodigoFechaValorFueraDeRango,
         $"La fecha valor {Fecha(fecha)} está fuera de lo permitido: hasta {dias} días antes de hoy y nunca futura.",
         new { valueDate = fecha, minDate = minima, maxDate = maxima });

@@ -876,6 +876,9 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payoffs.LiquidacionDeRecogida>();
         // 2026-11-27 (feature 028, T023): la recogida que pide una solicitud (validar, proyectar y guardar sus filas al crear, corregir y radicar).
         services.AddScoped<Lending.Payoffs.RecogidasDeLaSolicitud>();
+        // 2026-11-27 (feature 028, E2, T069, T070): quién recogió un crédito ya cancelado (para lo que gire su pagaduría) y el seguimiento de la cuota dejada.
+        services.AddScoped<Lending.Payoffs.SucesorDeCreditoRecogido>();
+        services.AddScoped<Lending.Payoffs.SeguimientoDeCuotaDejada>();
         services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();
         services.AddScoped<Lending.Accrual.ReajusteDeTasa>();
         services.AddScoped<Lending.Ledger.VerificacionDelLibro>();

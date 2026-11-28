@@ -50,6 +50,33 @@ public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number
 
     /// <summary>La cuota del ciclo está reconocida al inicio de su ciclo.</summary>
     public bool CuotaReconocida => RecognizedPending > 0m;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023): la cuota del período que ya va en un archivo de la pagaduría o en la nómina propia —en qué va, la cuota, el
+    /// archivo y la frase que lo dice—; nula si no hay nada enviado.
+    /// </summary>
+    public CuotaEnviadaDeLaCajaDto? SentInstallment { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071; D4): lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> para la línea del crédito (<c>Incluir</c>, <c>Excluir</c>, <c>Preguntar</c>).</summary>
+    public string? SentInstallmentAtPayoff { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071): lo que cuesta cancelar todo menos la cuota enviada; nulo si no se puede dejar.</summary>
+    public decimal? PayoffExceptSentInstallmentAmount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071): lo que la cuota enviada queda debiendo a su canal si se deja.</summary>
+    public decimal? SentInstallmentLeftAmount { get; init; }
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, E2, T071; FR-021, FR-023): la cuota del período de un crédito que ya salió a su canal, como la dice el contrato de obligaciones:
+/// en qué va (<see cref="State"/>: 1 enviada sin respuesta, 2 descontada pendiente de giro, 3 no descontada, 4 a 6 en la nómina propia), la cuota, la
+/// pagaduría, el archivo, el período, los valores de la línea y la frase que lo explica.
+/// </summary>
+public sealed record CuotaEnviadaDeLaCajaDto(int State, int? InstallmentNumber, DateOnly? DueDate, string? Paymaster, string? Agreement, string? File,
+    string? Period, decimal? CurrentAmount, decimal? PastDueAmount, decimal? TotalAmount, Guid? PayrollRunPublicId, string Explanation)
+{
+    /// <summary>Va en la nómina propia (novedad generada, corrida calculada o aprobada); si no, en un archivo de la pagaduría.</summary>
+    public bool EnNominaPropia => State is 4 or 5 or 6;
 }
 
 /// <summary>
@@ -368,6 +395,7 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         5 => "Abono extraordinario a capital",
         6 => "Cuota específica",
         7 => "Valor libre",
+        8 => "Todo menos la cuota enviada",
         _ => "—",
     };
 
@@ -390,6 +418,8 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
              + "queda como anticipo de esa cuota.",
         7 => "Valor libre: paga lo vencido por la prelación y el resto queda como anticipo general (como «Anticipo»). Úsela cuando el asociado trae un "
              + "valor que no corresponde a una cuota.",
+        8 => "Todo menos la cuota enviada: cancela todo lo que debe el crédito salvo la cuota del período que ya va en el archivo de la pagaduría o en la "
+             + "nómina; esa cuota queda en el crédito tal como se envió y la paga su canal. Úsela para no cobrarle al asociado una cuota que ya le van a descontar.",
         _ => "Cómo se aplica el pago al crédito: elija la modalidad y pase el cursor sobre ella para ver cómo funciona.",
     };
 }

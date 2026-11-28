@@ -558,4 +558,48 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   el detalle del crédito dice «Cuota dejada a la pagaduría/nómina: cuota N por $X» mientras no esté pagada. El informe `payoffs` dice «Dejada a su canal: cuota
   N por $X».
 - **Pendiente o dudoso**: la pregunta abierta al dueño sobre el interés de la cuota dejada dentro del tope legal del prepago (no se tocó el motor); T067–T071 y la
-  parte de la caja de T072 son de otro bloque.
+  parte de la caja de T072 quedaron en E-13.
+
+### E-13 — Libranza con crédito cerrado, giro posterior, cuota dejada y caja (T067–T074, parte de caja de T072, 2026-11-27)
+- **Crédito cerrado** es cancelado, anulado o novado (`PendientesDeGiro.CreditoCerrado`, lo mismo que el contrato no deja pagar); el **castigado no**: sigue
+  recibiendo pagos (recuperación) y su descuento se trata como siempre. `ConsumoDeLibranza` lee el estado ya bajo el cerrojo y sella `LoanClosedAtResult`; ese
+  resultado no deja no descontado, ni regla del convenio, ni aviso al deudor, ni cuenta para la alerta `Cartera.NoAplicadoDePagaduria` del archivo.
+- **`PendientesDeGiro.Consulta` mira el estado del crédito al consultar**, no sólo la marca (subconsulta por la llave del crédito: barata). Así salen también los
+  resultados de antes de la columna, y si el crédito se reabre (se anula el crédito nuevo y se reversa la recogida) su pendiente vuelve. La marca queda para
+  decir «descuento de un crédito cancelado»: el cuadre `payroll-deduction-reconciliation` lo pone en el motivo y deja el pendiente de giro en cero. Por la
+  consulta salen también la referencia que exige el contrato, la tarea de giros atrasados (alerta y aviso al deudor), la consulta del convenio, el informe de
+  pagadurías y la proyección a centrales. `CargadorDeReconstruccion.PendientesDeGiroAsync` no se tocó (el brief lo prohíbe y no hace falta): un crédito
+  cancelado no tiene cuota que cubrir, así que el pendiente no cambia su mora.
+- **El rechazo con sucesor**: `SucesorDeCreditoRecogido` (Lending/Payoffs) toma el último vínculo de recogida total no reversado de un crédito `PaidOff`
+  (`VinculosDeRecogida`: fila `LND_DisbursementPayoffs` o pago `CAR` anterior a la 028) y `Recogida.GiroPosteriorDeCreditoRecogido` (general, a hoy).
+  `ErroresDePagos.NoPagableRecogido` lleva en `data` `successorObligationPublicId`, `successorObligationNumber`, `successorFrom` (fecha valor del desembolso
+  nuevo) y `afterPayoff`, además de lo de siempre. Las claves, los valores y el lector viven en el contrato (`Common/Integration/Lending/RecogidaEnElContrato.cs`,
+  `GiroPosteriorDeCreditoRecogido.Leer`): Recaudo no lee parámetros ni enums de Cartera. `AplicacionDePagos.NoPagableAsync` arma el rechazo en la aplicación y
+  en la simulación del contrato. Un crédito cancelado de otra forma, anulado o novado recibe el rechazo de siempre.
+- **Recaudo** (`GirosDePagaduria`): `ResultadoNoInteractivo` y `ParteRechazada` ganan `Data` (el rechazo de la simulación o de la aplicación).
+  - `AlCreditoNuevo`: otra línea no interactiva —recibo de la pagaduría, el de esa línea del giro (el primer intento no numeró)— al crédito nuevo con valor libre
+    (cubre primero lo exigible y deja el resto como anticipo), clase `Transfer` y **sin** referencia de la línea del archivo: lo descontado era del crédito
+    viejo, y con `ExternalPaymasterDeduction` el crédito nuevo exigiría la referencia de sus propios pendientes. Fecha valor: la del descuento, nunca antes de
+    `successorFrom`; admite fecha tardía. Clave `REC:{giro:N}:{línea:N}:sucesor` (`GirosDePagaduria.ClaveDelSucesor`). Aplicada, la línea queda `Applied` con ese
+    recibo; si el crédito nuevo tampoco lo recibe, como siempre.
+  - `AFavorDelAsociado`: no había un hecho para pasar un saldo de la pagaduría a una persona; se usa el más cercano, `SaldoAFavorDePagadorResuelto` del saldo de la
+    pagaduría con la forma nueva `TransferredToAssociate` (`PayerCreditBalanceMovementKind` 10; se guarda como entero, sin migración) y las líneas
+    `SaldoDePagadurias` (débito, la pagaduría) y `SaldoAFavorDePagadores` (crédito, el asociado), roles que el hecho ya admitía (sin cambio en la matriz). El
+    saldo del asociado nace `Payer` con origen `PaymasterUnapplied` y la línea del giro lo nombra; reprocesarla se rechaza («resuélvalo en Saldos a favor») y no
+    hay alerta de no aplicado.
+  - **Excedente**: si la línea se aplica dejando excedente (saldo de la pagaduría), Recaudo le pregunta a Cartera simulando un valor libre sobre el crédito: si
+    quedó cancelado y lo había recogido otro, el rechazo trae la regla. `AlCreditoNuevo` aplica el excedente al crédito nuevo (misma clave de sucesor) y baja el
+    saldo de la pagaduría (`AppliedByReceipt`); `AFavorDelAsociado` lo traslada. Sin recogida, como siempre.
+- **Seguimiento de la cuota dejada** (`SeguimientoDeCuotaDejada`): la marca `AplicacionDePagos` después de registrar el pago (estática, en la misma transacción;
+  no escribe el libro): pagada si el pago cancela el crédito o la cuota queda sin capital ni conceptos pendientes. Un reverso no la desmarca (la marca es «una
+  vez»). El aviso al asesor es una **notificación** (`SendNotificationCommand`, en la aplicación y por correo) a quien radicó la solicitud del crédito nuevo (o,
+  sin él, quien la creó), desde `ConsumoDeLibranza` (pagaduría) y `NoDescontadosDelLote` (nómina propia): las alertas van por permiso, no a una persona, y no se
+  agregó tipo de alerta.
+- **Caja**: el listado del contrato gana `SentInstallmentAtPayoff` (`Pagos.CuotaEnviadaAlCancelar` de la línea, leído por `InteresesAlCancelar`, sólo con cuota
+  enviada), `PayoffExceptSentInstallmentAmount` y `SentInstallmentLeftAmount` (sólo si la cuota sigue en su canal sin respuesta —archivo sin resultado o nómina
+  sin aprobar, `CuotaEnviada.SePuedeDejar`—, es la causada que deja la modalidad 8 y el recaudador la admite). `ReglasDeLaCaja` rechaza la modalidad 8 si la
+  línea dice «Incluir» o falta el valor: de fábrica la caja cancela todo, como siempre. Pantalla: F7 propone la modalidad 8 con «Excluir»; con «Preguntar», una
+  casilla en el ítem; el aviso va en el ítem siempre que se cancela y la lista de lo pagable dice «cuota N enviada a la pagaduría/nómina». La lógica es pura, en
+  `Shared/Services/Recaudo/CuotaEnviadaEnLaCaja`. La pantalla no tiene carga nueva (todo llega con «lo que puede pagar»): ninguna zona nueva de `IndicadorDeCarga`.
+- **Pendiente o dudoso**: lo que la pagaduría gire por un crédito cancelado **en caja** (no recogido) sigue yendo a saldo de la pagaduría (el parámetro es de la
+  recogida); el reverso del pago que cerró la cuota dejada no la desmarca; la cuota descontada pendiente de giro sólo se avisa en caja (vencida, no se deja).

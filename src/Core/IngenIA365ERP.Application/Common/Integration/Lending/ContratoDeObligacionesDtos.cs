@@ -78,6 +78,23 @@ public sealed record ObligacionListadaDto(
     /// cancelación. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
     /// </summary>
     public CuotaEnviadaDto? SentInstallment { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023, D4): con <see cref="SentInstallment"/>, lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> para la línea del
+    /// crédito (<see cref="CuotaEnviadaAlCancelar"/>: <c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>); nulo sin nada enviado. La caja no lee parámetros de
+    /// Cartera: lo lee aquí. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public string? SentInstallmentAtPayoff { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-019, FR-023): lo que cuesta cancelar todo menos la cuota enviada (la modalidad
+    /// <see cref="ModalidadDePago.PayoffExceptCurrentInstallment"/>) si esa cuota es la causada que la modalidad deja, sigue en su canal sin respuesta y el
+    /// recaudador la admite; nulo si no se puede dejar. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public decimal? PayoffExceptSentInstallmentAmount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071): lo que la cuota enviada queda debiendo a su canal si se deja (con <see cref="PayoffExceptSentInstallmentAmount"/>). (nuevo)</summary>
+    public decimal? SentInstallmentLeftAmount { get; init; }
 }
 
 /// <summary>

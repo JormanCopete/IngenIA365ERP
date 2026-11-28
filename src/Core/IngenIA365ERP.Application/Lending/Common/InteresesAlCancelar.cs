@@ -185,6 +185,21 @@ public sealed class InteresesAlCancelar(ReglasDeParametrosDeCartera parametros, 
         return leido.IsSuccess && leido.Value.Valor is decimal fraccion && fraccion is > 0m and <= 1m ? fraccion : 0m;
     }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023, D4): lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> a <paramref name="fecha"/> —el de la línea del crédito
+    /// que se cancela si lo tiene, si no el general—: <c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>; ilegible = <c>Incluir</c> (lo de siempre). (nuevo)
+    /// </summary>
+    public async Task<string> CuotaEnviadaAlCancelarAsync(DateOnly fecha, int lineaId, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.PagosCuotaEnviadaAlCancelar, fecha, null, ParameterScopeKind.CreditLine, lineaId, ct);
+        return (leido.IsSuccess ? leido.Value.Texto?.Trim() : null) switch
+        {
+            ParametrosDeCartera.CuotaExcluir => ParametrosDeCartera.CuotaExcluir,
+            ParametrosDeCartera.CuotaPreguntar => ParametrosDeCartera.CuotaPreguntar,
+            _ => ParametrosDeCartera.CuotaIncluir,
+        };
+    }
+
     /// <summary>El tope legal del prepago del crédito con el SMMLV y <c>PREPAGO_TOPE_SMMLV</c> a la fecha del desembolso; nulo si falta algo.</summary>
     private async Task<ResultadoDeTopeDePrepago?> TopeAsync(Loan credito, CancellationToken ct)
     {

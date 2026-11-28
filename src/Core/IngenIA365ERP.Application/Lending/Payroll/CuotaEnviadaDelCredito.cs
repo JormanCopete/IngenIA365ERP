@@ -35,6 +35,13 @@ public sealed record CuotaEnviada(
     /// <summary>Va en un archivo de libranza (enviada sin respuesta, descontada pendiente de giro o no descontada).</summary>
     public bool EnPagaduria => Estado is SentInstallmentState.SentWithoutResponse or SentInstallmentState.DeductedPendingTransfer or SentInstallmentState.NotDeducted;
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071): ¿la cuota sigue en su canal sin respuesta —en el archivo sin resultado o en la nómina sin aprobar— y por eso una
+    /// cancelación puede dejarla para que la pague él? La descontada pendiente de giro ya venció (no se deja); la no descontada y la aprobada, tampoco. (nuevo)
+    /// </summary>
+    public bool SePuedeDejar => Estado is SentInstallmentState.SentWithoutResponse or SentInstallmentState.OwnPayrollGenerated
+        or SentInstallmentState.OwnPayrollCalculated;
+
     /// <summary>Va en la nómina propia (novedad generada, corrida calculada o aprobada).</summary>
     public bool EnNominaPropia => Estado is SentInstallmentState.OwnPayrollGenerated or SentInstallmentState.OwnPayrollCalculated
         or SentInstallmentState.OwnPayrollApproved;

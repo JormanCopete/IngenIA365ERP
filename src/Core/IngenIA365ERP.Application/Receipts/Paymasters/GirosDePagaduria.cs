@@ -302,6 +302,20 @@ public sealed class ListPaymasterRemittancesQueryHandler(IApplicationDbContext d
 /// <summary>
 /// La aplicación de las líneas de un giro (feature 015, US7, T0208): la usan aplicar y reprocesar (<see cref="IReprocesoDeCorrida"/>). Cada línea es su unidad por
 /// <see cref="AplicacionNoInteractiva"/>; la tanda toma antes todos sus cerrojos (configuración, pagadores —la pagaduría y los titulares— y las líneas del giro). (nuevo)
+/// <para>
+/// 2026-11-27 (feature 028, E2, T069; R7, FR-022, HU4-5): <b>lo que la pagaduría gira por un crédito ya recogido</b> por el desembolso de otro. Cartera rechaza
+/// el pago con <c>Lending.Payment.ObligationNotPayable</c> y en <c>data</c> dice el crédito nuevo y la regla de <c>Recogida.GiroPosteriorDeCreditoRecogido</c>
+/// (<see cref="GiroPosteriorDeCreditoRecogido"/>; Recaudo no lee parámetros de Cartera):
+/// <list type="bullet">
+/// <item><c>SaldoDeLaPagaduria</c> (de fábrica): como siempre, saldo de la pagaduría con la alerta;</item>
+/// <item><c>AlCreditoNuevo</c>: la línea se aplica en su mismo recibo al crédito nuevo, con valor libre —cubre primero lo exigible y deja el resto como anticipo—
+/// y la clave <see cref="ClaveDelSucesor"/>; si el crédito nuevo tampoco lo recibe, como siempre;</item>
+/// <item><c>AFavorDelAsociado</c>: nace el saldo de la pagaduría y pasa entero a saldo a favor del asociado (<see cref="PayerCreditBalanceMovementKind.TransferredToAssociate"/>,
+/// con su hecho <c>SaldoAFavorDePagadorResuelto</c>).</item>
+/// </list>
+/// Lo mismo con el <b>excedente</b> del giro de un crédito que seguía vivo sólo con la cuota que una recogida dejó a la pagaduría: si el giro lo deja cancelado y
+/// sobra, lo que sobra sigue la regla (Cartera la dice al preguntarle por el crédito ya cancelado) en lugar de quedar siempre como saldo de la pagaduría.
+/// </para>
 /// </summary>
 public sealed class GirosDePagaduria(
     IApplicationDbContext db,
@@ -309,12 +323,20 @@ public sealed class GirosDePagaduria(
     AplicacionNoInteractiva aplicacion,
     AuditoriaDeRecaudo auditoria,
     IAlertas alertas,
-    IDateTimeService reloj) : IReprocesoDeCorrida
+    IDateTimeService reloj,
+    EmisionDeRecaudo? emision = null,
+    IContratoDeObligaciones? obligaciones = null) : IReprocesoDeCorrida
 {
     public ProcessingRunKind Clase => ProcessingRunKind.PaymasterRemittance;
 
     /// <summary>La clave de una línea de giro: <c>REC:{giro:N}:{línea:N}</c>.</summary>
     public static string Clave(Guid giro, Guid lineaDelArchivo) => string.Create(CultureInfo.InvariantCulture, $"{ClavesDeRecaudo.Codigo}:{giro:N}:{lineaDelArchivo:N}");
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): la clave con que la línea de giro de un crédito ya recogido —o su excedente— se aplica al crédito que lo recogió:
+    /// <c>REC:{giro:N}:{línea:N}:sucesor</c>. (nuevo)
+    /// </summary>
+    public static string ClaveDelSucesor(Guid giro, Guid lineaDelArchivo) => Clave(giro, lineaDelArchivo) + ":sucesor";
 
     public async Task<ProcessingRun> AplicarAsync(PaymasterRemittance giro, IReadOnlyList<PaymasterRemittanceLine> lineas, Guid? corridaPedida, int usuario, CancellationToken ct)
     {
@@ -345,10 +367,33 @@ public sealed class GirosDePagaduria(
                     DeductionFileLinePublicId: linea.DeductionFileLinePublicId, Key: l.IdempotencyKey)],
                 ClaseDeMedioDeRecaudo.ExternalPaymasterDeduction, PaymentMeansClass.Transfer, giro.OwnBankAccountPublicId, giro.Number,
                 giro.BankStatementLinePublicId, giro.Id, AllowLateValueDate: false, PaymasterReference: true, CerrojosTomados: true), ct);
+            // 2026-11-27 (feature 028, E2, T069): lo girado por un crédito ya recogido; con «AlCreditoNuevo», la línea va al crédito que lo recogió.
+            var sucesor = resultado.Outcome == ProcessingLineOutcome.Rejected && linea.Kind == PayrollDeductionLineKind.Loan
+                ? GiroPosteriorDeCreditoRecogido.Leer(resultado.Code, resultado.Data)
+                : null;
+            if (sucesor is { AlCreditoNuevo: true })
+            {
+                var alNuevo = await AlSucesorAsync(giro, l, linea, publicos, sucesor, l.Amount, linea.DeductionDate ?? giro.RemittedOn, ct);
+                if (alNuevo.Outcome is ProcessingLineOutcome.Applied or ProcessingLineOutcome.AlreadyApplied && alNuevo.Receipt is not null)
+                {
+                    await AuditarSucesorAsync(giro, l, linea, sucesor, l.Amount, alNuevo.Receipt, ct);
+                    resultado = alNuevo;
+                    sucesor = null;
+                }
+            }
             CorridasNoInteractivas.Anotar(corrida, deCorrida, resultado, ahora);
-            await AnotarAsync(giro, l, linea, resultado, usuario, ahora, ct);
+            await AnotarAsync(giro, l, linea, resultado, sucesor, usuario, ahora, ct);
             if (resultado.Outcome == ProcessingLineOutcome.Applied && resultado.Receipt is { } r) recibos.Add(r);
             if (resultado.Outcome == ProcessingLineOutcome.Rejected) rechazadas.Add(deCorrida);
+            // 2026-11-27 (feature 028, E2, T069): lo que sobra del giro que canceló un crédito ya recogido (la cuota que una recogida le dejó a la pagaduría).
+            if (resultado.Outcome == ProcessingLineOutcome.Applied && resultado.Surplus > 0m && resultado.CreditBalance is { Kind: PayerCreditBalanceKind.Paymaster } sobrante
+                && linea.Kind == PayrollDeductionLineKind.Loan && resultado.Receipt is { } delGiro
+                && await SucesorDelExcedenteAsync(linea, resultado.Surplus, resultado.AppliedValueDate ?? linea.DeductionDate ?? giro.RemittedOn, ct) is { } deLaCuota)
+            {
+                var alNuevo = await ExcedenteAsync(giro, l, linea, publicos, deLaCuota, sobrante, resultado.Surplus,
+                    resultado.AppliedValueDate ?? linea.DeductionDate ?? giro.RemittedOn, usuario, ahora, ct);
+                if (alNuevo?.Receipt is { } delNuevo && alNuevo.Outcome == ProcessingLineOutcome.Applied && delNuevo.Id != delGiro.Id) recibos.Add(delNuevo);
+            }
             await db.SaveChangesAsync(ct);
         }
         await EstadoAsync(giro, ct);
@@ -364,16 +409,24 @@ public sealed class GirosDePagaduria(
         var giro = await db.PaymasterRemittances.FirstAsync(g => g.Id == deGiro.PaymasterRemittanceId, ct);
         if (deGiro.Outcome == PaymasterRemittanceLineOutcome.Applied) return Result.Success();
         if (deGiro.CreditBalanceId is { } s
-            && await db.PayerCreditBalances.AsNoTracking().FirstAsync(x => x.Id == s, ct) is { } saldo && saldo.Balance < deGiro.Amount)
-            return Result.Failure(ErroresDeRecaudo.CorridaLineaNoReprocesable("su saldo de la pagaduría ya se resolvió"));
+            && await db.PayerCreditBalances.AsNoTracking().FirstAsync(x => x.Id == s, ct) is { } saldo)
+        {
+            // 2026-11-27 (feature 028, E2, T069): lo que pasó a saldo a favor del asociado se resuelve en «Saldos a favor», no reprocesando la línea.
+            if (saldo.Kind != PayerCreditBalanceKind.Paymaster)
+                return Result.Failure(ErroresDeRecaudo.CorridaLineaNoReprocesable("lo girado pasó a saldo a favor del asociado: resuélvalo en «Saldos a favor»"));
+            if (saldo.Balance < deGiro.Amount) return Result.Failure(ErroresDeRecaudo.CorridaLineaNoReprocesable("su saldo de la pagaduría ya se resolvió"));
+        }
         deGiro.Outcome = PaymasterRemittanceLineOutcome.Pending;
         await AplicarAsync(giro, [deGiro], corrida.PublicId, usuario, ct);
         return Result.Success();
     }
 
-    /// <summary>Lo que pasó con la línea del giro: el recibo, o el saldo de la pagaduría con su alerta (o, al reprocesar, la baja de ese saldo).</summary>
-    private async Task AnotarAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea, ResultadoNoInteractivo resultado, int usuario,
-        DateTime ahora, CancellationToken ct)
+    /// <summary>
+    /// Lo que pasó con la línea del giro: el recibo, o el saldo de la pagaduría con su alerta (o, al reprocesar, la baja de ese saldo). 2026-11-27 (feature 028, E2,
+    /// T069): rechazada por un crédito ya recogido con la regla «AFavorDelAsociado», el saldo pasa entero al asociado, sin la alerta.
+    /// </summary>
+    private async Task AnotarAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea, ResultadoNoInteractivo resultado,
+        SucesorDelRechazo? sucesor, int usuario, DateTime ahora, CancellationToken ct)
     {
         if (resultado.Outcome is ProcessingLineOutcome.Applied or ProcessingLineOutcome.AlreadyApplied && resultado.Receipt is { } recibo)
         {
@@ -381,7 +434,8 @@ public sealed class GirosDePagaduria(
             l.ReceiptId = recibo.Id;
             l.RejectionCode = null;
             l.RejectionMessage = null;
-            if (l.CreditBalanceId is { } previo && await db.PayerCreditBalances.FirstOrDefaultAsync(x => x.Id == previo, ct) is { } saldoPrevio && saldoPrevio.Balance >= l.Amount)
+            if (l.CreditBalanceId is { } previo && await db.PayerCreditBalances.FirstOrDefaultAsync(x => x.Id == previo, ct) is { } saldoPrevio
+                && saldoPrevio.Kind == PayerCreditBalanceKind.Paymaster && saldoPrevio.Balance >= l.Amount)
                 SaldosAFavor.Bajar(db, saldoPrevio, PayerCreditBalanceMovementKind.AppliedByReceipt, l.Amount, recibo.PublicId, recibo.Number, usuario, ahora,
                     "Aplicada al reprocesar la línea del giro.");
             return;
@@ -396,6 +450,13 @@ public sealed class GirosDePagaduria(
         saldo.Kind = PayerCreditBalanceKind.Paymaster;
         await db.SaveChangesAsync(ct);
         SaldosAFavor.Reconocido(db, saldo, usuario, ahora);
+        if (sucesor is { AFavorDelAsociado: true } && emision is not null)
+        {
+            var delAsociado = await AlAsociadoAsync(giro, saldo, linea.PersonId, l.Amount, usuario, ahora, ct);
+            l.CreditBalanceId = delAsociado.Id;
+            await AuditarAlAsociadoAsync(giro, l, linea, sucesor, l.Amount, delAsociado, ct);
+            return;
+        }
         l.CreditBalanceId = saldo.Id;
         await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoNoAplicadoDePagaduria, "Línea del giro de una pagaduría sin aplicar",
             string.Create(CultureInfo.InvariantCulture,
@@ -403,6 +464,89 @@ public sealed class GirosDePagaduria(
             "PaymasterRemittanceLine", l.PublicId, DedupKey: $"Recaudo.NoAplicadoDePagaduria:{l.PublicId:N}", ModuloDeOrigen: "Receipts",
             ScopeBranchPublicId: await db.Branches.AsNoTracking().Where(b => b.Id == giro.BranchId).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct)), ct);
     }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): aplica <paramref name="valor"/> de la línea al crédito que recogió el de la línea, en un recibo de la pagaduría con la
+    /// clave <see cref="ClaveDelSucesor"/>: valor libre —cubre primero lo exigible y el resto queda como anticipo—, transferencia sin referencia de pagaduría (lo
+    /// descontado era del crédito viejo) y la fecha valor del descuento, nunca antes de que el crédito nuevo recibiera pagos. (nuevo)
+    /// </summary>
+    private async Task<ResultadoNoInteractivo> AlSucesorAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea,
+        IReadOnlyDictionary<int, Guid> publicos, SucesorDelRechazo sucesor, decimal valor, DateOnly fecha, CancellationToken ct)
+    {
+        var desde = sucesor.Desde is { } d && d > fecha ? d : fecha;
+        var clave = ClaveDelSucesor(giro.PublicId, l.DeductionFileLinePublicId);
+        return await aplicacion.AplicarAsync(new LineaNoInteractiva(clave, ReceiptChannel.Paymaster, publicos[giro.PaymasterPersonId], desde, valor, giro.BranchId,
+            [new ParteNoInteractiva(ApplicationTarget.Loan, sucesor.Obligacion, publicos[linea.PersonId], valor, LoanModality: ModalidadDePago.FreeAmount, Key: clave)],
+            ClaseDeMedioDeRecaudo.Transfer, PaymentMeansClass.Transfer, giro.OwnBankAccountPublicId, giro.Number, giro.BankStatementLinePublicId, giro.Id,
+            AllowLateValueDate: true, CerrojosTomados: true), ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): el saldo de la pagaduría pasa entero a saldo a favor del asociado: nace el de la persona (con su reconocimiento), baja el
+    /// de la pagaduría (<see cref="PayerCreditBalanceMovementKind.TransferredToAssociate"/>) y el hecho mueve el dinero de <c>SaldoDePagadurias</c> a
+    /// <c>SaldoAFavorDePagadores</c>. (nuevo)
+    /// </summary>
+    private async Task<PayerCreditBalance> AlAsociadoAsync(PaymasterRemittance giro, PayerCreditBalance deLaPagaduria, int persona, decimal valor, int usuario,
+        DateTime ahora, CancellationToken ct)
+    {
+        var delAsociado = SaldosAFavor.Reconocer(db, persona, PayerCreditBalanceOrigin.PaymasterUnapplied, giro.PublicId, giro.Number, giro.BranchId, valor,
+            reloj.HoyLocal, usuario, ahora, giro.OwnBankAccountPublicId);
+        await db.SaveChangesAsync(ct);
+        SaldosAFavor.Reconocido(db, delAsociado, usuario, ahora);
+        var movimiento = SaldosAFavor.Bajar(db, deLaPagaduria, PayerCreditBalanceMovementKind.TransferredToAssociate, valor, delAsociado.PublicId,
+            delAsociado.OriginDocumentNumber, usuario, ahora, "Lo giró la pagaduría por un crédito ya recogido: pasó a saldo a favor del asociado.");
+        await db.SaveChangesAsync(ct);
+        await emision!.SaldoDePagaduriaAlAsociadoAsync(deLaPagaduria, movimiento, delAsociado, reloj.HoyLocal, ct);
+        return delAsociado;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): ¿el crédito de la línea quedó cancelado y lo había recogido el desembolso de otro? Se le pregunta a Cartera por el
+    /// crédito (la simulación de un valor libre lo rechaza con el sucesor y la regla). Nulo si no, o sin el contrato. (nuevo)
+    /// </summary>
+    private async Task<SucesorDelRechazo?> SucesorDelExcedenteAsync(PayrollDeductionFileLine linea, decimal sobrante, DateOnly fecha, CancellationToken ct)
+    {
+        if (obligaciones is null) return null;
+        var sim = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, linea.ProductPublicId, ModalidadDePago.FreeAmount, sobrante,
+            fecha), ct);
+        return sim.Result == ResultadoDelContrato.Rejected ? GiroPosteriorDeCreditoRecogido.Leer(sim.Code, sim.Data) : null;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): lo que sobró del giro que canceló un crédito ya recogido sigue la regla: al crédito nuevo (baja el saldo de la pagaduría
+    /// por lo que el recibo nuevo toma de él) o a saldo a favor del asociado; con «SaldoDeLaPagaduria», como siempre. Devuelve el resultado del recibo al crédito
+    /// nuevo, si lo hubo. (nuevo)
+    /// </summary>
+    private async Task<ResultadoNoInteractivo?> ExcedenteAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea,
+        IReadOnlyDictionary<int, Guid> publicos, SucesorDelRechazo sucesor, PayerCreditBalance sobrante, decimal valor, DateOnly fecha, int usuario, DateTime ahora,
+        CancellationToken ct)
+    {
+        if (sucesor.AFavorDelAsociado && emision is not null && sobrante.Balance >= valor)
+        {
+            var delAsociado = await AlAsociadoAsync(giro, sobrante, linea.PersonId, valor, usuario, ahora, ct);
+            await AuditarAlAsociadoAsync(giro, l, linea, sucesor, valor, delAsociado, ct);
+            return null;
+        }
+        if (!sucesor.AlCreditoNuevo) return null;
+        var alNuevo = await AlSucesorAsync(giro, l, linea, publicos, sucesor, valor, fecha, ct);
+        if (alNuevo.Outcome is not (ProcessingLineOutcome.Applied or ProcessingLineOutcome.AlreadyApplied) || alNuevo.Receipt is not { } recibo) return alNuevo;
+        if (alNuevo.Outcome == ProcessingLineOutcome.Applied && sobrante.Balance >= valor)
+            SaldosAFavor.Bajar(db, sobrante, PayerCreditBalanceMovementKind.AppliedByReceipt, valor, recibo.PublicId, recibo.Number, usuario, ahora,
+                $"Lo que sobró del giro se aplicó al crédito {sucesor.Numero ?? "nuevo"}, que recogió el {linea.ProductNumber}.");
+        await AuditarSucesorAsync(giro, l, linea, sucesor, valor, recibo, ct);
+        return alNuevo;
+    }
+
+    private async Task AuditarSucesorAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea, SucesorDelRechazo sucesor,
+        decimal valor, Receipt recibo, CancellationToken ct) =>
+        await auditoria.AgregarAsync("Receipts.PaymasterRemittance.AppliedToSuccessor", "PaymasterRemittanceLine", l.PublicId, null,
+            new { remittance = giro.Number, paidOffLoan = linea.ProductNumber, successor = sucesor.Numero, successorPublicId = sucesor.Obligacion, amount = valor,
+                  receipt = recibo.Number }, ct);
+
+    private async Task AuditarAlAsociadoAsync(PaymasterRemittance giro, PaymasterRemittanceLine l, PayrollDeductionFileLine linea, SucesorDelRechazo sucesor,
+        decimal valor, PayerCreditBalance delAsociado, CancellationToken ct) =>
+        await auditoria.AgregarAsync("Receipts.PaymasterRemittance.TransferredToAssociate", "PaymasterRemittanceLine", l.PublicId, null,
+            new { remittance = giro.Number, paidOffLoan = linea.ProductNumber, successor = sucesor.Numero, amount = valor, creditBalance = delAsociado.PublicId }, ct);
 
     private async Task EstadoAsync(PaymasterRemittance giro, CancellationToken ct)
     {

@@ -144,6 +144,14 @@ public sealed class ContratoDeObligacionesDeCartera(
             // cuota del ciclo es la que vence en ese tramo (pagada, la siguiente es anticipo).
             var calendario = await aplicacion.PeriodoCalendarioAsync(credito, estado, fecha, ct);
             var admitidas = Admitidas(credito, cargado, estado, solicitud.Collector, calendario);
+            // 2026-11-27 (feature 028, E2, T071; FR-023, D4): con la cuota enviada, lo que dice Pagos.CuotaEnviadaAlCancelar de su línea y, si esa cuota es
+            // la causada que la modalidad deja y sigue en su canal sin respuesta, lo que cuesta cancelar todo menos ella y lo que ella queda debiendo.
+            var enviada = enviadas.GetValueOrDefault(credito.Id);
+            var alCancelar = enviada is null ? null : await aplicacion.CuotaEnviadaAlCancelarAsync(credito, fecha, ct);
+            var salvo = enviada is { SePuedeDejar: true } && admitidas.Contains(ModalidadDePago.PayoffExceptCurrentInstallment)
+                ? await aplicacion.ValorParaCancelarSalvoCuotaAsync(credito, estado, ct)
+                : null;
+            if (salvo is not null && enviada!.Cuota is { } cuotaEnviada && cuotaEnviada != salvo.Cuota) salvo = null;
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
                 ComprobantesDePago.CuotaDelCiclo(estado, calendario),
@@ -155,7 +163,10 @@ public sealed class ContratoDeObligacionesDeCartera(
                 // 2026-11-26 (pedido del dueño): la mora para la caja, sin el interés ya causado del período en curso.
                 DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
                 // 2026-11-27 (feature 028, T065): la cuota del período que ya va en la libranza o en la nómina propia.
-                SentInstallment = Enviada(enviadas.GetValueOrDefault(credito.Id)),
+                SentInstallment = Enviada(enviada),
+                SentInstallmentAtPayoff = alCancelar,
+                PayoffExceptSentInstallmentAmount = salvo?.ParaCancelar,
+                SentInstallmentLeftAmount = salvo?.QuedaEnLaCuota,
             });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
@@ -324,8 +335,9 @@ public sealed class ContratoDeObligacionesDeCartera(
         {
             var credito = await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == solicitud.ObligationPublicId && !l.IsDeleted, ct);
             if (credito is null) return Rechazo<SimulacionDePagoDto>(ErroresDePagos.ObligacionInexistente());
+            // 2026-11-27 (feature 028, E2, T069; R7): si lo recogió el desembolso de otro, el rechazo lleva el sucesor y la regla de lo que gire su pagaduría.
             if (credito.Status is LoanStatus.PendingDisbursement or LoanStatus.PaidOff or LoanStatus.Voided or LoanStatus.Novated)
-                return Rechazo<SimulacionDePagoDto>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+                return Rechazo<SimulacionDePagoDto>(await aplicacion.NoPagableAsync(credito, ct));
             if (await fechas.ValidarAsync(solicitud.Collector.Class, solicitud.ValueDate, solicitud.Amount, ct) is { } fecha)
                 return Rechazo<SimulacionDePagoDto>(fecha);
             // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, sólo la recogida y Recaudo (también en los pagos anteriores del recibo).

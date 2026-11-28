@@ -123,7 +123,8 @@ public sealed class AplicacionDePagos(
     IAvisoDeAbonoConPreferencia aviso,
     IDateTimeService reloj,
     InteresesAlCancelar? intereses = null,
-    PrelacionDeLaEmpresa? prelacionDeLaEmpresa = null)
+    PrelacionDeLaEmpresa? prelacionDeLaEmpresa = null,
+    Payoffs.SucesorDeCreditoRecogido? sucesor = null)
 {
     public const string PrefijoDePago = "PAG-";
 
@@ -324,6 +325,45 @@ public sealed class AplicacionDePagos(
     }
 
     /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069; R7, FR-022): el rechazo de un pago a <paramref name="credito"/>, que ya no recibe pagos. Si lo recogió el desembolso
+    /// de otro, con el crédito nuevo y la regla de <c>Recogida.GiroPosteriorDeCreditoRecogido</c> en <c>data</c> (<see cref="Payoffs.SucesorDeCreditoRecogido"/>);
+    /// si no —o sin la pieza, en las pruebas que no la arman—, el de siempre. Lo usan la aplicación y la simulación del contrato. (nuevo)
+    /// </summary>
+    public async Task<Error> NoPagableAsync(Loan credito, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        return sucesor is null ? ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()) : await sucesor.NoPagableAsync(credito, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023, D4): lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> para la línea de <paramref name="credito"/> a
+    /// <paramref name="fecha"/> (<c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>; de fábrica e ilegible, <c>Incluir</c>). Sin la pieza de intereses, lo de
+    /// siempre. (nuevo)
+    /// </summary>
+    public async Task<string> CuotaEnviadaAlCancelarAsync(Loan credito, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        return intereses is null ? Domain.Lending.Parameters.ParametrosDeCartera.CuotaIncluir
+            : await intereses.CuotaEnviadaAlCancelarAsync(fecha, credito.CreditLineId, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-019, FR-023): lo que cuesta cancelar todo menos la cuota causada a la fecha de <paramref name="estado"/> —el mismo
+    /// cálculo con que la modalidad reparte (<see cref="AplicadorDePagos.ValorParaCancelarSalvoCuota"/>), con el modo de intereses de la cancelación y el
+    /// período calendario de la línea—: la cuota que se deja, lo que cuesta lo demás y lo que la cuota queda debiendo. Nulo si no hay cuota causada que dejar.
+    /// (nuevo)
+    /// </summary>
+    public async Task<ValorSalvoCuota?> ValorParaCancelarSalvoCuotaAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        var modo = await ModoAsync(credito, estado, PaymentModality.PayoffExceptCurrentInstallment, estado.Fecha, ct);
+        var calendario = await PeriodoCalendarioAsync(credito, estado, estado.Fecha, ct);
+        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario);
+        return v.Cuota is null ? null : v;
+    }
+
+    /// <summary>
     /// 2026-11-24 (feature 025, fase 5, HU5): ¿la línea de <paramref name="credito"/> causa por período calendario a <paramref name="fecha"/>
     /// (<c>Causacion.Periodo</c>)? Nunca en UVR ni en un programa sin el servicio. Lo usan el reparto de los pagos, la caja y la cancelación. (nuevo)
     /// </summary>
@@ -364,7 +404,8 @@ public sealed class AplicacionDePagos(
                 ? Result.Success(new PagoAplicado(existente, await ComprobanteAsync(existente, credito, ct), UnidadEmitida.Vacia, true))
                 : Falla(ErroresDePagos.ClaveReusada(pago.IdempotencyKey));
 
-        if (NoPagables.Contains(credito.Status)) return Falla(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+        // 2026-11-27 (feature 028, E2, T069; R7): si lo recogió el desembolso de otro, el rechazo lleva el sucesor y la regla de lo que gire su pagaduría.
+        if (NoPagables.Contains(credito.Status)) return Falla(await NoPagableAsync(credito, ct));
         if (ClasesDeMedioDeRecaudo.Validar(r.Class, pago.MeansClass, esResolucion: p.Origen is not null) is { } medio) return Falla(medio);
         // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, sólo la recogida y Recaudo.
         if (ClasesDeMedioDeRecaudo.ValidarModalidad(r.Class, pago.Modality) is { } noAdmitida) return Falla(noAdmitida);
@@ -545,6 +586,9 @@ public sealed class AplicacionDePagos(
 
         if (cancela && credito.Status is LoanStatus.Active or LoanStatus.WrittenOff)
             RegistroDeCartera.CambiarEstado(credito, LoanStatus.PaidOff, v);
+        // 2026-11-27 (feature 028, E2, T070): la cuota que una recogida dejó a su canal queda pagada si este pago —de cualquier canal— la cerró. No escribe el
+        // libro: marca la fila de la recogida en la misma transacción.
+        await Payoffs.SeguimientoDeCuotaDejada.MarcarPagadasAsync(db, credito.Id, efecto.Despues, cancela, ahora, ct);
         await db.SaveChangesAsync(ct);
 
         // La reclamación al seguro que paga la aseguradora (T102), la puesta al día preparada (con la operación ya guardada) y la posición.

@@ -115,6 +115,9 @@ public sealed class PayrollDeductionReconciliationReportQueryHandler(IApplicatio
         new("_credito", Clave: "_credito"),
     ];
 
+    /// <summary>2026-11-27 (feature 028, E2, T068; FR-022): cómo dice el cuadre la línea de un crédito que se cerró después de enviarla. (nuevo)</summary>
+    public const string TextoDeCreditoCerrado = "Descuento de un crédito cancelado";
+
     public async Task<Result<TablaExportable>> Handle(PayrollDeductionReconciliationReportQuery request, CancellationToken ct)
     {
         if (request.Agreement is not { } publico)
@@ -154,8 +157,11 @@ public sealed class PayrollDeductionReconciliationReportQueryHandler(IApplicatio
             var credito = porId[l.LoanId];
             vigentes.TryGetValue(l.Id, out var r);
             var aplicado = r is null ? 0m : aplicados.GetValueOrDefault(r.Id);
-            var pendiente = r is { DejaPendienteDeGiro: true } && aplicado == 0m ? r.DeductedAmount : 0m;
+            // 2026-11-27 (feature 028, E2, T068; FR-022): lo descontado de un crédito ya cerrado no queda pendiente de giro para Cartera y la línea lo dice.
+            var cerrado = r is not null && (r.LoanClosedAtResult || Payroll.PendientesDeGiro.CreditoCerrado(credito.Status));
+            var pendiente = r is { DejaPendienteDeGiro: true } && aplicado == 0m && !cerrado ? r.DeductedAmount : 0m;
             var motivo = r?.NonDeductionReason is { } m ? Payroll.Results.SeguimientoDeNoAplicados.Motivo(m) : null;
+            if (cerrado) motivo = motivo is null ? TextoDeCreditoCerrado : $"{TextoDeCreditoCerrado} · {motivo}";
             return new FilaExportable(
             [
                 $"{l.EmployeeIdAtPaymaster ?? "—"} · {personas[credito.DebtorPersonId].Name}", credito.Number, l.TotalAmount, r?.DeductedAmount ?? 0m, pendiente, aplicado,
