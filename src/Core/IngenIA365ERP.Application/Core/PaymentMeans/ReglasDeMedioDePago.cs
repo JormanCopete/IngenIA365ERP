@@ -50,6 +50,9 @@ public static class ReglasDeMedioDePago
     public const string Comision = "CommissionRange";
     public const string Tolerancia = "ToleranceRange";
     public const string ConjuntoExplicito = "ExplicitSetExists";
+
+    /// <summary>2026-11-27 (feature 028, E4, T086): la clase del cruce interno del desembolso es del sistema: no se crea a mano ni se cambia a ella o desde ella.</summary>
+    public const string ClaseDelSistema = "SystemClass";
     public const string CreditoSinCarteraSoloEnCredito = "CreditWithoutLendingOnlyForCredit";
 
     /// <summary>El arqueo efectivo del medio: el que viene o el de la clase.</summary>
@@ -68,6 +71,11 @@ public static class ReglasDeMedioDePago
     {
         var input = datos.Input;
         var arqueo = ArqueoDe(input);
+        // 2026-11-27 (feature 028, E4, T086): el medio del cruce interno (recogida de facturas en el desembolso) lo deja la semilla; ni se crea otro ni se pasa uno
+        // existente a esa clase o desde ella.
+        if (ClasesDeMedio.EsInterna(input.Class) != (existente is not null && ClasesDeMedio.EsInterna(existente.Class)))
+            return Result.Failure<MedioDePago>(PaymentMeansErrors.Invalid("class", ClaseDelSistema,
+                "La clase «Recogida en el desembolso» es del sistema: su medio lo deja la semilla y no se crea ni se cambia a mano."));
 
         if (existente is null)
         {

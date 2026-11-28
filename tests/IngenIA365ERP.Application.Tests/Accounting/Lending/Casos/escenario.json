@@ -334,6 +334,13 @@
       "tercero": true
     },
     {
+      "codigo": "24959503",
+      "nombre": "Puente de recogidas de créditos propios (feature 028)",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
       "codigo": "26480501",
       "nombre": "Fondo de bienestar social (descuento condicionado)",
       "naturaleza": "Credit",

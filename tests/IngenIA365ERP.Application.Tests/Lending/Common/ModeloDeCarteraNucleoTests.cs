@@ -52,6 +52,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_CreditLimits", "LND_DebtorBlocks", "LND_LoanNumberReservations", "LND_DebtorControls", "LND_PrepaymentPreferences",
         // 2026-11-25 (EdicionDeSolicitudRadicada): las ediciones de la solicitud radicada sin devolverla.
         "LND_CreditApplicationEdits",
+        // 2026-11-27 (feature 028, RecogidaDeCreditos): la recogida proyectada en la solicitud y la aplicada en el desembolso.
+        "LND_CreditApplicationPayoffs", "LND_DisbursementPayoffs",
         // Crédito y libro (17)
         "LND_Loans", "LND_LoanParties", "LND_LoanTermsVersions", "LND_LoanOperations", "LND_LoanTransactions",
         "LND_RepaymentScheduleVersions", "LND_RepaymentInstallments", "LND_LoanControls", "LND_LoanDailyPositions",
@@ -232,7 +234,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(193,
+        Tablas.Should().HaveCount(195,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -244,7 +246,8 @@ public class ModeloDeCarteraNucleoTests
             + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 3 de la decisión de asamblea, sus líneas y la base de los retornos por plantilla (US12, E261) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)"
             + " + 3 del proceso de causación, sus hechos y sus líneas (feature 024, fase 3)"
             + " + 3 de los documentos para firma: plantillas, campos propios y juegos (2026-11-18)"
-            + " + 1 de las ediciones de la solicitud radicada (2026-11-25)");
+            + " + 1 de las ediciones de la solicitud radicada (2026-11-25)"
+            + " + 2 de la recogida proyectada y la aplicada (feature 028, 2026-11-27)");
     }
 
     [Theory]

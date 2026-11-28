@@ -380,6 +380,8 @@ public static class DependencyInjection
         services.AddScoped<Receipts.Compliance.GeneracionDelReporteDeTransacciones>();
         // Feature 015, R1 (fase 31; E-05, D26): las consultas de sólo lectura del consolidado de Recaudo.
         services.AddScoped<Common.Integration.Payroll.IRecaudoDeNominaParaConsolidado, Payroll.Integration.RecaudoDeNominaParaConsolidado>();
+        // 2026-11-27 (feature 028, T064a; R6): los descuentos de cartera vivos de la nómina propia, que Cartera lee para la cuota enviada.
+        services.AddScoped<Common.Integration.Payroll.IDescuentosDeNominaParaCartera, Payroll.Integration.DescuentosDeNominaParaCartera>();
         services.AddScoped<Common.Integration.Lending.IDebitoAutomaticoParaConsolidado, Lending.Integration.DebitoAutomaticoParaConsolidado>();
         services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
         services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
@@ -390,6 +392,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Receipts.IRecaudoParaConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
         services.AddScoped<Common.Integration.Receipts.IPartidasDesdeConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
         services.AddScoped<Common.Integration.Accounting.IConciliacionBancariaParaContabilidad, Treasury.Reconciliation.ConciliacionBancariaParaContabilidad>();
+        // 2026-11-27 (feature 028, E4, T085): la recogida de facturas a crédito de Comercial en el desembolso (Recaudo ofrece, Cartera usa).
+        services.AddScoped<Receipts.Integration.RecogidaEnRecaudo>();
+        services.AddScoped<Common.Integration.Receipts.IRecogidaEnRecaudo>(sp => sp.GetRequiredService<Receipts.Integration.RecogidaEnRecaudo>());
         // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
         services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
         services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();
@@ -870,6 +875,17 @@ public static class DependencyInjection
         services.AddScoped<Lending.Accrual.LectorDePoliticaDeReconocimiento>();
         services.AddScoped<Lending.Accrual.PuestaAlDiaDeCredito>();
         services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
+        // 2026-11-27 (feature 028, R3, T010): el único sitio que liquida una recogida (la consulta de productos, la vista previa y el desembolso).
+        services.AddScoped<Lending.Payoffs.LiquidacionDeRecogida>();
+        // 2026-11-27 (feature 028, T023): la recogida que pide una solicitud (validar, proyectar y guardar sus filas al crear, corregir y radicar).
+        services.AddScoped<Lending.Payoffs.RecogidasDeLaSolicitud>();
+        // 2026-11-27 (feature 028, E3, T077): la recogida de aportes y ahorros en el desembolso (consigna por dentro de Cartera).
+        services.AddScoped<Lending.Payoffs.RecogidaDeCuentas>();
+        // 2026-11-27 (feature 028, E4, T087): la recogida de facturas a crédito de Comercial en el desembolso (por el puerto de Recaudo).
+        services.AddScoped<Lending.Payoffs.RecogidaDeFacturas>();
+        // 2026-11-27 (feature 028, E2, T069, T070): quién recogió un crédito ya cancelado (para lo que gire su pagaduría) y el seguimiento de la cuota dejada.
+        services.AddScoped<Lending.Payoffs.SucesorDeCreditoRecogido>();
+        services.AddScoped<Lending.Payoffs.SeguimientoDeCuotaDejada>();
         services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();
         services.AddScoped<Lending.Accrual.ReajusteDeTasa>();
         services.AddScoped<Lending.Ledger.VerificacionDelLibro>();
@@ -924,6 +940,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payroll.Agreements.AltaDeVersionDeConvenio>();
         services.AddScoped<Lending.Payroll.Agreements.CopiaDeVersionDeConvenio>();
         services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
+        // 2026-11-27 (feature 028, T064; R6, FR-021): en qué va la cuota del período de cada crédito frente a su pagaduría o su nómina propia.
+        services.AddScoped<Lending.Payroll.CuotaEnviadaDelCredito>();
         services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
         services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
         // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.

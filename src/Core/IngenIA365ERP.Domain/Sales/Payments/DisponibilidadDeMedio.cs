@@ -51,6 +51,8 @@ public static class DisponibilidadDeMedio
         ArgumentNullException.ThrowIfNull(caso);
 
         if (!medio.IsActive || medio.ValidFrom > caso.Date || (medio.ValidTo is { } hasta && hasta < caso.Date)) return false;
+        // 2026-11-27 (feature 028, E4, T086): el cruce interno del desembolso nunca se ofrece al cobrar, aunque alguien le marque «todos».
+        if (ClasesDeMedio.EsInterna(medio.Class)) return false;
         if (caso.PointOfSaleId is { } punto && !medio.OfferedAtAllPointsOfSale && !medio.PointOfSaleIds.Contains(punto)) return false;
         if (caso.SalesChannelId is { } canal && !medio.OfferedInAllChannels && !medio.SalesChannelIds.Contains(canal)) return false;
         if (!medio.OfferedForAllDocumentTypes && !medio.DocumentTypeIds.Contains(caso.DocumentTypeId)) return false;

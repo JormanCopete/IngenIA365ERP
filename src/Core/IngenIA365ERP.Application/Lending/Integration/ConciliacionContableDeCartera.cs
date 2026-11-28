@@ -3,6 +3,7 @@ using System.Text.Json;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -166,6 +167,9 @@ public sealed class ConciliacionContableDeCartera(
         /// <c>RecaudoPorAplicar</c> de su clase de recaudador, el giro debita <c>DesembolsoPorGirar</c>—, como débito menos crédito. Vacío en los de Cartera.
         /// </summary>
         public IReadOnlyList<(string Rol, string? Clase, decimal Neto)> PuentesDeOtroModulo { get; init; } = [];
+
+        /// <summary>2026-11-27 (feature 028, T049): lo que un desembolso o su reverso lleva a los puentes del giro (vacío en los demás hechos).</summary>
+        public GiroDelHecho Giro { get; init; } = GiroDelHecho.Ninguno;
     }
 
     /// <summary>Los módulos cuyos hechos sin procesar explican la diferencia de un puente de Cartera (feature 015, T0261).</summary>
@@ -193,7 +197,10 @@ public sealed class ConciliacionContableDeCartera(
                 var propios = porMensaje[f.PublicId].ToList();
                 if (propios.Count == 0) propios = porOperacion[f.OriginPublicId].ToList();
                 return new Pendiente(new HechoQueExplicaDto(f.PublicId, f.Type, f.OriginNumber, f.OperationDate, f.Status.ToString(), 0m), f.OriginPublicId,
-                    ClaseDe(f.PayloadJson), propios);
+                    ClaseDe(f.PayloadJson), propios)
+                {
+                    Giro = GiroDelHecho.De(f.Type, f.PayloadJson),
+                };
             })
             .ToList();
     }
@@ -212,14 +219,57 @@ public sealed class ConciliacionContableDeCartera(
             return p.PuentesDeOtroModulo.Where(x => x.Rol == rol && (rol != "RecaudoPorAplicar" || combinaciones.Any(c => c.Clave.ClaseDeRecaudador == x.Clase)))
                 .Sum(x => x.Neto) * SaldosContablesDeCartera.Signo(rol);
         var total = p.Movimientos.Sum(m => m.Monto);
+        var desembolso = p.Hecho.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type;
+        var reverso = p.Hecho.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.DesembolsoReversadoV1.Type;
+        var recogidaPropia = combinaciones.Any(c => c.Clave.ClaseDeRecaudador == nameof(ClaseDeRecaudador.OwnLoanPayoff));
         return rol switch
         {
+            // 2026-11-27 (feature 028, T049; E-09): el desembolso acredita al puente de la recogida propia lo recogido y su reverso se lo devuelve.
+            "RecaudoPorAplicar" when desembolso && recogidaPropia => -p.Giro.Recogido,
+            "RecaudoPorAplicar" when reverso && recogidaPropia => p.Giro.Recogido,
             // El pago acredita la cartera y debita el puente de su clase: lo que Contabilidad no recibió es lo aplicado.
             "RecaudoPorAplicar" when p.ClaseDeRecaudador is { } clase && combinaciones.Any(c => c.Clave.ClaseDeRecaudador == clase) => -total,
-            // El desembolso abona el puente con Tesorería por lo girado (§2.1, CreditoDesembolsado).
-            "DesembolsoPorGirar" when p.Hecho.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type => total,
+            // El desembolso abona el puente con Tesorería por lo girado (§2.1, CreditoDesembolsado): desde la 028, el neto que gira Tesorería (bruto menos lo
+            // recogido más lo del fondo; nada en especie, que va contra Comercial). Su reverso se lo devuelve (antes no explicaba nada).
+            "DesembolsoPorGirar" when desembolso => p.Giro.EnEspecie ? 0m : p.Giro.NetoAGirar ?? total - p.Giro.Recogido,
+            "DesembolsoPorGirar" when reverso => p.Giro.EnEspecie ? 0m : total + p.Giro.Recogido - p.Giro.Subsidio,
             _ => 0m,
         };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T049): lo que un hecho de desembolso o su reverso lleva a los puentes del giro, leído de su contenido: lo recogido, el neto
+    /// que gira Tesorería (sólo el desembolso lo trae), la parte del fondo y si es en especie. Vacío en los demás hechos.
+    /// </summary>
+    private sealed record GiroDelHecho(decimal Recogido, decimal? NetoAGirar, decimal Subsidio, bool EnEspecie)
+    {
+        public static GiroDelHecho Ninguno { get; } = new(0m, null, 0m, false);
+
+        public static GiroDelHecho De(string tipo, string payloadJson)
+        {
+            if (tipo != IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type
+                && tipo != IngenIA365ERP.Application.Common.Integration.Contracts.Lending.DesembolsoReversadoV1.Type)
+                return Ninguno;
+            try
+            {
+                using var doc = JsonDocument.Parse(payloadJson);
+                var raiz = doc.RootElement;
+                static decimal Numero(JsonElement e, string nombre) =>
+                    e.ValueKind == JsonValueKind.Object && e.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : 0m;
+                var recogido = raiz.TryGetProperty("payoffDeductions", out var r) && r.ValueKind == JsonValueKind.Array
+                    ? r.EnumerateArray().Sum(x => Numero(x, "amount"))
+                    : 0m;
+                decimal? neto = tipo == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type
+                                && raiz.TryGetProperty("netToDisburse", out var n) && n.ValueKind == JsonValueKind.Number ? n.GetDecimal() : null;
+                var subsidio = raiz.TryGetProperty("subsidy", out var s) ? Numero(s, "amount") : 0m;
+                var especie = raiz.TryGetProperty("inKind", out var k) && k.ValueKind == JsonValueKind.Object;
+                return new GiroDelHecho(recogido, neto, subsidio, especie);
+            }
+            catch (JsonException)
+            {
+                return Ninguno;
+            }
+        }
     }
 
     /// <summary>

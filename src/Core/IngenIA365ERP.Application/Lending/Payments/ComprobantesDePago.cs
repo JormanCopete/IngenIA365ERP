@@ -227,7 +227,10 @@ public static class ComprobantesDePago
         + $"|A{d.Anticipo}:{d.CuotaDelAnticipo}|S{d.SaldoAFavor}|E{d.Excedente}|U" + string.Join(",", d.AnticipoUsado.Select(u => $"{u.Cuota}:{u.Monto}"))
         // 2026-11-16: el interés de la cuota en curso que cobra una cancelación con la cuota completa (sólo si lo hay).
         + (d.InteresPorCausar.Count == 0 ? string.Empty
-            : "|I" + string.Join(",", d.InteresPorCausar.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}")));
+            : "|I" + string.Join(",", d.InteresPorCausar.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}")))
+        // 2026-11-27 (feature 028, R4): la cuota que dejó la cancelación salvo la cuota causada y el interés que se causó en ella (sólo si la hay).
+        + (d.CuotaDejada is not { } dejada ? string.Empty
+            : $"|D{dejada}:" + string.Join(",", d.InteresDeLaCuotaDejada.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}")));
 
     /// <summary>Lo que cambió en la distribución de un pago (después − antes) por concepto y cuota, para <c>reallocations</c> (suma cero).</summary>
     public static IReadOnlyList<ConceptAmountV1> Reasignacion(DistribucionDePago antes, DistribucionDePago despues)

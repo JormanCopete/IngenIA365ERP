@@ -142,11 +142,14 @@ public static class OperacionesDeCartera
 
     public static IReadOnlyList<OperacionDeCartera> Todas { get; } =
     [
+        // 2026-11-27 (feature 028, T046; FR-027, H5): el desembolso acredita a «desembolso por girar» sólo el neto y lo recogido al puente de la recogida
+        // propia (RecaudoPorAplicar, clase OwnLoanPayoff), el mismo que debita el recibo de cada recogida; su reverso, al revés.
         new(CreditoDesembolsadoV1.Type, "DES", false,
-            [R.Capital, R.FondoQueSubsidia], [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial], EnLinea, null, "DS", EntregaDelHecho.K1, Ninguno),
+            [R.Capital, R.FondoQueSubsidia], [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial, R.RecaudoPorAplicar], EnLinea, null, "DS",
+            EntregaDelHecho.K1, Ninguno),
         // 2026-11-16 (feature 024, fase 2): el reverso de un desembolso también deshace la administración causada (cargo por cobrar contra ingreso).
         new(DesembolsoReversadoV1.Type, "DRV", false,
-            [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial, R.Ingreso, R.SeguroPorPagar, R.ContraOrdenContingente],
+            [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial, R.Ingreso, R.SeguroPorPagar, R.ContraOrdenContingente, R.RecaudoPorAplicar],
             [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar, R.SuspensoEnOrden, R.FondoQueSubsidia], Heredado, null, "DS",
             EntregaDelHecho.K1,
             [AjusteDeCausacionPorFechaValorV1.Type], HeredaElModo: true),

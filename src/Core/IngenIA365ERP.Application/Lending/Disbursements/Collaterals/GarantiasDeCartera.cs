@@ -1,5 +1,6 @@
 using System.Globalization;
 using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -73,6 +74,21 @@ public static class ErroresDeGarantias
     public static Error SinFirmeza(DateOnly hasta, Guid pago) => new ErrorConDatos(CodigoSinFirmeza,
         $"El pago que canceló el crédito queda en firme el {hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}: libere después de esa fecha.",
         new { finalityUntil = hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), paymentOperationPublicId = pago });
+
+    /// <summary>2026-11-27 (feature 028, T039; FR-027d, D12): el crédito lo recogió el desembolso de otro que todavía no está girado. (nuevo)</summary>
+    public const string CodigoPorLiberarAlGirar = "Lending.Collateral.PendingNewLoanDisbursement";
+
+    /// <summary>«Por liberar al girar el crédito {número}»: lo que dicen el detalle del crédito recogido y el rechazo al liberar. (nuevo)</summary>
+    public static string TextoPorLiberarAlGirar(string numeroDelCreditoNuevo) => $"Por liberar al girar el crédito {numeroDelCreditoNuevo}";
+
+    /// <summary>
+    /// Las garantías y el pagaré de un crédito recogido se liberan cuando el crédito nuevo queda girado: si se anulara antes, la recogida se reversa y el
+    /// recogido vuelve a estar vivo con ellas (D12, H7). (nuevo)
+    /// </summary>
+    public static Error PorLiberarAlGirar(string numeroDelCreditoNuevo, Guid creditoNuevo) => new ErrorConDatos(CodigoPorLiberarAlGirar,
+        $"{TextoPorLiberarAlGirar(numeroDelCreditoNuevo)}: el crédito se canceló con el desembolso del crédito {numeroDelCreditoNuevo} y sus garantías y su " +
+        "pagaré se liberan cuando ese giro quede pagado. Si el crédito nuevo se anula antes, la recogida se reversa y este crédito vuelve a estar vivo con ellas.",
+        new { newLoanPublicId = creditoNuevo, newLoanNumber = numeroDelCreditoNuevo });
 }
 
 /// <summary>Lee el dueño, la garantía y el pagaré dentro del alcance, arma sus DTO y verifica la firmeza de la cancelación (FR-082). (nuevo)</summary>
@@ -138,11 +154,19 @@ public static class GarantiasDeCartera
     /// Nulo si la cancelación del crédito ya está en firme (FR-082): el crédito cancelado y el último pago sin reversar con su
     /// <c>FinalityDate</c> cumplida a <paramref name="hoy"/>; si no, <c>Lending.Collateral.LoanNotPaidOff</c> o <c>.NotFinal</c>. Devuelve también el
     /// pago que canceló (nulo si el crédito cancelado no tiene pagos registrados, p. ej. migrado ya cancelado).
+    /// <para>
+    /// 2026-11-27 (feature 028, T039; FR-027d, D12, H7): el cruce interno de una recogida queda en firme al aplicarse, pero si un desembolso recogió el
+    /// crédito (cancelándolo o abonándolo) y su crédito nuevo todavía no está girado, la cancelación no está en firme:
+    /// <c>Lending.Collateral.PendingNewLoanDisbursement</c> con el número del crédito nuevo (<see cref="PorLiberarAlGirarAsync"/>). Lo cancelado por la
+    /// caja, la nómina o la libranza sigue como antes.
+    /// </para>
     /// </summary>
     public static async Task<(Error? Error, long? Pago)> FirmezaDeLaCancelacionAsync(IApplicationDbContext db, int? loanId, DateOnly hoy, CancellationToken ct)
     {
         var credito = loanId is { } id ? await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct) : null;
         if (credito is null || credito.Status != LoanStatus.PaidOff) return (ErroresDeGarantias.CreditoNoCancelado(credito?.Status.ToString()), null);
+        if ((await PorLiberarAlGirarAsync(db, [credito.Id], ct)).TryGetValue(credito.Id, out var nuevo))
+            return (ErroresDeGarantias.PorLiberarAlGirar(nuevo.Numero, nuevo.PublicId), null);
         var pago = await db.LoanOperations.AsNoTracking()
             .Where(o => o.LoanId == credito.Id && o.Kind == LoanOperationKind.Payment && o.ReversedByOperationId == null)
             .OrderByDescending(o => o.Sequence).ThenByDescending(o => o.Id)
@@ -151,6 +175,66 @@ public static class GarantiasDeCartera
         if (pago is null) return (null, null);
         var firme = pago.FinalityDate ?? pago.ValueDate;
         return firme > hoy ? (ErroresDeGarantias.SinFirmeza(firme, pago.PublicId), pago.Id) : (null, pago.Id);
+    }
+
+    /// <summary>El crédito nuevo cuyo giro espera la liberación de las garantías de un crédito recogido. (nuevo)</summary>
+    public sealed record CreditoPorGirar(Guid PublicId, string Numero);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T039; FR-027d, D12, H7): de <paramref name="creditos"/>, los que recogió el desembolso de un crédito nuevo que todavía no
+    /// está girado, con ese crédito nuevo. Un crédito está recogido por un desembolso si tiene un pago <c>CAR</c> vivo con la clave
+    /// <c>CAR:{desembolso:N}:{crédito:N}</c> (<see cref="RecogidaEnElDesembolso.DesembolsoDeLaClave"/>). El crédito nuevo está girado cuando una orden de
+    /// ese tramo —la del desembolso o la de un giro nuevo— quedó <c>Disbursed</c> (lo registra el consumo del resultado de Tesorería); si el tramo no tiene
+    /// ninguna orden, queda girado al desembolsarse. Si el crédito nuevo se anula, la recogida se reversa (C11) y el pago deja de estar vivo: el recogido
+    /// vuelve a estar vivo y sus garantías nunca se liberaron. (nuevo)
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<int, CreditoPorGirar>> PorLiberarAlGirarAsync(IApplicationDbContext db, IReadOnlyCollection<int> creditos,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(creditos);
+        var resultado = new Dictionary<int, CreditoPorGirar>();
+        if (creditos.Count == 0) return resultado;
+        var ids = creditos.Distinct().ToList();
+        var pagos = (await db.LoanOperations.AsNoTracking()
+                .Where(o => ids.Contains(o.LoanId) && o.Kind == LoanOperationKind.Payment && o.CollectorCode == ClavesDeRecaudador.Cartera
+                            && o.ReversedByOperationId == null && o.IdempotencyKey != null)
+                .Select(o => new { o.LoanId, o.IdempotencyKey })
+                .ToListAsync(ct))
+            .Select(o => (o.LoanId, Desembolso: RecogidaEnElDesembolso.DesembolsoDeLaClave(o.IdempotencyKey)))
+            .Where(o => o.Desembolso is not null)
+            .ToList();
+        if (pagos.Count == 0) return resultado;
+
+        var publicos = pagos.Select(p => p.Desembolso!.Value).Distinct().ToList();
+        var desembolsos = await db.LoanOperations.AsNoTracking()
+            .Where(o => publicos.Contains(o.PublicId) && o.Kind == LoanOperationKind.Disbursement)
+            .Select(o => new { o.PublicId, o.LoanId, Tramo = o.TrancheNumber ?? 1 })
+            .ToListAsync(ct);
+        if (desembolsos.Count == 0) return resultado;
+        var nuevos = desembolsos.Select(d => d.LoanId).Distinct().ToList();
+        var tramos = await db.LoanOperations.AsNoTracking()
+            .Where(o => nuevos.Contains(o.LoanId) && o.Kind == LoanOperationKind.Disbursement)
+            .Select(o => new { o.Id, o.LoanId, Tramo = o.TrancheNumber ?? 1 })
+            .ToListAsync(ct);
+        var ordenes = await db.DisbursementOrders.AsNoTracking()
+            .Where(o => nuevos.Contains(o.LoanId) && !o.IsDeleted)
+            .Select(o => new { o.DisbursementOperationId, o.Status })
+            .ToListAsync(ct);
+        var creditosNuevos = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => nuevos.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, l => new CreditoPorGirar(l.PublicId, l.Number), ct);
+
+        foreach (var (recogido, desembolso) in pagos)
+        {
+            if (resultado.ContainsKey(recogido)) continue;
+            var d = desembolsos.FirstOrDefault(x => x.PublicId == desembolso);
+            if (d is null) continue;
+            var delTramo = tramos.Where(t => t.LoanId == d.LoanId && t.Tramo == d.Tramo).Select(t => t.Id).ToHashSet();
+            var suyas = ordenes.Where(o => delTramo.Contains(o.DisbursementOperationId)).ToList();
+            if (suyas.Count == 0 || suyas.Any(o => o.Status == DisbursementOrderStatus.Disbursed)) continue;
+            resultado[recogido] = creditosNuevos[d.LoanId];
+        }
+        return resultado;
     }
 
     /// <summary>
@@ -190,6 +274,7 @@ public static class GarantiasDeCartera
             .ToDictionaryAsync(a => a.Id, a => (a.PublicId, a.Number), ct);
         var creditos = filas.Where(f => f.LoanId is not null).Select(f => f.LoanId!.Value).Distinct().ToList();
         var deCredito = await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => (l.PublicId, (string?)l.Number), ct);
+        var porGirar = await PorLiberarDeAsync(db, creditos, ct);
         var ids = filas.Select(f => f.PublicId).ToList();
         var documentos = (await db.Attachments.AsNoTracking()
                 .Where(a => a.OwnerEntityType == AdjuntosDeModulo.DocumentoDeGarantia && ids.Contains(a.OwnerEntityPublicId))
@@ -215,7 +300,21 @@ public static class GarantiasDeCartera
                 ExtinguishReason = f.ExtinguishReason,
                 ExecutedOn = f.ExecutedOn,
                 Documents = documentos[f.PublicId].ToList(),
+                ReleaseNotice = f.Status is CollateralStatus.Constituted or CollateralStatus.Valid && f.LoanId is { } recogido
+                    && porGirar.TryGetValue(recogido, out var nuevo) ? ErroresDeGarantias.TextoPorLiberarAlGirar(nuevo.Numero) : null,
             };
         }).ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T039): de <paramref name="creditos"/>, los cancelados que esperan el giro del crédito nuevo que los recogió (lo que muestran
+    /// las garantías y el pagaré: «Por liberar al girar el crédito …»). Uno abonado y vivo no se libera de todas formas: no se anuncia. (nuevo)
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<int, CreditoPorGirar>> PorLiberarDeAsync(IApplicationDbContext db, IReadOnlyCollection<int> creditos,
+        CancellationToken ct)
+    {
+        if (creditos.Count == 0) return new Dictionary<int, CreditoPorGirar>();
+        var cancelados = await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Id) && l.Status == LoanStatus.PaidOff).Select(l => l.Id).ToListAsync(ct);
+        return await PorLiberarAlGirarAsync(db, cancelados, ct);
     }
 }

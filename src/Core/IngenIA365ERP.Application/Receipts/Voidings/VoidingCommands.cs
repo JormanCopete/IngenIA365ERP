@@ -114,6 +114,10 @@ public sealed class RequestReceiptVoidingCommandHandler(
         var recibo = await db.IssuedReceipts.FirstAsync(r => r.Id == visto.Id, ct);
         if (recibo.Status != ReceiptState.Valid || await db.ReceiptVoidings.AnyAsync(v => v.ReceiptId == recibo.Id, ct))
             return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionYaHecha(recibo.Number));
+        // 2026-11-27 (feature 028, E4, T087): el recibo con que un desembolso recogió facturas se anula sólo anulando el crédito nuevo antes del giro: anulado
+        // aquí, la orden de giro saldría por un neto que ya no cuadra con lo recogido.
+        if (recibo.Channel == ReceiptChannel.LoanDisbursement)
+            return Result.Failure<ReceiptVoidingDto>(Integration.RecogidaEnRecaudo.SeAnulaConElCredito(recibo.Number));
         // 2026-11-23: el anticipo de concepto que recibió tiene que estar entero; si ya se cruzó, no se pide la anulación.
         var anticipoEntero = await CreditBalances.AnticiposDeConcepto.PuedeAnularAsync(db, recibo, ct);
         if (anticipoEntero.IsFailure) return Result.Failure<ReceiptVoidingDto>(anticipoEntero.Error);

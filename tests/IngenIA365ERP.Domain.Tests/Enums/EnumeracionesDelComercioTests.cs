@@ -142,7 +142,9 @@ public class EnumeracionesDelComercioTests
     {
         Fija((PaymentMeansClass.Cash, 1), (PaymentMeansClass.CreditCard, 2), (PaymentMeansClass.DebitCard, 3),
              (PaymentMeansClass.AssociateCredit, 4), (PaymentMeansClass.CustomerCredit, 5), (PaymentMeansClass.BankDeposit, 6),
-             (PaymentMeansClass.Transfer, 7), (PaymentMeansClass.Voucher, 8), (PaymentMeansClass.Check, 9), (PaymentMeansClass.Other, 99));
+             (PaymentMeansClass.Transfer, 7), (PaymentMeansClass.Voucher, 8), (PaymentMeansClass.Check, 9),
+             // 2026-11-27 (feature 028, E4, T086): el cruce interno, con el número de ClaseDeMedioDeRecaudo.InternalOffset.
+             (PaymentMeansClass.InternalOffset, 22), (PaymentMeansClass.Other, 99));
         Fija((CashCountMethod.PhysicalCount, 1), (CashCountMethod.VoucherTotal, 2), (CashCountMethod.ByReference, 3), (CashCountMethod.None, 4));
         Fija((PaymentReferenceKind.Approval, 1), (PaymentReferenceKind.Receipt, 2), (PaymentReferenceKind.Deposit, 3),
              (PaymentReferenceKind.VoucherNumber, 4), (PaymentReferenceKind.CheckNumber, 5), (PaymentReferenceKind.Other, 99));

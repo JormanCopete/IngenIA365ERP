@@ -20,7 +20,11 @@
      neto y plan— y confirmar con la huella de la vista previa que se vio y, si hay avisos, reconociéndolos.
    - Órdenes de giro: pedir la anulación a Tesorería, el giro nuevo de un crédito pendiente de giro y anular el crédito.
    - Archivos de desembolsos: formato del ámbito de desembolsos, cuenta de origen del plan, órdenes pendientes con su motivo, generar,
-     descargar por enlace firmado y anular antes del primer resultado de Tesorería. *@
+     descargar por enlace firmado y anular antes del primer resultado de Tesorería.
+   2026-11-27 (pedido del dueño; feature 028, HU3, T042): las recogidas salen de la solicitud (todas las autorizadas; ya no se eligen aquí) y la vista
+   previa las recalcula a la fecha valor: «Lo que recoge» con lo proyectado, lo actual, la diferencia y su causa, lo omitido y lo que requiere
+   reestructuración; el resumen dice bruto, recogido y neto a girar; si hay diferencias u omitidos, confirmar exige «Revisé las diferencias de lo que se
+   recoge»; y el resultado muestra lo aplicado por producto, lo omitido y la orden por el neto. *@
 <PermissionGate Required="Lending.Disbursements.Execute" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -97,7 +101,6 @@
                             <label class="campo"><input type="checkbox" @bind="_porArchivo" /> Se paga por archivo de desembolsos</label>
                         }
                     </div>
-                    <p class="texto-tenue">La recogida de créditos propios se elige con la lista de créditos del deudor, que llega con la consulta de créditos.</p>
                     <div class="toolbar">
                         <SfButton CssClass="e-outline" Disabled="@_vista.Activa" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
                     </div>
@@ -111,14 +114,18 @@
                 <div class="kpi-grid">
                     <div class="kpi-card"><span class="kpi-label">Tramo</span><span class="kpi-value">@p.Tranche</span></div>
                     <div class="kpi-card"><span class="kpi-label">Bruto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(p.GrossAmount)</span></div>
+                    @if (p.Payoffs.Count > 0)
+                    {
+                        <div class="kpi-card"><span class="kpi-label">Recogido</span><span class="kpi-value">@TextosDeOriginacion.Pesos(p.Recogido)</span></div>
+                    }
                     <div class="kpi-card"><span class="kpi-label">Neto a girar</span><span class="kpi-value">@TextosDeOriginacion.Pesos(p.NetToDisburse)</span></div>
                     <div class="kpi-card"><span class="kpi-label">Tasa efectiva con cargos</span><span class="kpi-value">@p.Usury.Rate.ToString("P2")</span></div>
                 </div>
                 <div class="info-card">
-                    <p class="@(p.Usury.Passes ? "aviso aviso-exito" : "aviso aviso-error")">
+                    <p class="@(p.Usury.Passes ? "aviso aviso-ok" : "aviso aviso-error")">
                         Usura del día @(p.Usury.Usury is { } u ? u.ToString("P2") : "sin publicar"): @(p.Usury.Passes ? "cumple" : "la supera")
                     </p>
-                    <p class="@(p.Approval.Valid ? "aviso aviso-exito" : "aviso aviso-error")">
+                    <p class="@(p.Approval.Valid ? "aviso aviso-ok" : "aviso aviso-error")">
                         Aprobación @(p.Approval.Valid ? "vigente" : "vencida") hasta el @(p.Approval.ExpiresAt?.ToString("dd/MM/yyyy"))
                     </p>
                     @if (!p.Collaterals.Perfected)
@@ -128,17 +135,21 @@
                     }
                     @if (p.Payoffs.Count > 0)
                     {
-                        <h4>Recogidas</h4>
-                        <table class="data-grid">
-                            <thead><tr><th>Crédito</th><th class="numero">Para cancelar</th><th class="numero">Días de mora</th><th></th></tr></thead>
-                            <tbody>
-                                @foreach (var r in p.Payoffs)
-                                {
-                                    <tr><td>@r.Number</td><td class="numero">@TextosDeOriginacion.Pesos(r.ToPayOff)</td><td class="numero">@r.DaysPastDue</td>
-                                        <td>@(r.RequiresRestructuring ? "Requiere reestructuración" : "")</td></tr>
-                                }
-                            </tbody>
-                        </table>
+                        <RecogidasDelDesembolso Recogidas="@p.Payoffs" />
+                        @if (p.PayoffDifferences.Count > 0)
+                        {
+                            <p class="aviso aviso-alerta">
+                                @(p.PayoffDifferences.Count == 1 ? "Un producto cambió" : $"{p.PayoffDifferences.Count} productos cambiaron") desde la proyección de la
+                                solicitud (diferencia total <span class="@TextosDeDesembolso.ClaseDeDiferencia(p.PayoffDifferences.Total)">@TextosDeDesembolso.Diferencia(p.PayoffDifferences.Total)</span>).
+                                El neto a girar ya la tiene en cuenta.
+                            </p>
+                        }
+                        @if (p.PayoffDifferences.AboveTolerance)
+                        {
+                            <p class="aviso aviso-error">
+                                La diferencia de lo que se recoge pasa de la tolerancia de la cooperativa: devuelva la solicitud para corregirla antes de desembolsar.
+                            </p>
+                        }
                     }
                     @if (p.Segregation.Conflict is not null)
                     {
@@ -168,20 +179,84 @@
                 </div>
                 @if (p.Blocking.Count == 0)
                 {
-                    <div class="toolbar">
-                        @if (p.Warnings.Count > 0)
-                        {
-                            <label class="campo"><input type="checkbox" @bind="_reconocer" /> Leí los avisos y desembolso de todas formas</label>
-                        }
-                        <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || (p.Warnings.Count > 0 && !_reconocer))" OnClick="@DesembolsarAsync">Desembolsar</SfButton>
-                    </div>
+                    <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Desembolsando…">
+                        <div class="toolbar">
+                            @if (p.Warnings.Count > 0)
+                            {
+                                <label class="campo"><input type="checkbox" @bind="_reconocer" /> Leí los avisos y desembolso de todas formas</label>
+                            }
+                            @if (p.PayoffDifferences.RequiresAcknowledgement)
+                            {
+                                <label class="campo"><input type="checkbox" @bind="_reconocerDiferencias" /> Revisé las diferencias de lo que se recoge</label>
+                            }
+                            <SfButton CssClass="e-primary" Disabled="@(!PuedeDesembolsar(p))" OnClick="@DesembolsarAsync">Desembolsar</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
                 }
             }
             @if (_resultado is { } hecho)
             {
                 <div class="info-card">
-                    <p class="aviso aviso-exito">Crédito @hecho.LoanNumber desembolsado (tramo @hecho.Tranche, operación @hecho.OperationNumber).
+                    <p class="aviso aviso-ok">Crédito @hecho.LoanNumber desembolsado (tramo @hecho.Tranche, operación @hecho.OperationNumber).
                         Orden de giro @(hecho.Order?.Number) por @TextosDeOriginacion.Pesos(hecho.NetToDisburse).</p>
+                    @if (hecho.Payoffs.Count > 0 || hecho.OmittedPayoffs.Count > 0)
+                    {
+                        <div class="kpi-grid">
+                            <div class="kpi-card"><span class="kpi-label">Bruto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(hecho.GrossAmount)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Recogido</span><span class="kpi-value">@TextosDeOriginacion.Pesos(hecho.Recogido)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Neto girado en la orden</span><span class="kpi-value">@TextosDeOriginacion.Pesos(hecho.NetToDisburse)</span></div>
+                        </div>
+                    }
+                    @if (hecho.Payoffs.Count > 0)
+                    {
+                        <h4>Lo que se aplicó</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th><th>Modo</th><th class="numero">Proyectado</th><th class="numero">Actual</th><th class="numero">Diferencia</th>
+                                        <th>Causa</th><th class="numero">Aplicado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in hecho.Payoffs)
+                                    {
+                                        <tr>
+                                            <td>@TextosDeDesembolso.ClaseDeProducto(a.Kind) @a.Number</td>
+                                            <td>
+                                                @TextosDeDesembolso.ModoDeRecogida(a.Mode)
+                                                @* 2026-11-27 (feature 028, E2, T072): la cuota causada que se dejó a su canal. *@
+                                                @if (a.LeftInstallmentNumber is { } dejada)
+                                                {
+                                                    <span class="texto-tenue"> · cuota @dejada dejada a su canal (@TextosDeOriginacion.Pesos(a.LeftInstallment ?? 0m))</span>
+                                                }
+                                                @* 2026-11-27 (feature 028, E4, T089): la factura se pagó con un recibo de Recaudo sin caja. *@
+                                                @if (a.ReceiptNumber is { } recibo)
+                                                {
+                                                    <span class="texto-tenue"> · recibo @recibo</span>
+                                                }
+                                            </td>
+                                            <td class="numero">@(a.Projected is { } proyectado ? TextosDeOriginacion.Pesos(proyectado) : "Sin proyección")</td>
+                                            <td class="numero">@TextosDeOriginacion.Pesos(a.Current)</td>
+                                            <td class="numero"><span class="@TextosDeDesembolso.ClaseDeDiferencia(a.Difference)">@TextosDeDesembolso.Diferencia(a.Difference)</span></td>
+                                            <td>@TextosDeDesembolso.Causas(a.Causes)</td>
+                                            <td class="numero">@TextosDeOriginacion.Pesos(a.Applied)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    @if (hecho.OmittedPayoffs.Count > 0)
+                    {
+                        <h4>Lo que no se recogió</h4>
+                        <ul>
+                            @foreach (var o in hecho.OmittedPayoffs)
+                            {
+                                <li>@TextosDeDesembolso.ClaseDeProducto(o.Kind) @o.Number@(o.Projected is { } proyectado ? $" (proyectado {TextosDeOriginacion.Pesos(proyectado)})" : ""): @(string.IsNullOrWhiteSpace(o.Reason) ? "ya estaba cancelado" : o.Reason)</li>
+                            }
+                        </ul>
+                    }
                 </div>
             }
         </IndicadorDeCarga>
@@ -337,7 +412,7 @@
     private decimal? _tramo;
     private PersonSearchPicker.PersonSearchItem? _beneficiario;
     private string? _banco, _tipoDeCuenta, _cuenta, _motivo, _errorDialogo, _estadoDeOrden, _formato, _cuentaDeOrigen;
-    private bool _porArchivo, _reconocer, _mostrarMotivo;
+    private bool _porArchivo, _reconocer, _reconocerDiferencias, _mostrarMotivo;
     private List<BancoItem> _bancos = [];
     private VistaPreviaDeDesembolsoDto? _previa;
     private DesembolsoRealizadoDto? _resultado;
@@ -399,6 +474,7 @@
         using var carga = _vista.Iniciar();
         _resultado = null;
         _reconocer = false;
+        _reconocerDiferencias = false;
         var r = await ClienteDeDesembolsos.VistaPreviaAsync(Pedido());
         _previa = r.IsSuccess ? r.Value : null;
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo evaluar el desembolso.");
@@ -413,6 +489,8 @@
         {
             ExpectedPreviewSha256 = _previa.PreviewSha256,
             AcknowledgeWarnings = _reconocer,
+            // 2026-11-27 (feature 028, T042): las diferencias de lo que se recoge se reconocen con su propia casilla.
+            AcknowledgedPayoffDifferences = _previa.PayoffDifferences.RequiresAcknowledgement && _reconocerDiferencias,
         }, _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo desembolsar."); return; }
         _resultado = r.Value;
@@ -420,6 +498,13 @@
         await Notification.SuccessAsync($"Crédito {r.Value!.LoanNumber} desembolsado.");
         await CargarSolicitudAsync(_solicitud.PublicId);
     }
+
+    /// <summary>
+    /// Se desembolsa sin otra acción en curso, con los avisos leídos si los hay y, 2026-11-27 (feature 028), las diferencias de lo que se recoge
+    /// revisadas si la vista previa las pide.
+    /// </summary>
+    private bool PuedeDesembolsar(VistaPreviaDeDesembolsoDto p) =>
+        !_accion.Activa && (p.Warnings.Count == 0 || _reconocer) && (!p.PayoffDifferences.RequiresAcknowledgement || _reconocerDiferencias);
 
     private async Task CambiarAsync(int pestana)
     {

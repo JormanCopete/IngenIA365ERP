@@ -548,6 +548,9 @@ public interface IApplicationDbContext
     // 2026-11-25 (pedido del dueño; feature 026): los cargos masivos.
     DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun> BulkChargeRuns { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine> BulkChargeLines { get; }
+    // 2026-11-27 (pedido del dueño; feature 028): la recogida proyectada en la solicitud y la aplicada en el desembolso.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff> CreditApplicationPayoffs { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payoffs.DisbursementPayoff> DisbursementPayoffs { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
     // K4 (feature 013, CarteraCobranza; data-model §26.3–§26.10).

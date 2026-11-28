@@ -514,6 +514,9 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // 2026-11-25 (feature 026): los cargos masivos.
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun> BulkChargeRuns => Set<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeRun>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine> BulkChargeLines => Set<IngenIA365ERP.Domain.Entities.Lending.BulkCharges.BulkChargeLine>();
+    // 2026-11-27 (feature 028): la recogida proyectada en la solicitud y la aplicada en el desembolso.
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff> CreditApplicationPayoffs => Set<IngenIA365ERP.Domain.Entities.Lending.Payoffs.CreditApplicationPayoff>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payoffs.DisbursementPayoff> DisbursementPayoffs => Set<IngenIA365ERP.Domain.Entities.Lending.Payoffs.DisbursementPayoff>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
     // K4 (feature 013, CarteraCobranza).

@@ -26,7 +26,13 @@ namespace IngenIA365ERP.Application.Lending.Disbursements;
 /// <c>RelatedOperationId</c> = el reversado) y otra orden con <c>PreviousOrderId</c>, por el mismo bruto y lo mismo recogido —las recogidas se
 /// conservaron (C11)—, con la forma y el beneficiario nuevos; el crédito vuelve a <c>Active</c>; emite <c>CreditoDesembolsado</c> y
 /// <c>OrdenDeGiroEmitida</c> con <c>ReplacesOrderPublicId</c> y <c>related</c> = la anterior. El plan no se regenera aquí: la regeneración por la
-/// fecha valor nueva la suma la fase 8 (<c>GeneradorDePlan</c>, D12). (nuevo)
+/// fecha valor nueva la suma la fase 8 (<c>GeneradorDePlan</c>, D12).
+/// <para>
+/// 2026-11-27 (feature 028, T038; FR-027c, H6): el hecho y la orden llevan las <b>mismas recogidas</b> —los pagos <c>CAR</c> vivos que aplicó el primer
+/// desembolso del tramo (<see cref="RecogidaEnElDesembolso.VivasAsync"/>)— y el mismo neto: la orden descuenta lo aplicado (H4) y
+/// <c>NetToDisburse</c> = bruto − recogido. Antes el hecho salía sin recogidas (neto = bruto) mientras la orden llevaba el neto.
+/// </para>
+/// (nuevo)
 /// </summary>
 public sealed record ReissueDisbursementOrderCommand(Guid OrderPublicId, DisbursementForm Form, BeneficiaryInput? Beneficiary, string Reason, bool PaidByFile = false)
     : IRequest<Result<DisbursementOrderDto>>, IOperacionIdempotente
@@ -95,14 +101,22 @@ public sealed class ReissueDisbursementOrderCommandHandler(
             var condiciones = await db.LoanTermsVersions.AsNoTracking().Where(t => t.LoanId == c.Id).OrderByDescending(t => t.VersionNumber).FirstAsync(ct);
 
             var tramo = original.TrancheNumber ?? 1;
+            // 2026-11-27 (feature 028, T038; FR-027c, H6): las recogidas del tramo siguen aplicadas (C11) con la clave del desembolso que las aplicó —el
+            // primero del tramo, no el reversado que se reemplaza—: el hecho nuevo las lleva y la orden descuenta lo aplicado de verdad (H4).
+            var desembolsosDelTramo = await db.LoanOperations.AsNoTracking()
+                .Where(o => o.LoanId == c.Id && o.Kind == LoanOperationKind.Disbursement && (o.TrancheNumber ?? 1) == tramo)
+                .Select(o => o.PublicId).ToListAsync(ct);
+            var recogidas = await RecogidaEnElDesembolso.VivasAsync(db, desembolsosDelTramo, ct);
+            var recogido = recogidas.Sum(r => r.Amount);
             var entradas = new { reissues = anterior.PublicId, reversed = original.PublicId, tranche = tramo, form = request.Form.ToString(),
-                payee = beneficiario.Value.PersonPublicId, reason = request.Reason.Trim() };
+                payee = beneficiario.Value.PersonPublicId, reason = request.Reason.Trim(),
+                payoffs = recogidas.Select(r => new { loan = r.Loan.LoanPublicId, operation = r.OperationPublicId, amount = r.Amount }) };
             var operacion = await tramos.RegistrarAsync(c, control, tramo, request.Form, original.Amount, hoy, fecha.Value, entradas, condiciones.RulesVersion,
                 PrevalidationOutcome.NotApplicable, original.Id, ct);
             RegistroDeCartera.CambiarEstado(c, LoanStatus.Active, hoy);
             await db.SaveChangesAsync(ct);
 
-            var orden = await tramos.EmitirOrdenAsync(c, operacion, beneficiario.Value, original.Amount, anterior.PayoffAmount,
+            var orden = await tramos.EmitirOrdenAsync(c, operacion, beneficiario.Value, original.Amount, recogido,
                 request.PaidByFile && request.Form == DisbursementForm.Transfer, anterior.Id, ct);
             intervenciones.Registrar(verificada.Value, EmisionDeCartera.ClaseDesembolso, operacion.PublicId);
 
@@ -121,7 +135,7 @@ public sealed class ReissueDisbursementOrderCommandHandler(
                 RulesVersion = plan.RulesVersion,
             };
             var emitidos = await emision.DesembolsoAsync(new DesembolsoAEmitir(hecho, operacion, tramo, true, request.Form, beneficiario.Value.ComoPayee(),
-                original.Amount, [], orden, resumen, PrevalidationOutcome.NotApplicable, anterior.PublicId, anterior.Number), ct);
+                original.Amount, recogidas, orden, resumen, PrevalidationOutcome.NotApplicable, anterior.PublicId, anterior.Number), ct);
             if (emitidos.IsFailure) return Falla(emitidos.Error);
             await db.SaveChangesAsync(ct);
             return Result.Success((await ConsultasDeOrdenesDeGiro.DtosAsync(db, [orden], cuentaCompleta: true, ct))[0]);

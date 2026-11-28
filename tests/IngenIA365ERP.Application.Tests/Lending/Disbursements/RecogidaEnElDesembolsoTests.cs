@@ -13,9 +13,11 @@ namespace IngenIA365ERP.Application.Tests.Lending.Disbursements;
 /// <summary>
 /// Feature 013, US3, T0419 (FR-046; data-model §7.3; T21, T91): cada crédito recogido se paga por <see cref="IContratoDeObligaciones.AplicarAsync"/>
 /// dentro de la transacción del desembolso, con el recaudador <c>CAR</c> de clase <c>OwnLoanPayoff</c>, la clave
-/// <c>CAR:{operaciónDeDesembolso:N}:{obligationPublicId:N}</c>, el medio <c>InternalOffset</c> y la modalidad <c>FullPayoff</c> o <c>FreeAmount</c>;
+/// <c>CAR:{operaciónDeDesembolso:N}:{obligationPublicId:N}</c>, el medio <c>InternalOffset</c> y la modalidad <c>FullPayoff</c> o —desde la 028 (D7)—
+/// <c>ExtraordinaryPrincipal</c> con la elección de la solicitud;
 /// el neto de la orden es el bruto menos lo recogido y un neto que no queda positivo se rechaza; un recogido en mora es reestructuración
-/// (<c>Lending.Payoff.RequiresRestructuring</c>, también en la vista previa); la recogida que la solicitud no autoriza no se admite; si el contrato
+/// (<c>Lending.Payoff.RequiresRestructuring</c>, también en la vista previa); una lista distinta de la que autoriza la solicitud no se admite
+/// (<c>Lending.Payoff.MustMatchApplication</c>, desde la 028); si el contrato
 /// no aplica un ítem, el desembolso no existe.
 /// <para>
 /// El efecto en el recogido —su operación <c>Payment</c> con <c>RelatedOperationId</c>, <c>FinalityDate = ValueDate</c>, el <c>PaidOff</c> y su
@@ -64,15 +66,16 @@ public sealed class RecogidaEnElDesembolsoTests : IAsyncLifetime
         (orden.GrossAmount, orden.PayoffAmount, orden.NetAmount).Should().Be((3_000_000m, 1_000_000m, 2_000_000m));
     }
 
+    /// <summary>2026-11-27 (feature 028, T036; D7): el parcial ya no deja anticipo: abona a capital con la elección de la solicitud (aquí, reducir plazo).</summary>
     [Fact]
-    public async Task La_recogida_parcial_va_como_FreeAmount_por_el_valor_pedido()
+    public async Task La_recogida_parcial_abona_a_capital_con_la_eleccion_de_la_solicitud()
     {
         var s = await AprobadaConRecogidaAsync(new OwnLoanPayoffInput(_viejo.PublicId, "Partial", 400_000m));
 
         await _d.DesembolsadoAsync(_d.Entrada(s) with { OwnLoanPayoffs = [new OwnLoanPayoffInput(_viejo.PublicId, "Partial", 400_000m)] });
 
         var pago = _d.Aplicadas.Single().Payments.Single();
-        (pago.Modality, pago.Amount).Should().Be((ModalidadDePago.FreeAmount, 400_000m));
+        (pago.Modality, pago.Amount, pago.Choice).Should().Be((ModalidadDePago.ExtraordinaryPrincipal, 400_000m, (EleccionDeAbono?)EleccionDeAbono.ReduceTerm));
     }
 
     [Fact]
@@ -105,7 +108,8 @@ public sealed class RecogidaEnElDesembolsoTests : IAsyncLifetime
 
         var r = await _d.DesembolsarAsync(_d.Entrada(s) with { OwnLoanPayoffs = [new OwnLoanPayoffInput(otro.PublicId)] });
 
-        r.Error.Code.Should().Be(ErroresDeDesembolso.CodigoRecogidaNoAutorizada);
+        // 2026-11-27 (feature 028, T032; D9): la lista del cuerpo, si viene, es la de la solicitud.
+        r.Error.Code.Should().Be(Application.Lending.Payoffs.ErroresDeRecogida.CodigoDebeCoincidirConLaSolicitud);
         _d.Aplicadas.Should().BeEmpty();
     }
 

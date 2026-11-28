@@ -84,6 +84,49 @@ public sealed record CreditoDto(
 {
     /// <summary>US6 (T0603): la validación fallida de la venta que lo originó (código, motivo y confirmación por excepción); nula si no la tuvo.</summary>
     public ValidacionFallidaDelCreditoDto? ValidationFailure { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T054): los créditos nuevos que lo recogieron con su desembolso («Recogido por el crédito … el …»).</summary>
+    public IReadOnlyList<VinculoDeRecogidaDto> PaidOffBy { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, T054): lo que recogió el desembolso de este crédito («Recogió: …»).</summary>
+    public IReadOnlyList<VinculoDeRecogidaDto> PaidOff { get; init; } = [];
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, T054): un vínculo de recogida visto desde un crédito: el otro lado (el crédito nuevo que lo recogió o el producto que éste
+/// recogió), la fecha valor del desembolso, el modo (<c>Total</c>, <c>Partial</c>…), lo aplicado y si se reversó.
+/// </summary>
+public sealed record VinculoDeRecogidaDto(string Kind, Guid? LoanPublicId, string Number, DateOnly Date, string Mode, decimal Applied, bool Reversed)
+{
+    private const string Reversado = " (reversado al anular el crédito nuevo)";
+
+    /// <summary>2026-11-27 (feature 028, E2, T072): la cuota causada que la recogida dejó a su canal, lo que debe, cuándo quedó pagada y el canal.</summary>
+    public int? LeftInstallmentNumber { get; init; }
+
+    public decimal? LeftInstallmentAmount { get; init; }
+
+    public DateTime? LeftInstallmentSettledAt { get; init; }
+
+    /// <summary>La forma de pago del crédito recogido (<c>PaymasterDeduction</c>, <c>OwnPayroll</c>, <c>Cashier</c>…).</summary>
+    public string? LeftInstallmentChannel { get; init; }
+
+    /// <summary>¿Dejó una cuota a su canal y todavía se debe?</summary>
+    public bool CuotaDejadaPendiente => LeftInstallmentNumber is not null && LeftInstallmentSettledAt is null && !Reversed;
+
+    /// <summary>«Cuota dejada a la pagaduría: cuota 7 por $ 312.400» (a la nómina, o a su canal si se paga en caja).</summary>
+    public string CuotaDejada => LeftInstallmentNumber is { } n
+        ? $"Cuota dejada {(LeftInstallmentChannel switch { "PaymasterDeduction" => "a la pagaduría", "OwnPayroll" => "a la nómina", _ => "a su canal" })}: "
+          + $"cuota {n} por {TextosDeRecogida.Pesos(LeftInstallmentAmount ?? 0m)}"
+        : string.Empty;
+
+    /// <summary>«Recogido por el crédito {número} el {fecha}».</summary>
+    public string RecogidoPor => $"Recogido por el crédito {Number} el {Date:dd/MM/yyyy}" + (Reversed ? Reversado : string.Empty);
+
+    /// <summary>Un producto recogido, para la lista «Recogió: …»: «crédito 65-78925 (total, $ 5.098.457)».</summary>
+    public string Recogido =>
+        $"{(Kind switch { "Account" => "cuenta", "CommercialReceivable" => "factura", _ => "crédito" })} {Number} "
+        + $"({(Mode switch { "Partial" => "parcial", "Installments" => "cuotas", "Deposit" => "abono", _ => "total" })}, {TextosDeRecogida.Pesos(Applied)}, "
+        + $"el {Date:dd/MM/yyyy}){(Reversed ? Reversado : string.Empty)}";
 }
 
 /// <summary>La validación fallida de la obligación de una venta (FR-052, B8).</summary>
@@ -166,6 +209,9 @@ public sealed record FilaDelLibroDto(
 
     /// <summary>2026-11-26 (pedido del dueño): el recibo del recaudador de la operación que dejó la fila; nulo sin recibo.</summary>
     public string? ReceiptNumber { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T054): lo que la fila dice además de su clase («Recogido con el crédito …»); nulo si nada.</summary>
+    public string? Description { get; init; }
 }
 
 // ------------------------------------------------------------------------------------- estado de cuenta (FR-069) --

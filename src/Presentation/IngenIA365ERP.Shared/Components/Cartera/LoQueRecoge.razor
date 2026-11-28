@@ -1,0 +1,118 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* 2026-11-27 (pedido del dueño; feature 028, HU2, T029; FR-011): «Lo que recoge» en el expediente de la solicitud: por producto, lo que se proyectó al
+   guardarla o radicarla —el modo, el valor pedido de un parcial, lo que se recogería a la fecha proyectada y su desglose desplegable, la cuota causada—,
+   el total, el neto a girar y la fecha proyectada con la información hasta cuándo se tomó. Avisa si otra solicitud viva recoge el mismo crédito. Al
+   desembolsar todo se vuelve a calcular y se muestran las diferencias. No consulta nada: pinta lo que trajo la solicitud (su zona de carga es la de
+   la pantalla).
+   2026-11-27 (feature 028, E2, T072; HU4): la cuota causada con su tratamiento —incluida o dejada a su canal, con lo que deberá—, la cuota enviada y qué
+   pasa con ella en la recogida. *@
+@if (Recogidas.Count > 0)
+{
+    <div class="info-card">
+        <h4>Lo que recoge</h4>
+        <p class="texto-apoyo">
+            Lo que el crédito nuevo cancela o abona con su desembolso, proyectado
+            @(Resumen is { } r ? $"al {r.ProjectedDate:dd/MM/yyyy} con la información registrada hasta el {r.RecordedAsOf.ToLocalTime():dd/MM/yyyy HH:mm}" : "a la fecha de desembolso").
+            Al desembolsar se vuelve a calcular y se muestran las diferencias.
+        </p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th>Producto</th><th>Modo</th><th class="numero">Valor pedido</th><th class="numero">Proyectado</th><th>Cuota causada</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var recogida in Recogidas)
+                    {
+                        var p = recogida;
+                        <tr>
+                            <td>@TextosDeRecogida.Clase(p.Kind) @p.Number</td>
+                            <td>@TextosDeRecogida.Modo(p.Mode)</td>
+                            <td class="numero">@TextosDeRecogida.Pesos(p.RequestedAmount)</td>
+                            <td class="numero">@(p.Projected ? TextosDeRecogida.Pesos(p.ProjectedAmount) : "Se proyecta al radicar")</td>
+                            <td>
+                                @if (p.CurrentInstallment is { } c)
+                                {
+                                    <span>Cuota @c.Number por @TextosDeRecogida.Pesos(c.Treatment == TextosDeRecogida.CuotaExcluida ? c.Left ?? c.Amount : c.Amount): @TextosDeRecogida.TratamientoDeCuota(c.Treatment).ToLowerInvariant()</span>
+                                    @if (c.Sent is { } enviada)
+                                    {
+                                        <span class="texto-alerta"> · @TextosDeRecogida.EstadoDeEnvio(enviada.State)</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>—</span>
+                                }
+                            </td>
+                            <td>
+                                @if (p.Projected)
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Alternar(p.Order))">@(_abiertos.Contains(p.Order) ? "Ocultar" : "Detalle")</SfButton>
+                                }
+                            </td>
+                        </tr>
+                        @if (p.InOtherApplication is not null)
+                        {
+                            <tr><td colspan="6"><span class="texto-alerta">@TextosDeRecogida.EnOtraSolicitud(p.InOtherApplication), que también lo recoge.</span></td></tr>
+                        }
+                        @if (p.CurrentInstallment?.Explanation is { } explicacionDeLaCuota)
+                        {
+                            <tr><td colspan="6"><span class="texto-apoyo">@explicacionDeLaCuota</span></td></tr>
+                        }
+                        @if (_abiertos.Contains(p.Order))
+                        {
+                            <tr>
+                                <td colspan="6">
+                                    <table class="data-grid">
+                                        <tbody>
+                                            @foreach (var (concepto, valor) in TextosDeRecogida.Conceptos(p.Breakdown))
+                                            {
+                                                <tr><td>@concepto</td><td class="numero">@TextosDeRecogida.Pesos(valor)</td></tr>
+                                            }
+                                            <tr><th>Proyectado</th><th class="numero">@TextosDeRecogida.Pesos(p.ProjectedAmount)</th></tr>
+                                        </tbody>
+                                    </table>
+                                    @if (p.InterestMode is { } modo) { <p class="texto-tenue">@TextosDeRecogida.ModoDeIntereses(modo)</p> }
+                                    @* 2026-11-27 (feature 028, T051): el interés proyectado en palabras; los días los da la vista previa del desembolso. *@
+                                    @foreach (var texto in TextosDeRecogida.InteresesDelDesglose(p.Breakdown, p.InterestMode))
+                                    {
+                                        <p class="texto-apoyo">@texto</p>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Resumen is { } resumen)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Total recogido</span><span class="kpi-value">@TextosDeRecogida.Pesos(resumen.Total)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Neto a girar</span><span class="kpi-value">@TextosDeRecogida.Pesos(resumen.NetToDisburse)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Fecha proyectada</span><span class="kpi-value">@resumen.ProjectedDate.ToString("dd/MM/yyyy")</span></div>
+            </div>
+            @if (Recogidas.Any(r => !r.Projected))
+            {
+                <p class="aviso aviso-info">Algunos productos se pidieron antes de que la solicitud guardara su proyección: se proyectan al radicarla.</p>
+            }
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Lo que recoge la solicitud (<c>payoffs[]</c>), en su orden.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RecogidaDeSolicitudDto> Recogidas { get; set; } = [];
+
+    /// <summary>El total, el neto, D y R (<c>payoffSummary</c>).</summary>
+    [Parameter] public ResumenDeRecogidasDeSolicitudDto? Resumen { get; set; }
+
+    private readonly HashSet<int> _abiertos = [];
+
+    private void Alternar(int orden)
+    {
+        if (!_abiertos.Remove(orden)) _abiertos.Add(orden);
+    }
+}

@@ -95,6 +95,25 @@ public class LosCerrojosDeRecaudoYTesoreriaVanEnOrden
     }
 
     /// <summary>
+    /// 2026-11-27 (feature 028, E4, T085; research E-16): el desembolso que recoge facturas y la anulación del crédito nuevo toman los cerrojos de Recaudo (por
+    /// <c>IRecogidaEnRecaudo.TomarCerrojosAsync</c>) <b>antes</b> que los de Cartera: el orden global de data-model §0.5 de la 015 pone Recaudo antes que los
+    /// contratos de Cartera; al revés, el desembolso y un recibo de caja del mismo deudor se esperarían en cruz.
+    /// </summary>
+    [Fact]
+    public void Cartera_toma_los_cerrojos_de_Recaudo_antes_que_los_suyos_al_recoger_facturas()
+    {
+        var root = RepoPath.FindRepoRoot();
+        foreach (var relativo in new[] { "ExecuteLoanDisbursementCommand.cs", "VoidPendingLoanCommand.cs" })
+        {
+            var texto = FuenteSinComentarios.Leer(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Disbursements", relativo));
+            var deRecaudo = texto.IndexOf(".TomarCerrojosAsync(", StringComparison.Ordinal);
+            var deCartera = texto.IndexOf("cerrojo.TomarSetupAsync(", StringComparison.Ordinal);
+            Assert.True(deRecaudo >= 0, $"{relativo} no toma los cerrojos de Recaudo de la recogida de facturas");
+            Assert.True(deCartera > deRecaudo, $"{relativo} toma los cerrojos de Cartera antes que los de Recaudo (data-model §0.5 de la 015)");
+        }
+    }
+
+    /// <summary>
     /// CH16: un archivo de Tesorería que escribe por <c>IResultadoDeOrdenesDeRecaudo.InformarAsync</c> o <c>IPartidasDesdeConciliacion.CrearAsync</c>
     /// llama antes a <c>TomarCerrojosAsync</c>. Sin llamadores todavía, no hay nada que violar.
     /// </summary>

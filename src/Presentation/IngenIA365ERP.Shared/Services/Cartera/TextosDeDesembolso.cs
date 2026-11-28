@@ -101,9 +101,108 @@ public static class TextosDeDesembolso
         "Lending.Disbursement.BeneficiaryAccountMissing" => "La transferencia necesita la cuenta del beneficiario",
         "Lending.Payoff.RequiresRestructuring" => "Un crédito a recoger está en mora: requiere reestructuración",
         "Lending.Payoff.NotRequested" => "La solicitud no autorizó recoger ese crédito",
+        // 2026-11-27 (feature 028, T042): las recogidas salen de la solicitud y se comparan con lo proyectado.
+        "Lending.Payoff.DifferenceAboveTolerance" => "Lo que se recoge cambió más de lo tolerado: devuelva la solicitud para corregirla",
+        "Lending.Payoff.MustMatchApplication" => "Las recogidas pedidas no son las que autorizó la solicitud",
+        "Lending.Payoff.NotPayable" => "Un producto a recoger no se puede pagar (castigado, en insolvencia o pendiente de giro)",
         "Lending.Disbursement.NetNotPositive" => "Lo recogido no deja neto por girar",
         "Lending.Prevalidation.NotPostable" => "Contabilidad no tiene regla para contabilizar el desembolso",
         "Lending.Security.UserWithoutPerson" => "Su usuario no está asociado a una persona del maestro",
         _ => "Hay un requisito sin cumplir: revise el detalle al confirmar",
     };
+
+    // ----------------------------------------------------------------- 2026-11-27 (feature 028, HU3, T042): lo que recoge el desembolso --
+
+    /// <summary>La causa de una diferencia entre lo proyectado y lo de ahora (<c>Payments</c>, <c>Accrual</c>…), en palabras.</summary>
+    public static string CausaDeDiferencia(string? causa) => causa switch
+    {
+        "Payments" => "Pagos recibidos",
+        "Accrual" => "Causación",
+        "Arrears" => "Mora",
+        "CurrentInstallment" => "Cuota causada",
+        "Parameters" => "Parámetros",
+        "ProductClosed" => "Ya cancelado",
+        "Other" => "Otros movimientos",
+        null or "" => "—",
+        _ => causa,
+    };
+
+    /// <summary>Las causas de una diferencia, separadas por coma; «—» si no hay.</summary>
+    public static string Causas(IReadOnlyList<string>? causas) =>
+        causas is { Count: > 0 } ? string.Join(", ", causas.Select(CausaDeDiferencia)) : "—";
+
+    /// <summary>La clase del producto que se recoge.</summary>
+    public static string ClaseDeProducto(string? clase) => clase switch
+    {
+        "Loan" => "Crédito",
+        "Account" => "Cuenta",
+        "CommercialReceivable" => "Factura a crédito",
+        _ => clase ?? "—",
+    };
+
+    /// <summary>Cómo se recoge: la cancelación o el abono (lo exigible y el resto a capital).</summary>
+    public static string ModoDeRecogida(string? modo) => modo switch
+    {
+        "Total" => "Total",
+        "Partial" => "Parcial (abono a capital)",
+        "Installments" => "Cuotas",
+        "Deposit" => "Abono",
+        _ => modo ?? "—",
+    };
+
+    /// <summary>Un concepto del detalle de la diferencia (los nombres de <c>breakdown</c>).</summary>
+    public static string ConceptoDeDiferencia(string? concepto) => concepto switch
+    {
+        "principal" => "Capital",
+        "currentInterest" => "Interés corriente",
+        "interestReturned" => "Interés devuelto por proporcionales",
+        "interestCharged" => "Interés cobrado por proporcionales",
+        "defaultInterest" => "Interés de mora",
+        "insurance" => "Seguro",
+        "administration" => "Administración",
+        "otherCharges" => "Otros cargos",
+        "advance" => "Anticipo a favor",
+        "creditBalance" => "Saldo a favor",
+        _ => concepto ?? "—",
+    };
+
+    /// <summary>
+    /// Una diferencia con su signo delante del valor: <c>+$ 25.000</c> (recoger cuesta más que lo proyectado: el neto baja), <c>-$ 25.000</c> (cuesta menos:
+    /// el neto sube), <c>$ 0</c> sin diferencia y «—» sin proyección.
+    /// </summary>
+    public static string Diferencia(decimal? diferencia) => diferencia switch
+    {
+        null => "—",
+        > 0m => "+" + TextosDeOriginacion.Pesos(diferencia.Value),
+        < 0m => "-" + TextosDeOriginacion.Pesos(-diferencia.Value),
+        _ => TextosDeOriginacion.Pesos(0m),
+    };
+
+    /// <summary>
+    /// La clase de <c>componentes.css</c> de una diferencia: <c>diferencia-en-contra</c> si recoger cuesta más (el asociado recibe menos),
+    /// <c>diferencia-a-favor</c> si cuesta menos; sin clase si no hay diferencia.
+    /// </summary>
+    public static string ClaseDeDiferencia(decimal? diferencia) => diferencia switch
+    {
+        > 0m => "diferencia-en-contra",
+        < 0m => "diferencia-a-favor",
+        _ => string.Empty,
+    };
+
+    /// <summary>Qué pasa con un producto en la vista previa: se omite, se bloquea o se recoge.</summary>
+    public static string EstadoDeRecogida(RecogidaPropuestaDto recogida)
+    {
+        ArgumentNullException.ThrowIfNull(recogida);
+        // 2026-11-27 (feature 028, E4, T089): una factura se paga con un recibo sin caja; omitida, ya no tenía saldo.
+        if (recogida.Kind == "CommercialReceivable")
+            return recogida.Omitted ? "Sin saldo: no se recoge" : recogida.AboveTolerance ? "Pasa de la tolerancia"
+                : recogida.Mode == "Partial" ? "Se abona con un recibo sin caja" : "Se paga con un recibo sin caja";
+        // 2026-11-27 (feature 028, E3, T081): una cuenta recibe una consignación; omitida, ya no tenía nada que recoger.
+        if (recogida.Kind == "Account")
+            return recogida.Omitted ? "Nada que recoger: no se consigna" : recogida.AboveTolerance ? "Pasa de la tolerancia" : "Se consigna";
+        if (recogida.Omitted) return "Ya cancelado: no se recoge";
+        if (recogida.RequiresRestructuring) return "Requiere reestructuración";
+        if (recogida.AboveTolerance) return "Pasa de la tolerancia";
+        return recogida.Mode == "Partial" ? "Se abona" : "Se cancela";
+    }
 }

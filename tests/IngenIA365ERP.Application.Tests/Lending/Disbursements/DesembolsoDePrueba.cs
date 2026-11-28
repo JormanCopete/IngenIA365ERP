@@ -86,7 +86,11 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public EmisorDeMensajes Emisor() => new(Db, G.Actor, G.Reloj);
     public EmisionDeCartera Emision() => new(Db, Emisor(), FechaContable(), new ModoDePasoDeCartera(Db, Contabilidad), G.Actor);
     public IMotorDeCreditoEnDesembolso MotorDelCredito() =>
-        Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia(), new Application.Lending.Common.InteresesAlCancelar(Parametros(), O.L.Valores()));
+        Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia(), Intereses());
+    public Application.Lending.Common.InteresesAlCancelar Intereses() => new(Parametros(), O.L.Valores());
+    /// <summary>2026-11-27 (feature 028, T010): el único sitio que liquida una recogida (lo usan los requisitos del desembolso).</summary>
+    public Application.Lending.Payoffs.LiquidacionDeRecogida LiquidacionDeRecogida() =>
+        new(Db, Cargador(), Intereses(), G.Reloj, Parametros(), O.CuotaEnviada());
 
     // Feature 013, US4 (bloque 8B): el motor real del crédito, sus series y la puesta al día. Una sola instancia por escenario de lo que
     // recuerda algo entre llamadas (la puesta al día preparada antes del tramo y escrita después).
@@ -98,22 +102,26 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);
     public RequisitosDelDesembolso Requisitos() =>
         new(Db, O.Simulador(), O.Concentracion(), O.Bloqueos, G.Intervenciones(), O.Guardia(), Parametros(), G.Parametros(), ValidacionPrevia(),
-            MotorDelCredito(), Emision(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+            LiquidacionDeRecogida(), Emision(), G.Alcance, G.Auditoria, G.Actor, G.Reloj, facturas: Facturas());
+
+    /// <summary>2026-11-27 (feature 028, E4, T090): la recogida de facturas sobre el puerto de Recaudo de la originación (nula sin él).</summary>
+    public Application.Lending.Payoffs.RecogidaDeFacturas? Facturas() => O.Recaudo is { } recaudo ? new(Db, recaudo) : null;
     public RegistroDeCartera Registro() => new(Db);
     public NumeradorDeCartera Numerador() => new(Db, O.Cerrojo);
     public TramoDeDesembolso Tramos() => new(Db, Registro(), Numerador(), Parametros(), new CalendarioDeDiasHabiles(Db), G.Actor, G.Reloj, Cargador());
     public ReversoDeDesembolso Reverso() => new(Db, Registro(), Numerador(), MotorDelCredito(), Emision(), FechaContable(), G.Reloj,
         new Application.Lending.Documents.AnulacionDeDocumentosPorReverso(Db));
 
-    public ExecuteLoanDisbursementCommandHandler Desembolsar() =>
-        new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(Contrato), MotorDelCredito(), Emision(),
-            FechaContable(), G.Intervenciones(), G.Auditoria, G.Actor, G.Reloj);
-    public PreviewDisbursementQueryHandler VistaPrevia() => new(Requisitos());
+    /// <summary>El comando con el contrato doble o, 2026-11-27 (feature 028), con <paramref name="contrato"/> (el real de <c>PagosDePrueba</c>).</summary>
+    public ExecuteLoanDisbursementCommandHandler Desembolsar(IContratoDeObligaciones? contrato = null) =>
+        new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(contrato ?? Contrato), MotorDelCredito(), Emision(),
+            FechaContable(), G.Intervenciones(), G.Auditoria, G.Actor, G.Reloj, recogidaDeFacturas: Facturas());
+    public PreviewDisbursementQueryHandler VistaPrevia() => new(Requisitos(), G.Auditoria);
     public VoidDisbursementOrderCommandHandler AnularOrden() =>
         new(Db, O.Cerrojo, Emision(), FechaContable(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
     public ReissueDisbursementOrderCommandHandler GirarDeNuevo() =>
         new(Db, Tramos(), O.Cerrojo, Emision(), FechaContable(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Reloj);
-    public VoidPendingLoanCommandHandler AnularCredito() => new(Db, Contrato, O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
+    public VoidPendingLoanCommandHandler AnularCredito() => new(Db, Contrato, O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj, recogidaDeFacturas: Facturas());
     public ConsumeTreasuryResultCommandHandler Consumir() => new(Db, new MensajesEntrantes(Db), O.Cerrojo, Reverso(), G.Reloj);
     public EmitTestDisbursementResultCommandHandler EmitirResultado(bool dobleRegistrado = true) =>
         new(Db, Emisor(), Emision(), dobleRegistrado ? [new TesoreriaDePrueba()] : []);
@@ -147,17 +155,17 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Beneficiary = new BeneficiaryInput(O.Ana.PublicId, Banco.PublicId, BeneficiaryInput.Ahorros, "0123456789"),
     };
 
-    public async Task<Result<DisbursementResultDto>> DesembolsarAsync(DisbursementInput entrada, bool limpiar = true)
+    public async Task<Result<DisbursementResultDto>> DesembolsarAsync(DisbursementInput entrada, bool limpiar = true, IContratoDeObligaciones? contrato = null)
     {
-        var r = await Desembolsar().Handle(new ExecuteLoanDisbursementCommand(entrada) { OperationKey = Guid.NewGuid() }, default);
+        var r = await Desembolsar(contrato).Handle(new ExecuteLoanDisbursementCommand(entrada) { OperationKey = Guid.NewGuid() }, default);
         if (limpiar) Db.ChangeTracker.Clear();
         return r;
     }
 
     /// <summary>Desembolsa y falla la prueba si no pudo.</summary>
-    public async Task<DisbursementResultDto> DesembolsadoAsync(DisbursementInput entrada)
+    public async Task<DisbursementResultDto> DesembolsadoAsync(DisbursementInput entrada, IContratoDeObligaciones? contrato = null)
     {
-        var r = await DesembolsarAsync(entrada);
+        var r = await DesembolsarAsync(entrada, contrato: contrato);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         return r.Value;
     }
@@ -196,7 +204,7 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Db.ChangeTracker.Clear();
     }
 
-    private static ComprobanteDeAplicacionDto Comprobante(PagoAAplicar p) => new(Guid.NewGuid(), "PAG-" + p.ObligationPublicId.ToString("N")[..6], p.ObligationPublicId,
+    public static ComprobanteDeAplicacionDto Comprobante(PagoAAplicar p) => new(Guid.NewGuid(), "PAG-" + p.ObligationPublicId.ToString("N")[..6], p.ObligationPublicId,
         "CR", p.IdempotencyKey, p.Modality, p.ValueDate, p.ValueDate, DateTime.UtcNow, p.Amount, p.Amount, 0m, 0m, 0m, [],
         new SaldosDeObligacionDto(0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0), null, p.Modality == ModalidadDePago.FullPayoff, p.ValueDate, "h", "LND-2026.1", []);
 

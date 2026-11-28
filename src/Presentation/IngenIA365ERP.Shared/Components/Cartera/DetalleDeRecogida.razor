@@ -1,0 +1,151 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* 2026-11-27 (pedido del dueño; feature 028, HU1, T019): el detalle desplegable de un producto en «Productos que recoge»: lo que cuesta recogerlo por
+   concepto (lo devuelto por proporcionales y el anticipo se descuentan), el modo de intereses con su explicación, la cuota causada y qué se hace con
+   ella, por qué no se puede recoger y los avisos. No consulta nada: pinta lo que trajo la consulta.
+   2026-11-27 (feature 028, E2, T072; HU4): con el tratamiento de la cuota causada que eligió el asesor (o el de la línea): el desglose de todo menos la
+   cuota si se deja, la cuota con lo que deberá, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella.
+   2026-11-27 (feature 028, E3, T081; HU6): una cuenta de aportes o ahorros muestra sus cuotas pendientes a la fecha (lo que se recoge «por cuotas») y si su
+   línea admite un abono; no tiene intereses ni cuota causada.
+   2026-11-27 (feature 028, E4, T089; HU7): una factura a crédito de Comercial muestra su fecha, lo pendiente y cómo se paga (un recibo de Recaudo sin caja que
+   nace del desembolso); no tiene intereses ni cuota causada. *@
+@if (Producto.EsFactura)
+{
+    <div class="form-grid">
+        <div class="campo">
+            <span class="etiqueta-campo">Factura a crédito</span>
+            <span>@Producto.Number@(Producto.InvoiceDate is { } fecha ? $" del {fecha:dd/MM/yyyy}" : "")</span>
+            <span class="etiqueta-campo">Saldo pendiente</span>
+            <span>@TextosDeRecogida.Pesos(Producto.ToPayOff)</span>
+        </div>
+        <div class="campo">
+            <span class="etiqueta-campo">Cómo se recoge</span>
+            <span>Con un recibo de Recaudo sin caja que nace del desembolso: la factura queda pagada (o con el resto, si es parcial) igual que con un pago en la caja.</span>
+        </div>
+    </div>
+    @if (!Producto.Eligible && Producto.BlockMessage is { } motivoDeLaFactura)
+    {
+        <p class="aviso aviso-alerta">@motivoDeLaFactura</p>
+    }
+    @foreach (var aviso in Producto.Warnings)
+    {
+        <p class="aviso aviso-info">@aviso</p>
+    }
+    return;
+}
+@if (Producto.EsCuenta)
+{
+    <div class="form-grid">
+        <div class="campo">
+            <span class="etiqueta-campo">Cuotas pendientes a la fecha</span>
+            @if (Producto.PendingInstallments.Count == 0)
+            {
+                <span class="texto-tenue">Sin cuotas pendientes a la fecha proyectada.</span>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Período</th><th>Vence</th><th class="numero">Pendiente</th></tr></thead>
+                    <tbody>
+                        @foreach (var cuota in Producto.PendingInstallments)
+                        {
+                            <tr><td>@cuota.Period</td><td>@cuota.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeRecogida.Pesos(cuota.Pending)</td></tr>
+                        }
+                        <tr><th colspan="2">Por cuotas</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ToPayOff)</th></tr>
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="campo">
+            <span class="etiqueta-campo">Producto</span>
+            <span>@TextosDeRecogida.ProductoDeCuenta(Producto.AccountProduct) · @Producto.Line</span>
+            <span class="etiqueta-campo">Abono</span>
+            <span>@(Producto.DepositNotAllowedReason ?? "La cuenta admite un abono por el valor que se indique.")</span>
+        </div>
+    </div>
+    @if (!Producto.Eligible && Producto.BlockMessage is { } motivoDeLaCuenta)
+    {
+        <p class="aviso aviso-alerta">@motivoDeLaCuenta</p>
+    }
+    @foreach (var aviso in Producto.Warnings)
+    {
+        <p class="aviso aviso-info">@aviso</p>
+    }
+    return;
+}
+<div class="form-grid">
+    <div class="campo">
+        <span class="etiqueta-campo">Lo que cuesta recogerlo</span>
+        <table class="data-grid">
+            <tbody>
+                @foreach (var (concepto, valor) in TextosDeRecogida.Conceptos(Producto.Desglose(Tratamiento)))
+                {
+                    <tr><td>@concepto</td><td class="numero">@TextosDeRecogida.Pesos(valor)</td></tr>
+                }
+                <tr><th>Para recoger</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ParaRecoger(Tratamiento))</th></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="campo">
+        <span class="etiqueta-campo">Intereses</span>
+        <span>@TextosDeRecogida.ModoDeIntereses(Producto.InterestMode)</span>
+        @* 2026-11-27 (feature 028, T051): el interés renglón a renglón, con los días que cuenta el servidor; el proporcional por la ley ya dice su motivo. *@
+        @foreach (var renglon in Producto.InterestExplanation.Where(r => !r.EsInformativo && !(SeDeja && r.Installment == Producto.CurrentInstallment?.Number)))
+        {
+            <span class="texto-apoyo">@renglon.Text</span>
+        }
+        @if (Producto.InterestModeExplanation is { } explicacion && !Producto.InterestExplanation.Any(r => r.Kind == "Proportional"))
+        {
+            <span class="texto-tenue">@explicacion</span>
+        }
+        @if (Producto.CurrentInstallment is { } c)
+        {
+            <span class="etiqueta-campo">Cuota causada</span>
+            <span>@TextoDeLaCuota(c, c.Tratamiento(Tratamiento))</span>
+            @if (c.Sent is { } enviada)
+            {
+                <span class="texto-alerta">@enviada.Texto</span>
+            }
+            @if (c.Explicacion(Tratamiento) is { } explicacionDeLaCuota)
+            {
+                <span class="texto-apoyo">@explicacionDeLaCuota</span>
+            }
+            @if (c.NotLeftReason is { } porque)
+            {
+                <span class="texto-tenue">@porque</span>
+            }
+        }
+        <span class="etiqueta-campo">Estado</span>
+        <span>@TextosDeRecogida.Estado(Producto.Status) · @TextosDeRecogida.Origen(Producto.Origin)</span>
+    </div>
+</div>
+@foreach (var liberado in Producto.InterestExplanation.Where(r => r.EsInformativo))
+{
+    <p class="aviso aviso-info">@liberado.Text</p>
+}
+@if (!Producto.Eligible && Producto.BlockMessage is { } motivo)
+{
+    <p class="aviso aviso-alerta">@motivo</p>
+}
+@if (Producto.InOtherApplication is not null)
+{
+    <p class="aviso aviso-alerta">@TextosDeRecogida.EnOtraSolicitud(Producto.InOtherApplication), que también lo recoge.</p>
+}
+@foreach (var aviso in Producto.Warnings.Where(a => Producto.InOtherApplication is null || !a.Contains("que también lo recoge", StringComparison.Ordinal)))
+{
+    <p class="aviso aviso-info">@aviso</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public ProductoParaRecogerDto Producto { get; set; } = null!;
+
+    /// <summary>2026-11-27 (T072): el tratamiento de la cuota causada que eligió el asesor con «Preguntar» (nulo, el de la línea).</summary>
+    [Parameter] public int? Tratamiento { get; set; }
+
+    private bool SeDeja => Producto.CurrentInstallment?.Tratamiento(Tratamiento) == TextosDeRecogida.CuotaExcluida;
+
+    private static string TextoDeLaCuota(CuotaCausadaDeRecogidaDto c, int tratamiento) =>
+        $"Cuota {c.Number}{(c.DueDate is { } vence ? $" (vence el {vence:dd/MM/yyyy})" : "")} por "
+        + $"{TextosDeRecogida.Pesos(tratamiento == TextosDeRecogida.CuotaExcluida ? c.Left ?? c.Amount : c.Amount)}: "
+        + $"{TextosDeRecogida.TratamientoDeCuota(tratamiento).ToLowerInvariant()}.";
+}

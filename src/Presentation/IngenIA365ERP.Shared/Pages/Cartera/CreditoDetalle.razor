@@ -18,7 +18,9 @@
    (sólo lectura); y las garantías, el pagaré y las órdenes de giro. Liquidar no escribe nada: la misma (D, R) da siempre lo mismo y la huella lo
    muestra. Fuera del alcance de oficina o línea el crédito no existe (el mismo 404).
    US5 (T0562): la pestaña «Simular pago» (Lending.Payments.Simulate; siete modalidades, sin aplicar: el pago entra por el recaudador), la
-   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa. *@
+   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa.
+   2026-11-27 (feature 028, T039; FR-027d): la garantía o el pagaré de un crédito cancelado por el desembolso de otro que no se ha girado dicen «Por liberar
+   al girar el crédito …». *@
 <PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -137,6 +139,26 @@
                     @if (c.Blocks.Count > 0)
                     {
                         <p><strong>Bloqueos del deudor:</strong> @string.Join(", ", c.Blocks.Select(b => $"{TextosDeCreditos.CausaDeBloqueo(b.Kind)} desde {TextosDeCreditos.Fecha(b.Since)}{(b.Automatic ? " (automático)" : "")}"))</p>
+                    }
+                    @* 2026-11-27 (feature 028, T054; FR-029): quién lo recogió con su desembolso y qué recogió éste. *@
+                    @foreach (var por in c.PaidOffBy)
+                    {
+                        <p>
+                            <strong>@por.RecogidoPor</strong>
+                            @if (por.LoanPublicId is { } nuevo && nuevo != Guid.Empty)
+                            {
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/creditos/{nuevo}"))">Ver el crédito @por.Number</SfButton>
+                            }
+                        </p>
+                        @* 2026-11-27 (feature 028, E2, T072; HU4): la cuota causada que la recogida dejó a su canal, mientras no esté pagada. *@
+                        @if (por.CuotaDejadaPendiente && c.Status != "PaidOff")
+                        {
+                            <p class="aviso aviso-info">@por.CuotaDejada. El crédito queda cancelado cuando se pague.</p>
+                        }
+                    }
+                    @if (c.PaidOff.Count > 0)
+                    {
+                        <p><strong>Recogió:</strong> @string.Join("; ", c.PaidOff.Select(r => r.Recogido))</p>
                     }
                     @if (c.Links.Application is { } solicitud)
                     {
@@ -397,7 +419,7 @@
                     <tbody>
                         @foreach (var f in _libro)
                         {
-                            <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")</td>
+                            <tr><td>@TextosDeCreditos.Fecha(f.ValueDate)</td><td>@TextosDeCreditos.Fecha(f.AccountingDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(f.Kind)@(f.ReversesTransaction is not null ? " (reverso)" : "")@(f.Description is { } d ? $" · {d}" : "")</td>
                                 <td>@TextosDeCreditos.Concepto(f.Concept)</td><td class="numero">@(f.Installment?.ToString() ?? "—")</td>
                                 <td class="numero">@TextosDeCreditos.Pesos(f.Amount)</td>
                                 @if (LibroEnUvr) { <td class="numero">@TextosDeCreditos.Uvr(f.UvrAmount)</td><td class="numero">@TextosDeCreditos.ValorDeUvr(f.UvrValue)</td> }
@@ -424,14 +446,15 @@
                         <tbody>
                             @foreach (var g in _garantias)
                             {
-                                <tr><td>@TextosDeDesembolso.ClaseDeGarantia(g.Kind)</td><td>@g.Description</td><td class="numero">@TextosDeCreditos.Pesos(g.AdmissibleValue)</td><td>@TextosDeDesembolso.EstadoDeGarantia(g.Status)</td></tr>
+                                <tr><td>@TextosDeDesembolso.ClaseDeGarantia(g.Kind)</td><td>@g.Description</td><td class="numero">@TextosDeCreditos.Pesos(g.AdmissibleValue)</td><td>@TextosDeDesembolso.EstadoDeGarantia(g.Status)@if (g.ReleaseNotice is { } porLiberar) { <span class="texto-alerta"> · @porLiberar</span> }</td></tr>
                             }
                         </tbody>
                     </table>
                     @if (_garantias.Count == 0) { <p class="texto-tenue">Sin garantías registradas.</p> }
                     @foreach (var p in _pagares)
                     {
-                        <p><strong>Pagaré:</strong> @(p.Number ?? "sin número") · @TextosDeDesembolso.FormaDePagare(p.Form) · @TextosDeDesembolso.EstadoDePagare(p.Status)</p>
+                        <p><strong>Pagaré:</strong> @(p.Number ?? "sin número") · @TextosDeDesembolso.FormaDePagare(p.Form) · @TextosDeDesembolso.EstadoDePagare(p.Status)
+                            @if (p.ReleaseNotice is { } porLiberar) { <span class="texto-alerta"> · @porLiberar</span> }</p>
                     }
                 </div>
             </PermissionGate>

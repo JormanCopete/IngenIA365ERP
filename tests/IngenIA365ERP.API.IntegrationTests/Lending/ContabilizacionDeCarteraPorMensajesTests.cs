@@ -407,8 +407,13 @@ public static class ContabilidadDeCarteraE2E
     /// todo o nada. Idempotente: si ya hay reglas de capital (la matriz ya está), no hace nada. Una regla que ya existía —la del recaudo por nómina que
     /// deja <see cref="CarteraE2E.RequisitosDeActivacionAsync"/> si la cooperativa se activó con líneas (decisión del dueño del 2026-10-18)— vuelve
     /// en la plantilla con su cuenta y se reimporta sin cambio.
+    /// <para>
+    /// 2026-11-27 (feature 028, T096): <paramref name="cuentasPropias"/> da a una fila (rol y clase de recaudador) una cuenta que ya existe en lugar de la
+    /// del rol, para mirar un puente por separado (el de la recogida propia: <c>RecaudoPorAplicar</c> con <c>OwnLoanPayoff</c>).
+    /// </para>
     /// </summary>
-    public static async Task MatrizPorPlantillaAsync(HttpClient http, string token, DateOnly hoy, bool conHuecos = true)
+    public static async Task MatrizPorPlantillaAsync(HttpClient http, string token, DateOnly hoy, bool conHuecos = true,
+        IReadOnlyDictionary<(string Rol, string ClaseDeRecaudador), string>? cuentasPropias = null)
     {
         if ((await CarteraE2E.GetAsync(http, token, $"{Reglas}?role=Capital&pageSize=1")).GetProperty("totalCount").GetInt32() > 0) return;
         var cuentas = await CuentasPorRolAsync(http, token);
@@ -433,7 +438,7 @@ public static class ContabilidadDeCarteraE2E
                 // Los dos huecos deliberados: el puente del recaudador (Recaudo real, clase Receipts, desde la corrida del 2026-10-26) y el giro por transferencia.
                 if (conHuecos && ((rol == "RecaudoPorAplicar" && clase == "Receipts") || (rol == "DesembolsoPorGirar" && motivo == "Transfer"))) continue;
                 if (fila.Cell(Col("cuenta")).GetString().Length > 0) continue;
-                fila.Cell(Col("cuenta")).Value = cuentas[rol];
+                fila.Cell(Col("cuenta")).Value = cuentasPropias is not null && cuentasPropias.TryGetValue((rol, clase), out var propia) ? propia : cuentas[rol];
                 fila.Cell(Col("vigenteDesde")).Value = new DateOnly(hoy.Year, hoy.Month, 1).ToDateTime(TimeOnly.MinValue);
                 fila.Cell(Col("notas")).Value = "Matriz del ensayo (e2e)";
                 filas++;

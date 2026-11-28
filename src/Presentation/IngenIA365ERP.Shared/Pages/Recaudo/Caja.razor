@@ -219,6 +219,20 @@
                                         <div class="texto-tenue">
                                             Exigible @V(obligacion.DueToday) · cuota @V(obligacion.CycleInstallment) · para cancelar @V(obligacion.PayoffAmount)@(obligacion.DaysPastDue > 0 ? $" · {obligacion.DaysPastDue} días de mora" : " · al día")@(obligacion.Advance > 0m ? $" · anticipo {V(obligacion.Advance)}" : "")
                                         </div>
+                                        @* 2026-11-27 (feature 028, E2, T071): la cuota del período ya va en su canal; con «Preguntar», el cajero la deja o la incluye. *@
+                                        @if (CuotaEnviadaEnLaCaja.Aviso(obligacion, item.LoanModality) is { } avisoDeLaCuota)
+                                        {
+                                            <p class="aviso aviso-info">@avisoDeLaCuota</p>
+                                            @if (CuotaEnviadaEnLaCaja.ElCajeroElige(obligacion))
+                                            {
+                                                <label class="campo-check">
+                                                    <input type="checkbox" checked="@(item.LoanModality == CuotaEnviadaEnLaCaja.SalvoLaCuota)"
+                                                           data-ayuda="Marcado, se cancela todo menos la cuota enviada: queda en el crédito (con el interés proporcional dentro del tope legal del prepago; fuera, tal como se envió) y la paga su canal. Sin marcar, la cancelación la cobra."
+                                                           @onchange="@(e => DejarLaCuota(item, e.Value is true))" />
+                                                    Dejar la cuota enviada para que la pague su canal
+                                                </label>
+                                            }
+                                        }
                                     }
                                     <div class="fila-campos">
                                         @if (item.Target == 1)
@@ -783,7 +797,7 @@
             {
                 var obligacion = o;
                 lista.Add(new Pagable(GrupoCartera, $"{o.Number} · {o.CreditLineName}{(o.Role == 2 ? " (codeudor)" : "")}",
-                    $"exigible {V(o.DueToday)} · cuota {V(o.CycleInstallment)}{(o.CuotaReconocida ? " (reconocida: se paga completa)" : "")} · vencido {V(o.PastDue)} · para cancelar {V(o.PayoffAmount)}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
+                    $"exigible {V(o.DueToday)} · cuota {V(o.CycleInstallment)}{(o.CuotaReconocida ? " (reconocida: se paga completa)" : "")} · vencido {V(o.PastDue)} · para cancelar {V(o.PayoffAmount)}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}{(o.SentInstallment is { } enviada ? $" · {(enviada.InstallmentNumber is { } n ? $"cuota {n}" : "cuota del período")} enviada a {(enviada.EnNominaPropia ? "la nómina" : "la pagaduría")}" : "")}",
                     o.DueToday > 0 ? o.DueToday : o.CycleInstallment, o.BlockReasons.Count > 0 ? string.Join(", ", o.BlockReasons.Select(Bloqueo)) : null,
                     () => AgregarCredito(obligacion), o.ObligationPublicId, o.Number));
             }
@@ -920,9 +934,19 @@
             (1, { } ob) => ob.PayoffAmount,
             (2, { } ob) => ob.DueToday,
             (3, { } ob) => ob.CycleInstallment,
+            (8, { PayoffExceptSentInstallmentAmount: { } salvo }) => salvo,
             _ => i.Amount,
         };
         Reemplazar(i, i with { LoanModality = modalidad, Choice = null, Amount = propuesto, InstallmentNumber = modalidad == 6 ? i.InstallmentNumber : null });
+    }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071): con «Preguntar», el cajero deja o incluye la cuota enviada (cambia la modalidad y el valor propuesto).</summary>
+    private void DejarLaCuota(ItemPedidoRequest viejo, bool dejarla)
+    {
+        var i = _items.FirstOrDefault(x => x.ItemId == viejo.ItemId) ?? viejo;
+        if (ObligacionDe(i) is not { } o) return;
+        var (modalidad, valor) = CuotaEnviadaEnLaCaja.AlDejarla(o, dejarla);
+        Reemplazar(i, i with { LoanModality = modalidad, Choice = null, Amount = valor, InstallmentNumber = null });
     }
 
     private void CambiarCuota(ItemPedidoRequest i, string? valor) => Reemplazar(i, Vigente(i) with { InstallmentNumber = int.TryParse(valor, out var n) && n > 0 ? n : null });
@@ -962,9 +986,10 @@
     /// </summary>
     private IReadOnlyList<int> ModalidadesPermitidas(ObligacionPagableDto? o)
     {
-        int[] orden = [2, 3, 1, 5, 6, 4, 7];
+        // 2026-11-27 (feature 028, E2, T071): «todo menos la cuota enviada» sólo si la línea deja la cuota enviada y Cartera dio lo que cuesta.
+        int[] orden = [2, 3, 1, CuotaEnviadaEnLaCaja.SalvoLaCuota, 5, 6, 4, 7];
         var admitidas = o?.AdmittedModalities is { Count: > 0 } a ? a : orden;
-        var lista = orden.Where(admitidas.Contains);
+        var lista = orden.Where(admitidas.Contains).Where(m => m != CuotaEnviadaEnLaCaja.SalvoLaCuota || (o is not null && CuotaEnviadaEnLaCaja.OfreceDejarla(o)));
         if (o is { ConVencido: true } && (_pagables?.OverdueOnlyDue ?? true) && _pagables?.OverdueAllowsAdvance != true)
             lista = lista.Where(m => m is 1 or 2 or 6);
         return lista.ToList();
@@ -1009,7 +1034,14 @@
     /// <summary>Lo que se propone para un ítem cuando sobra después de lo exigible: la cuota del ciclo, lo de cancelar la cuenta o el valor escrito.</summary>
     private decimal PropuestoDe(ItemPedidoRequest i) => i.Target switch
     {
-        1 when ObligacionDe(i) is { } o => i.LoanModality switch { 1 => o.PayoffAmount, 2 => o.DueToday, _ => Math.Max(o.CycleInstallment, o.DueToday) },
+        1 when ObligacionDe(i) is { } o => i.LoanModality switch
+        {
+            1 => o.PayoffAmount,
+            2 => o.DueToday,
+            // 2026-11-27 (feature 028, E2, T071): todo menos la cuota enviada.
+            CuotaEnviadaEnLaCaja.SalvoLaCuota => o.PayoffExceptSentInstallmentAmount ?? i.Amount,
+            _ => Math.Max(o.CycleInstallment, o.DueToday),
+        },
         _ => Math.Max(i.Amount, ExigibleDe(i)),
     };
 
@@ -1200,8 +1232,12 @@
         _items.Clear();
         _rotulos.Clear();
         _rechazados.Clear();
+        // 2026-11-27 (feature 028, E2, T071): con la cuota del período ya en su canal y la línea en «Excluir», todo menos esa cuota; el aviso va en el ítem.
         foreach (var o in CreditosParaCancelar)
-            Agregar(new ItemPedidoRequest(1, o.PayoffAmount, o.ObligationPublicId, LoanModality: 1), $"Crédito {o.Number}");
+        {
+            var (modalidad, valor) = CuotaEnviadaEnLaCaja.ParaCancelar(o);
+            Agregar(new ItemPedidoRequest(1, valor, o.ObligationPublicId, LoanModality: modalidad), $"Crédito {o.Number}");
+        }
         foreach (var c in _pagables.Accounts?.Accounts ?? [])
             if (c.AcceptsDeposits && (_pagables.DueInstallments?.Installments ?? []).Any(x => x.AccountPublicId == c.AccountPublicId && x.Pending > 0m))
                 AgregarCuenta(c);

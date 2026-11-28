@@ -23,7 +23,13 @@
    lo guardado y sólo deja cambiar los grupos que el parámetro Originacion.GruposEditablesAlDevolver de la línea permite (en borrador, todo); el
    servidor los vuelve a revisar. El solicitante no cambia.
    2026-11-25 (pedido del dueño): también edita una solicitud radicada sin devolverla (permiso Lending.Applications.EditSubmitted, parámetro
-   Originacion.EditarRadicadaSinDevolver), con el motivo del cambio; el servidor vuelve a correr las validaciones y el enrutamiento. *@
+   Originacion.EditarRadicadaSinDevolver), con el motivo del cambio; el servidor vuelve a correr las validaciones y el enrutamiento.
+   2026-11-27 (pedido del dueño; feature 028, HU1, T020): en el paso 2, después del simulador, «Productos que recoge» muestra los créditos vivos del
+   solicitante liquidados a la fecha de desembolso de la simulación (si no hay, hoy), deja marcar los que recoge el crédito nuevo y muestra el neto a
+   girar. Lo marcado queda en _recogidas.
+   2026-11-27 (feature 028, HU2, T028): al guardar manda lo marcado (payoffs) con su proyección (la fecha proyectada y hasta cuándo se tomó la
+   información); el servidor lo valida y lo vuelve a liquidar. Al corregir abre con lo que la solicitud ya recoge y lo deja cambiar sólo si el grupo
+   «Recogidas» se puede corregir; si no, lo manda tal como está. Las recogidas ya no impiden corregir la solicitud. *@
 <PermissionGate Required="Lending.Applications.Create" AnyOf="@(new[] { "Lending.Applications.EditSubmitted" })" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -72,6 +78,15 @@
 
     @if (HayDatos)
     {
+        <PermissionGate Required="Lending.Payoffs.Read">
+            <ProductosParaRecoger Persona="@SolicitanteElegido" Linea="@LineaElegida" Monto="@MontoVisible" CuotaNueva="@CuotaNuevaVisible"
+                                  FechaDeDesembolso="@FechaDeDesembolsoVisible" SolicitudExcluida="@Id" SeleccionCambiada="@TomarRecogidas"
+                                  Inicial="@_recogidasIniciales" SoloLectura="@(!Edita("Recogidas"))" />
+        </PermissionGate>
+    }
+
+    @if (HayDatos)
+    {
         <div class="info-card">
             <h4>Datos de la solicitud</h4>
             <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo las oficinas…">
@@ -87,6 +102,12 @@
                     else if (_original is { } o)
                     {
                         <div class="kpi-card"><span class="kpi-label">Desembolso previsto</span><span class="kpi-value">@(o.ExpectedDisbursementDate?.ToString("dd/MM/yyyy") ?? "el día que se desembolse")</span></div>
+                    }
+                    @if (_recogidas is { Marcadas.Count: > 0 } recogidas)
+                    {
+                        @* Feature 028 (T020): lo que recoge y el neto que se gira. *@
+                        <div class="kpi-card"><span class="kpi-label">Recoge</span><span class="kpi-value">@TextosDeRecogida.Pesos(recogidas.Resumen.SelectedTotal)</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Neto a girar</span><span class="kpi-value">@TextosDeRecogida.Pesos(recogidas.Resumen.NetToDisburse)</span></div>
                     }
                 </div>
                 @if (!EsCorreccion)
@@ -241,6 +262,12 @@
     private bool _puedeCrearPersona, _mostrarPersona, _esVis;
     private ClaveDeOperacion _clave = new();
 
+    /// <summary>Feature 028 (T020): lo que marcó el asesor en «Productos que recoge», con su resumen; nulo mientras no se consulte.</summary>
+    private SeleccionDeRecogida? _recogidas;
+
+    /// <summary>Feature 028 (T028): al corregir, lo que la solicitud ya recoge (los créditos), para abrir la tabla con eso marcado.</summary>
+    private IReadOnlyList<RecogidaMarcada>? _recogidasIniciales;
+
     private bool EsCorreccion => Id is not null;
 
     /// <summary>2026-11-25: se edita una solicitud ya radicada, sin devolverla.</summary>
@@ -254,6 +281,21 @@
     private bool HayDatos => EsCorreccion ? _original is not null && _bloqueo is null : _simulacion is not null;
 
     private bool EsVivienda => _simulacion?.Resultado.IsHousing ?? _original?.IsSocialHousing is not null;
+
+    /// <summary>Feature 028 (T020): el deudor de los productos que se recogen (al corregir, el de la solicitud).</summary>
+    private Guid? SolicitanteElegido => EsCorreccion ? _original?.Applicant.PersonPublicId : _solicitante?.PublicId;
+
+    private Guid? LineaElegida => _simulacion?.Entrada.CreditLinePublicId ?? _original?.Line.PublicId;
+
+    /// <summary>
+    /// La fecha esperada de desembolso de la simulación; al corregir sin simular, la fecha a la que se proyectaron las recogidas o, sin ellas, la fecha
+    /// esperada guardada; nula, hoy.
+    /// </summary>
+    private DateOnly? FechaDeDesembolsoVisible =>
+        _simulacion?.Resultado.DisbursementDate ?? _original?.PayoffSummary?.ProjectedDate ?? _original?.ExpectedDisbursementDate;
+
+    /// <summary>La cuota regular del plan simulado: la que más se repite (la primera puede ser distinta por los días del primer período).</summary>
+    private decimal? CuotaNuevaVisible => _simulacion?.Resultado.Installments.GroupBy(c => c.Total).MaxBy(g => g.Count())?.Key;
 
     private string LineaVisible => _simulacion?.Resultado.CreditLineCode ?? _original?.Line.Code ?? "—";
 
@@ -298,10 +340,12 @@
         }
         if (o.UsesAdvancedTerms)
         {
-            _bloqueo = "Esta solicitud tiene condiciones que esta pantalla no maneja (cuotas extraordinarias, gracia, créditos que recoge o convenio de "
-                + "libranza). Para no perderlas, anúlela y radique otra.";
+            // 2026-11-27 (feature 028, T028): las recogidas ya no lo encienden (esta pantalla las corrige).
+            _bloqueo = "Esta solicitud tiene condiciones que esta pantalla no maneja (cuotas extraordinarias, gracia o convenio de libranza). "
+                + "Para no perderlas, anúlela y radique otra.";
             return;
         }
+        _recogidasIniciales = o.Payoffs.Select(p => p.ComoMarcada()).OfType<RecogidaMarcada>().ToList();
         _oficina = o.Office?.PublicId;
         _destino = o.Purpose;
         _formaDePago = o.PaymentForm;
@@ -335,6 +379,8 @@
         _error = null;
         _clave = new ClaveDeOperacion();
     }
+
+    private void TomarRecogidas(SeleccionDeRecogida seleccion) => _recogidas = seleccion;
 
     /// <summary>La persona simulada se propone como solicitante si todavía no hay uno (al corregir, el solicitante no cambia).</summary>
     private void TomarPersona(PersonSearchPicker.PersonSearchItem? persona)
@@ -430,6 +476,22 @@
             solicitud.Insurances = _simulacion?.Entrada.Insurances;
         }
 
+        // Feature 028 (T028): lo que recoge, con su proyección. Al corregir sin poder cambiar las recogidas (o sin haber visto la tabla, que pide
+        // Lending.Payoffs.Read), se mandan las que tiene, tal cual, para no quitarlas.
+        if (EsCorreccion && _original is { } conRecogidas && (!Edita("Recogidas") || _recogidas is null))
+        {
+            solicitud.Payoffs = conRecogidas.Payoffs.Count > 0 ? conRecogidas.Payoffs.Select(p => p.ComoPedido()).ToList() : null;
+            solicitud.PayoffProjection = conRecogidas.PayoffSummary is { } resumen
+                ? new ProyeccionDeRecogidaRequest(resumen.ProjectedDate, null)
+                : null;
+        }
+        else if (_recogidas is { } recogidas)
+        {
+            solicitud.Payoffs = recogidas.Marcadas.Count > 0 ? recogidas.Pedido.ToList() : null;
+            solicitud.PayoffProjection = recogidas.Marcadas.Count > 0
+                ? new ProyeccionDeRecogidaRequest(recogidas.FechaProyectada, recogidas.InformacionHasta)
+                : null;
+        }
         var r = !EsCorreccion
             ? await Originacion.CrearAsync(solicitud, _clave)
             : EsRadicada

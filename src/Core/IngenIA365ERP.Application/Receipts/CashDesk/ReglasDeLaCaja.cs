@@ -248,6 +248,14 @@ public sealed class ReglasDeLaCaja(
         if (o.BlockReasons.Count > 0)
             return new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoObligacionBloqueada,
                 $"El crédito {o.Number} {string.Join(" y ", o.BlockReasons.Select(Bloqueo))}: sus pagos no se reciben en caja.");
+        // 2026-11-27 (feature 028, E2, T071; FR-023, D4): «todo menos la cuota enviada» sólo si la línea del crédito lo deja (Pagos.CuotaEnviadaAlCancelar en
+        // «Excluir» o «Preguntar», que Cartera dice en el listado) y la cuota del período sigue en su canal sin respuesta: de fábrica la caja cancela todo.
+        if (modalidad == ModalidadDePago.PayoffExceptCurrentInstallment
+            && (!CuotaEnviadaAlCancelar.OfreceDejarla(o.SentInstallmentAtPayoff) || o.PayoffExceptSentInstallmentAmount is null))
+            return new RechazoDeLaCaja(item.ItemId, ErroresDeRecaudo.CodigoModalidadNoAdmitida, o.SentInstallment is null
+                ? $"El crédito {o.Number} no tiene una cuota enviada a la pagaduría o a la nómina que dejar: cancélelo completo."
+                : $"El crédito {o.Number} no deja su cuota enviada al cancelar en caja (la línea la incluye, o la cuota ya no está en su canal sin respuesta): "
+                  + "cancélelo completo.");
         // 2026-11-26: la cuota específica que la línea sólo admite sin nada vencido entra detrás de los ítems del recibo que cubren lo vencido; Cartera la
         // simula sobre lo que ellos dejan.
         if (!o.AdmittedModalities.Contains(modalidad)
@@ -428,6 +436,7 @@ public sealed class ReglasDeLaCaja(
         ModalidadDePago.ExtraordinaryPrincipal => "abono extraordinario a capital",
         ModalidadDePago.SpecificInstallment => "cuota específica",
         ModalidadDePago.FreeAmount => "valor libre",
+        ModalidadDePago.PayoffExceptCurrentInstallment => "todo menos la cuota causada",
         _ => m.ToString(),
     };
 }

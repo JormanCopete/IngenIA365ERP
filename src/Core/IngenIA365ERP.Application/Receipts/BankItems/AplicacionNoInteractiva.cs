@@ -77,7 +77,11 @@ public sealed record LineaNoInteractiva(
 public sealed record OrigenABloquear(string Tabla, long Id);
 
 /// <summary>Una parte que el contrato rechazó después de simular: su índice, el código y el mensaje. (nuevo)</summary>
-public sealed record ParteRechazada(int Index, string Code, string Message);
+public sealed record ParteRechazada(int Index, string Code, string Message)
+{
+    /// <summary>2026-11-27 (feature 028, E2, T069): los datos del rechazo del contrato (p. ej. el crédito que recogió una obligación ya cancelada). (nuevo)</summary>
+    public IReadOnlyDictionary<string, object?>? Data { get; init; }
+}
 
 /// <summary>
 /// Lo que pasó con la línea: aplicada (con su recibo), ya aplicada (repetida con su clave) o rechazada (sin recibo, con el código del contrato); el excedente y lo
@@ -92,7 +96,14 @@ public sealed record ResultadoNoInteractivo(
     bool LateValueDate,
     DateOnly? AppliedValueDate,
     IReadOnlyList<ParteRechazada> RejectedParts,
-    PayerCreditBalance? CreditBalance);
+    PayerCreditBalance? CreditBalance)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069; R7): los datos del rechazo del contrato —de la simulación o de la aplicación— (p. ej. el crédito que recogió una
+    /// obligación ya cancelada y la regla de lo que gire su pagaduría, <c>GiroPosteriorDeCreditoRecogido</c>). (nuevo)
+    /// </summary>
+    public IReadOnlyDictionary<string, object?>? Data { get; init; }
+}
 
 /// <summary>
 /// La aplicación no interactiva de Recaudo (feature 015, T0194; R-17, R-32; FR-068, FR-071, FR-078, FR-171, FR-174, FR-198; DT §2.4): la usan la identificación de
@@ -151,6 +162,8 @@ public sealed class AplicacionNoInteractiva(
         ReceiptChannel.Agreement => ReceiptDocumentKind.AgreementReceipt,
         ReceiptChannel.Online => ReceiptDocumentKind.OnlineReceipt,
         ReceiptChannel.AdvanceCrossing => ReceiptDocumentKind.AdvanceCrossingReceipt,
+        // 2026-11-27 (feature 028, E4, T085): la recogida de facturas en el desembolso, con su propio consecutivo.
+        ReceiptChannel.LoanDisbursement => ReceiptDocumentKind.LoanDisbursementReceipt,
         _ => ReceiptDocumentKind.CashReceipt,
     };
 
@@ -204,7 +217,7 @@ public sealed class AplicacionNoInteractiva(
                         linea.ValueDate, p.LoanChoice), ct);
                     if (sim.Result == ResultadoDelContrato.Rejected || sim.Value is null)
                     {
-                        if (!CodigosDeFechaValor.Contains(sim.Code)) return Rechazo(sim.Code, sim.Message);
+                        if (!CodigosDeFechaValor.Contains(sim.Code)) return Rechazo(sim.Code, sim.Message) with { Data = sim.Data };
                         partes.Add((p, p.Amount, modalidad, null));
                         break;
                     }
@@ -308,7 +321,8 @@ public sealed class AplicacionNoInteractiva(
                 var r = k < respuesta.Payments.Count ? respuesta.Payments[k] : null;
                 if (r is null || r.Result == ResultadoDelContrato.Rejected || r.Value is null)
                 {
-                    rechazadas.Add(new ParteRechazada(deCreditos[k].Indice, r?.Code ?? "Receipts.Receipt.ContractUnavailable", r?.Message ?? "El módulo no respondió."));
+                    rechazadas.Add(new ParteRechazada(deCreditos[k].Indice, r?.Code ?? "Receipts.Receipt.ContractUnavailable", r?.Message ?? "El módulo no respondió.")
+                        { Data = r?.Data });
                     continue;
                 }
                 var x = deCreditos[k];
@@ -349,7 +363,10 @@ public sealed class AplicacionNoInteractiva(
         {
             numerador.Devolver(tipo.Code, prefijo, numero);
             var primera = rechazadas.FirstOrDefault();
-            return new ResultadoNoInteractivo(ProcessingLineOutcome.Rejected, null, primera?.Code, primera?.Message, 0m, tardia, null, rechazadas, null);
+            return new ResultadoNoInteractivo(ProcessingLineOutcome.Rejected, null, primera?.Code, primera?.Message, 0m, tardia, null, rechazadas, null)
+            {
+                Data = primera?.Data,
+            };
         }
 
         // Las filas del recibo: sólo lo aplicado; el excedente y lo rechazado después de simular quedan a favor del pagador (FR-171, FR-198).

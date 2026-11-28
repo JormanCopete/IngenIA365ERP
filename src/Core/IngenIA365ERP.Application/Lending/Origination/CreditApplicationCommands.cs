@@ -11,6 +11,7 @@ using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
@@ -60,7 +61,51 @@ public sealed class CreditApplicationInputValidator : AbstractValidator<CreditAp
             a.RuleFor(y => y.Purpose).IsInEnum();
         });
         RuleFor(x => x.ApplicantCapacity!.MonthlyIncome).GreaterThanOrEqualTo(0m).When(x => x.ApplicantCapacity?.MonthlyIncome is not null);
+
+        // 2026-11-27 (feature 028, T024; api.md §2): la forma de lo que recoge. Lo que necesita la base (del solicitante, vivo, admitido, neto) lo revisa
+        // RecogidasDeLaSolicitud; las dos listas a la vez, RecogidasPedidas.Unificar (Request.BodyInvalid).
+        RuleFor(x => x.Payoffs).Must(p => p is null || p.Count <= MaximoDeRecogidas)
+            .WithMessage($"Una solicitud recoge a lo sumo {MaximoDeRecogidas} productos.");
+        RuleFor(x => x.Payoffs).Must(p => p is null || p.Where(r => r?.ProductPublicId is not null).GroupBy(r => (r.Kind, r.ProductPublicId)).All(g => g.Count() == 1))
+            .WithMessage("Un producto está dos veces entre los que recoge la solicitud.");
+        // 2026-11-27 (feature 028, E4, T087): una factura se nombra por su número (el documento cruce).
+        RuleFor(x => x.Payoffs).Must(p => p is null || p.Where(r => r is { Kind: PayoffProductKind.CommercialReceivable } && !string.IsNullOrWhiteSpace(r.Reference))
+                .GroupBy(r => r.Reference!.Trim(), StringComparer.Ordinal).All(g => g.Count() == 1))
+            .WithMessage("Una factura está dos veces entre las que recoge la solicitud.");
+        RuleForEach(x => x.Payoffs).ChildRules(p =>
+        {
+            // 2026-11-27 (feature 028, E3, T078; E4, T087): créditos, cuentas de aportes y ahorros (por cuotas o como abono) y facturas a crédito de Comercial.
+            p.RuleFor(y => y.Kind).IsInEnum();
+            p.RuleFor(y => y.ProductPublicId).NotEmpty().When(y => y.Kind != PayoffProductKind.CommercialReceivable).WithMessage("Indique el producto que recoge.");
+            p.RuleFor(y => y.Reference).NotEmpty().MaximumLength(60).When(y => y.Kind == PayoffProductKind.CommercialReceivable)
+                .WithMessage("Indique el número de la factura que recoge (hasta 60 caracteres).");
+            p.RuleFor(y => y.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).When(y => y.Kind is PayoffProductKind.Loan or PayoffProductKind.CommercialReceivable)
+                .WithMessage("Un crédito o una factura se recoge total o parcial.");
+            p.RuleFor(y => y.Mode).Must(m => m is PayoffMode.Installments or PayoffMode.Deposit).When(y => y.Kind == PayoffProductKind.Account)
+                .WithMessage("Una cuenta se recoge por sus cuotas pendientes o con un abono.");
+            p.RuleFor(y => y.Amount).NotNull().GreaterThan(0m).When(y => y.Mode is PayoffMode.Partial or PayoffMode.Deposit)
+                .WithMessage("Una recogida parcial o un abono lleva un valor mayor que cero.");
+            p.RuleFor(y => y.InstallmentTreatment).Null().When(y => y.Kind != PayoffProductKind.Loan)
+                .WithMessage("La cuota causada sólo aplica a la recogida de un crédito.");
+            p.RuleFor(y => y.Amount).PrecisionScale(18, 2, true).When(y => y.Amount is not null);
+            // 2026-11-27 (feature 028, E2, T066): «todo menos la cuota causada» (Recogida.CuotaCausada) sólo en una recogida total; si la línea del crédito lo
+            // admite lo decide RecogidasDeLaSolicitud.
+            p.RuleFor(y => y.InstallmentTreatment).IsInEnum().When(y => y.InstallmentTreatment is not null);
+            p.RuleFor(y => y.InstallmentTreatment).Must(t => t != InstallmentTreatment.Exclude).When(y => y.Mode != PayoffMode.Total)
+                .WithMessage("Dejar la cuota causada a su canal sólo aplica a una recogida total.");
+        });
+        RuleForEach(x => x.OwnLoanPayoffs).ChildRules(p =>
+        {
+            p.RuleFor(y => y.LoanPublicId).NotEmpty().WithMessage("Indique el crédito que recoge.");
+            p.RuleFor(y => y.Amount).NotNull().GreaterThan(0m).When(y => string.Equals(y.Mode?.Trim(), RecogidasPedidas.ModoViejoParcial, StringComparison.OrdinalIgnoreCase))
+                .WithMessage("Una recogida parcial lleva un valor mayor que cero.");
+        });
+        RuleFor(x => x.OwnLoanPayoffs).Must(p => p is null || p.Count <= MaximoDeRecogidas)
+            .WithMessage($"Una solicitud recoge a lo sumo {MaximoDeRecogidas} productos.");
     }
+
+    /// <summary>2026-11-27 (feature 028): a lo sumo los mismos productos que marca la consulta de productos para recoger.</summary>
+    public const int MaximoDeRecogidas = GetPayoffCandidatesQueryHandler.MaximoDeMarcados;
 }
 
 /// <summary>Lo que la solicitud resolvió de su entrada: personas, oficina, línea, la simulación y el tipo de deudor. (nuevo)</summary>
@@ -227,7 +272,8 @@ public sealed class ArmadoDeSolicitud(
             ? e.Payroll.EmployeeId.Trim()
             : null;
         s.PrepaymentChoice = e.PrepaymentPreference;
-        s.PayoffRequest = e.OwnLoanPayoffs is { Count: > 0 } r ? ConsultasDeSolicitudes.Serializar(r) : null;
+        // 2026-11-27 (feature 028, T023): las recogidas van en filas (LND_CreditApplicationPayoffs, RecogidasDeLaSolicitud): PayoffRequest se conserva y
+        // ya no se escribe.
         s.PolicyExceptionRequested = e.PolicyExceptionRequested;
         s.PolicyExceptionReason = e.PolicyExceptionRequested ? e.PolicyExceptionReason?.Trim() : null;
         // K6b (T1055): sólo una solicitud de vivienda dice si el inmueble es VIS.
@@ -304,6 +350,7 @@ public sealed class CreateCreditApplicationCommandValidator : AbstractValidator<
 public sealed class CreateCreditApplicationCommandHandler(
     IApplicationDbContext db,
     ArmadoDeSolicitud armado,
+    RecogidasDeLaSolicitud recogidas,
     IAutorizacionDeDatos autorizaciones,
     IActorActual actorActual,
     IDateTimeService reloj) : IRequestHandler<CreateCreditApplicationCommand, Result<CreditApplicationDto>>
@@ -316,6 +363,9 @@ public sealed class CreateCreditApplicationCommandHandler(
         var armada = await armado.ArmarAsync(e, reloj.HoyLocal, ct);
         if (armada.IsFailure) return Result.Failure<CreditApplicationDto>(armada.Error);
         var a = armada.Value;
+        // 2026-11-27 (feature 028, T023–T024): lo que recoge, validado y proyectado a D con la información hasta R.
+        var preparadas = await recogidas.PrepararAsync(e, a.Solicitante.Id, a.Linea.Id, reloj.HoyLocal, ct);
+        if (preparadas.IsFailure) return Result.Failure<CreditApplicationDto>(preparadas.Error);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -323,6 +373,7 @@ public sealed class CreateCreditApplicationCommandHandler(
             ArmadoDeSolicitud.Copiar(s, e, a);
             db.CreditApplications.Add(s);
             await db.SaveChangesAsync(ct);
+            await recogidas.ReescribirAsync(s.Id, preparadas.Value, ct);
 
             var solicitante = CreditApplicationParty.Nueva(s.Id, a.Solicitante.Id, CreditPartyRole.Applicant, 0);
             solicitante.Declarar(e.ApplicantCapacity?.MonthlyIncome, e.ApplicantCapacity?.MonthlyExpenses, e.ApplicantCapacity?.ExternalInstallments);
@@ -390,6 +441,7 @@ public sealed class UpdateCreditApplicationCommandValidator : AbstractValidator<
 public sealed class UpdateCreditApplicationCommandHandler(
     IApplicationDbContext db,
     ArmadoDeSolicitud armado,
+    RecogidasDeLaSolicitud recogidas,
     IAutorizacionDeDatos autorizaciones,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
@@ -437,6 +489,9 @@ public sealed class UpdateCreditApplicationCommandHandler(
         var armada = await armado.ArmarAsync(e, hoy, ct);
         if (armada.IsFailure) return Falla(ErroresDeOriginacion.ConElPasoParaCorregir(armada.Error));
         var a = armada.Value;
+        // 2026-11-27 (feature 028, T023–T024): lo que recoge, validado y proyectado; si el grupo «Recogidas» no se puede corregir y cambia, lo dice la foto.
+        var preparadas = await recogidas.PrepararAsync(e, a.Solicitante.Id, a.Linea.Id, hoy, ct);
+        if (preparadas.IsFailure) return Falla(preparadas.Error);
         // 2026-11-23 (pedido del dueño): devuelta para corregir —o, desde el 2026-11-25, radicada—, sólo cambia lo que el parámetro de su línea deja
         // (Originacion.GruposEditablesAlDevolver).
         var antes = s.Status is CreditApplicationStatus.Returned || radicada ? await FotoDeSolicitud.TomarAsync(db, s, ct) : null;
@@ -470,7 +525,7 @@ public sealed class UpdateCreditApplicationCommandHandler(
             var plan = a.Simulacion.Entrada;
             var despues = antes is null
                 ? null
-                : FotoDeSolicitud.De(s, partes.Concat(agregadas)) with
+                : FotoDeSolicitud.De(s, partes.Concat(agregadas), preparadas.Value.TextoDeLaFoto) with
                 {
                     PrimerPagoPorDefecto = FotoDeSolicitud.PrimerPagoSinFecha(plan.FechaDesembolso, plan.Periodicidad, plan.DiaDePago),
                 };
@@ -484,10 +539,11 @@ public sealed class UpdateCreditApplicationCommandHandler(
             if (autorizadas.IsFailure) return Falla(autorizadas.Error);
             if (!radicada)
             {
+                await recogidas.ReescribirAsync(s.Id, preparadas.Value, ct);
                 await db.SaveChangesAsync(ct);
                 return Result.Success(await ConsultasDeSolicitudes.DtoAsync(db, s, hoy, ct));
             }
-            return await EditarRadicadaAsync(s, a, antes!, despues!, agregadas, estadoAntes, nivelAntes, verificada!, request.EditReason!, ct);
+            return await EditarRadicadaAsync(s, a, preparadas.Value, antes!, despues!, agregadas, estadoAntes, nivelAntes, verificada!, request.EditReason!, ct);
         }, ct);
     }
 
@@ -496,7 +552,7 @@ public sealed class UpdateCreditApplicationCommandHandler(
     /// guardado, las validaciones y el enrutamiento de nuevo (lo que niega la radicación también niega la edición), la fila del historial, la
     /// intervención y el evento de auditoría. Sin nada distinto no escribe nada.
     /// </summary>
-    private async Task<Result<CreditApplicationDto>> EditarRadicadaAsync(CreditApplication s, SolicitudArmada a, FotoDeSolicitud antes,
+    private async Task<Result<CreditApplicationDto>> EditarRadicadaAsync(CreditApplication s, SolicitudArmada a, RecogidasPreparadas preparadas, FotoDeSolicitud antes,
         FotoDeSolicitud despues, IReadOnlyList<CreditApplicationParty> agregadas, CreditApplicationStatus estadoAntes, int? nivelAntes,
         IntervencionVerificada verificada, string motivo, CancellationToken ct)
     {
@@ -523,6 +579,8 @@ public sealed class UpdateCreditApplicationCommandHandler(
         await cerrojo.BloquearDeudoresAsync(deudores.Concat(agregadas.Select(p => p.PersonId)).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
 
         s.EditsAfterSubmission++;
+        // 2026-11-27 (feature 028): las recogidas quedan con lo de ahora antes de volver a correr las validaciones, que las leen de sus filas.
+        await recogidas.ReescribirAsync(s.Id, preparadas, ct);
         await db.SaveChangesAsync(ct);
 
         var cargada = await evaluacion.CargarAsync(s, ct);

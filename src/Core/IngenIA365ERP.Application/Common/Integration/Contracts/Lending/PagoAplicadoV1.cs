@@ -9,6 +9,13 @@ public sealed record PagoAplicadoV1
 {
     public const string Type = "PagoAplicado";
 
+    /// <summary>
+    /// El <c>reasonCode</c> del importe del concepto <c>Advance</c> que lleva <see cref="Amounts"/> cuando una cancelación usó el anticipo del crédito (D7 de
+    /// la 013): el importe es positivo y es lo que el anticipo cubrió, no dinero recibido. 2026-11-28 (feature 028, T096): Contabilidad lo asienta al revés
+    /// de lo aplicado (débito al anticipo, crédito al puente del recaudo), porque baja el pasivo con el deudor. (nuevo)
+    /// </summary>
+    public const string AnticipoUsado = "AdvanceUsed";
+
     public LoanRefV1 Loan { get; init; } = new();
 
     public Guid DebtorPersonPublicId { get; init; }

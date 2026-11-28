@@ -78,6 +78,12 @@ public enum PayerCreditBalanceMovementKind
 
     /// <summary>2026-11-23 (cruce automático): el módulo reversó el pago que el anticipo había cruzado; lo reversado vuelve al anticipo.</summary>
     ReturnedByModuleReversal = 9,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069): lo que la pagaduría giró por un crédito ya recogido pasó a saldo a favor del asociado
+    /// (<c>Recogida.GiroPosteriorDeCreditoRecogido = AFavorDelAsociado</c>): sale del saldo de la pagaduría y nace el de la persona.
+    /// </summary>
+    TransferredToAssociate = 10,
 }
 
 /// <summary>El estado de la cuenta por cobrar al pagador (nuevo).</summary>

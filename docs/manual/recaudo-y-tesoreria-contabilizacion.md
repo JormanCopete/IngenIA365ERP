@@ -51,6 +51,14 @@ Los tipos `RR`, `RB`, `MC`, `AR`, `TP` se siembran con `voucher-types.json` y su
 Tesorería giró) y `PuenteDeDevolucion` (Recaudo pidió devolver y Tesorería giró, o informó que no). La conciliación de puentes de Cartera
 (`/cartera/conciliacion-contable`) suma el lado de Recaudo y Tesorería y explica cada diferencia hecho por hecho.
 
+**La recogida de facturas en el desembolso** (feature 028, 2026-11-27). Cuando un crédito nuevo recoge facturas a crédito de Comercial, Recaudo
+emite un recibo sin caja (canal «desembolso de crédito», medio `RECOGIDA` de la clase del mismo nombre) con el hecho de siempre, `ReciboEmitido`.
+Su débito va al rol nuevo **«Recogida en el desembolso»** (`RecogidaEnElDesembolso`, también en `ReciboAnulado`), con el deudor de tercero y la
+factura de cruce, y su crédito a las cuentas por cobrar comerciales de cada factura. Ese rol debe llevar **la misma cuenta que el puente de la
+recogida propia de Cartera** (`RecaudoPorAplicar` con la clase `OwnLoanPayoff`), que el desembolso acredita: la completitud de Cartera avisa
+`Accounting.LendingRule.InvoicePayoffBridgeMismatch` si falta o no coincide. El tipo de cruce del mapeo de `ReciboEmitido` debe ser `FV`. Receta en
+[cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §9 y §10.
+
 ## 6. La validación previa
 
 Con `Contabilidad.FaltaDeRegla = Bloquear` (el defecto), la **pantalla** no confirma una operación cuyo hecho no tiene regla

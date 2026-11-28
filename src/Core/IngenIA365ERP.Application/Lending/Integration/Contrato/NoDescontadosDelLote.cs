@@ -20,10 +20,11 @@ namespace IngenIA365ERP.Application.Lending.Integration.Contrato;
 /// devuelve lo ya registrado (<c>AlreadyApplied</c>). La cuota <b>sigue exigible</b>: no mueve el libro ni emite hecho contable. Alerta
 /// <c>Cartera.CuotaNoDescontadaPorNomina</c> (deduplicada por crédito y cuota) a quien lee créditos en la oficina del crédito.
 /// <c>LND_InstallmentNonDeductions</c> no tiene columna para el ítem de Nómina que lo informó (<c>SourceItemPublicId</c>): va en el hecho de
-/// auditoría. (nuevo)
+/// auditoría. 2026-11-27 (feature 028, E2, T070): si la cuota es una que una recogida dejó a la nómina, avisa además al asesor
+/// (<see cref="Payoffs.SeguimientoDeCuotaDejada"/>). (nuevo)
 /// </summary>
 public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeReconstruccion cargador, IAlertas alertas, IDateTimeService reloj,
-    Payroll.Results.SeguimientoDeNoAplicados? seguimiento = null)
+    Payroll.Results.SeguimientoDeNoAplicados? seguimiento = null, Payoffs.SeguimientoDeCuotaDejada? cuotaDejada = null)
 {
     /// <summary>Los destinatarios de la alerta (en el alcance de la oficina del crédito).</summary>
     public const string PermisoDeLaAlerta = "Lending.Loans.Read";
@@ -78,6 +79,9 @@ public sealed class NoDescontadosDelLote(IApplicationDbContext db, CargadorDeRec
             await db.SaveChangesAsync(ct);
             await seguimiento.AplicarReglaAsync(fila, credito.DebtorPersonId, regla, ct);
         }
+        // 2026-11-27 (feature 028, E2, T070; HU4-7): la cuota que una recogida dejó a la nómina y no se descontó: además, el aviso al asesor.
+        if (cuotaDejada is not null)
+            await cuotaDejada.AvisarNoDescontadoAsync(credito.Id, cuota.Value.Numero, n.NotDeductedAmount, "La nómina", ct);
         return new(ResultadoDelContrato.Applied, AuditEventTypes.LendingObligationContractApplied, ErroresDePagos.MensajeNoDescontado,
             new NoDescontadoRegistradoDto(fila.PublicId, credito.PublicId, cuota.Value.Numero, n.NotDeductedAmount));
     }

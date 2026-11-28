@@ -91,7 +91,7 @@ la regla del no aplicado y si la nómina lleva lo vencido.
 
 Recaudo devuelve la respuesta (`ResultadoDeDescuentos`) y Cartera la aplica **todo o nada**:
 
-- **Descontado**: la cuota queda **pendiente de giro**, con el vencimiento de la ventana y el umbral sellados ese día.
+- **Descontado**: la cuota queda **pendiente de giro** (salvo que el crédito ya esté cerrado: §6a), con el vencimiento de la ventana y el umbral sellados ese día.
   Mientras la mora de la pagaduría (contada desde que vence su ventana) no supere el umbral, **la cuota no cuenta para la
   altura de mora del deudor** ni le causa interés de mora. Superado el umbral, la cuota vuelve a contar desde su fecha
   exigible, se avisa al deudor una sola vez y se alerta (`Cartera.GiroDePagaduriaAtrasado`).
@@ -103,6 +103,31 @@ Recaudo devuelve la respuesta (`ResultadoDeDescuentos`) y Cartera la aplica **to
 línea del archivo: su fecha valor es la del descuento (aunque pase el límite de días de fecha valor), la pagaduría es el
 pagador y el pendiente se levanta. Si la pagaduría tiene pendientes, un pago suyo sin la referencia se rechaza. Reversar
 el giro vuelve a dejar el pendiente.
+
+## 6a. El crédito que se cancela con su cuota ya enviada (feature 028, 2026-11-27)
+
+Un crédito por libranza puede cancelarse —en caja, por la recogida de un crédito nuevo o por cualquier otra cancelación— **después** de que
+su cuota salió en el archivo de descuentos. Hasta la 028 eso dejaba un «pendiente de giro» que nunca se levantaba, alertas de giro atrasado,
+avisos al deudor como si estuviera en mora, y el giro de la pagaduría terminaba como saldo a favor de ella. Ahora:
+
+- **La cuota enviada se ve.** La solicitud, el detalle del crédito, el desembolso y la caja dicen si la cuota del período ya se envió sin
+  respuesta, si la pagaduría la descontó y está pendiente de giro, o si no la descontó, con la pagaduría, el archivo y el período (en la nómina
+  propia, si está en la novedad, en la corrida en borrador o ya aplicada).
+- **Se puede cancelar «todo menos la cuota enviada».** La recogida (`Recogida.CuotaCausada`) y la caja (`Pagos.CuotaEnviadaAlCancelar`), por
+  línea del crédito, pueden dejar esa cuota en el crédito para que la pague la pagaduría: el crédito queda vivo **sólo con esa cuota**, sale de los
+  archivos siguientes y queda cancelado, al peso, cuando la pagaduría la gira. De fábrica las dos cobran todo, como antes. Dentro del tope legal
+  del prepago la cuota queda con el interés proporcional; fuera de él, tal como se envió. Receta y ejemplo con cifras en
+  [cartera-recogida-de-creditos.md](cartera-recogida-de-creditos.md) §6.
+- **La respuesta sobre un crédito cerrado** (cancelado, anulado o novado al llegar la respuesta) queda marcada **«descuento de un crédito
+  cancelado»**: no crea un no aplicado ni sigue la regla del convenio, no avisa al deudor, no queda pendiente de giro, no alerta giro atrasado
+  (`Cartera.GiroDePagaduriaAtrasado`) ni cuenta para `Cartera.NoAplicadoDePagaduria` ni para centrales. El cuadre
+  `payroll-deduction-reconciliation` lo muestra con ese motivo y el pendiente en cero. El castigado no cuenta como cerrado: sigue recibiendo pagos.
+  Si el crédito vuelve a estar vivo (se anuló el crédito nuevo que lo recogió), su pendiente vuelve.
+- **Lo que la pagaduría gira después por un crédito recogido** sigue `Recogida.GiroPosteriorDeCreditoRecogido`: `SaldoDeLaPagaduria` (de fábrica,
+  como antes), `AlCreditoNuevo` (se aplica como pago de la pagaduría al crédito que lo recogió, con la fecha del descuento) o `AFavorDelAsociado`
+  (saldo a favor del asociado). Lo de un crédito cancelado **en caja** sigue quedando como saldo de la pagaduría.
+- **La cuota dejada que la pagaduría no descuenta** sigue la regla del convenio como cualquier no descontada, y se avisa a quien radicó la
+  solicitud del crédito nuevo.
 
 ## 7. No aplicados
 

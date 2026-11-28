@@ -1,0 +1,121 @@
+// Feature 028 (R4, T061; D7, D13-A): «todo menos la cuota causada» con ANTICIPO del mismo crédito. El mismo crédito del caso 01 (1.200.000, 3 cuotas de
+// abono constante, 1,5 % MV; vencimientos 15-04, 15-05 y 15-06); R el 30-04 deja la cuota 2 (400.000 de capital y 12.000 de interés del período).
+// La cancelación usa primero el anticipo del mismo crédito, en este orden: el de las cuotas que salen del plan, el general, el de la cuota que se deja.
+// «general»: P1 paga 448.000 como valor libre el 15-04: 418.000 cubren la cuota 1 y 30.000 quedan de anticipo general. R cuesta 400.000 − 30.000 =
+//   370.000 y la cuota 2 queda debiendo 412.000 completos.
+// «de-la-cuota-dejada»: el 20-04 el asociado anticipó 100.000 de la cuota 2 (cuota del ciclo). R los usa para lo demás: cuesta 300.000 y la cuota 2
+//   queda debiendo 412.000 completos, así la pagaduría la cierra al peso con lo que se le envió.
+// «de-una-cuota-que-sale»: el 20-04 el asociado anticipó la cuota 3 completa (cuota específica: 400.000 + 6.000 = 406.000). R usa 400.000 de ese
+//   anticipo para el capital de la cuota 3 (no cuesta nada: los 1,00 que llegan vuelven como excedente) y los 6.000 que sobran pasan al anticipo
+//   general (la cuota 3 sale del plan). La cuota 2 queda debiendo 412.000 − 6.000 = 406.000: el 15-05 el anticipo general cubre 6.000 de su interés
+//   y su canal paga 406.000 al peso. Calculado a mano. Pendiente de validar por la contadora.
+{
+  "nombre": "Cancelación salvo la cuota causada: con anticipo",
+  "condiciones": {
+    "sistema": "ConstantPrincipal", "convencion": "Thirty360", "equivalencia": "Linear",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 3, "periodicidad": "Monthly", "tasaEA": 0.195618, "tasaMV": 0.015,
+    "fechaDesembolso": "2027-03-15", "diaDePago": 15, "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000002804" } ]
+  },
+  "escenarios": [
+    {
+      "nombre": "general",
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2027-03-15", "registradoEn": "2027-03-15T15:00:00Z" },
+        { "id": "P1", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 448000, "fechaValor": "2027-04-15", "registradoEn": "2027-04-15T16:00:00Z" },
+        { "id": "R", "tipo": "Payment", "modalidad": "PayoffExceptCurrentInstallment", "valor": 370000, "fechaValor": "2027-04-30", "registradoEn": "2027-04-30T16:00:00Z" },
+        { "id": "P2", "tipo": "Payment", "modalidad": "PastDue", "valor": 412000, "fechaValor": "2027-05-15", "registradoEn": "2027-05-15T16:00:00Z" }
+      ],
+      "pago": "R",
+      "esperado": {
+        "cuota": 2, "cuotaDejada": 2,
+        "lineas": [ { "cuota": 3, "concepto": "Principal", "valor": 400000 } ],
+        "interesFijado": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 } ],
+        "anticipoUsado": [ { "cuota": null, "valor": 30000 } ], "anticipo": 0, "excedente": 0, "aplicado": 370000, "cancela": false,
+        "cuotasDelPlanNuevo": [ 1, 2 ],
+        "avisos": [ "Lending.Payment.CurrentInstallmentLeft" ]
+      },
+      "valor": { "cuota": 2, "paraCancelar": 370000, "quedaEnLaCuota": 412000 },
+      "cierre": {
+        "pago": "P2",
+        "lineas": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 }, { "cuota": 2, "concepto": "Principal", "valor": 400000 } ],
+        "excedente": 0, "cancela": true
+      },
+      "verificaciones": [
+        { "fecha": "2027-05-14", "informacionHasta": "2027-05-14T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 412000,
+          "porCuota": [ { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 } ] },
+        { "fecha": "2027-05-31", "informacionHasta": "2027-05-31T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 0, "porCuota": [] }
+      ]
+    },
+    {
+      "nombre": "de-la-cuota-dejada",
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2027-03-15", "registradoEn": "2027-03-15T15:00:00Z" },
+        { "id": "P1", "tipo": "Payment", "modalidad": "PastDue", "valor": 418000, "fechaValor": "2027-04-15", "registradoEn": "2027-04-15T16:00:00Z" },
+        { "id": "P1b", "tipo": "Payment", "modalidad": "CycleInstallment", "valor": 100000, "fechaValor": "2027-04-20", "registradoEn": "2027-04-20T16:00:00Z" },
+        { "id": "R", "tipo": "Payment", "modalidad": "PayoffExceptCurrentInstallment", "valor": 300000, "fechaValor": "2027-04-30", "registradoEn": "2027-04-30T16:00:00Z" },
+        { "id": "P2", "tipo": "Payment", "modalidad": "PastDue", "valor": 412000, "fechaValor": "2027-05-15", "registradoEn": "2027-05-15T16:00:00Z" }
+      ],
+      "pago": "R",
+      "esperado": {
+        "cuota": 2, "cuotaDejada": 2,
+        "lineas": [ { "cuota": 3, "concepto": "Principal", "valor": 400000 } ],
+        "interesFijado": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 } ],
+        "anticipoUsado": [ { "cuota": 2, "valor": 100000 } ], "anticipo": 0, "excedente": 0, "aplicado": 300000, "cancela": false,
+        "cuotasDelPlanNuevo": [ 1, 2 ],
+        "avisos": [ "Lending.Payment.CurrentInstallmentLeft" ]
+      },
+      "valor": { "cuota": 2, "paraCancelar": 300000, "quedaEnLaCuota": 412000 },
+      "cierre": {
+        "pago": "P2",
+        "lineas": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 }, { "cuota": 2, "concepto": "Principal", "valor": 400000 } ],
+        "excedente": 0, "cancela": true
+      },
+      "verificaciones": [
+        { "fecha": "2027-05-14", "informacionHasta": "2027-05-14T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 412000,
+          "porCuota": [ { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 } ] }
+      ]
+    },
+    {
+      "nombre": "de-una-cuota-que-sale",
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2027-03-15", "registradoEn": "2027-03-15T15:00:00Z" },
+        { "id": "P1", "tipo": "Payment", "modalidad": "PastDue", "valor": 418000, "fechaValor": "2027-04-15", "registradoEn": "2027-04-15T16:00:00Z" },
+        { "id": "P1b", "tipo": "Payment", "modalidad": "SpecificInstallment", "cuota": 3, "valor": 406000, "fechaValor": "2027-04-20", "registradoEn": "2027-04-20T16:00:00Z" },
+        { "id": "R", "tipo": "Payment", "modalidad": "PayoffExceptCurrentInstallment", "valor": 1, "fechaValor": "2027-04-30", "registradoEn": "2027-04-30T16:00:00Z" },
+        { "id": "P2", "tipo": "Payment", "modalidad": "PastDue", "valor": 406000, "fechaValor": "2027-05-15", "registradoEn": "2027-05-15T16:00:00Z" }
+      ],
+      "pago": "R",
+      "esperado": {
+        "cuota": 2, "cuotaDejada": 2,
+        "lineas": [ { "cuota": 3, "concepto": "Principal", "valor": 400000 } ],
+        "interesFijado": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 } ],
+        "anticipoUsado": [ { "cuota": 3, "valor": 406000 } ], "anticipo": 6000, "excedente": 1, "aplicado": 0, "cancela": false,
+        "cuotasDelPlanNuevo": [ 1, 2 ],
+        "avisos": [ "Lending.Payment.CurrentInstallmentLeft" ]
+      },
+      "valor": { "cuota": 2, "paraCancelar": 0, "quedaEnLaCuota": 406000 },
+      "cierre": {
+        "pago": "P2",
+        "lineas": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 }, { "cuota": 2, "concepto": "Principal", "valor": 400000 } ],
+        "excedente": 0, "cancela": true
+      },
+      "verificaciones": [
+        { "fecha": "2027-05-14", "informacionHasta": "2027-05-14T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 406000,
+          "porCuota": [
+            { "cuota": null, "concepto": "Advance", "valor": 6000 },
+            { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 }
+          ] },
+        { "fecha": "2027-05-15", "informacionHasta": "2027-05-15T10:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 406000,
+          "porCuota": [ { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 } ] },
+        { "fecha": "2027-05-31", "informacionHasta": "2027-05-31T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 0, "porCuota": [] }
+      ]
+    }
+  ]
+}

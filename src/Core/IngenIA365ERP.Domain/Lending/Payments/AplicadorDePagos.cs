@@ -25,6 +25,10 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// <item><see cref="PaymentModality.SpecificInstallment"/>: sólo esa cuota, si las anteriores exigibles están cubiertas o la prelación lo
 /// permite (<c>Lending.Payment.SpecificInstallmentBlocked</c> con <c>pendingBefore</c>); si no vence todavía, como anticipo de esa cuota.</item>
 /// <item><see cref="PaymentModality.FreeAmount"/>: lo exigible por la prelación y el resto como anticipo general.</item>
+/// <item>2026-11-27 (feature 028, R4): <see cref="PaymentModality.PayoffExceptCurrentInstallment"/>: la cancelación de todo menos la cuota causada
+/// (<see cref="CuotaCausada"/>), que queda tal como se envió y congelada; las cuotas siguientes se pagan a capital y salen del plan
+/// (<see cref="DistribucionDePago.CuotaDejada"/>). Sin cuota causada, o en vivienda, es la cancelación total con su aviso. 2026-11-27 (D13 ajustada): dentro
+/// del tope legal del prepago la cuota se deja con el interés proporcional (<see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/>).</item>
 /// </list>
 /// Con la gracia total repartida (<see cref="GraceInterestTreatment.Distributed"/>) el interés de la gracia que el libro lleva en la cuota
 /// 1 se cobra con la cuota a la que el plan se lo carga (<see cref="PlanDePagos.AtribuirInteresDeLaPrimera"/>). 2026-11-16 (pedido del dueño): con el
@@ -51,6 +55,46 @@ public static class AplicadorDePagos
     /// (<see cref="SolicitudDeDistribucion.CuotaCompleta"/>). Es lo que se le avisa al deudor en el comprobante. (nuevo)
     /// </summary>
     public const string AvisoInteresDeLaCuotaCompleta = "Lending.Payment.FullInstallmentInterestCharged";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): la cancelación salvo la cuota causada dejó esa cuota en el crédito tal como se envió (D13-A) y canceló lo demás.
+    /// (nuevo)
+    /// </summary>
+    public const string AvisoCuotaCausadaDejada = "Lending.Payment.CurrentInstallmentLeft";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): a la fecha valor no hay cuota del período en curso que dejar —la fecha es un vencimiento, el crédito está en gracia o,
+    /// por período calendario, el tramo de la próxima cuota no ha empezado— o la que pidió el pago ya no es esa: la cancelación salvo cuota se aplicó como
+    /// cancelación total. (nuevo)
+    /// </summary>
+    public const string AvisoSinCuotaQueDejar = "Lending.Payment.NoInstallmentToLeave";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T062): un crédito de vivienda (en UVR o en pesos) se recoge completo: dejar la cuota con el interés del período sobre todo el
+    /// saldo cobraría interés del capital que se prepaga, y la Ley 546 de 1999 no admite penalidad por prepago. La cancelación salvo cuota se aplicó como
+    /// cancelación total. (nuevo)
+    /// </summary>
+    public const string AvisoViviendaSeCancelaCompleto = "Lending.Payment.HousingPaidOffInFull";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, D13-A): la regla con que la cancelación salvo cuota deja la cuota causada —tal como se envió, con el interés del período
+    /// completo sobre el saldo con que se proyectó—; la sella la decisión del pago como constancia. (nuevo)
+    /// </summary>
+    public const string ReglaDeLaCuotaDejada = "TalComoSeEnvio";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño; Ley 1555 de 2012): la regla con que la cancelación salvo cuota deja la cuota causada dentro del tope
+    /// legal del prepago (o sin los valores nacionales para saberlo): con el <b>interés proporcional</b> —lo causado hasta la fecha valor sobre todo el saldo y,
+    /// de ahí a su vencimiento, sólo sobre su propio capital—. La decide quien pide (<see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/>), la sella la
+    /// decisión del pago y la reconstrucción la repite. (nuevo)
+    /// </summary>
+    public const string ReglaDeLaCuotaDejadaProporcional = "Proporcional";
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): la cuota se dejó con el interés proporcional (dentro del tope legal del prepago): el interés de los días que le
+    /// faltan sobre el capital que se canceló no se cobra. (nuevo)
+    /// </summary>
+    public const string AvisoCuotaDejadaProporcional = "Lending.Payment.LeftInstallmentProportional";
 
     /// <summary>Lo que hay por cubrir de un concepto: la cuota con que se ordena y la del libro (difieren sólo con la gracia repartida).</summary>
     private readonly record struct Cubeta(int? Orden, int? Libro, LoanConcept Concepto, decimal Monto);
@@ -85,6 +129,9 @@ public static class AplicadorDePagos
         {
             case PaymentModality.FullPayoff:
                 return Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta, solicitud.PeriodoCalendario);
+
+            case PaymentModality.PayoffExceptCurrentInstallment:
+                return CancelacionSalvoCuota(estado, cubetas, salida, solicitud);
 
             case PaymentModality.PastDue:
             {
@@ -259,9 +306,21 @@ public static class AplicadorDePagos
     public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta, bool periodoCalendario = false)
     {
         ArgumentNullException.ThrowIfNull(estado);
-        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario).Sum(l => l.Monto) : 0m;
+        var extra = cuotaCompleta ? InteresDeLaCuotaCompleta(estado, periodoCalendario).Sum(l => l.Monto) : 0m;
         var noCobrado = periodoCalendario && !estado.EnUvr ? InteresSinTramo(estado, estado.Fecha).Sum(l => l.Monto) : 0m;
         return Math.Max(0m, estado.ValorParaCancelar + extra - noCobrado);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R3): lo que una cancelación con la cuota completa agrega a lo causado —el interés de la cuota en curso que falta por causar
+    /// (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>)—, por cuota y concepto; por período calendario, sólo el de un tramo ya empezado.
+    /// Vacío en UVR. Es la misma regla con que cobran <see cref="ValorParaCancelar"/> y la cancelación: la liquidación de la recogida la usa para desglosar
+    /// «el interés que se cobra por la cuota completa». (nuevo)
+    /// </summary>
+    public static IReadOnlyList<LineaDeDistribucion> InteresDeLaCuotaCompleta(EstadoDelCredito estado, bool periodoCalendario = false)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.EnUvr ? [] : DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario);
     }
 
     /// <summary>
@@ -316,28 +375,33 @@ public static class AplicadorDePagos
     /// se cobra: sale de lo que se cubre y la cancelación lo devuelve (<see cref="DistribucionDePago.InteresNoCobrado"/>); la cuota completa, sólo la del
     /// tramo ya empezado. Si así los fondos no cancelan, es la cancelación de siempre (parcial): lo de un tramo sin empezar sigue debiéndose.
     /// </remarks>
+    /// <remarks>
+    /// 2026-11-27 (feature 028, R4): con <paramref name="dejada"/> es la cancelación salvo esa cuota (<see cref="CancelacionSalvoCuota"/>): las cubetas ya vienen
+    /// sin las suyas, la cuota completa no cobra la suya y el anticipo se usa en otro orden (<see cref="Anticipos"/>).
+    /// </remarks>
     private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
-        bool cuotaCompleta, bool periodoCalendario)
+        bool cuotaCompleta, bool periodoCalendario, int? dejada = null)
     {
         if (periodoCalendario && !estado.EnUvr && InteresSinTramo(estado, salida.FechaValor) is { Count: > 0 } noCobrado)
         {
             var sinEmpezar = noCobrado.Select(l => l.Cuota).ToHashSet();
             var cobrables = cubetas.Where(c => !(c.Concepto == LoanConcept.CurrentInterest && sinEmpezar.Contains(c.Libro))).ToList();
-            var calendario = ConLaCuotaCompleta(estado, cobrables, salida, avisos, cuotaCompleta, periodoCalendario);
+            var calendario = ConLaCuotaCompleta(estado, cobrables, salida, avisos, cuotaCompleta, periodoCalendario, dejada);
             if (calendario.Cancela) return calendario with { InteresNoCobrado = noCobrado };
         }
-        return ConLaCuotaCompleta(estado, cubetas, salida, avisos, cuotaCompleta, periodoCalendario);
+        return ConLaCuotaCompleta(estado, cubetas, salida, avisos, cuotaCompleta, periodoCalendario, dejada);
     }
 
     /// <summary>La cancelación con o sin la cuota completa (2026-11-16); por período calendario (2026-11-24), la cuota completa sólo de un tramo empezado.</summary>
     private static DistribucionDePago ConLaCuotaCompleta(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
-        bool cuotaCompleta, bool periodoCalendario)
+        bool cuotaCompleta, bool periodoCalendario, int? dejada)
     {
-        var corrida = Cancelacion(estado, cubetas, salida, avisos);
-        var extra = cuotaCompleta && !estado.EnUvr ? DeTramoEmpezado(estado, estado.InteresPorCausarDeLaCuotaEnCurso(), periodoCalendario) : [];
+        var corrida = Cancelacion(estado, cubetas, salida, avisos, dejada);
+        // 2026-11-27 (feature 028, R4): la cuota que se deja no cobra su cuota completa: su interés del período se causa y queda en ella.
+        var extra = cuotaCompleta ? InteresDeLaCuotaCompleta(estado, periodoCalendario).Where(l => dejada is null || l.Cuota != dejada).ToList() : [];
         if (extra.Count == 0) return corrida;
         var regulares = cubetas.Sum(c => c.Monto);
-        var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos);
+        var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos, dejada);
         var fondos = conLaCuota.AnticipoUsado.Sum(u => u.Monto) + conLaCuota.Aplicado;
         return fondos < regulares
             ? corrida
@@ -345,12 +409,13 @@ public static class AplicadorDePagos
     }
 
     /// <summary>La cancelación sobre unas cubetas: todo lo cobrable, primero con el anticipo del mismo crédito (D7).</summary>
-    private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos)
+    private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
+        int? dejada = null)
     {
         var total = cubetas.Sum(c => c.Monto);
         var usado = new List<LineaDeDistribucion>();
         var porUsar = total;
-        foreach (var s in estado.Saldos.Where(s => s.Concepto == LoanConcept.Advance && s.Valor > 0m).OrderBy(s => s.Cuota is null ? 0 : 1).ThenBy(s => s.Cuota))
+        foreach (var s in Anticipos(estado, dejada))
         {
             var t = Math.Min(s.Valor, porUsar);
             if (t <= 0m) break;
@@ -362,6 +427,160 @@ public static class AplicadorDePagos
         return salida with
         {
             Lineas = lineas, AnticipoUsado = usado, Excedente = salida.Valor - pago, Cancela = pago == porUsar, Avisos = avisos,
+        };
+    }
+
+    /// <summary>
+    /// El anticipo del mismo crédito, en el orden en que lo usa una cancelación: el general y después el de cada cuota (D7). 2026-11-27 (feature 028, R4): la
+    /// cancelación salvo la cuota <paramref name="dejada"/> usa primero el de las cuotas que salen del plan, después el general, el de la cuota dejada y el de las
+    /// anteriores: así la cuota queda debiéndose tal como se envió y su canal la cierra al peso, y lo que sobre no queda en una cuota que ya no existe.
+    /// </summary>
+    private static IEnumerable<SaldoDeCuota> Anticipos(EstadoDelCredito estado, int? dejada)
+    {
+        var anticipos = estado.Saldos.Where(s => s.Concepto == LoanConcept.Advance && s.Valor > 0m);
+        return dejada is not { } n
+            ? anticipos.OrderBy(s => s.Cuota is null ? 0 : 1).ThenBy(s => s.Cuota)
+            : anticipos.OrderBy(s => s.Cuota is { } c && c > n ? 0 : s.Cuota is null ? 1 : s.Cuota == n ? 2 : 3).ThenBy(s => s.Cuota);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059; FR-019): la <b>cuota causada</b> que la cancelación salvo cuota deja a <paramref name="fecha"/>: la cuota del período
+    /// en curso —la primera que vence después de la fecha y cuyo período ya empezó (su <c>Desde</c> es anterior a la fecha) y, con
+    /// <paramref name="periodoCalendario"/>, cuyo tramo del calendario ya empezó (<see cref="CuotasDelTramoEnCurso"/>)—. Nula si no la hay (la fecha es un
+    /// vencimiento, el crédito está en gracia, el tramo de la próxima no ha empezado) o el crédito es de vivienda (<see cref="AvisoViviendaSeCancelaCompleto"/>).
+    /// Es la misma cuota cuyo interés por causar proyecta <see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>. (nuevo)
+    /// </summary>
+    public static int? CuotaCausada(EstadoDelCredito estado, DateOnly fecha, bool periodoCalendario)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        if (estado.Plan is not { } plan || DejaLaCuotaEnVivienda(estado)) return null;
+        var cuota = plan.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
+        if (cuota is null || cuota.Desde >= fecha) return null;
+        if (periodoCalendario && !PeriodoDeCausacion.TramoEmpezado(cuota.Vencimiento, plan.Entrada.Periodicidad, fecha)) return null;
+        return cuota.Numero;
+    }
+
+    /// <summary>¿Es un crédito de vivienda (en UVR o con las reglas de vivienda)? Se recoge completo (T062).</summary>
+    private static bool DejaLaCuotaEnVivienda(EstadoDelCredito estado) => estado.EnUvr || VersionesDeReglas.EsDeVivienda(estado.RulesVersion);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059; FR-019, D13-A): la cancelación de <b>todo menos la cuota causada</b> <c>n</c> (<see cref="CuotaCausada"/>, o la que trae
+    /// la solicitud si es esa misma):
+    /// <list type="bullet">
+    /// <item>cubre, con la prelación de siempre, todo lo cobrable salvo los conceptos de <c>n</c> —con el modo de intereses de la cancelación para las demás
+    /// cuotas (la cuota completa y, por período calendario, lo de un tramo sin empezar)— y el capital de las cuotas siguientes, que salen del plan
+    /// (<see cref="GeneradorDePlan.CortarDespuesDe"/>);</item>
+    /// <item>usa primero el anticipo del mismo crédito (<see cref="Anticipos"/>); lo que sobre del de las cuotas que salen pasa al anticipo general;</item>
+    /// <item><c>n</c> queda <b>tal como se envió</b>: si la causación no le había causado todo el interés del período, se causa ahora lo que falta
+    /// (<see cref="DistribucionDePago.InteresDeLaCuotaDejada"/>: lo mismo que cobraría la cuota completa, sobre el saldo con que se proyectó) y queda
+    /// <b>congelada</b> (<see cref="DistribucionDePago.CuotaDejada"/>): no causa más interés corriente mientras no esté vencida. Por período calendario o al
+    /// inicio del ciclo con el período ya causado, no hay nada que causar: sólo se congela.</item>
+    /// </list>
+    /// Sin cuota causada, con otra pedida o en vivienda es la cancelación total, con su aviso. Si los fondos no alcanzan lo demás, es una cancelación parcial
+    /// sobre todo menos <c>n</c>: no se deja ni se congela nada.
+    /// <para>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño; Ley 1555 de 2012): con <see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/> la cuota no queda
+    /// tal como se envió sino con el <b>interés proporcional</b>: lo que se causa en ella es el interés de los días que le faltan sólo sobre su propio capital
+    /// (<see cref="EstadoDelCredito.InteresPorCausarSobreSuCapital"/>); el de esos días sobre el capital que se cancela no se cobra. Lo que se cancela no cambia.
+    /// La congelación fija ese valor. Aviso <see cref="AvisoCuotaDejadaProporcional"/>.
+    /// </para>
+    /// </summary>
+    private static DistribucionDePago CancelacionSalvoCuota(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, SolicitudDeDistribucion s)
+    {
+        var v = s.FechaValor;
+        var n = CuotaCausada(estado, v, s.PeriodoCalendario);
+        if (n is null || (s.Cuota is { } pedida && pedida != n))
+        {
+            var total = Cancelacion(estado, cubetas, salida with { Cuota = null }, [], s.CuotaCompleta, s.PeriodoCalendario);
+            return total with { Avisos = [.. total.Avisos, DejaLaCuotaEnVivienda(estado) ? AvisoViviendaSeCancelaCompleto : AvisoSinCuotaQueDejar] };
+        }
+
+        var dejada = n.Value;
+        var resto = cubetas.Where(c => c.Orden != dejada).ToList();
+        var pago = Cancelacion(estado, resto, salida with { Cuota = dejada }, [], s.CuotaCompleta, s.PeriodoCalendario, dejada);
+        if (!pago.Cancela) return pago;
+
+        // Lo que sobre del anticipo de las cuotas que salen del plan pasa al anticipo general (sale de su cuota y entra sin cuota).
+        var usado = pago.AnticipoUsado.ToList();
+        var alGeneral = 0m;
+        foreach (var a in estado.Saldos.Where(x => x.Concepto == LoanConcept.Advance && x.Valor > 0m && x.Cuota is { } c && c > dejada))
+        {
+            var i = usado.FindIndex(u => u.Cuota == a.Cuota);
+            var sobra = a.Valor - (i >= 0 ? usado[i].Monto : 0m);
+            if (sobra <= 0m) continue;
+            if (i >= 0) usado[i] = usado[i] with { Monto = a.Valor };
+            else usado.Add(new LineaDeDistribucion(a.Cuota, LoanConcept.Advance, a.Valor));
+            alGeneral += sobra;
+        }
+
+        var plan = estado.Plan!;
+        return pago with
+        {
+            Cancela = false,
+            CuotaDejada = dejada,
+            InteresDeLaCuotaDejada = InteresQueSeFija(estado, dejada, s.CuotaDejadaProporcional),
+            CuotaDejadaProporcional = s.CuotaDejadaProporcional,
+            PlanNuevo = plan.Cuotas.Any(c => c.Numero > dejada) ? GeneradorDePlan.CortarDespuesDe(plan, dejada, v) : null,
+            AnticipoUsado = usado,
+            Anticipo = pago.Anticipo + alGeneral,
+            CuotaDelAnticipo = null,
+            Avisos = s.CuotaDejadaProporcional
+                ? [AvisoCuotaCausadaDejada, AvisoCuotaDejadaProporcional, .. pago.Avisos]
+                : [AvisoCuotaCausadaDejada, .. pago.Avisos],
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4; D13 ajustada): el interés que se causa en la cuota dejada en la fecha valor: tal como se envió (D13-A), lo que le falta del
+    /// período sobre el saldo con que se proyectó (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>); con el proporcional, lo de los días que le
+    /// faltan sólo sobre su capital (<see cref="EstadoDelCredito.InteresPorCausarSobreSuCapital"/>). (nuevo)
+    /// </summary>
+    private static List<LineaDeDistribucion> InteresQueSeFija(EstadoDelCredito estado, int dejada, bool proporcional) =>
+        (proporcional ? estado.InteresPorCausarSobreSuCapital(dejada) : estado.InteresPorCausarDeLaCuotaEnCurso())
+        .Where(l => l.Cuota == dejada && l.Monto > 0m).ToList();
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): lo que cuesta, a la fecha del estado, la cancelación de todo menos la cuota causada, sin aplicarla (la proyección de la
+    /// recogida y la caja): el mismo reparto que <see cref="PaymentModality.PayoffExceptCurrentInstallment"/> con fondos de sobra. Devuelve la cuota que se deja
+    /// (nula si no hay cuota causada, pidió otra o el crédito es de vivienda: entonces lo que cuesta es la cancelación total), lo que cuesta cancelar lo demás
+    /// —con el anticipo del mismo crédito ya descontado—, lo que la cuota deberá al vencer —lo que debe hoy de capital, interés, mora y otros cargos, el interés
+    /// del período que se causa, el seguro y la administración del plan, menos el anticipo que sobre: lo que su canal paga para cerrarla al peso—, ese interés
+    /// por causar y los avisos. Gemelo de <see cref="ValorParaCancelar"/>. (nuevo)
+    /// </summary>
+    /// <param name="proporcional">2026-11-27 (feature 028, D13 ajustada): la cuota se deja con el interés proporcional
+    /// (<see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/>); lo que cuesta lo demás no cambia, lo que queda en la cuota sí. El resultado dice también lo
+    /// que debería si se dejara tal como se envió (<see cref="ValorSalvoCuota.QuedaTalComoSeEnvio"/>).</param>
+    public static ValorSalvoCuota ValorParaCancelarSalvoCuota(EstadoDelCredito estado, int? cuota, bool cuotaCompleta, bool periodoCalendario = false,
+        bool proporcional = false)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        if (estado.Plan is null) return new ValorSalvoCuota(null, 0m, 0m, [], []);
+        var cubetas = Cubetas(estado, Prelacion.PorDefecto);
+        var extra = cuotaCompleta ? InteresDeLaCuotaCompleta(estado, periodoCalendario).Sum(l => l.Monto) : 0m;
+        // Fondos de sobra: todo lo cobrable más la cuota completa (lo que no se aplica vuelve como excedente y no cuenta).
+        var fondos = cubetas.Sum(c => c.Monto) + extra;
+        var salida = new DistribucionDePago
+        {
+            Modalidad = PaymentModality.PayoffExceptCurrentInstallment, Valor = fondos, FechaValor = estado.Fecha, Cuota = cuota,
+        };
+        var d = CancelacionSalvoCuota(estado, cubetas, salida,
+            new SolicitudDeDistribucion(PaymentModality.PayoffExceptCurrentInstallment, fondos, estado.Fecha)
+            {
+                Cuota = cuota, CuotaCompleta = cuotaCompleta, PeriodoCalendario = periodoCalendario, CuotaDejadaProporcional = proporcional,
+            });
+        if (d.CuotaDejada is not { } n) return new ValorSalvoCuota(null, d.Aplicado, 0m, [], d.Avisos);
+        // Lo que la cuota deberá al vencer: lo que debe hoy salvo el seguro y la administración, el interés del período que se le causa, el seguro y la
+        // administración del plan (siguen causándose hasta su vencimiento, como se enviaron) y menos el anticipo que sobre.
+        var cuotaDelPlan = estado.Plan.Cuotas.First(c => c.Numero == n);
+        var anticipoQueQueda = estado.Anticipo - d.AnticipoUsado.Sum(u => u.Monto) + d.Anticipo;
+        var sinElInteres = cubetas.Where(c => c.Orden == n && c.Concepto is not (LoanConcept.Insurance or LoanConcept.Administration)).Sum(c => c.Monto)
+                           + cuotaDelPlan.Seguro + cuotaDelPlan.Administracion - anticipoQueQueda;
+        var queda = sinElInteres + d.InteresDeLaCuotaDejada.Sum(l => l.Monto);
+        // Tal como se envió (D13-A): con el interés del período sobre todo el saldo, lo que su canal tiene para pagar.
+        var comoSeEnvio = proporcional ? sinElInteres + InteresQueSeFija(estado, n, proporcional: false).Sum(l => l.Monto) : queda;
+        return new ValorSalvoCuota(n, d.Aplicado, Math.Max(0m, queda), d.InteresDeLaCuotaDejada, d.Avisos)
+        {
+            Proporcional = proporcional, QuedaTalComoSeEnvio = Math.Max(0m, comoSeEnvio),
         };
     }
 

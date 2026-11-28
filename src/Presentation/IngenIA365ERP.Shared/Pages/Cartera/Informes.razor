@@ -198,6 +198,18 @@
                 {
                     <label class="campo">Señal desde (% del límite) <input type="number" min="1" max="100" class="e-input" value="@Otro("warnAt")" placeholder="80" @onchange="@(e => PonerOtro("warnAt", e.Value?.ToString()))" /></label>
                 }
+                @* 2026-11-27 (feature 028, HU8, T055): las recogidas por la clase del producto recogido. *@
+                @if (UsaPropio("productKind"))
+                {
+                    <label class="campo">Producto recogido
+                        <select class="e-input" value="@Otro("productKind")" @onchange="@(e => PonerOtro("productKind", e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            <option value="Loan">Créditos</option>
+                            <option value="Account">Aportes y ahorros</option>
+                            <option value="CommercialReceivable">Facturas a crédito</option>
+                        </select>
+                    </label>
+                }
                 @if (UsaPropio("load"))
                 {
                     <label class="campo">Carga de migración <input class="e-input" value="@Otro("load")" placeholder="identificador de la carga" @onchange="@(e => PonerOtro("load", e.Value?.ToString()))" /></label>
@@ -230,7 +242,7 @@
     private static readonly HashSet<string> ConControl = new(StringComparer.Ordinal)
     {
         "branch", "line", "modality", "collector", "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load",
-        "by", "top", "warnAt", "year", "month",
+        "by", "top", "warnAt", "year", "month", "productKind",
     };
 
     private readonly EstadoDeCarga _cargaVistas = new(), _carga = new();
@@ -290,7 +302,7 @@
         _vista = _vistas.FirstOrDefault(v => v.Key == clave);
         _tabla = null;
         // Los filtros propios de una vista no significan lo mismo en otra (groupBy de colocación no es el de recaudo).
-        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan", "by", "top", "warnAt", "year", "month" })
+        foreach (var propio in new[] { "groupBy", "dateKind", "ranges", "points", "purpose", "channel", "status", "load", "kind", "loan", "by", "top", "warnAt", "year", "month", "productKind" })
             _filtros.Otros.Remove(propio);
         await EvaluarExportacionAsync();
     }

@@ -41,6 +41,7 @@ public sealed partial class ReceiptsReportQueryHandler
         ReceiptChannel.Online => "Pasarela o PSE",
         ReceiptChannel.Contingency => "Contingencia",
         ReceiptChannel.AdvanceCrossing => "Cruce de anticipo",
+        ReceiptChannel.LoanDisbursement => "Recogida en el desembolso",
         _ => c.ToString(),
     };
 

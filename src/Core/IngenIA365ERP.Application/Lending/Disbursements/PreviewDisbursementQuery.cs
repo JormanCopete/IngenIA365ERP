@@ -1,6 +1,11 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Application.Lending.Integration;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Enums.Integration;
+using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Payoffs;
 using MediatR;
 
 namespace IngenIA365ERP.Application.Lending.Disbursements;
@@ -11,7 +16,13 @@ namespace IngenIA365ERP.Application.Lending.Disbursements;
 /// —usura del día, aprobación, garantías pendientes, recogidas con lo que cuesta cancelarlas y si son reestructuración, neto, plan propuesto
 /// (D12), validación previa contable, segregación— y la huella <c>previewSha256</c> que el comando compara (<c>expectedPreviewSha256</c>). Lo que
 /// impediría desembolsar sale en <c>blocking</c> con su código; sólo responde error lo que impide evaluar (solicitud inexistente o fuera del
-/// alcance, no aprobada, la usura del día sin publicar). Filtra por el alcance de la solicitud (<c>AlcanceDeCartera</c>). (nuevo)
+/// alcance, no aprobada, la usura del día sin publicar). Filtra por el alcance de la solicitud (<c>AlcanceDeCartera</c>).
+/// <para>
+/// 2026-11-27 (feature 028, T034; FR-013, FR-015; api.md §3): cada recogida trae lo proyectado en la solicitud, lo de ahora, lo que se aplica, la
+/// diferencia por concepto con su causa, si se omite y la cuota causada, y <c>payoffDifferences</c> dice si confirmar exige reconocerlas. Como la
+/// liquidación del crédito, audita <c>Lending.Payoff.Viewed</c> por cada crédito liquidado.
+/// </para>
+/// (nuevo)
 /// </summary>
 public sealed record PreviewDisbursementQuery(DisbursementInput Input) : IRequest<Result<DisbursementPreviewDto>>;
 
@@ -24,7 +35,7 @@ public sealed class PreviewDisbursementQueryValidator : AbstractValidator<Previe
     }
 }
 
-public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requisitos)
+public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requisitos, LendingAuditEmitter auditoria)
     : IRequestHandler<PreviewDisbursementQuery, Result<DisbursementPreviewDto>>
 {
     public async Task<Result<DisbursementPreviewDto>> Handle(PreviewDisbursementQuery request, CancellationToken ct)
@@ -34,16 +45,25 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
         if (evaluados.IsFailure) return Result.Failure<DisbursementPreviewDto>(evaluados.Error);
         var r = evaluados.Value;
 
+        // 2026-11-27 (feature 028, T034): ver lo que cuesta recoger un crédito es ver su liquidación (como GetLoanSettlementQuery).
+        foreach (var x in r.Recogidas)
+            if (x.Liquidacion.Detalle is { } l)
+                await auditoria.EmitirLiquidacionVistaAsync(x.LoanPublicId, l.Fecha, l.InformacionHasta, l.Huella, ct);
+
         var s = r.Simulacion;
         var plan = new DisbursementScheduleDto(s.Plan.Cuotas.Count, s.TasaPactada,
             s.Plan.Cuotas.Select(c => new DisbursementScheduleLineDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Total)
                 { Administration = c.Administracion }).ToList());
+        var porReconocer = r.Recogidas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)
+            .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total))
+            .Concat(r.RecogidasDeFacturas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
         return Result.Success(new DisbursementPreviewDto(
             new DisbursementUsuryDto(s.Usura.EfectivaConCargos, s.Usura.Usura, s.Usura.Pasa, s.Usura.UsuraPublicId),
             new DisbursementApprovalDto(r.Solicitud.ApprovalValidUntil, !r.Solicitud.AprobacionVencida(r.FechaValor)),
             new DisbursementCollateralsDto(r.Pendientes.Count == 0, r.Pendientes),
-            r.Recogidas.Select(x => new DisbursementPreviewPayoffDto(x.LoanPublicId, x.Number, x.Liquidacion.ParaCancelar, x.Liquidacion.DiasDeMora,
-                x.RequiereReestructuracion)).ToList(),
+            // 2026-11-27 (feature 028, E3, T077): las cuentas recogidas, detrás de los créditos.
+            // 2026-11-27 (feature 028, E4, T087): y las facturas a crédito, al final.
+            r.Recogidas.Select(x => Recogida(x)).Concat(r.RecogidasDeCuentas.Select(x => Recogida(x))).Concat(r.RecogidasDeFacturas.Select(x => Recogida(x))).ToList(),
             r.Tramo,
             r.Bruto,
             r.Neto,
@@ -52,16 +72,142 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             new DisbursementSegregationDto(r.ConflictoDeSegregacion),
             r.Bloqueos.Select(b => b.Code).ToList(),
             r.Avisos,
-            r.Huella));
+            r.Huella)
+        {
+            PayoffDifferences = new DisbursementPayoffDifferencesDto(porReconocer.Count, porReconocer.Sum(), r.RequiereReconocimiento,
+                r.Recogidas.Any(x => x.SobreLaTolerancia) || r.RecogidasDeCuentas.Any(x => x.SobreLaTolerancia)
+                || r.RecogidasDeFacturas.Any(x => x.SobreLaTolerancia)),
+        });
     }
 
-    /// <summary>Lo que respondió la validación previa contable, como lo muestran la vista previa y el resultado del desembolso.</summary>
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T077, T081; api.md §3): una cuenta recogida como la muestra la vista previa: <c>kind = Account</c>, el producto, el modo
+    /// (por cuotas o abono), lo proyectado, lo de ahora (lo pendiente a la fecha valor o el abono), lo que se consigna, la diferencia con su causa y si se omite.
+    /// Sin mora, intereses ni cuota causada (no es una deuda).
+    /// </summary>
+    public static DisbursementPreviewPayoffDto Recogida(RecogidaDeCuentaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        return new DisbursementPreviewPayoffDto(Guid.Empty, x.Number, x.Actual, 0, false)
+        {
+            Kind = nameof(PayoffProductKind.Account),
+            ProductPublicId = x.AccountPublicId,
+            Mode = x.Modo.ToString(),
+            RequestedMode = x.Modo.ToString(),
+            Projected = x.ConProyeccion ? x.Proyectado : null,
+            Current = x.Actual,
+            ToApply = x.AAplicar,
+            Difference = x.ConProyeccion || x.Omitida ? x.Diferencia.Total : null,
+            Causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            Detail = Detalle(x.Diferencia.PorConcepto),
+            Omitted = x.Omitida,
+            AboveTolerance = x.SobreLaTolerancia,
+            Warnings = x.Avisos,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T087, T089; api.md §3): una factura a crédito como la muestra la vista previa: <c>kind = CommercialReceivable</c>, su número (en
+    /// <c>number</c> y <c>reference</c>), el identificador estable de la consulta de productos, el modo, lo proyectado, lo pendiente de ahora, lo que se le aplica, la
+    /// diferencia con su causa y si se omite. Sin mora, intereses ni cuota causada.
+    /// </summary>
+    public static DisbursementPreviewPayoffDto Recogida(RecogidaDeFacturaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        return new DisbursementPreviewPayoffDto(Guid.Empty, x.Numero, x.Actual, 0, false)
+        {
+            Kind = nameof(PayoffProductKind.CommercialReceivable),
+            ProductPublicId = x.Identificador,
+            Reference = x.Numero,
+            Mode = x.Modo.ToString(),
+            RequestedMode = x.ModoPedido.ToString(),
+            Projected = x.ConProyeccion ? x.Proyectado : null,
+            Current = x.Actual,
+            ToApply = x.AAplicar,
+            Difference = x.ConProyeccion || x.Omitida ? x.Diferencia.Total : null,
+            Causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            Detail = Detalle(x.Diferencia.PorConcepto),
+            Omitted = x.Omitida,
+            AboveTolerance = x.SobreLaTolerancia,
+            Warnings = x.Avisos,
+        };
+    }
+
+    /// <summary>Una recogida como la muestra la vista previa (api.md §3).</summary>
+    public static DisbursementPreviewPayoffDto Recogida(RecogidaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        return new DisbursementPreviewPayoffDto(x.LoanPublicId, x.Number, x.Liquidacion.ParaCancelar, x.Liquidacion.DiasDeMora, x.RequiereReestructuracion)
+        {
+            ProductPublicId = x.LoanPublicId,
+            Mode = x.Total ? nameof(PayoffMode.Total) : nameof(PayoffMode.Partial),
+            RequestedMode = x.ModoPedido.ToString(),
+            Projected = x.ConProyeccion ? x.Proyectado : null,
+            Current = x.Actual,
+            ToApply = x.AAplicar,
+            Difference = x.ConProyeccion || x.Omitida ? x.Diferencia.Total : null,
+            Causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            Detail = Detalle(x.Diferencia.PorConcepto),
+            Omitted = x.Omitida,
+            AboveTolerance = x.SobreLaTolerancia,
+            InterestMode = x.ModoDeIntereses,
+            // 2026-11-27 (feature 028, E2, T066): la cuota causada con el tratamiento con que se aplica, la que se deja, la enviada y su explicación.
+            CurrentInstallment = Cuota(x),
+            Warnings = x.Avisos,
+            // 2026-11-27 (feature 028, T051): el interés explicado sólo en una cancelación (un abono va a capital y no lo cobra así).
+            InterestExplanation = x.Omitida || !x.Total || x.Liquidacion.Detalle is not { } explicada
+                ? []
+                : PayoffInterestLineDto.De(x.Segun?.ExplicacionDelInteres ?? explicada.ExplicacionDelInteres),
+            RecognizedReleased = x.Omitida || !x.Total ? 0m : x.Liquidacion.Detalle?.ReconocidoQueSeLibera ?? 0m,
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T066; api.md §3 <c>currentInstallment</c>): la cuota causada del recogido con el tratamiento con que se aplica —la que se
+    /// deja con lo que debe (<c>left</c>), o la que se incluye—, la cuota enviada y qué pasa con ella. Sin cuota, nula.
+    /// </summary>
+    public static DisbursementPayoffInstallmentDto? Cuota(RecogidaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        if (x.Liquidacion.Detalle is not { } l) return null;
+        var segun = x.Segun ?? l.Segun(InstallmentTreatment.Include);
+        if (segun.Cuota is not { } c) return null;
+        return new DisbursementPayoffInstallmentDto(c.Numero, c.Vencimiento, c.Valor, x.Tratamiento.ToString(), x.ValorDejado)
+        {
+            Sent = PayoffSentInstallmentDto.De(l.CuotaEnviada),
+            Explanation = x.Omitida || !x.Total ? null : segun.ExplicacionDeLaCuota,
+            // 2026-11-27 (feature 028, D13 ajustada): la regla con que se deja la cuota, sólo si se deja.
+            LeftRule = x.ValorDejado is null ? null : l.SalvoCuota?.Regla.Regla,
+            LeftRuleReason = x.ValorDejado is null ? null : l.SalvoCuota?.Regla.Motivo,
+            LeftAsSent = x.ValorDejado is null ? null : l.SalvoCuota?.QuedaTalComoSeEnvio,
+        };
+    }
+
+    /// <summary>La diferencia por concepto, sólo los que cambiaron, con los nombres de <c>breakdown</c> (api.md §1).</summary>
+    public static IReadOnlyDictionary<string, decimal> Detalle(DesgloseDeRecogida d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        var conceptos = new (string Nombre, decimal Valor)[]
+        {
+            ("principal", d.Capital), ("currentInterest", d.InteresCorriente), ("interestReturned", d.InteresDevuelto),
+            ("interestCharged", d.InteresCobradoPorProporcionales), ("defaultInterest", d.Mora), ("insurance", d.Seguro), ("administration", d.Administracion),
+            ("otherCharges", d.OtrosCargos), ("advance", d.Anticipo), ("creditBalance", d.SaldoAFavor),
+        };
+        return conceptos.Where(c => c.Valor != 0m).ToDictionary(c => c.Nombre, c => c.Valor);
+    }
+
+    /// <summary>
+    /// Lo que respondió la validación previa contable, como lo muestran la vista previa y el resultado del desembolso. 2026-11-27 (feature 028, T037): con la
+    /// de las recogidas, si la hubo: aplica si alguna aplica, respondió si respondieron todas, se puede contabilizar si todas, y sus hallazgos juntos.
+    /// </summary>
     public static PrevalidationDto Prevalidacion(RequisitosEvaluados r)
     {
-        var p = r.Prevalidacion;
-        var aplica = p.Outcome != PrevalidationOutcome.NotApplicable;
-        var respondio = p.Outcome != PrevalidationOutcome.NoResponse;
-        bool? contabilizable = aplica && respondio ? p.Outcome == PrevalidationOutcome.Postable : null;
-        return new PrevalidationDto(aplica, contabilizable, respondio, p.Errors.Cast<object>().ToList(), p.Warnings.Cast<object>().ToList());
+        var resultados = new[] { r.Prevalidacion, r.PrevalidacionDeRecogidas, r.PrevalidacionDeCuentas }.OfType<ResultadoDeValidacionPreviaDeCartera>()
+            .Where(p => p.Outcome != PrevalidationOutcome.NotApplicable).ToList();
+        var aplica = resultados.Count > 0;
+        var respondio = resultados.All(p => p.Outcome != PrevalidationOutcome.NoResponse);
+        bool? contabilizable = aplica && respondio ? resultados.All(p => p.Outcome == PrevalidationOutcome.Postable) : null;
+        return new PrevalidationDto(aplica, contabilizable, respondio, resultados.SelectMany(p => p.Errors).Cast<object>().ToList(),
+            resultados.SelectMany(p => p.Warnings).Cast<object>().ToList());
     }
 }

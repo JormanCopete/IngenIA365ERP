@@ -1,0 +1,404 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject RecogidasClient Recogidas
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+@* 2026-11-27 (pedido del dueño; feature 028, HU1, T019; R16): los productos del deudor que el crédito nuevo puede recoger con su desembolso. Carga
+   todos sus créditos vivos liquidados a la fecha proyectada de desembolso (editable aquí: «Simular» vuelve a consultar con esa fecha y la información
+   de ese momento) y dice, por cada uno, la forma de pago, los días de mora, la cuota, lo que cuesta recogerlo y si se puede recoger o por qué no. El
+   asesor marca lo que se recoge, total o parcial; al pie, el total recogido, el neto a girar y las cuotas que se liberan frente a la cuota nueva. El
+   detalle de cada crédito despliega el desglose por concepto, el modo de intereses, la cuota causada y los avisos. «Imprimir simulación» baja el PDF
+   con el membrete. Cada cambio de lo marcado se le avisa a quien la contiene (SeleccionCambiada). Lo usa la solicitud nueva (paso 2).
+   2026-11-27 (feature 028, HU2, T028): al corregir abre con lo que la solicitud ya recoge (Inicial) y lo avisa sin volver a liquidar; con SoloLectura
+   (el grupo «Recogidas» no se puede corregir) se ve pero no se marca ni se cambia, y lo marcado no se quita aunque ya no se pueda recoger (el servidor lo
+   vuelve a revisar al guardar). La consulta ya no manda lo marcado: el resumen sale aquí con la misma regla del servidor, y así un crédito marcado que
+   dejó de ser del deudor (se canceló) no tumba la consulta.
+   2026-11-27 (feature 028, E2, T072; HU4): la cuota causada. La forma de pago avisa si la cuota del período ya va en la libranza o en la nómina; con
+   «Preguntar» (Recogida.CuotaCausada) el asesor elige por crédito «Incluir la cuota» o «Dejarla a su canal», y lo que cuesta recogerlo, el total y el neto
+   siguen esa elección; el detalle explica qué pasa con la cuota en cada caso.
+   2026-11-27 (feature 028, E3, T081; HU6): también las cuentas del titular (aportes, ahorro a la vista, permanente y contractual; nunca el CDAT), con sus
+   modos —por cuotas (lo pendiente a la fecha) o abono (con su valor)—; de fábrica se ven sin poder marcarse («La cooperativa no los recoge»).
+   2026-11-27 (feature 028, E4, T089; HU7): y las facturas a crédito de Comercial pendientes, total o parcial; de fábrica se ven sin poder marcarse («La
+   cooperativa no las recoge»). Sin zonas de carga nuevas: todo llega con la consulta. *@
+<div class="info-card">
+    <h4>Productos que recoge</h4>
+    <p class="texto-apoyo">
+        Marque los créditos del deudor que el crédito nuevo cancela o abona con su desembolso y, si la cooperativa los recoge, las cuotas de aportes y
+        ahorros o un abono a ellos y sus facturas a crédito. Los valores son una proyección a la fecha de desembolso:
+        al desembolsar se vuelven a calcular y se muestran las diferencias.
+    </p>
+    <div class="form-grid">
+        <label class="campo">Fecha proyectada de desembolso
+            <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" min="@Hoy.ToString("yyyy-MM-dd")"
+                   @onchange="@(e => { _fecha = LeerFecha(e.Value) is { } f && f >= Hoy ? f : Hoy; _fechaVieja = true; })" />
+        </label>
+    </div>
+    <IndicadorDeCarga Cargando="@_impresion.Activa" Compacto="true" Texto="Generando el PDF…">
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@(_carga.Activa || Persona is null)" OnClick="@SimularAsync">Simular</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@(_respuesta is null || _marcadas.Count == 0 || _impresion.Activa || _carga.Activa)"
+                      OnClick="@ImprimirAsync">Imprimir simulación</SfButton>
+        </div>
+    </IndicadorDeCarga>
+    @if (_fechaVieja)
+    {
+        <p class="aviso aviso-alerta">Cambió la fecha proyectada: pulse «Simular» para recalcular los valores a esa fecha.</p>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Liquidando los productos del deudor…">
+        @if (_error is not null)
+        {
+            <p class="aviso aviso-error" role="alert">@_error</p>
+        }
+        else if (Persona is null)
+        {
+            <p class="texto-tenue">Elija el solicitante para ver sus productos.</p>
+        }
+        else if (_respuesta is { } r)
+        {
+            @if (r.Products.Count == 0)
+            {
+                <p class="texto-tenue">@(r.Person?.Nombre ?? "El deudor") no tiene créditos vivos como deudor, ni cuentas ni facturas a crédito que se puedan recoger.</p>
+            }
+            else
+            {
+                <p class="texto-tenue">
+                    Valores al @r.Date.ToString("dd/MM/yyyy") con la información registrada hasta el @r.RecordedAsOf.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+                </p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>Recoger</th><th>Producto</th><th>Línea</th><th>Forma de pago</th><th class="numero">Días de mora</th>
+                                <th class="numero">Cuota</th><th class="numero">Para recoger</th><th>Modo</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var producto in r.Products)
+                            {
+                                var p = producto;
+                                var marcada = Marcada(p.ProductPublicId);
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" checked="@(marcada is not null)" disabled="@(!p.Eligible || SoloLectura)"
+                                               title="@(p.Eligible ? (p.EsCuenta ? "Recoger esta cuenta" : p.EsFactura ? "Recoger esta factura" : "Recoger este crédito") : p.BlockMessage)"
+                                               aria-label="@($"Recoger {(p.EsCuenta ? "la cuenta" : p.EsFactura ? "la factura" : "el crédito")} {p.Number}")"
+                                               @onchange="@(e => MarcarAsync(p, e.Value is true))" />
+                                    </td>
+                                    <td>
+                                        @if (p.EsCuenta) { <span class="texto-tenue">@TextosDeRecogida.ProductoDeCuenta(p.AccountProduct) </span> }
+                                        @if (p.EsFactura) { <span class="texto-tenue">Factura </span> }
+                                        @p.Number
+                                        @if (p.Origin is 2 or 4) { <span class="texto-tenue"> (@TextosDeRecogida.Origen(p.Origin))</span> }
+                                    </td>
+                                    <td>@p.Line</td>
+                                    <td>
+                                        @TextosDeRecogida.Canal(p.Channel)
+                                        @if (p.CurrentInstallment?.Sent is { } enviada)
+                                        {
+                                            <span class="texto-alerta" title="@enviada.Texto"> · cuota enviada</span>
+                                        }
+                                    </td>
+                                    <td class="numero">@p.DaysPastDue</td>
+                                    <td class="numero">@TextosDeRecogida.Pesos(p.Installment)</td>
+                                    <td class="numero">@TextosDeRecogida.Pesos(p.ParaRecoger(marcada?.InstallmentTreatment))</td>
+                                    <td>
+                                        @if (!p.Eligible)
+                                        {
+                                            <span class="texto-alerta">@TextosDeRecogida.Motivo(p.BlockReason, p.Kind)</span>
+                                        }
+                                        else if (marcada is { } m)
+                                        {
+                                            <select class="e-input" value="@m.Mode" disabled="@(p.AdmittedModes.Count < 2 || SoloLectura)" aria-label="@($"Modo de recogida de {p.Number}")"
+                                                    @onchange="@(e => CambiarModoAsync(p, LeerEntero(e.Value) ?? TextosDeRecogida.ModoTotal))">
+                                                @foreach (var modo in p.AdmittedModes)
+                                                {
+                                                    <option value="@modo">@TextosDeRecogida.Modo(modo)</option>
+                                                }
+                                            </select>
+                                            @if (m.Mode == TextosDeRecogida.ModoTotal && p.CuotaElegible)
+                                            {
+                                                <select class="e-input" value="@p.TratamientoDeLaCuota(m.InstallmentTreatment)" disabled="@SoloLectura"
+                                                        aria-label="@($"Cuota causada del crédito {p.Number}")"
+                                                        @onchange="@(e => CambiarTratamientoAsync(p, LeerEntero(e.Value) ?? TextosDeRecogida.CuotaIncluida))">
+                                                    <option value="@TextosDeRecogida.CuotaIncluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaIncluida)</option>
+                                                    <option value="@TextosDeRecogida.CuotaExcluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaExcluida)</option>
+                                                </select>
+                                            }
+                                            @if (m.Mode == TextosDeRecogida.ModoAbono)
+                                            {
+                                                <input class="e-input" type="number" min="1" step="1000" disabled="@SoloLectura"
+                                                       value="@m.Amount?.ToString(CultureInfo.InvariantCulture)" aria-label="@($"Valor del abono a la cuenta {p.Number}")"
+                                                       @onchange="@(e => CambiarValorAsync(p, LeerDecimal(e.Value)))" />
+                                            }
+                                            @if (m.Mode == TextosDeRecogida.ModoParcial)
+                                            {
+                                                <input class="e-input" type="number" min="1" step="1000" max="@p.ToPayOff.ToString(CultureInfo.InvariantCulture)"
+                                                       disabled="@SoloLectura" value="@m.Amount?.ToString(CultureInfo.InvariantCulture)"
+                                                       aria-label="@($"Valor parcial {(p.EsFactura ? "de la factura" : "del crédito")} {p.Number}")"
+                                                       @onchange="@(e => CambiarValorAsync(p, LeerDecimal(e.Value)))" />
+                                            }
+                                        }
+                                        else if (p.InOtherApplication is not null)
+                                        {
+                                            <span class="texto-alerta">@TextosDeRecogida.EnOtraSolicitud(p.InOtherApplication)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => Alternar(p.ProductPublicId))">
+                                            @(_abiertos.Contains(p.ProductPublicId) ? "Ocultar" : "Detalle")
+                                        </SfButton>
+                                    </td>
+                                </tr>
+                                @if (_abiertos.Contains(p.ProductPublicId))
+                                {
+                                    <tr>
+                                        <td colspan="9">
+                                            <DetalleDeRecogida Producto="@p" Tratamiento="@marcada?.InstallmentTreatment" />
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Total recogido</span><span class="kpi-value">@TextosDeRecogida.Pesos(_resumen.SelectedTotal)</span></div>
+                @if (_resumen.NetToDisburse is { } neto)
+                {
+                    <div class="kpi-card"><span class="kpi-label">Neto a girar</span><span class="kpi-value">@TextosDeRecogida.Pesos(neto)</span></div>
+                }
+                <div class="kpi-card"><span class="kpi-label">Cuotas que se liberan</span><span class="kpi-value">@TextosDeRecogida.Pesos(_resumen.ReleasedInstallments)</span></div>
+                @if (CuotaNueva is { } cuota)
+                {
+                    <div class="kpi-card"><span class="kpi-label">Cuota del crédito nuevo</span><span class="kpi-value">@TextosDeRecogida.Pesos(cuota)</span></div>
+                }
+            </div>
+            @foreach (var aviso in _resumen.Warnings)
+            {
+                <p class="aviso aviso-alerta" role="alert">@aviso</p>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    /// <summary>El solicitante (deudor de los productos); nulo mientras no se elija.</summary>
+    [Parameter] public Guid? Persona { get; set; }
+
+    /// <summary>La línea del crédito nuevo: decide qué productos y modos se admiten.</summary>
+    [Parameter] public Guid? Linea { get; set; }
+
+    /// <summary>El monto del crédito nuevo, para el neto a girar.</summary>
+    [Parameter] public decimal? Monto { get; set; }
+
+    /// <summary>La cuota del crédito nuevo, para compararla con las que se liberan.</summary>
+    [Parameter] public decimal? CuotaNueva { get; set; }
+
+    /// <summary>La fecha esperada de desembolso de la simulación; nula, hoy. Es la fecha proyectada inicial.</summary>
+    [Parameter] public DateOnly? FechaDeDesembolso { get; set; }
+
+    /// <summary>Lo marcado al abrir (la solicitud que se corrige).</summary>
+    [Parameter] public IReadOnlyList<RecogidaMarcada>? Inicial { get; set; }
+
+    /// <summary>2026-11-27 (T028): sólo se ve (al corregir, si el grupo «Recogidas» no se puede corregir).</summary>
+    [Parameter] public bool SoloLectura { get; set; }
+
+    /// <summary>La solicitud que se corrige: no cuenta como «otra solicitud que lo recoge».</summary>
+    [Parameter] public Guid? SolicitudExcluida { get; set; }
+
+    /// <summary>Cada cambio de lo marcado o de la simulación.</summary>
+    [Parameter] public EventCallback<SeleccionDeRecogida> SeleccionCambiada { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _impresion = new();
+    private readonly List<RecogidaMarcada> _marcadas = [];
+    private readonly HashSet<Guid> _abiertos = [];
+    private ProductosParaRecogerDto? _respuesta;
+    private ResumenDeRecogidaDto _resumen = new(0m, null, 0m, null, []);
+    private DateOnly _fecha = Hoy;
+    private bool _fechaVieja, _inicialTomada;
+    private string? _error;
+    private (Guid? Persona, Guid? Linea, DateOnly? Fecha) _consultado;
+    private (decimal? Monto, decimal? Cuota) _avisado;
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Now);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var recienTomada = false;
+        if (!_inicialTomada && Inicial is { Count: > 0 } inicial)
+        {
+            _marcadas.AddRange(inicial);
+            _inicialTomada = recienTomada = true;
+        }
+        // Otra persona, otra línea u otra fecha de desembolso de la simulación: se vuelve a consultar. El monto y la cuota sólo cambian el resumen.
+        if (_consultado != (Persona, Linea, FechaDeDesembolso))
+        {
+            _consultado = (Persona, Linea, FechaDeDesembolso);
+            _fecha = FechaDeDesembolso is { } f && f >= Hoy ? f : Hoy;
+            if (Persona is not null) await ConsultarAsync();
+            else { _respuesta = null; _marcadas.Clear(); await AvisarAsync(); }
+        }
+        else if (recienTomada || _avisado != (Monto, CuotaNueva))
+        {
+            // Otro monto u otra cuota (se volvió a simular con la misma fecha), o lo que ya recogía llegó después de consultar: el neto cambia y quien la
+            // contiene lo muestra. No se vuelve a liquidar.
+            await AvisarAsync();
+        }
+    }
+
+    private async Task SimularAsync()
+    {
+        await ConsultarAsync();
+    }
+
+    private async Task ConsultarAsync()
+    {
+        if (Persona is not { } persona) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        // Sin lo marcado: el resumen sale aquí (Resumir) y un marcado que ya no es del deudor no tumba la consulta.
+        var r = await Recogidas.ProductosAsync(Pedido(persona) with { Selected = null });
+        if (!r.IsSuccess || r.Value is not { } respuesta)
+        {
+            _error = r.ErrorMessage ?? "No se pudieron leer los productos del deudor.";
+            _respuesta = null;
+            return;
+        }
+        _respuesta = respuesta;
+        _fechaVieja = false;
+        if (SoloLectura)
+        {
+            // Sólo se ve: lo marcado queda como está, con el valor de ahora si el producto sigue entre los del deudor.
+            var todos = respuesta.Products.ToDictionary(p => p.ProductPublicId);
+            for (var i = 0; i < _marcadas.Count; i++)
+                if (todos.TryGetValue(_marcadas[i].ProductPublicId, out var producto))
+                    _marcadas[i] = _marcadas[i] with { ToPayOff = producto.ParaRecoger(_marcadas[i].InstallmentTreatment) };
+            await AvisarAsync();
+            return;
+        }
+        // Lo marcado que ya no se puede recoger (otra fecha, otra línea) se desmarca; lo demás toma el valor de ahora.
+        var vigentes = respuesta.Products.Where(p => p.Eligible).ToDictionary(p => p.ProductPublicId);
+        // 2026-11-27 (T072): la elección de la cuota causada sólo se conserva si el crédito la sigue dejando elegir.
+        var siguen = _marcadas.Where(m => vigentes.ContainsKey(m.ProductPublicId) && vigentes[m.ProductPublicId].AdmittedModes.Contains(m.Mode))
+            .Select(m =>
+            {
+                var p = vigentes[m.ProductPublicId];
+                return p.CuotaElegible ? m with { ToPayOff = p.ParaRecoger(m.InstallmentTreatment) } : m with { ToPayOff = p.ToPayOff, InstallmentTreatment = null, Kind = p.Kind };
+            }).ToList();
+        var quitadas = _marcadas.Count - siguen.Count;
+        _marcadas.Clear();
+        _marcadas.AddRange(siguen);
+        if (quitadas > 0)
+            await Notification.WarningAsync(quitadas == 1
+                ? "Un producto marcado ya no se puede recoger con estas condiciones y se desmarcó."
+                : $"{quitadas} productos marcados ya no se pueden recoger con estas condiciones y se desmarcaron.");
+        await AvisarAsync();
+    }
+
+    private ProductosParaRecogerRequest Pedido(Guid persona) => new(persona, Linea, _fecha, null,
+        _marcadas.Select(m => m.ComoPedido()).ToList(), Monto is { } monto && monto > 0m ? new CreditoNuevoDeRecogidaRequest(monto, CuotaNueva) : null,
+        SolicitudExcluida);
+
+    private RecogidaMarcada? Marcada(Guid producto) => _marcadas.FirstOrDefault(m => m.ProductPublicId == producto);
+
+    private async Task MarcarAsync(ProductoParaRecogerDto p, bool marcar)
+    {
+        if (SoloLectura) return;
+        _marcadas.RemoveAll(m => m.ProductPublicId == p.ProductPublicId);
+        if (marcar && p.Eligible)
+        {
+            var modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoTotal) ? TextosDeRecogida.ModoTotal : p.AdmittedModes.FirstOrDefault();
+            // 2026-11-27 (feature 028, E3): una cuenta se marca por cuotas si lo admite (si no, abono, con el valor por digitar).
+            if (p.EsCuenta) modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoCuotas) && p.ToPayOff > 0m ? TextosDeRecogida.ModoCuotas : p.AdmittedModes.FirstOrDefault();
+            // 2026-11-27 (feature 028, E4, T089): una factura va por su número.
+            _marcadas.Add(new RecogidaMarcada(p.ProductPublicId, p.Number, modo, modo == TextosDeRecogida.ModoParcial ? p.ToPayOff : null, p.ToPayOff, Kind: p.Kind,
+                Reference: p.Reference));
+        }
+        await AvisarAsync();
+    }
+
+    private async Task CambiarModoAsync(ProductoParaRecogerDto p, int modo)
+    {
+        var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
+        if (i < 0 || !p.AdmittedModes.Contains(modo)) return;
+        _marcadas[i] = _marcadas[i] with
+        {
+            Mode = modo,
+            Amount = modo == TextosDeRecogida.ModoParcial ? _marcadas[i].Amount ?? p.ToPayOff : modo == TextosDeRecogida.ModoAbono ? _marcadas[i].Amount : null,
+        };
+        await AvisarAsync();
+    }
+
+    /// <summary>2026-11-27 (feature 028, E2, T072): con «Preguntar», incluir la cuota causada o dejarla a su canal.</summary>
+    private async Task CambiarTratamientoAsync(ProductoParaRecogerDto p, int tratamiento)
+    {
+        var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
+        if (i < 0 || SoloLectura || !p.CuotaElegible) return;
+        _marcadas[i] = _marcadas[i] with { InstallmentTreatment = tratamiento, ToPayOff = p.ParaRecoger(tratamiento) };
+        await AvisarAsync();
+    }
+
+    private async Task CambiarValorAsync(ProductoParaRecogerDto p, decimal? valor)
+    {
+        var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
+        if (i < 0) return;
+        if (valor is not > 0m)
+        {
+            await Notification.WarningAsync(p.EsCuenta ? "El valor del abono es mayor que cero." : "El valor parcial es mayor que cero.");
+            return;
+        }
+        if (!p.EsCuenta && valor > p.ToPayOff)
+        {
+            await Notification.WarningAsync(p.EsFactura
+                ? $"El valor parcial pasa de lo pendiente de la factura {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}."
+                : $"El valor parcial pasa de lo que cuesta recoger el crédito {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}.");
+            valor = p.ToPayOff;
+        }
+        _marcadas[i] = _marcadas[i] with { Amount = valor };
+        await AvisarAsync();
+    }
+
+    private void Alternar(Guid producto)
+    {
+        if (!_abiertos.Remove(producto)) _abiertos.Add(producto);
+    }
+
+    private void Resumir() =>
+        _resumen = SeleccionDeRecogida.Resumir(_respuesta?.Products ?? [], _marcadas, Monto is > 0m ? Monto : null, CuotaNueva);
+
+    private async Task AvisarAsync()
+    {
+        _avisado = (Monto, CuotaNueva);
+        Resumir();
+        await SeleccionCambiada.InvokeAsync(new SeleccionDeRecogida(_marcadas.ToList(), _resumen, _respuesta?.Date ?? _fecha, _respuesta?.RecordedAsOf));
+    }
+
+    private async Task ImprimirAsync()
+    {
+        if (Persona is not { } persona || _respuesta is null) return;
+        using var carga = _impresion.Iniciar();
+        // Para imprimir sí va lo marcado (el PDF trae su resumen), sólo lo que la consulta trajo.
+        var deLaConsulta = _respuesta.Products.Select(p => p.ProductPublicId).ToHashSet();
+        var r = await Recogidas.SimulacionEnPdfAsync(Pedido(persona) with
+        {
+            ProjectedDisbursementDate = _respuesta.Date,
+            Selected = _marcadas.Where(m => deLaConsulta.Contains(m.ProductPublicId)).Select(m => m.ComoPedido()).ToList(),
+        });
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el PDF de la simulación."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    private static decimal? LeerDecimal(object? valor) =>
+        decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static int? LeerEntero(object? valor) =>
+        int.TryParse(valor?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : null;
+}

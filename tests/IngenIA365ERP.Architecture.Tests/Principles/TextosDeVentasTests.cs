@@ -92,6 +92,8 @@ public class TextosDeVentasTests
         Assert.Contains($"MedioCreditoAsociado = {(int)PaymentMeansClass.AssociateCredit};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"MedioCreditoCliente = {(int)PaymentMeansClass.CustomerCredit};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"MedioBono = {(int)PaymentMeansClass.Voucher};", Fuente, StringComparison.Ordinal);
+        // 2026-11-27 (feature 028, E4, T086): el cruce interno de la recogida en el desembolso.
+        Assert.Contains($"MedioCruceInterno = {(int)PaymentMeansClass.InternalOffset};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ArqueoPorDenominaciones = {(int)CashCountMethod.PhysicalCount};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ArqueoPorLote = {(int)CashCountMethod.VoucherTotal};", Fuente, StringComparison.Ordinal);
         Assert.Contains($"ArqueoPorReferencias = {(int)CashCountMethod.ByReference};", Fuente, StringComparison.Ordinal);

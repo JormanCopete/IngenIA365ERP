@@ -23,6 +23,12 @@ public enum DineroDeLaAnulacion
 
     /// <summary>Feature 021 (FR-052): después del corte el dinero ya está en el banco; nace un saldo a favor del pagador que Tesorería devuelve.</summary>
     SaldoAFavor = 3,
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T087): el recibo de la recogida de facturas en el desembolso no recibió dinero (cruce interno): su anulación es el espejo exacto
+    /// del recibo, sin saldo a favor de nadie. (nuevo)
+    /// </summary>
+    SinDinero = 4,
 }
 
 /// <summary>
@@ -96,7 +102,7 @@ public sealed class AplicacionDeAnulacion(
             // 2026-11-23: lo que se cruzó con el medio de un anticipo vuelve a su anticipo (AlAnularAsync), no a un saldo a favor genérico.
             var aSaldo = mediosDeAnticipo.Contains(medio.PaymentMeansId) ? false : dinero switch
             {
-                DineroDeLaAnulacion.DevueltoPorLaPasarela => false,
+                DineroDeLaAnulacion.DevueltoPorLaPasarela or DineroDeLaAnulacion.SinDinero => false,
                 DineroDeLaAnulacion.SaldoAFavor => true,
                 _ => !sesionAbierta || medio.MeansClass is not (PaymentMeansClass.Cash or PaymentMeansClass.Check),
             };

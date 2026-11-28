@@ -160,6 +160,10 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // una peticion mal formada, no una regla de negocio. Sin esta linea caia al 422 por defecto.
             "Operation.KeyRequired" => StatusCodes.Status400BadRequest,
 
+            // Feature 028 (R1, T013): un cuerpo que trae las recogidas en «payoffs» y en «ownLoanPayoffs» a la vez no se puede leer; lo detecta
+            // la aplicación (RecogidasPedidas) y sale con el mismo 400 que el manejador de excepciones da a un JSON ilegible.
+            "Request.BodyInvalid" => StatusCodes.Status400BadRequest,
+
             // Feature 012 (T21, contracts/api.md §7): una clave fuera del catalogo de parametros es un recurso que no
             // existe. No termina en ".NotFound" y sin esta linea caia al 422 por defecto.
             "Parameters.KeyNotFound" => StatusCodes.Status404NotFound,

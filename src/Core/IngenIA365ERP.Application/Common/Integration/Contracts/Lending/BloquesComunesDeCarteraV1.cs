@@ -222,15 +222,60 @@ public sealed record PayeeV1
     public string? BankAccountType { get; init; }
 }
 
-/// <summary><c>PayoffDeductionV1</c> (interfaces.md §4.2): un crédito recogido en el desembolso, con su comprobante de aplicación.</summary>
+/// <summary>
+/// <c>PayoffDeductionV1</c> (interfaces.md §4.2): un producto recogido en el desembolso, con su comprobante de aplicación.
+/// <para>
+/// 2026-11-27 (feature 028, T045; FR-027, H5): gana <see cref="ProductKind"/>, <see cref="AccountRef"/>, <see cref="ReceivableRef"/>,
+/// <see cref="BranchPublicId"/> y <see cref="PayerPersonPublicId"/>, todos opcionales y aditivos dentro de la v1 (como
+/// <c>CreditoAjustadoDesdeComercialV1.Reallocations</c>): un mensaje emitido antes los trae ausentes y se lee como siempre —un crédito, con la sucursal
+/// del desembolso y el deudor como pagador—. Con ellos el comprobante del desembolso acredita el puente de la recogida propia con las mismas dimensiones
+/// con que el recibo de cada recogida lo debita. Ninguno es una cuenta contable: <see cref="AccountRef"/> es la cuenta del asociado (E2). (nuevo)
+/// </para>
+/// </summary>
 public sealed record PayoffDeductionV1
 {
+    /// <summary>Lo que se recoge: <c>Loan</c>, <c>Account</c> (aportes o ahorro, E2) o <c>CommercialReceivable</c> (factura a crédito, E4).</summary>
+    public const string Credito = "Loan";
+
+    public const string CuentaDelAsociado = "Account";
+
+    public const string FacturaComercial = "CommercialReceivable";
+
+    /// <summary>El crédito recogido; vacío si se recoge otra clase de producto.</summary>
     public LoanRefV1 Loan { get; init; } = new();
 
     /// <summary>Su operación de aplicación (<c>OwnLoanPayoff</c>).</summary>
     public Guid OperationPublicId { get; init; }
 
     public decimal Amount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T045): <see cref="Credito"/>, <see cref="CuentaDelAsociado"/> o <see cref="FacturaComercial"/>; ausente = crédito.</summary>
+    public string? ProductKind { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T045): la cuenta del asociado que se recoge (E2); nula en un crédito.</summary>
+    public Deposits.MemberAccountRefV1? AccountRef { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T045): la factura a crédito de Comercial que se recoge (E4); nula en un crédito.</summary>
+    public ExternalDocumentRefV1? ReceivableRef { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T045): la sucursal contable de la oficina del producto recogido, la del puente que debita el recibo de la recogida;
+    /// ausente = la del desembolso.
+    /// </summary>
+    public Guid? BranchPublicId { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, T045): quien paga la recogida (el deudor del crédito nuevo), el tercero del puente; ausente = el deudor.</summary>
+    public Guid? PayerPersonPublicId { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T080): en una cuenta, el hecho con que la cuenta recibió la recogida —<c>AporteRecibido</c> en aportes,
+    /// <c>ConsignacionEnCuentaAplicada</c> en ahorros—: el comprobante del desembolso cruza el puente con el tipo de cruce del mapeo de ese hecho, como lo
+    /// debita la consignación. Ausente en un crédito (cruza como el <c>PagoAplicado</c>). Opcional y aditivo dentro de la v1. (nuevo)
+    /// </summary>
+    public string? DepositFactType { get; init; }
+
+    /// <summary>La clase del producto con el defecto de los mensajes de antes: ausente es un crédito. Método, no propiedad: no viaja en el JSON.</summary>
+    public string ClaseDeProducto() => string.IsNullOrWhiteSpace(ProductKind) ? Credito : ProductKind.Trim();
 }
 
 /// <summary>

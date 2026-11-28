@@ -19,7 +19,11 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 /// la base certificada, el tope que rige y de dónde salió, lo permitido, lo que ya descuenta la pagaduría, la cuota nueva y lo disponible. (nuevo)
 /// </summary>
 public sealed record DetalleDeCapacidadDeLibranza(decimal Income, decimal Cap, string CapSource, decimal Allowed, decimal CurrentDeductions,
-    decimal Requested, decimal Available);
+    decimal Requested, decimal Available)
+{
+    /// <summary>2026-11-27 (feature 028, R8): lo que la pagaduría deja de descontar por los créditos que la solicitud recoge total; nulo si no recoge nada.</summary>
+    public decimal? ReleasedByPayoffs { get; init; }
+}
 
 /// <summary>
 /// Una validación evaluada que todavía no es fila (feature 013, T0394): la parte (nula = de la solicitud), la clase, el resultado, si se puede
@@ -50,6 +54,12 @@ public sealed record ContextoDeValidacion(
     DateOnly Fecha)
 {
     public IReadOnlySet<ApplicationCheckKind>? Solo { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8, T025): los créditos que la solicitud recoge (sus filas vivas de <c>LND_CreditApplicationPayoffs</c>): las validaciones
+    /// miden la situación después de recogerlos (<see cref="RecogidaEnLaValidacion"/>). Vacío, como siempre.
+    /// </summary>
+    public IReadOnlyList<RecogidaEnLaValidacion> Recogidas { get; init; } = [];
 
     public bool Corre(ApplicationCheckKind clase) => Solo is null || Solo.Contains(clase);
 
@@ -104,6 +114,10 @@ public sealed record ValidacionesEvaluadas(
 /// <item><b>autorización</b> de tratamiento para el estudio de crédito de cada parte (no exceptuable); <b>vinculado</b> (advertencia: la
 /// solicitud va al consejo, FR-040); <b>documentos</b>.</item>
 /// </list>
+/// 2026-11-27 (feature 028, R8, T025; FR-008): con recogidas (<see cref="ContextoDeValidacion.Recogidas"/>), la capacidad de pago y las de descuento
+/// (nómina propia y libranza del mismo convenio) se miden sin la próxima cuota de los créditos recogidos total, y el endeudamiento consolidado, el cupo y
+/// la concentración sin su capital (total: todo; parcial: el valor pedido, topado), nunca por debajo de cero; cada una dice en su detalle
+/// <c>releasedByPayoffs</c> lo que liberó la recogida (nulo si la solicitud no recoge nada). Las reglas están en <see cref="RecogidaEnLaValidacion"/>.
 /// Exceptuable es todo lo que no está en <see cref="NoExceptuables"/>, salvo tres límites que no son de política: la concentración (legal), la
 /// capacidad de descuento (legal) y los bloqueos vigentes (orden de autoridad o de la cooperativa). No escribe validaciones: las devuelve
 /// pendientes y <see cref="Registrar"/> las agrega cuando su evidencia ya tiene Id. Las consultas de listas sí quedan en la unidad de trabajo
@@ -167,16 +181,19 @@ public sealed class ValidacionesDeOriginacion(
         // -------------------------------------------------------------------------------------------- capacidad de pago --
         var capacidades = new Dictionary<int, CapacidadCalculada>();
         var validaIngresos = !c.Corre(ApplicationCheckKind.PaymentCapacity) || await ValidaIngresosYGastosAsync(c.Linea.Id, c.Fecha, ct);
+        var recoge = c.Recogidas.Count > 0;
+        // 2026-11-27 (feature 028, R8): sin la próxima cuota de lo que se recoge total (los créditos son del solicitante: a los codeudores no les cambia).
+        IReadOnlyCollection<int>? sinLasCuotasDe = recoge ? RecogidaEnLaValidacion.Totales(c.Recogidas) : null;
         foreach (var parte in c.Partes)
         {
-            var cap = await capacidad.DePagoAsync(parte, c.Simulacion.CuotaMensual, c.Fecha, ct);
+            var cap = await capacidad.DePagoAsync(parte, c.Simulacion.CuotaMensual, c.Fecha, sinLasCuotasDe, ct);
             capacidades[parte.Id] = cap;
             if (!c.Corre(ApplicationCheckKind.PaymentCapacity)) continue;
             var detalle = new
             {
                 income = cap.Ingresos, expenses = cap.Egresos, ownInstallments = cap.CuotasPropias, externalInstallments = cap.CuotasExternas,
                 simulatedInstallment = cap.CuotaSimulada, available = cap.Disponible, declared = cap.Declarada,
-                validated = validaIngresos, insufficient = cap.Declarada && !cap.Alcanza,
+                validated = validaIngresos, insufficient = cap.Declarada && !cap.Alcanza, releasedByPayoffs = cap.CuotasLiberadas,
             };
             // 2026-11-23: con «Originacion.ValidarIngresosYGastos» en «No» no se valida: «No aplica», sin bloquear ni subir de nivel; si lo
             // declarado no alcanza, el detalle lo dice (insufficient) y la pantalla lo avisa.
@@ -204,7 +221,7 @@ public sealed class ValidacionesDeOriginacion(
                 pendientes.Add(new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.NotApplicable, true, null, null));
             else
             {
-                var desc = await capacidad.DeDescuentoAsync(solicitante, c.Simulacion.CuotaMensual, c.Fecha, ct);
+                var desc = await capacidad.DeDescuentoAsync(solicitante, c.Simulacion.CuotaMensual, c.Fecha, sinLasCuotasDe, ct);
                 pendientes.Add(desc.IsFailure
                     ? new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Unavailable, false, desc.Error.Code,
                         new { reason = desc.Error.Message })
@@ -215,24 +232,30 @@ public sealed class ValidacionesDeOriginacion(
                         {
                             income = desc.Value.Ingreso, fraction = desc.Value.Fraccion, allowed = desc.Value.Permitido,
                             currentDeductions = desc.Value.DescuentosVigentes, simulatedInstallment = desc.Value.CuotaSimulada,
-                            available = desc.Value.Disponible, source = desc.Value.Fuente,
+                            available = desc.Value.Disponible, source = desc.Value.Fuente, releasedByPayoffs = desc.Value.Liberado,
                         }));
             }
         }
 
         // ------------------------------------------------------------------------------------- endeudamiento consolidado --
         var expo = await exposicion.DeAsync(solicitante.PersonId, c.Fecha, s.Id, ct);
+        // El consolidado del enrutamiento (quién decide) es el de siempre; la validación del endeudamiento lo mide después de recoger (R8).
         var consolidado = s.RequestedAmount + expo.Total;
+        decimal? liberadoDelConsolidado = recoge
+            ? RecogidaEnLaValidacion.Liberado(c.Recogidas, id => expo.Creditos.Where(x => x.LoanId == id && !x.ComoCodeudor).Sum(x => x.Capital))
+            : null;
+        var consolidadoDespues = Math.Max(0m, consolidado - (liberadoDelConsolidado ?? 0m));
         if (c.Corre(ApplicationCheckKind.ConsolidatedExposure))
         {
-            var excede = version.MaxIndebtedness is { } maximo && consolidado > maximo;
+            var excede = version.MaxIndebtedness is { } maximo && consolidadoDespues > maximo;
             pendientes.Add(new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.ConsolidatedExposure,
                 excede ? CheckOutcome.Blocking : CheckOutcome.Passed, true, excede ? ErroresDeOriginacion.CodigoRequisitosDeLinea : null,
                 new
                 {
                     asDebtor = expo.ComoDeudor, asCoDebtor = expo.ComoCodeudor, reservations = expo.Reservas, approved = expo.Aprobadas,
-                    requested = s.RequestedAmount, consolidated = consolidado, maxIndebtedness = version.MaxIndebtedness,
+                    requested = s.RequestedAmount, consolidated = consolidadoDespues, maxIndebtedness = version.MaxIndebtedness,
                     loans = expo.Creditos.Select(x => new { number = x.Number, principal = x.Capital, asCoDebtor = x.ComoCodeudor }),
+                    releasedByPayoffs = liberadoDelConsolidado,
                 }));
         }
 
@@ -240,19 +263,27 @@ public sealed class ValidacionesDeOriginacion(
         if (c.Corre(ApplicationCheckKind.CreditLimit))
         {
             var cupo = await cupos.CalcularAsync(solicitante.PersonId, c.Linea.Id, c.Fecha, ct);
+            // R8: lo que se recoge de los créditos que consumen ese cupo vuelve a estar disponible.
+            decimal? liberadoDelCupo = recoge ? RecogidaEnLaValidacion.Liberado(c.Recogidas, id => cupo.CapitalPorCredito.GetValueOrDefault(id)) : null;
+            var disponible = recoge ? cupo.DisponibleDespuesDe(liberadoDelCupo!.Value) : cupo.Disponible;
             pendientes.Add(!cupo.TieneCupo
                 ? new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.CreditLimit, CheckOutcome.NotApplicable, true, null, null)
                 : new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.CreditLimit,
-                    cupo.Disponible >= s.RequestedAmount ? CheckOutcome.Passed : CheckOutcome.Blocking, true,
-                    cupo.Disponible >= s.RequestedAmount ? null : ErroresDeOriginacion.CodigoCupoInsuficiente,
-                    new { limit = cupo.Cupo, used = cupo.Consumido, available = cupo.Disponible, requested = s.RequestedAmount, creditLimitPublicId = cupo.CreditLimitPublicId }));
+                    disponible >= s.RequestedAmount ? CheckOutcome.Passed : CheckOutcome.Blocking, true,
+                    disponible >= s.RequestedAmount ? null : ErroresDeOriginacion.CodigoCupoInsuficiente,
+                    new
+                    {
+                        limit = cupo.Cupo, used = cupo.Consumido - (liberadoDelCupo ?? 0m), available = disponible, requested = s.RequestedAmount,
+                        creditLimitPublicId = cupo.CreditLimitPublicId, releasedByPayoffs = liberadoDelCupo,
+                    }));
         }
 
         // --------------------------------------------------------------------------------------------------- concentración --
         ResultadoDeConcentracion? conc = null;
         if (c.Corre(ApplicationCheckKind.Concentration))
         {
-            var medida = await concentracion.MedirAsync(solicitante.PersonId, s.RequestedAmount, conGarantiaAdmisible: false, c.Fecha, s.Id, ct);
+            var medida = await concentracion.MedirAsync(solicitante.PersonId, s.RequestedAmount, conGarantiaAdmisible: false, c.Fecha, s.Id,
+                recoge ? c.Recogidas : null, ct);
             if (medida.IsFailure)
                 pendientes.Add(new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.Concentration, CheckOutcome.Blocking, false,
                     medida.Error.Code, new { reason = medida.Error.Message }));
@@ -267,6 +298,7 @@ public sealed class ValidacionesDeOriginacion(
                     {
                         debtor = Medida(conc.PorDeudor),
                         group = conc.PorGrupo is null ? null : Medida(conc.PorGrupo),
+                        releasedByPayoffs = conc.PorDeudor.LiberadoPorRecogidas,
                     }));
             }
         }
@@ -489,10 +521,13 @@ public sealed class ValidacionesDeOriginacion(
             return NoDisponible(Payroll.ErroresDeLibranza.CodigoCertificacionRequerida, "Falta el ingreso neto que certificó la pagaduría.");
         var topes = await convenios.TopesAsync(version.DeductionCapFraction, c.Fecha, ct);
         if (topes.IsFailure) return NoDisponible(topes.Error.Code, topes.Error.Message);
-        var vigentes = await convenios.DescuentosVigentesAsync(solicitante.PersonId, convenioId, null, c.Fecha, s.LoanId, ct);
+        // 2026-11-27 (feature 028, R8): sin la próxima cuota de los créditos del mismo convenio que la solicitud recoge total.
+        var recoge = c.Recogidas.Count > 0;
+        var (vigentes, liberado) = await convenios.DescuentosVigentesSinAsync(solicitante.PersonId, convenioId, null, c.Fecha, s.LoanId,
+            recoge ? RecogidaEnLaValidacion.Totales(c.Recogidas) : [], ct);
         var r = Domain.Lending.Payroll.CapacidadDeDescuento.Evaluar(ingreso, topes.Value, vigentes, c.Simulacion.CuotaMensual);
         var detalle = new DetalleDeCapacidadDeLibranza(r.Base, r.TopeEfectivo, r.OrigenDelTope.ToString(), r.Permitido, r.DescuentosVigentes, r.CuotaNueva,
-            r.Disponible);
+            r.Disponible) { ReleasedByPayoffs = recoge ? liberado : null };
         return r.Alcanza
             ? new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Passed, false, null, detalle)
             : new ValidacionPendiente(solicitante.Id, ApplicationCheckKind.DeductionCapacity, CheckOutcome.Blocking, false,
@@ -536,5 +571,6 @@ public sealed class ValidacionesDeOriginacion(
     {
         scope = m.Alcance.ToString(), groupPublicId = m.GrupoPublicId, limit = m.Limite, current = m.Actual, requested = m.Pedido, excess = m.Exceso,
         @base = m.Base, fraction = m.Fraccion, cutoffDate = m.Corte, members = m.Miembros.Select(x => new { personPublicId = x.PersonPublicId, exposure = x.Exposicion }),
+        releasedByPayoffs = m.LiberadoPorRecogidas,
     };
 }

@@ -164,6 +164,9 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(PendingInstallmentsReportQueryHandler.Vista, (f, q) => new PendingInstallmentsReportQuery(f, Texto(q, "status")));
         group.MapVistaDeCartera(AssociatesReportQueryHandler.Vista, (f, q) => new AssociatesReportQuery(f, Texto(q, "status")));
         group.MapVistaDeCartera(AccountingReconciliationReportQueryHandler.Vista, (f, _) => new AccountingReconciliationReportQuery(f));
+        // 2026-11-27 (feature 028, HU8, T053; api.md §5): las recogidas de los desembolsos del rango (branch, line, advisor y productKind), con datos del
+        // deudor.
+        group.MapVistaDeCartera(PayoffsReportQueryHandler.Vista, (f, q) => new PayoffsReportQuery(f, Texto(q, PayoffsReportQueryHandler.FiltroDeClase)));
         foreach (var vista in Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQueryHandler.Todas)
             group.MapVistaDeCartera(vista,
                 (f, q) => new Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQuery(f, vista.Key, Entero(q, "year"), Entero(q, "month")));

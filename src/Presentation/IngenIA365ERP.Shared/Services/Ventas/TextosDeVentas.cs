@@ -56,6 +56,8 @@ public static class TextosDeVentas
         [7] = "Transferencia",
         [8] = "Bono",
         [9] = "Cheque",
+        // 2026-11-27 (feature 028, E4, T086): el cruce interno de la recogida en el desembolso (del sistema: la pantalla no lo ofrece para crear).
+        [22] = "Recogida en el desembolso",
         [99] = "Otro",
     };
 
@@ -70,6 +72,8 @@ public static class TextosDeVentas
         [7] = "Transfer",
         [8] = "Voucher",
         [9] = "Check",
+        // 2026-11-27 (feature 028, E4, T086): el cruce interno de la recogida en el desembolso (no se ofrece para crear: sólo lo deja la semilla).
+        [22] = "InternalOffset",
         [99] = "Other",
     };
 
@@ -377,6 +381,9 @@ public static class TextosDeVentas
     // ----------------------------------------------------------------------------------- ayudantes --
 
     public static string ClaseDeMedio(int v) => Texto(ClasesDeMedio, v, "Medio");
+
+    /// <summary>2026-11-27 (feature 028, E4, T086): <c>PaymentMeansClass.InternalOffset</c>, del sistema.</summary>
+    public const int MedioCruceInterno = 22;
     public static string TipoDeTarjeta(int v) => Texto(TiposDeTarjeta, v, "Tarjeta");
     public static string TipoDeReferencia(int? v) => v is { } x ? Texto(TiposDeReferencia, x, "Referencia") : "—";
     public static string FormaDeArqueo(int v) => Texto(FormasDeArqueo, v, "Arqueo");

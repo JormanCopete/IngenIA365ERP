@@ -51,6 +51,13 @@ public sealed record PagoDistribuido(
     /// decisión (<c>AccrualPeriod</c>) para que la reconstrucción lo repita. (nuevo)
     /// </summary>
     public bool PeriodoCalendario { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): en la cancelación salvo la cuota causada, con qué regla se deja la cuota
+    /// (<see cref="InteresesAlCancelar.CuotaDejadaAsync"/>: proporcional dentro del tope legal del prepago, tal como se envió fuera de él); se sella en la
+    /// decisión (<c>LeftInstallmentRule</c>). En las demás modalidades, tal como se envió (no se mira). (nuevo)
+    /// </summary>
+    public ReglaDeCuotaDejada ReglaDeLaCuotaDejada { get; init; } = ReglaDeCuotaDejada.TalComoSeEnvio;
 }
 
 /// <summary>Un pago que el contrato aplica: quién recauda, la forma, el ítem y la validación previa del lote. (nuevo)</summary>
@@ -123,7 +130,8 @@ public sealed class AplicacionDePagos(
     IAvisoDeAbonoConPreferencia aviso,
     IDateTimeService reloj,
     InteresesAlCancelar? intereses = null,
-    PrelacionDeLaEmpresa? prelacionDeLaEmpresa = null)
+    PrelacionDeLaEmpresa? prelacionDeLaEmpresa = null,
+    Payoffs.SucesorDeCreditoRecogido? sucesor = null)
 {
     public const string PrefijoDePago = "PAG-";
 
@@ -154,10 +162,12 @@ public sealed class AplicacionDePagos(
     /// 2026-11-26 (pedido del dueño): con <paramref name="previos"/> —los pagos que van antes en el mismo recibo a la misma obligación—, cada uno se reparte
     /// sobre el estado que deja el anterior y entra a la reconstrucción como un pago más (sin escribir), y éste se distribuye sobre lo que dejan todos: lo mismo
     /// que pasa al aplicar el lote en orden dentro de una transacción. Así se simulan juntos lo vencido y una cuota anticipada del mismo recibo.
+    /// 2026-11-27 (feature 028, T050): con <paramref name="recogida"/> —la recogida del crédito en el desembolso de otro—, el modo de intereses de la
+    /// cancelación sale de <c>Recogida.InteresesProporcionales</c> (<see cref="InteresesAlCancelar.ModoAlRecogerAsync"/>), no del parámetro de la caja.
     /// </remarks>
     public async Task<Result<PagoDistribuido>> DistribuirAsync(Loan credito, PaymentModality modalidad, decimal valor, DateOnly fechaValor,
         PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, CancellationToken ct, DateOnly? seriesHasta = null, DateTime? informacionHasta = null,
-        IReadOnlyList<PagoPrevioDeDistribucion>? previos = null)
+        IReadOnlyList<PagoPrevioDeDistribucion>? previos = null, bool recogida = false)
     {
         ArgumentNullException.ThrowIfNull(credito);
         var cargado = await cargador.CargarAsync(credito.Id, null, seriesHasta is { } h && h > fechaValor ? h : fechaValor, ct);
@@ -168,16 +178,16 @@ public sealed class AplicacionDePagos(
         {
             var previo = anteriores[k];
             var r = await DistribuirSobreAsync(credito, cargado, previo.Modalidad, previo.Valor, fechaValor, previo.Eleccion, previo.Cuota, usaPreferencia: false,
-                informacionHasta, ct);
+                informacionHasta, recogida: false, ct);
             if (r.IsFailure) return r;
             // Después de los pagos guardados y antes del que se simula (Despues usa int.MaxValue): la reconstrucción ordena por fecha valor y secuencia.
             cargado = cargado with { Entrada = ConPago(r.Value, r.Value.Distribucion, int.MaxValue - (anteriores.Count - k)) };
         }
-        return await DistribuirSobreAsync(credito, cargado, modalidad, valor, fechaValor, eleccion, cuota, usaPreferencia, informacionHasta, ct);
+        return await DistribuirSobreAsync(credito, cargado, modalidad, valor, fechaValor, eleccion, cuota, usaPreferencia, informacionHasta, recogida, ct);
     }
 
     private async Task<Result<PagoDistribuido>> DistribuirSobreAsync(Loan credito, CreditoCargado cargado, PaymentModality modalidad, decimal valor,
-        DateOnly fechaValor, PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, DateTime? informacionHasta, CancellationToken ct)
+        DateOnly fechaValor, PrepaymentChoice? eleccion, int? cuota, bool usaPreferencia, DateTime? informacionHasta, bool recogida, CancellationToken ct)
     {
         var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fechaValor);
         if (estado.Plan is null) return Result.Failure<PagoDistribuido>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
@@ -189,20 +199,29 @@ public sealed class AplicacionDePagos(
             eleccion = await preferencias.EleccionDelCreditoAsync(credito.Id, informacionHasta ?? reloj.UtcNow, ct);
             dePreferencia = eleccion is not null;
         }
-        // 2026-11-16 (pedido del dueño): cómo cobra una cancelación el interés de la cuota en curso, a la fecha valor.
-        var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct);
+        // 2026-11-16 (pedido del dueño): cómo cobra una cancelación el interés de la cuota en curso, a la fecha valor. 2026-11-27 (feature 028, T050): la
+        // recogida del desembolso, con Recogida.InteresesProporcionales.
+        var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct, recogida);
         // 2026-11-24 (feature 025, fase 5, HU5; D3): si la línea causa por período calendario a la fecha valor (nunca en UVR).
         var calendario = await PeriodoCalendarioAsync(credito, estado, fechaValor, ct);
-        if (valor <= 0m && modalidad is PaymentModality.FullPayoff or PaymentModality.PastDue)
-            valor = modalidad == PaymentModality.FullPayoff
-                ? AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, calendario)
-                : ComprobantesDePago.Exigible(estado, periodoCalendario: calendario);
+        // 2026-11-27 (feature 028, D13 ajustada): con qué regla deja la cuota la cancelación salvo la cuota causada (el motivo legal; la caja y la recogida igual).
+        var dejada = modalidad == PaymentModality.PayoffExceptCurrentInstallment ? await CuotaDejadaAsync(credito, estado, ct) : ReglaDeCuotaDejada.TalComoSeEnvio;
+        if (valor <= 0m && modalidad is PaymentModality.FullPayoff or PaymentModality.PastDue or PaymentModality.PayoffExceptCurrentInstallment)
+            valor = modalidad switch
+            {
+                PaymentModality.FullPayoff => AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, calendario),
+                // 2026-11-27 (feature 028, T058): todo menos la cuota causada, sin aplicar (lo mismo que reparte la modalidad).
+                PaymentModality.PayoffExceptCurrentInstallment =>
+                    AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, cuota, modo.CuotaCompleta, calendario, dejada.Proporcional).ParaCancelar,
+                _ => ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
+            };
         if (valor <= 0m)
             return Result.Failure<PagoDistribuido>(ErroresDePagos.Validacion([("amount", "GreaterThan", "El valor del pago es mayor que cero.")]));
 
         var solicitud = new SolicitudDeDistribucion(modalidad, valor, fechaValor)
         {
             Eleccion = eleccion, Cuota = cuota, CuotaCompleta = modo.CuotaCompleta, PeriodoCalendario = calendario,
+            CuotaDejadaProporcional = dejada.Proporcional,
         };
         // 2026-11-16 (pedido del dueño): el orden de rubros de la empresa a la fecha valor (salvo que la línea tenga su propia lista).
         var prelacion = await PrelacionAsync(condiciones.Prelacion, fechaValor, ct);
@@ -218,7 +237,7 @@ public sealed class AplicacionDePagos(
                 : [];
             return Result.Success(new PagoDistribuido(credito, cargado, estado, d, huella, alternativas, dePreferencia)
             {
-                Intereses = modo, Rubros = prelacion.Rubros, PeriodoCalendario = calendario,
+                Intereses = modo, Rubros = prelacion.Rubros, PeriodoCalendario = calendario, ReglaDeLaCuotaDejada = dejada,
             });
         }
         catch (ReglaDeCarteraException ex)
@@ -259,6 +278,7 @@ public sealed class AplicacionDePagos(
             new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente)
             {
                 Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros, PeriodoCalendario = p.PeriodoCalendario,
+                CuotaDejadaProporcional = d.CuotaDejadaProporcional,
             });
     }
 
@@ -277,14 +297,30 @@ public sealed class AplicacionDePagos(
     /// (<see cref="InteresesAlCancelar"/>). Sólo una modalidad que puede cancelar (<c>FullPayoff</c> o el abono extraordinario que alcanza el capital por
     /// vencer) lo pregunta; las demás, un crédito en UVR (vivienda) y un programa sin el servicio cobran el corrido. (nuevo)
     /// </summary>
+    /// <param name="recogida">2026-11-27 (feature 028, T050): es la recogida del crédito en el desembolso de otro (<see cref="EsRecogidaDelDesembolso"/>):
+    /// el modo sale de <c>Recogida.InteresesProporcionales</c> (<see cref="InteresesAlCancelar.ModoAlRecogerAsync"/>; de fábrica, lo mismo que la caja).</param>
     public async Task<ModoDeInteresesAlCancelar> ModoAsync(Loan credito, EstadoDelCredito estado, PaymentModality modalidad, DateOnly fecha,
-        CancellationToken ct)
+        CancellationToken ct, bool recogida = false)
     {
         ArgumentNullException.ThrowIfNull(credito);
         ArgumentNullException.ThrowIfNull(estado);
-        if (intereses is null || estado.EnUvr || modalidad is not (PaymentModality.FullPayoff or PaymentModality.ExtraordinaryPrincipal))
-            return ModoDeInteresesAlCancelar.Corrido;
-        return await intereses.ModoAsync(credito, estado.RulesVersion, fecha, ct);
+        if (intereses is null || estado.EnUvr || !PuedeCancelar(modalidad)) return ModoDeInteresesAlCancelar.Corrido;
+        return recogida
+            ? await intereses.ModoAlRecogerAsync(credito, estado.RulesVersion, fecha, ct)
+            : await intereses.ModoAsync(credito, estado.RulesVersion, fecha, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T050): ¿el pago es la recogida del crédito en el desembolso de otro? El recaudador de clase <c>OwnLoanPayoff</c> con el
+    /// documento del desembolso (<c>Receipt.DocumentKind</c> = <see cref="InteresesAlCancelar.DocumentoDelDesembolso"/>). El cruce del retiro del asociado y
+    /// el débito automático también pagan con <c>OwnLoanPayoff</c>, pero con otro documento: siguen con el modo de la caja. (nuevo)
+    /// </summary>
+    public static bool EsRecogidaDelDesembolso(Recaudador recaudador, PagoAAplicar pago)
+    {
+        ArgumentNullException.ThrowIfNull(recaudador);
+        ArgumentNullException.ThrowIfNull(pago);
+        return recaudador.Class == ClaseDeRecaudador.OwnLoanPayoff
+               && string.Equals(pago.Receipt?.DocumentKind, InteresesAlCancelar.DocumentoDelDesembolso, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -297,6 +333,60 @@ public sealed class AplicacionDePagos(
         var modo = await ModoAsync(credito, estado, PaymentModality.FullPayoff, estado.Fecha, ct);
         // 2026-11-24 (feature 025, fase 5): por período calendario, sin lo causado de un tramo sin empezar (lo mismo que cobra la cancelación).
         return AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, await PeriodoCalendarioAsync(credito, estado, estado.Fecha, ct));
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069; R7, FR-022): el rechazo de un pago a <paramref name="credito"/>, que ya no recibe pagos. Si lo recogió el desembolso
+    /// de otro, con el crédito nuevo y la regla de <c>Recogida.GiroPosteriorDeCreditoRecogido</c> en <c>data</c> (<see cref="Payoffs.SucesorDeCreditoRecogido"/>);
+    /// si no —o sin la pieza, en las pruebas que no la arman—, el de siempre. Lo usan la aplicación y la simulación del contrato. (nuevo)
+    /// </summary>
+    public async Task<Error> NoPagableAsync(Loan credito, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        return sucesor is null ? ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()) : await sucesor.NoPagableAsync(credito, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023, D4): lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> para la línea de <paramref name="credito"/> a
+    /// <paramref name="fecha"/> (<c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>; de fábrica e ilegible, <c>Incluir</c>). Sin la pieza de intereses, lo de
+    /// siempre. (nuevo)
+    /// </summary>
+    public async Task<string> CuotaEnviadaAlCancelarAsync(Loan credito, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        return intereses is null ? Domain.Lending.Parameters.ParametrosDeCartera.CuotaIncluir
+            : await intereses.CuotaEnviadaAlCancelarAsync(fecha, credito.CreditLineId, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-019, FR-023): lo que cuesta cancelar todo menos la cuota causada a la fecha de <paramref name="estado"/> —el mismo
+    /// cálculo con que la modalidad reparte (<see cref="AplicadorDePagos.ValorParaCancelarSalvoCuota"/>), con el modo de intereses de la cancelación y el
+    /// período calendario de la línea—: la cuota que se deja, lo que cuesta lo demás y lo que la cuota queda debiendo. Nulo si no hay cuota causada que dejar.
+    /// (nuevo)
+    /// </summary>
+    public async Task<ValorSalvoCuota?> ValorParaCancelarSalvoCuotaAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        var modo = await ModoAsync(credito, estado, PaymentModality.PayoffExceptCurrentInstallment, estado.Fecha, ct);
+        var calendario = await PeriodoCalendarioAsync(credito, estado, estado.Fecha, ct);
+        // 2026-11-27 (feature 028, D13 ajustada): con la regla con que el contrato la dejaría (la misma de DistribuirAsync).
+        var dejada = await CuotaDejadaAsync(credito, estado, ct);
+        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario, dejada.Proporcional);
+        return v.Cuota is null ? null : v;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con qué regla deja la cuota causada una cancelación salvo la cuota causada de <paramref name="credito"/>
+    /// (<see cref="InteresesAlCancelar.CuotaDejadaAsync"/>: proporcional dentro del tope legal del prepago o sin los valores nacionales para saberlo, tal como se
+    /// envió fuera de él). Un crédito en UVR no deja cuota; un programa sin la pieza de intereses, tal como se envió. La usan el reparto (la recogida y la caja
+    /// por el contrato) y el listado de la caja: dicen lo mismo. (nuevo)
+    /// </summary>
+    public async Task<ReglaDeCuotaDejada> CuotaDejadaAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        return intereses is null || estado.EnUvr ? ReglaDeCuotaDejada.TalComoSeEnvio : await intereses.CuotaDejadaAsync(credito, estado.RulesVersion, ct);
     }
 
     /// <summary>
@@ -340,8 +430,11 @@ public sealed class AplicacionDePagos(
                 ? Result.Success(new PagoAplicado(existente, await ComprobanteAsync(existente, credito, ct), UnidadEmitida.Vacia, true))
                 : Falla(ErroresDePagos.ClaveReusada(pago.IdempotencyKey));
 
-        if (NoPagables.Contains(credito.Status)) return Falla(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+        // 2026-11-27 (feature 028, E2, T069; R7): si lo recogió el desembolso de otro, el rechazo lleva el sucesor y la regla de lo que gire su pagaduría.
+        if (NoPagables.Contains(credito.Status)) return Falla(await NoPagableAsync(credito, ct));
         if (ClasesDeMedioDeRecaudo.Validar(r.Class, pago.MeansClass, esResolucion: p.Origen is not null) is { } medio) return Falla(medio);
+        // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, sólo la recogida y Recaudo.
+        if (ClasesDeMedioDeRecaudo.ValidarModalidad(r.Class, pago.Modality) is { } noAdmitida) return Falla(noAdmitida);
         var pagador = await db.People.AsNoTracking().Where(x => x.PublicId == pago.PayerPublicId && !x.IsDeleted).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
         if (pagador is null) return Falla(new Error(ErroresDePagos.CodigoNoEncontrado, "El pagador no es una persona del maestro."));
 
@@ -381,7 +474,9 @@ public sealed class AplicacionDePagos(
             return Falla(ErroresDePagos.PreferenciaFaltante());
         var distribuido = await DistribuirAsync(credito, modalidad, pago.Amount, v, ComprobantesDePago.Eleccion(pago.Choice), pago.InstallmentNumber,
             usaPreferencia: p.Forma == FormaDeAplicacion.NonInteractive, ct, seriesHasta: marca,
-            informacionHasta: control.LastRegisteredAt >= reloj.UtcNow ? control.LastRegisteredAt.AddTicks(1) : reloj.UtcNow);
+            informacionHasta: control.LastRegisteredAt >= reloj.UtcNow ? control.LastRegisteredAt.AddTicks(1) : reloj.UtcNow,
+            // 2026-11-27 (feature 028, T050): la recogida del desembolso cobra el interés con Recogida.InteresesProporcionales.
+            recogida: EsRecogidaDelDesembolso(r, pago));
         if (distribuido.IsFailure) return Falla(distribuido.Error);
         var d = distribuido.Value;
         if (p.Forma == FormaDeAplicacion.Interactive && !string.Equals(pago.SimulationId, d.SimulationId, StringComparison.Ordinal))
@@ -394,7 +489,7 @@ public sealed class AplicacionDePagos(
         // dueño, 2026-10-14): recoger un crédito al desembolsar otro no es un prepago del deudor y no se bloquea por falta del SMMLV o del límite.
         // K6b (T1053): con las reglas de vivienda el prepago va siempre sin penalidad (Ley 546 de 1999): se sella «dentro del tope» sin leer el SMMLV.
         var tope = r.Class == ClaseDeRecaudador.OwnLoanPayoff ? Result.Success<TopeSellado?>(null)
-            : Domain.Lending.VersionesDeReglas.EsDeVivienda(d.Estado.RulesVersion) && (modalidad is PaymentModality.ExtraordinaryPrincipal or PaymentModality.FullPayoff || dist.AbonoACapital != 0m)
+            : Domain.Lending.VersionesDeReglas.EsDeVivienda(d.Estado.RulesVersion) && (PuedeCancelar(modalidad) || dist.AbonoACapital != 0m)
                 ? Result.Success<TopeSellado?>(new TopeSellado(new ResultadoDeTopeDePrepago(true, 0m, 0m), null, null))
                 : await TopeAsync(credito, modalidad, dist, ct);
         if (tope.IsFailure) return Falla(tope.Error);
@@ -413,7 +508,8 @@ public sealed class AplicacionDePagos(
         var decision = new DecisionDePago
         {
             Modality = modalidad.ToString(), Received = pago.Amount, Applied = dist.Aplicado, ValueDate = v, Choice = dist.Eleccion?.ToString(),
-            ChoiceFromPreference = d.EleccionDePreferencia, Installment = pago.InstallmentNumber, CollectorCode = r.Code, CollectorClass = r.Class.ToString(),
+            ChoiceFromPreference = d.EleccionDePreferencia, Installment = CuotaDeLaDecision(modalidad, pago.InstallmentNumber, dist), CollectorCode = r.Code,
+            CollectorClass = r.Class.ToString(),
             Form = p.Forma.ToString(), MeansClass = pago.MeansClass.ToString(), SimulationId = p.Forma == FormaDeAplicacion.Interactive ? d.SimulationId : null,
             WithinLegalPrepaymentCap = tope.Value?.Resultado.DentroDelTope, LegalPrepaymentCap = tope.Value?.Resultado.TopeEnPesos,
             MinimumWagePublicId = tope.Value?.Smmlv, CapLimitPublicId = tope.Value?.Limite, SourceOperationPublicId = p.Origen?.PublicId,
@@ -425,6 +521,13 @@ public sealed class AplicacionDePagos(
             AllocationRubrics = d.Rubros?.Texto,
             // 2026-11-24 (feature 025, fase 5): el período calendario con que se repartió; nulo por el ciclo de la cuota (las decisiones de siempre no cambian).
             AccrualPeriod = d.PeriodoCalendario ? Domain.Lending.Parameters.ParametrosDeCartera.PeriodoCalendario : null,
+            // 2026-11-27 (feature 028, R4): la cuota que dejó la cancelación salvo la cuota causada (en Installment), con qué regla y el interés del período
+            // que se causó en ella; nulos en todo lo demás, así las decisiones de siempre se sellan igual.
+            // 2026-11-27 (feature 028, D13 ajustada): tal como se envió o proporcional (dentro del tope legal del prepago), con su motivo.
+            LeftInstallmentRule = dist.CuotaDejada is null ? null
+                : dist.CuotaDejadaProporcional ? AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional : AplicadorDePagos.ReglaDeLaCuotaDejada,
+            LeftInstallmentRuleReason = dist.CuotaDejada is not null && dist.CuotaDejadaProporcional ? d.ReglaDeLaCuotaDejada.Motivo : null,
+            LeftInstallmentInterest = dist.CuotaDejada is null ? null : dist.InteresDeLaCuotaDejada.Sum(l => l.Monto),
         };
         var payload = decision.Serializar();
         var numero = await numerador.NumeroDeOperacionAsync(LoanOperationKind.Payment, PrefijoDePago, ct);
@@ -475,8 +578,10 @@ public sealed class AplicacionDePagos(
         var conElPago = CargadorDeReconstruccion.ConOperacion(entrada, operacion,
             new ContenidoDePago(modalidad, dist.Aplicado)
             {
-                Eleccion = dist.Eleccion, Cuota = pago.InstallmentNumber, CuotaCompleta = d.Intereses.CuotaCompleta, Rubros = d.Rubros,
+                Eleccion = dist.Eleccion, Cuota = CuotaDeLaDecision(modalidad, pago.InstallmentNumber, dist), CuotaCompleta = d.Intereses.CuotaCompleta,
+                Rubros = d.Rubros,
                 PeriodoCalendario = d.PeriodoCalendario,
+                CuotaDejadaProporcional = dist.CuotaDejadaProporcional,
             });
         var libro = marca >= v ? (await cargador.LibroAsync([credito.Id], marca, ct))[credito.Id] : [];
         var efecto = EfectoEnElLibro.Calcular(entrada, conElPago, id, v, marca, libro, []);
@@ -511,6 +616,9 @@ public sealed class AplicacionDePagos(
 
         if (cancela && credito.Status is LoanStatus.Active or LoanStatus.WrittenOff)
             RegistroDeCartera.CambiarEstado(credito, LoanStatus.PaidOff, v);
+        // 2026-11-27 (feature 028, E2, T070): la cuota que una recogida dejó a su canal queda pagada si este pago —de cualquier canal— la cerró. No escribe el
+        // libro: marca la fila de la recogida en la misma transacción.
+        await Payoffs.SeguimientoDeCuotaDejada.MarcarPagadasAsync(db, credito.Id, efecto.Despues, cancela, ahora, ct);
         await db.SaveChangesAsync(ct);
 
         // La reclamación al seguro que paga la aseguradora (T102), la puesta al día preparada (con la operación ya guardada) y la posición.
@@ -578,7 +686,13 @@ public sealed class AplicacionDePagos(
             excedente, lineas, saldos, null, pagado, pagado ? operacion.FinalityDate : null, operacion.InputsSha256, operacion.RulesVersion,
             [
                 // 2026-11-16: el comprobante repetido también dice que se cobró la cuota en curso completa.
-                .. filas.Any(t => t.Kind == LoanTransactionKind.UnaccruedInstallmentInterest) ? [AplicadorDePagos.AvisoInteresDeLaCuotaCompleta] : Array.Empty<string>(),
+                // 2026-11-27 (feature 028, R4): en la cancelación salvo la cuota causada esas filas son el interés del período de la cuota que dejó.
+                .. operacion.PaymentModality == PaymentModality.PayoffExceptCurrentInstallment && decision?.LeftInstallmentRule is not null
+                    ? decision.Contenido().CuotaDejadaProporcional
+                        // 2026-11-27 (feature 028, D13 ajustada): y que la dejó con el interés proporcional.
+                        ? [AplicadorDePagos.AvisoCuotaCausadaDejada, AplicadorDePagos.AvisoCuotaDejadaProporcional]
+                        : [AplicadorDePagos.AvisoCuotaCausadaDejada]
+                    : filas.Any(t => t.Kind == LoanTransactionKind.UnaccruedInstallmentInterest) ? [AplicadorDePagos.AvisoInteresDeLaCuotaCompleta] : Array.Empty<string>(),
                 .. decision?.Choice is null && operacion.PaymentModality == PaymentModality.ExtraordinaryPrincipal ? [AplicadorDePagos.AvisoPreferenciaAsumida] : Array.Empty<string>(),
             ]);
     }
@@ -637,8 +751,15 @@ public sealed class AplicacionDePagos(
 
     /// <summary>2026-11-16: ¿se sella el modo? Sólo si la modalidad puede cancelar y el parámetro pedía la cuota completa.</summary>
     internal static bool SellaLaCuotaCompleta(PaymentModality modalidad, ModoDeInteresesAlCancelar modo) =>
-        modalidad is PaymentModality.FullPayoff or PaymentModality.ExtraordinaryPrincipal
-        && modo.Configurado == Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta;
+        PuedeCancelar(modalidad) && modo.Configurado == Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta;
+
+    /// <summary>
+    /// ¿La modalidad puede cancelar el crédito (o casi)? La cancelación, el abono extraordinario que alcanza el capital por vencer y, desde el 2026-11-27
+    /// (feature 028, R4), la cancelación salvo la cuota causada: las que preguntan el modo de intereses de la cancelación y sellan el tope legal del prepago.
+    /// (nuevo)
+    /// </summary>
+    internal static bool PuedeCancelar(PaymentModality modalidad) =>
+        modalidad is PaymentModality.FullPayoff or PaymentModality.ExtraordinaryPrincipal or PaymentModality.PayoffExceptCurrentInstallment;
 
     private sealed record TopeSellado(ResultadoDeTopeDePrepago Resultado, Guid? Smmlv, Guid? Limite);
 
@@ -649,7 +770,7 @@ public sealed class AplicacionDePagos(
     /// </summary>
     private async Task<Result<TopeSellado?>> TopeAsync(Loan credito, PaymentModality modalidad, DistribucionDePago d, CancellationToken ct)
     {
-        if (modalidad is not (PaymentModality.ExtraordinaryPrincipal or PaymentModality.FullPayoff) && d.AbonoACapital == 0m)
+        if (!PuedeCancelar(modalidad) && d.AbonoACapital == 0m)
             return Result.Success<TopeSellado?>(null);
         var smmlv = await valores.LeerAsync(CodigosDeValorNacional.Smmlv, string.Empty, credito.OpenedOn, null, ct);
         if (smmlv.IsFailure) return Result.Failure<TopeSellado?>(smmlv.Error);
@@ -662,4 +783,11 @@ public sealed class AplicacionDePagos(
     }
 
     private static Result<PagoAplicado> Falla(Error e) => Result.Failure<PagoAplicado>(e);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059): la cuota que sella la decisión: la específica que pidió el pago o, en la cancelación salvo la cuota causada, la que
+    /// el aplicador dejó (aunque la decidiera él), así la reconstrucción deja esa misma. (nuevo)
+    /// </summary>
+    private static int? CuotaDeLaDecision(PaymentModality modalidad, int? pedida, DistribucionDePago d) =>
+        modalidad == PaymentModality.PayoffExceptCurrentInstallment ? d.Cuota : pedida;
 }

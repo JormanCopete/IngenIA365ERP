@@ -40,7 +40,22 @@ public sealed record RepartoDeConsignacion(IReadOnlyList<PorcionDeConsignacion> 
 }
 
 /// <summary>Una consignación del contrato en curso: el recaudador, el ítem, la validación previa sellada y sus avisos. (nuevo)</summary>
-public sealed record ConsignacionEnCurso(Recaudador Recaudador, ConsignacionAAplicar Item, PrevalidationOutcome Validacion, IReadOnlyList<string> Avisos);
+public sealed record ConsignacionEnCurso(Recaudador Recaudador, ConsignacionAAplicar Item, PrevalidationOutcome Validacion, IReadOnlyList<string> Avisos)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, T076; R13, FR-025): la consigna Cartera por dentro, sin el contrato: la recogida de cuentas en el desembolso de un crédito
+    /// (<c>RecogidaDeCuentas</c>). Sólo así se admiten el recaudador <c>CAR</c> de clase <c>OwnLoanPayoff</c> y el medio <c>InternalOffset</c>
+    /// (<see cref="ConsignacionEnCuentas.ClaseDeMedio"/>). El contrato de cuentas (<c>IContratoDeCuentas.ConsignarAsync</c>) nunca la enciende: quien entra
+    /// por el puerto público con <c>CAR</c> se sigue rechazando por el registro, por la clave y por la clase de medio. (nuevo)
+    /// </summary>
+    public bool Interna { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T077): el motivo de la operación por el camino interno («Por el desembolso … del crédito …»), que muestran el libro y el
+    /// estado de cuenta; nulo por el contrato. (nuevo)
+    /// </summary>
+    public string? Motivo { get; init; }
+}
 
 /// <summary>Lo que dejó una consignación: el comprobante y si ya estaba aplicada con la misma clave. (nuevo)</summary>
 public sealed record ConsignacionAplicada(ComprobanteDeCuentaDto Comprobante, bool YaAplicada);
@@ -124,7 +139,8 @@ public sealed class ConsignacionEnCuentas(
         if (await OperableAsync(cuenta, ct) is { } noOperable) return Falla(noOperable);
         if (cuenta.DepositClass is DepositClass.TermDeposit)
             return Falla(ErroresDeAportes.EntregaNoDisponible("La consignación en un CDAT", nameof(EntregaDeCartera.K9)));
-        if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass) is { } medio) return Falla(medio);
+        // 2026-11-27 (feature 028, T076): la recogida de cuentas del desembolso es la única que pasa con OwnLoanPayoff e InternalOffset (camino interno).
+        if (ClaseDeMedio(c.Recaudador.Class, item.MeansClass, c.Interna) is { } medio) return Falla(medio);
         // Feature 014 (T091, D36; contrato-de-cuentas §6.4): el giro de la pagaduría nombra la línea del archivo «descontado pendiente de giro» que paga.
         int? giroDePagaduria = null;
         if (item.DeductionFileLinePublicId is { } lineaDelArchivo)
@@ -201,6 +217,7 @@ public sealed class ConsignacionEnCuentas(
             AuthorizedByUserId = atribucion.AprobadoPor,
             PayrollDeductionAccountResultId = giroDePagaduria,
             BankItemPublicId = item.BankItem?.BankItemPublicId,
+            Reason = c.Interna && c.Motivo is { Length: > 0 } motivo ? (motivo.Length <= 500 ? motivo : motivo[..500]) : null,
             Payload = JsonSerializer.Serialize(item, Json),
             InputsSha256 = entradas,
             RulesVersion = VersionesDeReglas.Vigente,
@@ -464,11 +481,15 @@ public sealed class ConsignacionEnCuentas(
     /// <summary>
     /// Las clases de medio de cada recaudador (contrato-de-cuentas §3.3): Nómina sólo su descuento; Tesorería transferencia y consignación bancaria; Recaudo
     /// y el doble de prueba, las de la 012 salvo el crédito y la operación interna (Recaudo, además, nunca el descuento de la nómina propia).
+    /// 2026-11-27 (feature 028, T076; R13): con <paramref name="interna"/> —sólo la recogida de cuentas del desembolso, que consigna por dentro de Cartera sin
+    /// el contrato (<see cref="ConsignacionEnCurso.Interna"/>)— la recogida propia (<c>OwnLoanPayoff</c>) admite el cruce interno (<c>InternalOffset</c>); por
+    /// el contrato, nunca.
     /// </summary>
-    public static Error? ClaseDeMedio(ClaseDeRecaudador recaudador, ClaseDeMedioDeRecaudo medio)
+    public static Error? ClaseDeMedio(ClaseDeRecaudador recaudador, ClaseDeMedioDeRecaudo medio, bool interna = false)
     {
         var admite = recaudador switch
         {
+            ClaseDeRecaudador.OwnLoanPayoff => interna && medio == ClaseDeMedioDeRecaudo.InternalOffset,
             ClaseDeRecaudador.Payroll => medio == ClaseDeMedioDeRecaudo.OwnPayrollDeduction,
             ClaseDeRecaudador.Treasury => medio is ClaseDeMedioDeRecaudo.Transfer or ClaseDeMedioDeRecaudo.BankDeposit,
             ClaseDeRecaudador.Receipts => Enum.IsDefined(medio) && medio is not (ClaseDeMedioDeRecaudo.AssociateCredit or ClaseDeMedioDeRecaudo.CustomerCredit

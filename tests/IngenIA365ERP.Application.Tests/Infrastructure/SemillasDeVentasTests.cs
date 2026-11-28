@@ -58,13 +58,14 @@ public class SemillasDeVentasTests
     // ------------------------------------------------------------------------------------------ efectivo --
 
     [Fact]
-    public async Task El_unico_medio_sembrado_es_EFECTIVO_de_clase_efectivo_con_arqueo_fisico_y_vueltas()
+    public async Task El_medio_de_cobro_sembrado_es_EFECTIVO_de_clase_efectivo_con_arqueo_fisico_y_vueltas()
     {
         using var db = TestDbContextFactory.Create();
 
-        (await DefaultPaymentMeansSeeder.AplicarAsync(db, default)).Should().Be(1);
+        // 2026-11-27 (feature 028, E4, T086): con él, el del cruce interno de la recogida de facturas en el desembolso, que no se ofrece al cobrar.
+        (await DefaultPaymentMeansSeeder.AplicarAsync(db, default)).Should().Be(2);
 
-        var medio = await db.PaymentMeans.SingleAsync();
+        var medio = await db.PaymentMeans.SingleAsync(m => m.Code == DefaultPaymentMeansSeeder.CodigoEfectivo);
         medio.Should().BeEquivalentTo(new
         {
             Code = "EFECTIVO",
@@ -90,16 +91,33 @@ public class SemillasDeVentasTests
     {
         using var db = TestDbContextFactory.Create();
         await DefaultPaymentMeansSeeder.AplicarAsync(db, default);
-        var medio = await db.PaymentMeans.SingleAsync();
+        var medio = await db.PaymentMeans.SingleAsync(m => m.Code == DefaultPaymentMeansSeeder.CodigoEfectivo);
         medio.Name = "Efectivo pesos";
         medio.ToleranceAmount = 500m;
         await db.SaveChangesAsync();
 
         (await DefaultPaymentMeansSeeder.AplicarAsync(db, default)).Should().Be(0);
 
-        var despues = await db.PaymentMeans.SingleAsync();
+        var despues = await db.PaymentMeans.SingleAsync(m => m.Code == DefaultPaymentMeansSeeder.CodigoEfectivo);
         despues.Name.Should().Be("Efectivo pesos");
         despues.ToleranceAmount.Should().Be(500m);
+    }
+
+    [Fact]
+    public async Task El_medio_del_cruce_interno_de_la_recogida_no_se_ofrece_en_ningun_lado_y_no_se_siembra_dos_veces()
+    {
+        using var db = TestDbContextFactory.Create();
+        await DefaultPaymentMeansSeeder.AplicarAsync(db, default);
+
+        var recogida = await db.PaymentMeans.SingleAsync(m => m.Code == DefaultPaymentMeansSeeder.CodigoRecogida);
+        recogida.Should().BeEquivalentTo(new
+        {
+            Class = PaymentMeansClass.InternalOffset, CountMethod = CashCountMethod.None, AllowsChange = false, IsActive = true,
+            OfferedAtAllPointsOfSale = false, OfferedInAllChannels = false, OfferedForAllDocumentTypes = false,
+        }, o => o.ExcludingMissingMembers());
+        CatalogoDian.Embebido.MedioDePago(recogida.DianPaymentMeansCode, Hoy).Should().NotBeNull();
+        (await DefaultPaymentMeansSeeder.AplicarAsync(db, default)).Should().Be(0);
+        (await db.PaymentMeans.CountAsync()).Should().Be(2);
     }
 
     // ------------------------------------------------------------------------------------------ consumidor final --

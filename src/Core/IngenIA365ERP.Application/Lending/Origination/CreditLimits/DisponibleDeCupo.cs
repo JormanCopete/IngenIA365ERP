@@ -20,6 +20,12 @@ public sealed record DisponibleDeUnCupo(
     public decimal Consumido => Usado + Reservado + AprobadoSinDesembolsar;
 
     public decimal Disponible => Math.Max(0m, Limite - Consumido);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8): el capital de cada crédito de la persona como deudora que suma en <see cref="Usado"/>, por crédito: lo que la recogida
+    /// de uno de ellos libera del cupo.
+    /// </summary>
+    public IReadOnlyDictionary<int, decimal> CapitalPorCredito { get; init; } = new Dictionary<int, decimal>();
 }
 
 /// <summary>Los disponibles de una persona: el consolidado, los de cada línea y el rotativo (los que rigen a la fecha). (nuevo)</summary>
@@ -54,7 +60,10 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
                         ?? (await AdmiteOrigenComercialAsync(creditLineId, fecha, ct) ? d.Rotativos.FirstOrDefault(c => c.Cupo.CreditLineId is null) : null);
         return aplicable is null
             ? DisponibleDeCupoCalculado.SinCupo
-            : new DisponibleDeCupoCalculado(true, aplicable.Limite, aplicable.Consumido, aplicable.Disponible, aplicable.Cupo.PublicId);
+            : new DisponibleDeCupoCalculado(true, aplicable.Limite, aplicable.Consumido, aplicable.Disponible, aplicable.Cupo.PublicId)
+            {
+                CapitalPorCredito = aplicable.CapitalPorCredito,
+            };
     }
 
     /// <summary>
@@ -112,21 +121,26 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
                         && a.ApprovalValidUntil >= fecha)
             .Select(a => new { a.CreditLineId, Valor = a.ApprovedAmount ?? a.RequestedAmount }).ToListAsync(ct);
 
+        // 2026-11-27 (feature 028, R8): el capital de cada crédito propio que suma en lo usado, para que la recogida lo libere.
+        Dictionary<int, decimal> PorCredito(IEnumerable<int> ids) => ids.Distinct().ToDictionary(id => id, id => capital.GetValueOrDefault(id));
+
         DisponibleDeUnCupo Medir(CreditLimit cupo)
         {
             switch (cupo.Kind)
             {
                 case CreditLimitKind.Consolidated:
                     return new(cupo, cupo.Amount, creditos.Sum(c => capital.GetValueOrDefault(c.Id)) + comoCodeudor.Sum(c => capital.GetValueOrDefault(c)),
-                        reservas.Sum(r => r.Amount), aprobadas.Sum(a => a.Valor));
+                        reservas.Sum(r => r.Amount), aprobadas.Sum(a => a.Valor)) { CapitalPorCredito = PorCredito(creditos.Select(c => c.Id)) };
                 case CreditLimitKind.ByLine:
-                    return new(cupo, cupo.Amount, creditos.Where(c => c.CreditLineId == cupo.CreditLineId).Sum(c => capital.GetValueOrDefault(c.Id)),
+                    var deLaLinea = creditos.Where(c => c.CreditLineId == cupo.CreditLineId).Select(c => c.Id).ToList();
+                    return new(cupo, cupo.Amount, deLaLinea.Sum(id => capital.GetValueOrDefault(id)),
                         reservas.Where(r => r.CreditLineId == cupo.CreditLineId).Sum(r => r.Amount),
-                        aprobadas.Where(a => a.CreditLineId == cupo.CreditLineId).Sum(a => a.Valor));
+                        aprobadas.Where(a => a.CreditLineId == cupo.CreditLineId).Sum(a => a.Valor)) { CapitalPorCredito = PorCredito(deLaLinea) };
                 default:
                     var delCupo = todas.Where(v => VersionesDeCupo.MismoCupo(v, cupo)).Select(v => v.Id).Where(i => i > 0).ToHashSet();
-                    return new(cupo, cupo.Amount, creditos.Where(c => c.CreditLimitId is { } l && delCupo.Contains(l)).Sum(c => capital.GetValueOrDefault(c.Id)),
-                        reservas.Where(r => r.CreditLimitId is { } l && delCupo.Contains(l)).Sum(r => r.Amount), 0m);
+                    var queLoTomaron = creditos.Where(c => c.CreditLimitId is { } l && delCupo.Contains(l)).Select(c => c.Id).ToList();
+                    return new(cupo, cupo.Amount, queLoTomaron.Sum(id => capital.GetValueOrDefault(id)),
+                        reservas.Where(r => r.CreditLimitId is { } l && delCupo.Contains(l)).Sum(r => r.Amount), 0m) { CapitalPorCredito = PorCredito(queLoTomaron) };
             }
         }
 

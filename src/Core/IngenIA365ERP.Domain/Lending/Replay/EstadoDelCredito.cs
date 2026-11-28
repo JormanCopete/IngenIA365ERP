@@ -153,13 +153,32 @@ public sealed class EstadoDelCredito
         _interesPorCausar ??= ProyeccionDeLaCuotaEnCurso?.Invoke(this) ?? [];
 
     /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): quien sabe proyectar el interés de la cuota en curso <b>sólo sobre su propio capital</b> (la reconstrucción que armó
+    /// este estado). Nulo en un estado armado sin ella. (nuevo)
+    /// </summary>
+    internal Func<EstadoDelCredito, int, IReadOnlyList<LineaDeDistribucion>>? ProyeccionSobreSuCapital { get; init; }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, IReadOnlyList<LineaDeDistribucion>> _sobreSuCapital = new();
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño; Ley 1555 de 2012): lo que la causación de la <b>cuota en curso</b> <paramref name="cuota"/> causaría
+    /// desde el día siguiente a <see cref="Fecha"/> hasta su vencimiento si en la base de la corriente sólo quedara su propio capital
+    /// (<see cref="ReconstruccionDeCredito.InteresPorCausarSobreSuCapital"/>): el interés proporcional que lleva la cuota que deja una cancelación salvo la
+    /// cuota causada dentro del tope legal del prepago. Por cuota y concepto (la corriente o su suspenso). Vacío si <paramref name="cuota"/> no es la cuota en
+    /// curso, no tiene capital o el estado no sabe proyectar. Se calcula una vez por cuota. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresPorCausarSobreSuCapital(int cuota) =>
+        _sobreSuCapital.GetOrAdd(cuota, n => ProyeccionSobreSuCapital?.Invoke(this, n) ?? []);
+
+    /// <summary>
     /// Un estado armado a mano (US5, T0514): la fecha, el plan y los saldos por cuota y concepto, sin libro ni explicación; las cuotas salen
     /// del plan con su capital pendiente de los saldos y vencidas si la fecha pasó su vencimiento. Lo usan las pruebas y quien simula sobre
     /// saldos ya conocidos; la reconstrucción arma el suyo. 2026-11-16: <paramref name="interesPorCausar"/> es lo que diría la proyección de la cuota en
-    /// curso (<see cref="InteresPorCausarDeLaCuotaEnCurso"/>); sin él, nada.
+    /// curso (<see cref="InteresPorCausarDeLaCuotaEnCurso"/>); sin él, nada. 2026-11-27 (feature 028): <paramref name="interesSobreSuCapital"/>, lo que diría la
+    /// proyección sobre su propio capital (<see cref="InteresPorCausarSobreSuCapital"/>) para cualquier cuota; sin él, nada.
     /// </summary>
     public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null,
-        IReadOnlyList<LineaDeDistribucion>? interesPorCausar = null)
+        IReadOnlyList<LineaDeDistribucion>? interesPorCausar = null, IReadOnlyList<LineaDeDistribucion>? interesSobreSuCapital = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(saldos);
@@ -171,6 +190,7 @@ public sealed class EstadoDelCredito
             ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."))
         {
             ProyeccionDeLaCuotaEnCurso = interesPorCausar is null ? null : _ => interesPorCausar,
+            ProyeccionSobreSuCapital = interesSobreSuCapital is null ? null : (_, n) => interesSobreSuCapital.Where(l => l.Cuota == n).ToList(),
         };
     }
 

@@ -155,6 +155,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesAlDeudo
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.OriginacionClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CuposClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClient>();
+// 2026-11-27 (feature 028, T018): los productos para recoger con el desembolso de un crédito nuevo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RecogidasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DocumentosParaFirmaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();

@@ -179,18 +179,36 @@ public sealed class ConveniosDeLibranza(IApplicationDbContext db, ReglasDeParame
     /// Lo que la pagaduría ya descuenta al deudor por Cartera: la próxima cuota a la fecha de cada crédito vivo vinculado al mismo convenio
     /// (o, sin convenio, a la misma pagaduría), sin el crédito <paramref name="excepto"/>.
     /// </summary>
-    public async Task<decimal> DescuentosVigentesAsync(int deudorId, int? convenioId, int? pagaduriaId, DateOnly fecha, int? excepto, CancellationToken ct)
+    public async Task<decimal> DescuentosVigentesAsync(int deudorId, int? convenioId, int? pagaduriaId, DateOnly fecha, int? excepto, CancellationToken ct) =>
+        (await DescuentosVigentesSinAsync(deudorId, convenioId, pagaduriaId, fecha, excepto, [], ct)).Vigentes;
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R8, T025): lo que la pagaduría seguiría descontando después de recoger los créditos de <paramref name="sin"/> (los que la
+    /// solicitud recoge total) y, aparte, lo que deja de descontar por ellos: la próxima cuota de cada crédito vivo vinculado al mismo convenio (o a la
+    /// misma pagaduría) que está entre ellos.
+    /// </summary>
+    public async Task<(decimal Vigentes, decimal Liberado)> DescuentosVigentesSinAsync(int deudorId, int? convenioId, int? pagaduriaId, DateOnly fecha,
+        int? excepto, IReadOnlyCollection<int> sin, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(sin);
+        var vinculados = await VinculadosAsync(deudorId, convenioId, pagaduriaId, fecha, excepto, ct);
+        var liberados = vinculados.Where(sin.Contains).ToList();
+        var siguen = vinculados.Except(liberados).ToList();
+        return (await ProximasCuotasAsync(siguen, fecha, ct), await ProximasCuotasAsync(liberados, fecha, ct));
+    }
+
+    /// <summary>Los créditos vivos del deudor vinculados a la fecha al mismo convenio (o, sin convenio, a la misma pagaduría), sin <paramref name="excepto"/>.</summary>
+    private async Task<List<int>> VinculadosAsync(int deudorId, int? convenioId, int? pagaduriaId, DateOnly fecha, int? excepto, CancellationToken ct)
     {
         var creditos = await db.Loans.AsNoTracking()
             .Where(l => !l.IsDeleted && l.DebtorPersonId == deudorId && (l.Status == LoanStatus.Active || l.Status == LoanStatus.PendingDisbursement)
                         && (excepto == null || l.Id != excepto))
             .Select(l => l.Id).ToListAsync(ct);
-        if (creditos.Count == 0) return 0m;
-        var vinculados = await db.LoanPayrollLinks.AsNoTracking()
+        if (creditos.Count == 0) return [];
+        return await db.LoanPayrollLinks.AsNoTracking()
             .Where(v => !v.IsDeleted && creditos.Contains(v.LoanId) && v.ValidFrom <= fecha && (v.ValidTo == null || v.ValidTo >= fecha)
                         && (convenioId != null ? v.PayrollAgreementId == convenioId : v.PaymasterPersonId == pagaduriaId))
             .Select(v => v.LoanId).Distinct().ToListAsync(ct);
-        return await ProximasCuotasAsync(vinculados, fecha, ct);
     }
 
     /// <summary>La próxima cuota (vencimiento ≥ fecha) del plan vigente de cada crédito, sumadas.</summary>

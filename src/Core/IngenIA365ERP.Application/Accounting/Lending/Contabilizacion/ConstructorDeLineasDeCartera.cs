@@ -151,9 +151,16 @@ public static partial class ConstructorDeLineasDeCartera
     /// <summary>El <c>reasonCode</c> de la capitalización de una novedad (mensajes.md §10.20).</summary>
     public const string Capitalizacion = "Capitalizacion";
 
+    /// <summary>2026-11-27 (feature 028, T046): la clase del recaudador de la recogida de créditos propios, la del puente que el desembolso acredita.</summary>
+    public const string ClaseDeLaRecogidaPropia = nameof(IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador.OwnLoanPayoff);
+
     private static readonly JsonSerializerOptions Json = OpcionesDeMensajes.Opciones;
 
-    /// <summary>Una partida: un importe con signo sobre un rol, con los valores que busca en la matriz y lo que la línea lleva si su cuenta lo exige.</summary>
+    /// <summary>
+    /// Una partida: un importe con signo sobre un rol, con los valores que busca en la matriz y lo que la línea lleva si su cuenta lo exige.
+    /// <see cref="HechoDelCruce"/> (2026-11-27, feature 028, T046): el hecho cuyo mapeo da el tipo de documento cruce de la línea, si no es el de la unidad
+    /// —el puente de la recogida que acredita el desembolso cruza como lo debita el recibo de la recogida—; nulo = el de la unidad.
+    /// </summary>
     public sealed record Partida(
         string Hecho,
         string Rol,
@@ -167,7 +174,8 @@ public static partial class ConstructorDeLineasDeCartera
         Guid? TerceroDelSobre,
         string? Factura,
         int? Par,
-        string? Cuenta = null);
+        string? Cuenta = null,
+        string? HechoDelCruce = null);
 
     /// <summary>El resultado del primer paso: las partidas, los fallos del contenido y el hecho principal.</summary>
     public sealed record Desglose(IReadOnlyList<Partida> Partidas, IReadOnlyList<FalloDeCartera> Fallos, HechoDeCartera? Principal);
@@ -364,9 +372,12 @@ public static partial class ConstructorDeLineasDeCartera
 
     private sealed record ContextoDeUnidad(string? ClaseDeRecaudador, Guid? Pagador, CreditoAjustadoDesdeComercialV1? AjusteDeComercial);
 
-    /// <summary>Un lado de un asiento: el rol, los valores que busca, el concepto del importe, el crédito, el tercero natural y la factura.</summary>
+    /// <summary>
+    /// Un lado de un asiento: el rol, los valores que busca, el concepto del importe, el crédito, el tercero natural y la factura; y, si no es el de la
+    /// unidad, el hecho cuyo mapeo da su tipo de cruce (<see cref="Partida.HechoDelCruce"/>).
+    /// </summary>
     private sealed record Lado(string Rol, ValoresDeCartera Valores, string? Concepto, string? Credito, Guid? Tercero, string? Factura = null,
-        string? Cuenta = null);
+        string? Cuenta = null, string? HechoDelCruce = null);
 
     private sealed class Desglosador(HechoDeCartera hecho, ContextoDeUnidad u, List<Partida> destino, List<FalloDeCartera> fallos, Func<int> nuevoPar)
     {
@@ -439,13 +450,27 @@ public static partial class ConstructorDeLineasDeCartera
 
         // ------------------------------------------------------------------------------------------- por hecho --
 
+        /// <summary>
+        /// El capital contra «desembolso por girar» (o, en especie, contra Comercial). 2026-11-27 (feature 028, T046; FR-027, H5): con recogidas, el
+        /// capital del tramo va contra «desembolso por girar» sólo por el <b>neto</b> y, por cada recogida, contra el puente de la recogida propia
+        /// (<see cref="PuenteDeLaRecogida"/>): el mismo rol y las mismas dimensiones con que el recibo de esa recogida lo debita, así el puente queda en
+        /// cero sin que la contadora haga coincidir dos reglas. Sin recogidas, como siempre.
+        /// </summary>
         private void Desembolso(CreditoDesembolsadoV1 x)
         {
+            var recogidas = RecogidasContables(x.PayoffDeductions, x.InKind);
             foreach (var a in x.Amounts)
             {
                 var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
                 if (saldo is null) continue;
-                Asentar(saldo, ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId), a.Amount);
+                var contra = ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId);
+                if (a.Concept == R.Principal && recogidas.Count > 0)
+                {
+                    Asentar(saldo, contra, a.Amount - recogidas.Sum(r => r.Amount));
+                    foreach (var r in recogidas) Asentar(saldo, PuenteDeLaRecogida(x.Dimensions, r, x.DebtorPersonPublicId), r.Amount);
+                    recogidas = [];
+                }
+                else Asentar(saldo, contra, a.Amount);
             }
             // 2026-11-23 (descuento condicionado): el fondo pone su parte del bien y el puente del giro la recibe junto con el capital.
             if (x.Subsidy is { Amount: > 0m } s)
@@ -464,6 +489,55 @@ public static partial class ConstructorDeLineasDeCartera
             L(R.FondoQueSubsidia, d, a, credito, deudor, motivo: Texto(s.FundCode));
 
         /// <summary>
+        /// 2026-11-27 (feature 028, T046): las recogidas que el comprobante del desembolso (o de su reverso) asienta. En especie no hay giro ni recogidas.
+        /// En E1 sólo se recogían créditos; desde E3 (T080) también cuentas de aportes y ahorros y desde E4 (T088) facturas a crédito de Comercial. Otra clase
+        /// de producto, o una cuenta o factura sin su referencia, es un fallo con su código y no se asienta (el hecho sigue cuadrando: «desembolso por girar» no la
+        /// descuenta).
+        /// </summary>
+        private IReadOnlyList<PayoffDeductionV1> RecogidasContables(IReadOnlyList<PayoffDeductionV1>? recogidas, InKindDisbursementV1? especie)
+        {
+            if (especie is not null || recogidas is not { Count: > 0 }) return [];
+            foreach (var otra in recogidas.Where(r => !Asentable(r)))
+                fallos.Add(new FalloDeCartera(AccountingErrors.LendingPayoffKindNotSupported(otra.ClaseDeProducto()), hecho.Tipo, R.RecaudoPorAplicar,
+                    null, null, []));
+            return recogidas.Where(r => Asentable(r) && r.Amount != 0m).ToList();
+
+            static bool Asentable(PayoffDeductionV1 r) => r.ClaseDeProducto() == PayoffDeductionV1.Credito
+                                                          || r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado && r.AccountRef is not null
+                                                          || r.ClaseDeProducto() == PayoffDeductionV1.FacturaComercial
+                                                          && !string.IsNullOrWhiteSpace(r.ReceivableRef?.Number);
+        }
+
+        /// <summary>
+        /// 2026-11-27 (feature 028, T046; FR-027, H5): el puente de una recogida (<c>RecaudoPorAplicar</c> de la clase <c>OwnLoanPayoff</c>) con las
+        /// dimensiones con que lo debita el recibo de la recogida (el <c>PagoAplicado</c> del crédito recogido): la clase, la sucursal contable del crédito
+        /// recogido, el pagador (el deudor) como tercero, el crédito recogido como documento cruce y el tipo de cruce del mapeo de ese recibo. Un mensaje
+        /// de antes, sin sucursal ni pagador, toma la del desembolso y su deudor.
+        /// </summary>
+        /// <remarks>
+        /// 2026-11-27 (feature 028, E3, T080; FR-027): en una cuenta recogida, el cruce es el número de la cuenta y su tipo, el del mapeo del hecho de la
+        /// consignación (<c>AporteRecibido</c> o <c>ConsignacionEnCuentaAplicada</c> con la clase <c>OwnLoanPayoff</c>), como lo debita la consignación; la
+        /// sucursal, la de la oficina de la cuenta.
+        /// <para>
+        /// 2026-11-27 (feature 028, E4, T088; R14): en una factura a crédito de Comercial, el puente lleva la factura de cruce (<see cref="CruceDeFactura"/>, el
+        /// tipo de los roles de Comercial) y el deudor de tercero; quien lo debita es el recibo sin caja de Recaudo (rol <c>RecogidaEnElDesembolso</c>, con la
+        /// misma factura y el mismo tercero), así que las dos reglas —la de Recaudo y ésta— deben dar la misma cuenta: la completitud de la matriz lo avisa.
+        /// </para>
+        /// </remarks>
+        private Lado PuenteDeLaRecogida(LoanFactDimensionsV1 d, PayoffDeductionV1 r, Guid deudor)
+        {
+            var valores = new ValoresDeCartera(CollectorClass: ClaseDeLaRecogidaPropia,
+                BranchPublicId: r.BranchPublicId is { } s && s != Guid.Empty ? s : Sucursal(d.BranchPublicId));
+            var pagador = r.PayerPersonPublicId is { } p && p != Guid.Empty ? p : deudor;
+            if (r.ClaseDeProducto() == PayoffDeductionV1.FacturaComercial)
+                return new Lado(R.RecaudoPorAplicar, valores, null, null, pagador, Factura: Texto(r.ReceivableRef?.Number));
+            return r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado
+                ? new Lado(R.RecaudoPorAplicar, valores, null, null, pagador, Cuenta: Texto(r.AccountRef?.AccountNumber),
+                    HechoDelCruce: Texto(r.DepositFactType) ?? IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionEnCuentaAplicadaV1.Type)
+                : new Lado(R.RecaudoPorAplicar, valores, null, Texto(r.Loan.LoanNumber), pagador, HechoDelCruce: PagoAplicadoV1.Type);
+        }
+
+        /// <summary>
         /// 2026-11-25 (feature 026): el cargo masivo debita el capital (su regla de saldo, con el deudor) y acredita la contrapartida del cargo de la línea
         /// con el tercero de la corrida (el deudor o un proveedor); su anulación, al revés.
         /// </summary>
@@ -479,15 +553,28 @@ public static partial class ConstructorDeLineasDeCartera
             }
         }
 
+        /// <summary>
+        /// El espejo del desembolso. 2026-11-27 (feature 028, E-09): con las recogidas que llevó su desembolso, «desembolso por girar» vuelve sólo por el
+        /// neto y lo recogido vuelve al puente de la recogida propia, que queda con lo que espera el giro nuevo (o el reverso de las recogidas si el
+        /// crédito se anula).
+        /// </summary>
         private void DesembolsoReversado(DesembolsoReversadoV1 x)
         {
+            var recogidas = RecogidasContables(x.PayoffDeductions, x.InKind);
             foreach (var a in x.Amounts)
             {
                 if (a.Concept == R.Principal)
                 {
                     var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
                     if (saldo is null) continue;
-                    Asentar(ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId), saldo, a.Amount);
+                    var contra = ContraDelDesembolso(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId, x.InKind, x.DisbursementForm, x.PayeePersonPublicId);
+                    if (recogidas.Count > 0)
+                    {
+                        Asentar(contra, saldo, a.Amount - recogidas.Sum(r => r.Amount));
+                        foreach (var r in recogidas) Asentar(PuenteDeLaRecogida(x.Dimensions, r, x.DebtorPersonPublicId), saldo, r.Amount);
+                        recogidas = [];
+                    }
+                    else Asentar(contra, saldo, a.Amount);
                     // 2026-11-23 (descuento condicionado): el espejo de lo que puso el fondo.
                     if (x.Subsidy is { Amount: > 0m } s)
                     {
@@ -545,7 +632,14 @@ public static partial class ConstructorDeLineasDeCartera
                     continue;
                 }
                 var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
-                if (saldo is not null) Asentar(Recaudo(x.Dimensions, a, x.Loan, x.Collector.CollectorClass, x.Collector.PayerPersonPublicId), saldo, a.Amount);
+                if (saldo is null) continue;
+                var recaudo = Recaudo(x.Dimensions, a, x.Loan, x.Collector.CollectorClass, x.Collector.PayerPersonPublicId);
+                // 2026-11-28 (feature 028, T096; FR-027): el anticipo que usó una cancelación (D7 de la 013, reasonCode AdvanceUsed) no es dinero recibido:
+                // baja el pasivo con el deudor (débito al anticipo) y lo que cubrió sale del puente del recaudo, que así queda con lo recibido de verdad.
+                // Hasta hoy se asentaba como un anticipo recibido: el puente quedaba con dos veces el anticipo de más y el anticipo, sin bajar (lo destapó la
+                // e2e de la recogida de un crédito con anticipo, cuyo puente no quedaba en cero).
+                if (a.ReasonCode == PagoAplicadoV1.AnticipoUsado) Asentar(saldo, recaudo, a.Amount);
+                else Asentar(recaudo, saldo, a.Amount);
             }
             Reasignaciones(x.Reallocations, x.Dimensions, x.Loan, x.DebtorPersonPublicId);
         }
@@ -989,7 +1083,8 @@ public static partial class ConstructorDeLineasDeCartera
 
         private void Agregar(Lado lado, bool debitoSiPositivo, decimal importe, int? par) =>
             destino.Add(new Partida(hecho.Tipo, lado.Rol, _invertirTodo ? !debitoSiPositivo : debitoSiPositivo, importe, lado.Valores,
-                _sobre.Origin.OperationDate, ConceptoDelMapa(lado), lado.Credito, lado.Tercero, _sobre.PersonPublicId, lado.Factura, par, lado.Cuenta));
+                _sobre.Origin.OperationDate, ConceptoDelMapa(lado), lado.Credito, lado.Tercero, _sobre.PersonPublicId, lado.Factura, par, lado.Cuenta,
+                lado.HechoDelCruce));
 
         /// <summary>
         /// El concepto que la línea muestra en su mapa: el de la regla si el rol lo usa; en un anticipo o un saldo a favor, el suyo; en el puente
@@ -1058,7 +1153,8 @@ public static partial class ConstructorDeLineasDeCartera
             string? tipoDeCruce = null, numeroDeCruce = null;
             if (cuenta.RequiresCrossDocument)
             {
-                if (rol?.Cruce == CruceDeRol.Factura && p.Factura is { } factura)
+                // 2026-11-27 (feature 028, E4, T088): el puente de la recogida de una factura cruza también contra la factura, como lo debita el recibo de Recaudo.
+                if ((rol?.Cruce == CruceDeRol.Factura || p.Rol == R.RecaudoPorAplicar) && p.Factura is { } factura)
                 {
                     tipoDeCruce = CruceDeFactura;
                     numeroDeCruce = factura;
@@ -1081,7 +1177,8 @@ public static partial class ConstructorDeLineasDeCartera
                 Debit = debito ? valor : 0m,
                 Credit = debito ? 0m : valor,
                 Detail = p.Credito is { } n ? $"{principal.Sobre.Origin.Number} · crédito {n}"
-                    : p.Cuenta is { } cta ? $"{principal.Sobre.Origin.Number} · cuenta {cta}" : principal.Sobre.Origin.Number,
+                    : p.Cuenta is { } cta ? $"{principal.Sobre.Origin.Number} · cuenta {cta}"
+                    : p.Factura is { } fv && p.Rol == R.RecaudoPorAplicar ? $"{principal.Sobre.Origin.Number} · factura {fv}" : principal.Sobre.Origin.Number,
                 PersonId = persona,
                 BranchId = regla.BranchId,
                 CostCenterId = cuenta.RequiresCostCenter ? regla.CostCenterId : null,

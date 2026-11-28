@@ -1,0 +1,633 @@
+{
+  "descripcion": "Feature 028 (T046–T048; FR-027, FR-027b, H5): desembolso de 10.000.000 por giro a un tercero que recoge dos créditos de la deudora, 000077 (2.300.000, sucursal principal) y 000078 (1.200.000, sucursal norte). «Desembolso por girar» lleva sólo el neto (6.500.000) con el beneficiario como tercero; cada recogida va al puente de la recogida propia, en una cuenta que exige tercero y documento cruce, con la deudora como tercero, el crédito recogido como cruce y la sucursal del crédito recogido: lo mismo con que lo debita el RC de cada recogida («recibos»). Con «¿El desembolso y sus recogidas salen en un solo comprobante?» en sí, los tres salen en un DS («esperadoEnUnComprobante») y el puente queda en cero por tercero, cruce y sucursal.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "DES-000140",
+      "publicId": "0d0d0680-0000-4000-8000-000000000680",
+      "operationDate": "2026-11-05"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0687-0000-4000-8000-000000000687",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-05T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0684-0000-4000-8000-000000000684",
+      "type": "CreditoDesembolsado",
+      "kind": "Business",
+      "originDocumentClass": "LoanDisbursement",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000140",
+          "loanNumber": "000140"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-05",
+        "registeredAt": "2026-11-05T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 10000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "ThirdPartyPayment"
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "tranche": {
+          "number": 1,
+          "isLast": true
+        },
+        "disbursementForm": "ThirdPartyPayment",
+        "payeePersonPublicId": "a1b2c3d4-0000-4000-8000-0000000000c7",
+        "grossAmount": 10000000.0,
+        "payoffDeductions": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000077",
+              "loanNumber": "000077"
+            },
+            "operationPublicId": "0d0d0682-0000-4000-8000-000000000682",
+            "amount": 2300000.0,
+            "productKind": "Loan",
+            "accountRef": null,
+            "receivableRef": null,
+            "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002"
+          },
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000078",
+              "loanNumber": "000078"
+            },
+            "operationPublicId": "0d0d0683-0000-4000-8000-000000000683",
+            "amount": 1200000.0,
+            "productKind": "Loan",
+            "accountRef": null,
+            "receivableRef": null,
+            "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+            "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002"
+          }
+        ],
+        "netToDisburse": 6500000.0,
+        "disbursementOrderPublicId": "0d1e0688-0000-4000-8000-000000000688",
+        "inKind": null,
+        "plan": {
+          "scheduleVersion": 1,
+          "amortizationSystem": "LevelPayment",
+          "periodicity": "Monthly",
+          "installmentCount": 36,
+          "installmentAmount": 392184.0,
+          "firstDueDate": "2026-12-30",
+          "finalDueDate": "2029-11-30",
+          "annualEffectiveRate": 0.245,
+          "dayCountConvention": "Thirty360",
+          "rulesVersion": "LND-2026.1"
+        }
+      }
+    }
+  ],
+  "matrizExtra": [
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "24959503",
+      "clase": "OwnLoanPayoff",
+      "sucursal": "principal"
+    },
+    {
+      "rol": "RecaudoPorAplicar",
+      "cuenta": "24959503",
+      "clase": "OwnLoanPayoff",
+      "sucursal": "norte"
+    }
+  ],
+  "esperado": {
+    "tipo": "DS",
+    "fecha": "2026-11-05",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 10000000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000140",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000140"
+          ]
+        }
+      },
+      {
+        "rol": "DesembolsoPorGirar",
+        "cuenta": "24959502",
+        "debito": 0.0,
+        "credito": 6500000.0,
+        "tercero": "beneficiario",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000140"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 0.0,
+        "credito": 2300000.0,
+        "tercero": "ana",
+        "cruce": "PG 000077",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000077"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 0.0,
+        "credito": 1200000.0,
+        "tercero": "ana",
+        "cruce": "PG 000078",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000078"
+          ]
+        }
+      }
+    ]
+  },
+  "recibos": [
+    {
+      "sobre": {
+        "version": 1,
+        "kind": "Business",
+        "originModule": "CAR",
+        "originEventKey": "Confirmation",
+        "origin": {
+          "kind": "Operation",
+          "documentClass": null,
+          "documentTypeCode": null,
+          "number": "PAG-000682",
+          "publicId": "0d0d0682-0000-4000-8000-000000000682",
+          "operationDate": "2026-11-05"
+        },
+        "related": null,
+        "chainRootPublicId": "0e0e0687-0000-4000-8000-000000000687",
+        "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+        "costCenterPublicId": null,
+        "warehouseCode": null,
+        "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "currency": "COP",
+        "exchangeRate": 1,
+        "originUser": {
+          "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+          "name": "Usuario de ensayo"
+        },
+        "emittedAt": "2026-11-05T15:00:00Z"
+      },
+      "mensajes": [
+        {
+          "messageId": "0f0f0685-0000-4000-8000-000000000685",
+          "type": "PagoAplicado",
+          "kind": "Business",
+          "originDocumentClass": "PaymentApplication",
+          "payload": {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000077",
+              "loanNumber": "000077"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "valueDate": "2026-11-05",
+            "registeredAt": "2026-11-05T15:00:00Z",
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": "OwnLoanPayoff",
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": 5,
+                "amount": 2000000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              },
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 5,
+                "amount": 300000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "rulesVersion": "LND-2026.1",
+            "collector": {
+              "collectorCode": "CAR",
+              "collectorClass": "OwnLoanPayoff",
+              "idempotencyKey": "CAR:0d0d0680000040008000000000000680:7b8c9d0e1f2a4b3c9d4e000000000077",
+              "meansClass": "InternalOffset",
+              "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+              "receipt": {
+                "number": "DES-000140",
+                "date": "2026-11-05",
+                "officePublicId": null,
+                "meansReference": null,
+                "documentKind": "LoanDisbursement"
+              }
+            },
+            "modality": "FullPayoff",
+            "amountReceived": 2300000.0,
+            "surplus": 0.0,
+            "reallocations": [],
+            "prepaymentChoice": null,
+            "newPlan": null,
+            "paidOff": true,
+            "finalityUntil": null,
+            "simulationId": null,
+            "deductionFileLinePublicId": null,
+            "insuranceClaimPublicId": null
+          }
+        }
+      ]
+    },
+    {
+      "sobre": {
+        "version": 1,
+        "kind": "Business",
+        "originModule": "CAR",
+        "originEventKey": "Confirmation",
+        "origin": {
+          "kind": "Operation",
+          "documentClass": null,
+          "documentTypeCode": null,
+          "number": "PAG-000683",
+          "publicId": "0d0d0683-0000-4000-8000-000000000683",
+          "operationDate": "2026-11-05"
+        },
+        "related": null,
+        "chainRootPublicId": "0e0e0687-0000-4000-8000-000000000687",
+        "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+        "costCenterPublicId": null,
+        "warehouseCode": null,
+        "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "currency": "COP",
+        "exchangeRate": 1,
+        "originUser": {
+          "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+          "name": "Usuario de ensayo"
+        },
+        "emittedAt": "2026-11-05T15:00:00Z"
+      },
+      "mensajes": [
+        {
+          "messageId": "0f0f0686-0000-4000-8000-000000000686",
+          "type": "PagoAplicado",
+          "kind": "Business",
+          "originDocumentClass": "PaymentApplication",
+          "payload": {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000078",
+              "loanNumber": "000078"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "valueDate": "2026-11-05",
+            "registeredAt": "2026-11-05T15:00:00Z",
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": "OwnLoanPayoff",
+              "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": 3,
+                "amount": 1150000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              },
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 3,
+                "amount": 50000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "rulesVersion": "LND-2026.1",
+            "collector": {
+              "collectorCode": "CAR",
+              "collectorClass": "OwnLoanPayoff",
+              "idempotencyKey": "CAR:0d0d0680000040008000000000000680:7b8c9d0e1f2a4b3c9d4e000000000078",
+              "meansClass": "InternalOffset",
+              "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+              "receipt": {
+                "number": "DES-000140",
+                "date": "2026-11-05",
+                "officePublicId": null,
+                "meansReference": null,
+                "documentKind": "LoanDisbursement"
+              }
+            },
+            "modality": "FullPayoff",
+            "amountReceived": 1200000.0,
+            "surplus": 0.0,
+            "reallocations": [],
+            "prepaymentChoice": null,
+            "newPlan": null,
+            "paidOff": true,
+            "finalityUntil": null,
+            "simulationId": null,
+            "deductionFileLinePublicId": null,
+            "insuranceClaimPublicId": null
+          }
+        }
+      ]
+    }
+  ],
+  "esperadoEnUnComprobante": {
+    "tipo": "DS",
+    "fecha": "2026-11-05",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 10000000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000140",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000140"
+          ]
+        }
+      },
+      {
+        "rol": "DesembolsoPorGirar",
+        "cuenta": "24959502",
+        "debito": 0.0,
+        "credito": 6500000.0,
+        "tercero": "beneficiario",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000140"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 0.0,
+        "credito": 2300000.0,
+        "tercero": "ana",
+        "cruce": "PG 000077",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000077"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 0.0,
+        "credito": 1200000.0,
+        "tercero": "ana",
+        "cruce": "PG 000078",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoDesembolsado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000078"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 2300000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000077",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000077"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 0.0,
+        "credito": 2000000.0,
+        "tercero": "ana",
+        "cruce": "PG 000077",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000077"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 0.0,
+        "credito": 300000.0,
+        "tercero": "ana",
+        "cruce": "PG 000077",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000077"
+          ]
+        }
+      },
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "24959503",
+        "debito": 1200000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000078",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000078"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 0.0,
+        "credito": 1150000.0,
+        "tercero": "ana",
+        "cruce": "PG 000078",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000078"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 0.0,
+        "credito": 50000.0,
+        "tercero": "ana",
+        "cruce": "PG 000078",
+        "sucursal": "norte",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000078"
+          ]
+        }
+      }
+    ]
+  }
+}

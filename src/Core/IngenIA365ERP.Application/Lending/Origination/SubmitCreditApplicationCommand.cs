@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Compliance;
@@ -34,7 +35,13 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 /// huella, el número (<c>NumeradorDeCartera</c>, al final del cerrojo) y la intervención <c>Radicar</c>.</item>
 /// </list>
 /// La preferencia de abono a capital queda sellada en la solicitud (<c>PrepaymentChoice</c>) y nace como fila de <c>LND_PrepaymentPreferences</c>
-/// cuando nace el crédito o el cupo: su <c>CK_LND_PrepaymentPreferences_Scope</c> exige uno de los dos. (nuevo)
+/// cuando nace el crédito o el cupo: su <c>CK_LND_PrepaymentPreferences_Scope</c> exige uno de los dos.
+/// <para>
+/// 2026-11-27 (feature 028, T024; FR-007): si la solicitud recoge productos, se vuelven a proyectar con lo de ahora (<see cref="RecogidasDeLaSolicitud.ReproyectarAsync"/>,
+/// R = ahora) y con las mismas reglas que al guardar —del solicitante como deudor, vivo y elegible, admitido, neto positivo—, para que quien decide vea lo
+/// vigente; y las validaciones miden la situación después de recoger (R8, <see cref="ValidacionesDeOriginacion"/>).
+/// </para>
+/// (nuevo)
 /// </summary>
 public sealed record SubmitCreditApplicationCommand(Guid ApplicationPublicId, byte[]? RowVersion = null)
     : IRequest<Result<CreditApplicationDto>>, IOperacionIdempotente
@@ -50,6 +57,7 @@ public sealed class SubmitCreditApplicationCommandValidator : AbstractValidator<
 public sealed class SubmitCreditApplicationCommandHandler(
     IApplicationDbContext db,
     EvaluacionDeSolicitud evaluacion,
+    RecogidasDeLaSolicitud recogidas,
     EnrutamientoDeSolicitud enrutamiento,
     RegistroDeIntervenciones intervenciones,
     NumeradorDeCartera numerador,
@@ -102,11 +110,15 @@ public sealed class SubmitCreditApplicationCommandHandler(
             if (autorizacion is not { Autoriza: true })
                 return Falla(ErroresDeOriginacion.SinAutorizacion(persona.PublicId, ReferenciasDeGobierno.Nombre(persona), DataAuthorizationPurpose.CreditProcessing));
         }
+        // 2026-11-27 (feature 028, T024): lo que recoge, otra vez proyectado con lo de ahora y con las reglas de guardar.
+        var reproyectadas = await recogidas.ReproyectarAsync(s, hoy, ct);
+        if (reproyectadas.IsFailure) return Falla(reproyectadas.Error);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync(c.Partes.Select(p => p.PersonId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+            if (reproyectadas.Value.Hay) await recogidas.ReescribirAsync(s.Id, reproyectadas.Value, ct);
 
             s.Radicar(verificada.Value.UsuarioId, reloj.UtcNow);
             s.SimulationSha256 = c.Simulacion.Huella;

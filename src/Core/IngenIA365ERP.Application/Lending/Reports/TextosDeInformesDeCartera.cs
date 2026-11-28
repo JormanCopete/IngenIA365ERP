@@ -85,6 +85,7 @@ public static class TextosDeInformesDeCartera
         PaymentModality.ExtraordinaryPrincipal => "Abono extraordinario a capital",
         PaymentModality.SpecificInstallment => "Cuota específica",
         PaymentModality.FreeAmount => "Valor libre",
+        PaymentModality.PayoffExceptCurrentInstallment => "Cancelación salvo la cuota causada",
         null => "Sin modalidad",
         _ => modalidad.ToString()!,
     };

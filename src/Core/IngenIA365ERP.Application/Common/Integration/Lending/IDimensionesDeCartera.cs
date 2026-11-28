@@ -26,6 +26,20 @@ public sealed record CatalogoDeDimensionesDeCarteraDto(
 {
     /// <summary>Un catálogo sin nada (cooperativa sin Cartera).</summary>
     public static CatalogoDeDimensionesDeCarteraDto Vacio { get; } = new([], [], [], [], []);
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T080): los hechos con que se consignan las cuentas que la cooperativa recoge con un crédito nuevo (<c>AporteRecibido</c>,
+    /// <c>ConsignacionEnCuentaAplicada</c>), con la clase de la recogida propia (<c>OwnLoanPayoff</c>); vacío si sólo recoge créditos (el defecto). La
+    /// completitud de la matriz pide su mapeo con esa clase. (nuevo)
+    /// </summary>
+    public IReadOnlyList<string> PayoffDepositFactTypes { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T088): si la cooperativa recoge facturas a crédito de Comercial con un crédito nuevo (<c>Recogida.ProductosAdmitidos</c> general o
+    /// de alguna línea de colocación activa, a hoy); falso de fábrica. La completitud de la matriz compara entonces la regla de Recaudo del recibo de la recogida
+    /// (<c>RecogidaEnElDesembolso</c>) con el puente de la recogida propia. (nuevo)
+    /// </summary>
+    public bool PayoffCommercialReceivablesAdmitted { get; init; }
 }
 
 /// <summary>Una línea de crédito por su código, con su modalidad y su sub-segmento. (nuevo)</summary>

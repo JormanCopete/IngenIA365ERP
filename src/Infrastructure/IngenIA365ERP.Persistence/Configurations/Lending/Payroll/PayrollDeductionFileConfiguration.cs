@@ -116,6 +116,8 @@ public class PayrollDeductionResultConfiguration : IEntityTypeConfiguration<Payr
         builder.Property(e => e.NotDeductedAmount).Monto().IsRequired();
         builder.Property(e => e.PaymasterResultCode).HasMaxLength(20);
         builder.Property(e => e.NonDeductionReason).HasConversion<int?>();
+        // 2026-11-27 (feature 028, E2, T063; migración CuotaDejadaALaPagaduria, aditiva): falso en las filas de antes.
+        builder.Property(e => e.LoanClosedAtResult).IsRequired();
         builder.Ignore(e => e.DejaPendienteDeGiro);
 
         builder.HasOne<PayrollDeductionFileLine>().WithMany().HasForeignKey(e => e.PayrollDeductionFileLineId).OnDelete(DeleteBehavior.Restrict);

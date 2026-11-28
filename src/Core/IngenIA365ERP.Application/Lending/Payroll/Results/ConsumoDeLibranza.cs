@@ -181,6 +181,11 @@ public sealed class ConsumePayrollFileSentCommandHandler(IApplicationDbContext d
 /// <item>lo no aplicado: <c>LND_InstallmentNonDeductions</c> con origen <c>PaymasterResult</c> y el motivo traducido por los códigos de la versión,
 /// la alerta <c>Cartera.NoAplicadoDePagaduria</c> (una por archivo), el aviso al deudor y la regla del convenio (<see cref="SeguimientoDeNoAplicados"/>);
 /// una parcial deja las dos cosas;</item>
+/// <item>2026-11-27 (feature 028, E2, T067; R7, FR-022): si el crédito ya no está vigente (cancelado —lo recogió el desembolso de otro—, anulado o novado),
+/// el resultado se guarda con <c>LoanClosedAtResult</c> («descuento de un crédito cancelado») y no deja no aplicado, ni regla del convenio, ni aviso al
+/// deudor, ni cuenta para la alerta del archivo; lo descontado no queda pendiente de giro (<see cref="PendientesDeGiro"/>);</item>
+/// <item>2026-11-27 (feature 028, E2, T070): el no aplicado de una cuota que una recogida dejó a la pagaduría avisa además al asesor
+/// (<see cref="Payoffs.SeguimientoDeCuotaDejada"/>);</item>
 /// <item>la versión <c>Generated</c> pasa a <c>Sent</c> (el resultado prueba el envío); un resultado posterior de la misma línea reemplaza al anterior
 /// (<c>SupersedesResultId</c>).</item>
 /// </list>
@@ -209,7 +214,8 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
     ConveniosDeLibranza convenios,
     SeguimientoDeNoAplicados seguimiento,
     IAlertas alertas,
-    IDateTimeService reloj) : IRequestHandler<ConsumePayrollDeductionResultCommand, Result<ResultadoDeConsumo>>
+    IDateTimeService reloj,
+    Payoffs.SeguimientoDeCuotaDejada? cuotaDejada = null) : IRequestHandler<ConsumePayrollDeductionResultCommand, Result<ResultadoDeConsumo>>
 {
     public const string Chequeo = "PayrollDeductionResult";
 
@@ -325,6 +331,11 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
             await cerrojo.BloquearDeudoresAsync(deCredito.Values.Select(l => l.DebtorPersonId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCreditosAsync(creditos, ModoDeEspera.Esperar, ct);
             if (cuentasDelReparto.Count > 0) await cerrojo.BloquearCuentasAsync(cuentasDelReparto, ModoDeEspera.Esperar, ct);
+            // 2026-11-27 (feature 028, E2, T067; R7, FR-022, H1): el estado de cada crédito, ya bajo su cerrojo. El que se cerró después de enviar la línea (lo
+            // recogió el desembolso de otro, se canceló en caja, se anuló o se novó) es «descuento de un crédito cancelado»: su resultado se guarda marcado y
+            // no deja no descontado, ni regla del convenio, ni aviso al deudor.
+            var cerrados = (await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Id)).Select(l => new { l.Id, l.Status }).ToListAsync(ct))
+                .Where(l => PendientesDeGiro.CreditoCerrado(l.Status)).Select(l => l.Id).ToHashSet();
 
             if (archivo.Status == PayrollFileStatus.Generated) archivo.MarcarEnviado(ahora, mensaje.MessageId, null);
             archivo.AnotarPrimerResultado(ahora);
@@ -360,12 +371,13 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
                     TransferDueDate = l.Descontado > 0m ? PayrollDeductionResult.VencimientoDelGiro(l.Entrada.DeductionDate, parametros.Value.VentanaDeGiroDias) : null,
                     PaymasterArrearsThresholdDays = l.Descontado > 0m ? parametros.Value.UmbralDeMoraDias : null,
                     SupersedesResultId = anteriores.TryGetValue(l.Linea.Id, out var previo) ? previo : null,
+                    LoanClosedAtResult = cerrados.Contains(l.Linea.LoanId),
                 };
                 db.PayrollDeductionResults.Add(fila);
                 await db.SaveChangesAsync(ct);
-                if (l.NoDescontado <= 0m) continue;
+                if (l.NoDescontado <= 0m || fila.LoanClosedAtResult) continue;
 
-                alerta ??= await AlertarAsync(archivo, leidas.Count(x => x.NoDescontado > 0m), ct);
+                alerta ??= await AlertarAsync(archivo, leidas.Count(x => x.NoDescontado > 0m && !cerrados.Contains(x.Linea.LoanId)), ct);
                 var cuota = await CuotaAsync(l.Linea, archivo, ct);
                 if (cuota is null) continue;
                 var credito = deCredito[l.Linea.LoanId];
@@ -389,7 +401,12 @@ public sealed class ConsumePayrollDeductionResultCommandHandler(
             }
             await db.SaveChangesAsync(ct);
             foreach (var (fila, deudor) in noAplicados)
+            {
                 await seguimiento.AplicarReglaAsync(fila, deudor, version.NonDeductionAction, ct);
+                // 2026-11-27 (feature 028, E2, T070; HU4-7): la cuota que una recogida dejó a la pagaduría y no se descontó: además, el aviso al asesor.
+                if (cuotaDejada is not null)
+                    await cuotaDejada.AvisarNoDescontadoAsync(fila.LoanId, fila.InstallmentNumber, fila.NotDeductedAmount, "La pagaduría", ct);
+            }
 
             if (reparto is not null)
             {

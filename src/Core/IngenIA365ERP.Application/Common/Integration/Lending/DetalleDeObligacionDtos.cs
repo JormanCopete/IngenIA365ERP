@@ -51,6 +51,12 @@ public sealed record DetalleDeObligacionDto(
     /// (<c>Pagos.DescuentoPorPagoAnticipado</c>); cero sin descuento. La aplica Recaudo: Cartera recibe la cuota completa. (nuevo)
     /// </summary>
     public decimal AdvanceDiscountFraction { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T065; R6, FR-023): la cuota del período que ya va en un archivo de libranza o en la nómina propia (como en el listado); nula si
+    /// no hay nada enviado. (nuevo)
+    /// </summary>
+    public CuotaEnviadaDto? SentInstallment { get; init; }
 }
 
 /// <summary>Un saldo de la obligación por concepto: el concepto (<c>ConceptoDeObligacion</c> por nombre), su nombre en español y el valor. (nuevo)</summary>

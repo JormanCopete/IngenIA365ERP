@@ -56,7 +56,8 @@
                         <div>
                             <label>Clase</label>
                             <select class="form-control" @bind="_clase">
-                                @for (var i = 1; i <= 11; i++)
+                                @* 2026-11-27 (feature 028, E4, T085): hasta la 12, «Recogida en el desembolso». *@
+                                @for (var i = 1; i <= 12; i++)
                                 {
                                     var clase = i;
                                     <option value="@clase">@ConfiguracionDeRecaudoClient.ClaseDeDocumento(clase)</option>

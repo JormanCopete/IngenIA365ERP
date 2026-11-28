@@ -481,6 +481,7 @@ public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext 
         PaymentMeansClass.BankDeposit => "Consignación",
         PaymentMeansClass.Transfer => "Transferencia",
         PaymentMeansClass.Voucher => "Bono",
+        PaymentMeansClass.InternalOffset => "Recogida en el desembolso",
         PaymentMeansClass.Check => "Cheque",
         _ => "Otro",
     };

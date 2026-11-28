@@ -171,6 +171,8 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
         9 => "Movimiento de caja",
         10 => "Ajuste de sesión",
         11 => "Cruce de anticipo",
+        // 2026-11-27 (feature 028, E4, T085): el recibo sin caja con que el desembolso de un crédito recoge facturas a crédito.
+        12 => "Recogida en el desembolso",
         _ => "Otra",
     };
 
@@ -183,6 +185,7 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
         7 => "Transferencia",
         8 => "Bono",
         9 => "Cheque",
+        22 => "Recogida en el desembolso",
         _ => "Otro",
     };
 

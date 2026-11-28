@@ -148,7 +148,11 @@
                     <label class="campo">Nombre * <input class="e-input" @bind="_m.Name" maxlength="80" /></label>
                     <label class="campo">Clase *
                         <select class="e-input" disabled="@(_medioId is not null)" value="@_m.Class" @onchange="@(e => _m.Class = e.Value?.ToString() ?? "Cash")">
-                            @foreach (var (v, t) in TextosDeVentas.ClasesDeMedio) { <option value="@TextosDeVentas.NombreDeClaseDeMedio(v)">@t</option> }
+                            @* 2026-11-27 (feature 028, E4, T086): la clase del cruce interno es del sistema: sólo se ve al editar su medio, no se ofrece para crear. *@
+                            @foreach (var (v, t) in TextosDeVentas.ClasesDeMedio.Where(c => _medioId is not null || c.Key != TextosDeVentas.MedioCruceInterno))
+                            {
+                                <option value="@TextosDeVentas.NombreDeClaseDeMedio(v)">@t</option>
+                            }
                         </select>
                     </label>
                     @* Feature 022 (T035, FR-049): un solo carácter, letra o número (el servidor sólo admite ^[A-Za-z0-9]$); actúa con la barra de medios enfocada. *@

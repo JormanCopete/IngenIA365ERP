@@ -55,4 +55,22 @@ public static class ClasesDeMedioDeRecaudo
         if (DeCredito.Contains(medio)) return ErroresDePagos.ClaseDeMedioDeCredito(medio);
         return Admite(recaudador, medio, esResolucion) ? null : ErroresDePagos.ClaseDeMedioNoAdmitida(medio, recaudador);
     }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T058): los recaudadores que admiten «todo menos la cuota causada» (<see cref="ModalidadDePago.PayoffExceptCurrentInstallment"/>):
+    /// la recogida al desembolsar (<c>OwnLoanPayoff</c>) y la caja de Recaudo (<c>Receipts</c>). (nuevo)
+    /// </summary>
+    public static IReadOnlySet<ClaseDeRecaudador> ConCancelacionSalvoCuota { get; } = new HashSet<ClaseDeRecaudador>
+    {
+        ClaseDeRecaudador.OwnLoanPayoff, ClaseDeRecaudador.Receipts,
+    };
+
+    /// <summary>2026-11-27 (feature 028, T058): ¿admite el recaudador esa modalidad? Las de siempre, todos; la cancelación salvo cuota, sólo los suyos. (nuevo)</summary>
+    public static bool AdmiteModalidad(ClaseDeRecaudador recaudador, ModalidadDePago modalidad) =>
+        Enum.IsDefined(modalidad)
+        && (modalidad != ModalidadDePago.PayoffExceptCurrentInstallment || ConCancelacionSalvoCuota.Contains(recaudador));
+
+    /// <summary>2026-11-27 (feature 028, T058): el error de la modalidad (<c>Lending.Payment.ModalityNotAllowed</c>), o nulo si el recaudador la admite. (nuevo)</summary>
+    public static Error? ValidarModalidad(ClaseDeRecaudador recaudador, ModalidadDePago modalidad) =>
+        AdmiteModalidad(recaudador, modalidad) ? null : ErroresDePagos.ModalidadNoAdmitidaPara(modalidad, recaudador);
 }

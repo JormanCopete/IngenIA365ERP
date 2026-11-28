@@ -161,6 +161,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K5 (US16, T1006): los excluidos del archivo de una central, por la oficina y la línea de su crédito.
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/BureauExclusionsReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs",
+        // Feature 028 (HU8, T053): las recogidas por la oficina y la línea del crédito nuevo (AmbitoDeInformeDeCartera).
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayoffsReportQuery.cs",
         // Feature 014, US1 (T066): el catálogo común de líneas filtra por PorLinea; el detalle y las versiones de una línea fuera del alcance (o de
         // una naturaleza cuyo View no tiene quien pregunta) responden el 404 de la línea (LectorDeLineasDeCaptacion.LineaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Deposits/Lines/LendingLineQueries.cs",
@@ -354,6 +356,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // estados de cuenta de cada módulo (ListLoansQuery, ListDebtorMessagesQuery, ListCollectionActionsQuery, ...) y la liquidación de cada crédito.
         ["GetPersonStatementSectionQuery"] = "arma cada sección con las consultas de su módulo por ISender, que aplican el alcance de oficina y línea",
         ["SimulatePersonPayoffQuery"] = "sólo simula créditos de ListLoansQuery, que aplica el alcance, y cada uno por GetLoanSettlementQuery, que lo asegura",
+        // 2026-11-27 (feature 028, T014): los productos para recoger.
+        ["GetPayoffCandidatesQuery"] = "sólo liquida créditos de ListLoansQuery, que aplica el alcance, y asegura la línea del crédito nuevo con AsegurarAsync",
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",

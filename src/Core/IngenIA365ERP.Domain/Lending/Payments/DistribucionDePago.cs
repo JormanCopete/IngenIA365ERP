@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
 namespace IngenIA365ERP.Domain.Lending.Payments;
@@ -15,7 +16,11 @@ public sealed record SolicitudDeDistribucion(PaymentModality Modalidad, decimal 
     /// <summary>La elección del deudor (interactivo) o su preferencia vigente (sin interacción); nula: el abono queda como saldo a favor (D24).</summary>
     public PrepaymentChoice? Eleccion { get; init; }
 
-    /// <summary>La cuota de <see cref="PaymentModality.SpecificInstallment"/>.</summary>
+    /// <summary>
+    /// La cuota de <see cref="PaymentModality.SpecificInstallment"/>. 2026-11-27 (feature 028, R4): en <see cref="PaymentModality.PayoffExceptCurrentInstallment"/>,
+    /// la cuota causada que se deja, opcional: sin ella la decide el aplicador (<see cref="AplicadorDePagos.CuotaCausada"/>); con ella tiene que ser esa
+    /// misma —la que sella la decisión del pago—, o la cancelación es total.
+    /// </summary>
     public int? Cuota { get; init; }
 
     /// <summary>
@@ -32,6 +37,15 @@ public sealed record SolicitudDeDistribucion(PaymentModality Modalidad, decimal 
     /// Falso —un pago que no lo trae— es el ciclo de la cuota, lo de siempre. (nuevo)
     /// </summary>
     public bool PeriodoCalendario { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño; Ley 1555 de 2012): en <see cref="PaymentModality.PayoffExceptCurrentInstallment"/>, la cuota que se
+    /// deja lleva el <b>interés proporcional</b> (<see cref="AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional"/>): lo causado hasta la fecha valor sobre todo
+    /// el saldo y, de ahí a su vencimiento, sólo sobre su propio capital (<see cref="EstadoDelCredito.InteresPorCausarSobreSuCapital"/>); el interés de esos días
+    /// sobre el capital que se cancela no se cobra. Lo decide quien pide —dentro del tope legal del prepago o sin los valores nacionales para saberlo— y lo
+    /// sella la decisión del pago. Falso —un pago que no lo trae— es D13-A: la cuota queda tal como se envió. El dominio no lee valores legales. (nuevo)
+    /// </summary>
+    public bool CuotaDejadaProporcional { get; init; }
 }
 
 /// <summary>Lo que un pago cubre de un concepto en una cuota (sin cuota: el capital de un abono extraordinario, que regenera el plan).</summary>
@@ -100,6 +114,30 @@ public sealed record DistribucionDePago
     /// </summary>
     public IReadOnlyList<LineaDeDistribucion> InteresNoCobrado { get; init; } = [];
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059; D13-A): con <see cref="PaymentModality.PayoffExceptCurrentInstallment"/> y los fondos que cubren todo lo demás, la
+    /// cuota causada que el pago dejó en el crédito <b>tal como se envió</b> —capital, interés del período completo, seguro y administración— y
+    /// <b>congelada</b>: desde el día siguiente a la fecha valor no causa más interés corriente mientras no esté vencida (la reconstrucción la respeta,
+    /// <see cref="ContextoDeReconstruccion.Congelar"/>). Nula en todo lo demás: también si la cancelación terminó siendo total o los fondos no alcanzaron.
+    /// (nuevo)
+    /// </summary>
+    public int? CuotaDejada { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, R4, T059; D13-A): el interés del período de <see cref="CuotaDejada"/> que la causación todavía no había causado —el mismo cálculo
+    /// que la cuota completa (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>), sobre el saldo con que se proyectó la cuota—, por cuota y
+    /// concepto. La reconstrucción lo <b>causa</b> en la fecha valor (filas <see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>) y queda
+    /// debiéndose en esa cuota: el pago no lo cubre. Vacío sin cuota dejada o si el interés del período ya estaba causado. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresDeLaCuotaDejada { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): con <see cref="CuotaDejada"/>, la cuota se dejó con el <b>interés proporcional</b>
+    /// (<see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/>): <see cref="InteresDeLaCuotaDejada"/> es el de los días que le faltan sobre su propio
+    /// capital, no sobre todo el saldo. Falso en todo lo demás. (nuevo)
+    /// </summary>
+    public bool CuotaDejadaProporcional { get; init; }
+
     /// <summary>2026-11-16: el total de <see cref="InteresPorCausar"/>. (nuevo)</summary>
     public decimal InteresDeLaCuotaEnCurso => InteresPorCausar.Sum(l => l.Monto);
 
@@ -126,4 +164,31 @@ public sealed record AplicacionDeAnticipo(
 {
     /// <summary>La cuota quedó cubierta del todo.</summary>
     public bool Cubierta { get; init; }
+}
+
+/// <summary>
+/// 2026-11-27 (feature 028, R4, T059): lo que cuesta la cancelación de todo menos la cuota causada sin aplicarla
+/// (<see cref="AplicadorDePagos.ValorParaCancelarSalvoCuota"/>): la cuota que se deja (nula si la cancelación es total), lo que cuesta cancelar lo demás con
+/// el anticipo del mismo crédito ya descontado, lo que queda en la cuota para que su canal la pague al peso, el interés del período que se causa en ella y los
+/// avisos. (nuevo)
+/// </summary>
+public sealed record ValorSalvoCuota(
+    int? Cuota,
+    decimal ParaCancelar,
+    decimal QuedaEnLaCuota,
+    IReadOnlyList<LineaDeDistribucion> InteresFijado,
+    IReadOnlyList<string> Avisos)
+{
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): la cuota se deja con el interés proporcional (<see cref="DistribucionDePago.CuotaDejadaProporcional"/>). (nuevo)</summary>
+    public bool Proporcional { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): lo que la cuota debería al vencer si se dejara <b>tal como se envió</b> (D13-A, con el interés del período sobre
+    /// todo el saldo): lo que su canal tiene para pagar. Igual a <see cref="QuedaEnLaCuota"/> sin la regla proporcional; con ella, la diferencia es lo que
+    /// sobra si el canal la paga completa. (nuevo)
+    /// </summary>
+    public decimal QuedaTalComoSeEnvio { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): lo que sobra si el canal paga la cuota tal como se envió (cero sin la regla proporcional). (nuevo)</summary>
+    public decimal DeMasSiSePagaComoSeEnvio => Math.Max(0m, QuedaTalComoSeEnvio - QuedaEnLaCuota);
 }

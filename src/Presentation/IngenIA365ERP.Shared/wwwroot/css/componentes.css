@@ -1941,3 +1941,8 @@ input[type="checkbox"], input[type="radio"] {
 .kpi-value.diferencia-faltante { color: var(--peligro-texto); }
 .kpi-value.diferencia-sobrante { color: var(--alerta-texto); }
 .data-grid tr.fila-de-diferencia > td { background: var(--peligro-fondo); font-size: var(--texto-sm); }
+
+/* 2026-11-27 (feature 028, HU3): lo que recoge el desembolso frente a lo proyectado en la solicitud. Recoger cuesta más (el asociado recibe menos) en
+   ámbar; cuesta menos (recibe más) en verde. La fila del producto omitido o bloqueado se marca con fila-alerta. */
+.diferencia-en-contra { color: var(--alerta-texto); font-weight: var(--peso-fuerte); }
+.diferencia-a-favor { color: var(--exito-texto); font-weight: var(--peso-fuerte); }

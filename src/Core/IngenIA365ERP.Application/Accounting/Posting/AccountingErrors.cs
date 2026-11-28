@@ -415,6 +415,15 @@ public static class AccountingErrors
     // ---- Cartera por hechos: el consumidor, las correcciones, el cierre y los indicadores (feature 013, US7, T0646–T0652;
     //      contracts/contabilidad.md §7, §9, §12, §15 y §23) ----
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T046): el desembolso recoge una clase de producto que su comprobante todavía no sabe asentar (en E1 sólo se recogen
+    /// créditos; aportes, ahorro y facturas llegan con E2 y E4): defecto de quien lo emitió, no de la matriz.
+    /// </summary>
+    public static Error LendingPayoffKindNotSupported(string kind) =>
+        new ErrorConDatos("Accounting.LendingFact.PayoffKindNotSupported",
+            $"El desembolso recoge un producto de la clase «{kind}» que su comprobante todavía no sabe contabilizar: es un defecto de quien lo emitió, no de la matriz. Repórtelo a soporte.",
+            new { kind });
+
     /// <summary>El hecho no cuadra o trae importes con más de dos decimales (§7.1, paso 7): defecto de quien lo emitió, no de la matriz.</summary>
     public static Error LendingFactUnbalanced(decimal difference) =>
         new ErrorConDatos("Accounting.LendingFact.Unbalanced",

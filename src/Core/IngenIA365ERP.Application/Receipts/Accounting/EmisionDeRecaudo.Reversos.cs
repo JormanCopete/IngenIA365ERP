@@ -62,7 +62,11 @@ public sealed partial class EmisionDeRecaudo
                 }, cruce: anulacion.Number));
             lineas.Add(aSaldo
                 ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, p.Amount, dim, pagador, anulacion.Number)
-                : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
+                // 2026-11-27 (feature 028, E4, T087): la anulación de la recogida en el desembolso devuelve el puente con el mismo tercero y la misma factura.
+                : medio.MeansClass == PaymentMeansClass.InternalOffset
+                    ? Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, dim, await PersonaPublicaAsync(a.BeneficiaryPersonId, ct),
+                        a.CrossDocumentReference ?? a.ProductNumber ?? anulacion.Number)
+                    : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
             // 2026-11-26 (pedido del dueño): con la porción que llevó el descuento por pago anticipado se reversa también el descuento.
             if (await DescuentoDeLaPorcionAsync(a, p.Id, ct) is > 0m and var descuento)
                 lineas.AddRange(ReversoDelDescuento(a, descuento, recibo.CashBoxId is { } c ? await DimensionesDeCajaAsync(c, null, ct) : dim, anulacion.Number));
@@ -152,6 +156,34 @@ public sealed partial class EmisionDeRecaudo
             ],
         };
         return await EmitirAsync(contenido, movimiento.PublicId, ClaseSaldoAFavor, TipoSaldoAFavor, saldo.OriginDocumentNumber, fecha, saldo.BranchId, pagador, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T069; R7, FR-022): lo que la pagaduría giró por un crédito ya recogido pasa al asociado
+    /// (<c>Recogida.GiroPosteriorDeCreditoRecogido = AFavorDelAsociado</c>). Es <c>SaldoAFavorDePagadorResuelto</c> del saldo de la pagaduría con la forma
+    /// <c>TransferredToAssociate</c>: débito <c>SaldoDePagadurias</c> con la pagaduría como tercero y crédito <c>SaldoAFavorDePagadores</c> con el asociado (los
+    /// dos roles ya son posibles del hecho; no hay hecho nuevo en la matriz). Sin guardar. (nuevo)
+    /// </summary>
+    public async Task<IntegrationMessage> SaldoDePagaduriaAlAsociadoAsync(PayerCreditBalance deLaPagaduria, PayerCreditBalanceMovement movimiento,
+        PayerCreditBalance delAsociado, DateOnly fecha, CancellationToken ct)
+    {
+        var dim = await DimensionesDeOficinaAsync(deLaPagaduria.BranchId, ct);
+        var personas = new[] { deLaPagaduria.PersonId, delAsociado.PersonId };
+        var publicos = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
+        var pagaduria = publicos[deLaPagaduria.PersonId];
+        var contenido = new SaldoAFavorDePagadorResueltoV1
+        {
+            CreditBalancePublicId = deLaPagaduria.PublicId, PayerPersonPublicId = pagaduria, Form = movimiento.Kind.ToString(), Amount = movimiento.Amount,
+            DocumentPublicId = delAsociado.PublicId, DocumentNumber = movimiento.DocumentNumber, ResolvedOn = fecha, ResolvedBy = await UsuarioAsync(ct),
+            Lines =
+            [
+                Linea(RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.Debito, movimiento.Amount, dim, pagaduria, deLaPagaduria.OriginDocumentNumber),
+                Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, movimiento.Amount, dim, publicos[delAsociado.PersonId],
+                    delAsociado.OriginDocumentNumber),
+            ],
+        };
+        return await EmitirAsync(contenido, movimiento.PublicId, ClaseSaldoAFavor, TipoSaldoAFavor, deLaPagaduria.OriginDocumentNumber, fecha, deLaPagaduria.BranchId,
+            pagaduria, ct);
     }
 
     /// <summary><c>SaldoAFavorDeCarteraDevuelto</c>: Cartera resolvió el saldo por el recaudador y Recaudo lo devuelve con una orden de pago.</summary>

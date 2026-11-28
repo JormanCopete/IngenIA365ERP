@@ -32,6 +32,8 @@ public class LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras
         // Fase 17 (T0277, T0278a): las partidas desde la conciliación (Recaudo) y la reapertura del período (Tesorería para Contabilidad).
         "Core/IngenIA365ERP.Application/Receipts/Integration/RecaudoParaConciliacion.cs",
         "Core/IngenIA365ERP.Application/Treasury/Reconciliation/ConciliacionBancariaParaContabilidad.cs",
+        // 2026-11-27 (feature 028, E4, T085): la recogida de facturas en el desembolso (Recaudo para Cartera).
+        "Core/IngenIA365ERP.Application/Receipts/Integration/RecogidaEnRecaudo.cs",
     ];
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);

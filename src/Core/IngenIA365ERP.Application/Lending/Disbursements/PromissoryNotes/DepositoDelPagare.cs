@@ -143,6 +143,8 @@ public sealed class DepositoDelPagare(
             .ToDictionaryAsync(a => a.Id, a => (a.PublicId, a.Number), ct);
         var creditos = filas.Where(f => f.LoanId is not null).Select(f => f.LoanId!.Value).Distinct().ToList();
         var deCredito = await db.Loans.AsNoTracking().Where(l => creditos.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => (l.PublicId, (string?)l.Number), ct);
+        // 2026-11-27 (feature 028, T039; FR-027d): el pagaré de un crédito recogido por un desembolso sin girar se anula cuando el giro quede pagado.
+        var porGirar = await GarantiasDeCartera.PorLiberarDeAsync(db, creditos, ct);
         var ids = filas.Select(f => f.PublicId).ToList();
         var documentos = (await db.Attachments.AsNoTracking()
                 .Where(a => a.OwnerEntityType == AdjuntosDeModulo.DocumentoDeGarantia && ids.Contains(a.OwnerEntityPublicId))
@@ -170,6 +172,9 @@ public sealed class DepositoDelPagare(
                 LastSyncedAt = f.LastSyncedAt,
                 SignatureRejected = firmaRechazada,
                 Documents = documentos[f.PublicId].ToList(),
+                ReleaseNotice = f.Status != PromissoryNoteStatus.Voided && f.LoanId is { } recogido && porGirar.TryGetValue(recogido, out var nuevo)
+                    ? ErroresDeGarantias.TextoPorLiberarAlGirar(nuevo.Numero)
+                    : null,
             };
         }).ToList();
     }

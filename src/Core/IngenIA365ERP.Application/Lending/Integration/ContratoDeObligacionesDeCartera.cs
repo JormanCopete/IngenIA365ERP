@@ -78,7 +78,8 @@ public sealed class ContratoDeObligacionesDeCartera(
     IValidator<SolicitudDeReverso> validadorDeReverso,
     IValidator<SolicitudDeResolucion> validadorDeResolucion,
     IValidator<SolicitudDeSimulacion> validadorDeSimulacion,
-    IDateTimeService reloj) : IContratoDeObligaciones
+    IDateTimeService reloj,
+    Payroll.CuotaEnviadaDelCredito cuotaEnviada) : IContratoDeObligaciones
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -118,14 +119,22 @@ public sealed class ContratoDeObligacionesDeCartera(
         var enInsolvencia = await db.InsolvencyProceedings.AsNoTracking()
             .AnyAsync(i => i.PersonId == persona && i.Status == InsolvencyProceedingStatus.Negotiating && !i.IsDeleted, ct);
 
-        var obligaciones = new List<ObligacionListadaDto>();
+        // 2026-11-27 (feature 028, T065): primero se reconstruye cada crédito; la cuota enviada se pregunta en lote para todos (no hace lento el listado).
+        var reconstruidos = new List<(Loan Credito, RolEnLaObligacion Rol, CreditoCargado Cargado, EstadoDelCredito Estado)>();
         foreach (var (credito, rol) in creditos.OrderBy(c => c.Credito.Number, StringComparer.Ordinal))
         {
             if (!cargados.TryGetValue(credito.Id, out var cargado) || !cargado.Listo) continue;
             var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fecha);
             if (estado.Plan is null) continue;
             if (credito.Status == LoanStatus.PaidOff && estado.Anticipo <= 0m && estado.SaldoAFavor <= 0m) continue;
-            var admitidas = Admitidas(credito, cargado, estado);
+            reconstruidos.Add((credito, rol, cargado, estado));
+        }
+        var enviadas = await cuotaEnviada.ConsultarAsync(reconstruidos.Where(r => r.Credito.Status == LoanStatus.Active)
+            .Select(r => Payroll.CuotaEnviadaDelCredito.CuotaDelEstado(r.Credito, r.Estado)).ToList(), fecha, ct);
+
+        var obligaciones = new List<ObligacionListadaDto>();
+        foreach (var (credito, rol, cargado, estado) in reconstruidos)
+        {
             var bloqueos = Bloqueos(credito, enInsolvencia);
             var linea = lineas.GetValueOrDefault(credito.CreditLineId);
             // 2026-11-16 (pedido del dueño): para cancelar, lo que cobra un FullPayoff —con la cuota completa si la empresa la cobra y el crédito está fuera
@@ -134,6 +143,17 @@ public sealed class ContratoDeObligacionesDeCartera(
             // 2026-11-24 (feature 025, fase 5, HU5): por período calendario, lo exigible del período incluye lo causado de la cuota del tramo en curso y la
             // cuota del ciclo es la que vence en ese tramo (pagada, la siguiente es anticipo).
             var calendario = await aplicacion.PeriodoCalendarioAsync(credito, estado, fecha, ct);
+            var admitidas = Admitidas(credito, cargado, estado, solicitud.Collector, calendario);
+            // 2026-11-27 (feature 028, E2, T071; FR-023, D4): con la cuota enviada, lo que dice Pagos.CuotaEnviadaAlCancelar de su línea y, si esa cuota es
+            // la causada que la modalidad deja y sigue en su canal sin respuesta, lo que cuesta cancelar todo menos ella y lo que ella queda debiendo.
+            var enviada = enviadas.GetValueOrDefault(credito.Id);
+            var alCancelar = enviada is null ? null : await aplicacion.CuotaEnviadaAlCancelarAsync(credito, fecha, ct);
+            var salvo = enviada is { SePuedeDejar: true } && admitidas.Contains(ModalidadDePago.PayoffExceptCurrentInstallment)
+                ? await aplicacion.ValorParaCancelarSalvoCuotaAsync(credito, estado, ct)
+                : null;
+            if (salvo is not null && enviada!.Cuota is { } cuotaEnviada && cuotaEnviada != salvo.Cuota) salvo = null;
+            // 2026-11-27 (feature 028, D13 ajustada): con qué regla la dejaría el contrato (la misma con que la aplica la modalidad).
+            var regla = salvo is null ? null : await aplicacion.CuotaDejadaAsync(credito, estado, ct);
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
                 ComprobantesDePago.CuotaDelCiclo(estado, calendario),
@@ -144,6 +164,14 @@ public sealed class ContratoDeObligacionesDeCartera(
                 RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado, calendario),
                 // 2026-11-26 (pedido del dueño): la mora para la caja, sin el interés ya causado del período en curso.
                 DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
+                // 2026-11-27 (feature 028, T065): la cuota del período que ya va en la libranza o en la nómina propia.
+                SentInstallment = Enviada(enviada),
+                SentInstallmentAtPayoff = alCancelar,
+                PayoffExceptSentInstallmentAmount = salvo?.ParaCancelar,
+                SentInstallmentLeftAmount = salvo?.QuedaEnLaCuota,
+                SentInstallmentLeftRule = regla?.Regla,
+                SentInstallmentLeftRuleReason = regla?.Motivo,
+                SentInstallmentAsSentAmount = salvo?.QuedaTalComoSeEnvio,
             });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
@@ -161,13 +189,35 @@ public sealed class ContratoDeObligacionesDeCartera(
     /// dominio ya admite (<c>AplicadorDePagos.Problema</c> sólo la bloquea con exigibles anteriores)—.
     /// </para>
     /// </summary>
-    private static List<ModalidadDePago> Admitidas(Loan credito, CreditoCargado cargado, EstadoDelCredito estado) =>
+    /// <remarks>
+    /// 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada no se anunciaba todavía. 2026-11-27 (feature 028, T065): se anuncia sólo al
+    /// recaudador que la admite (la recogida y Recaudo, <see cref="ClasesDeMedioDeRecaudo.AdmiteModalidad"/>) y sólo si el crédito la admite: vigente, al día y
+    /// con una cuota causada que dejar (<see cref="Domain.Lending.Payments.AplicadorDePagos.CuotaCausada"/>: no en vivienda, ni sin cuota en curso).
+    /// </remarks>
+    private static List<ModalidadDePago> Admitidas(Loan credito, CreditoCargado cargado, EstadoDelCredito estado, Recaudador recaudador, bool calendario) =>
         Enum.GetValues<ModalidadDePago>()
+            .Where(m => m != ModalidadDePago.PayoffExceptCurrentInstallment || AdmiteDejarLaCuota(credito, estado, recaudador, calendario))
             .Where(m => m != ModalidadDePago.SpecificInstallment || cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden
                 || ComprobantesDePago.Exigible(estado) <= 0m)
             .Where(m => m != ModalidadDePago.Advance || credito.Status != LoanStatus.WrittenOff)
             .Where(_ => credito.Status != LoanStatus.PaidOff)
             .ToList();
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T065; FR-019, FR-023): ¿se le ofrece a <paramref name="recaudador"/> cancelar todo menos la cuota causada? Si lo admite el
+    /// recaudador y el crédito: vigente, al día y con cuota causada a la fecha del estado. (nuevo)
+    /// </summary>
+    public static bool AdmiteDejarLaCuota(Loan credito, EstadoDelCredito estado, Recaudador recaudador, bool calendario) =>
+        ClasesDeMedioDeRecaudo.AdmiteModalidad(recaudador.Class, ModalidadDePago.PayoffExceptCurrentInstallment)
+        && credito.Status == LoanStatus.Active
+        && estado.AlturaDeMora.Dias == 0
+        && Domain.Lending.Payments.AplicadorDePagos.CuotaCausada(estado, estado.Fecha, calendario) is not null;
+
+    /// <summary>2026-11-27 (feature 028, T065): la cuota enviada como la lleva el contrato; nula sin nada enviado. (nuevo)</summary>
+    public static CuotaEnviadaDto? Enviada(Payroll.CuotaEnviada? e) => e is null || e.Estado == SentInstallmentState.None
+        ? null
+        : new CuotaEnviadaDto((EstadoDeCuotaEnviada)(int)e.Estado, e.Cuota, e.Vencimiento, e.Pagaduria, e.Convenio, e.Archivo, e.Periodo, e.Corriente, e.Vencido,
+            e.Total, e.Corrida, Payroll.TextosDeCuotaEnviada.Frase(e));
 
     /// <summary>Lo que impide recibir pagos de la obligación en un recaudador: castigo e insolvencia que negocia (§3.5).</summary>
     private static List<string> Bloqueos(Loan credito, bool enInsolvencia)
@@ -224,11 +274,17 @@ public sealed class ContratoDeObligacionesDeCartera(
         if (reconocido > 0m && delPeriodo is not null)
             avisos.Add($"La cuota {delPeriodo.Numero} está reconocida desde el inicio de su {(calendario ? "período" : "ciclo")}: se paga completa ({reconocido:N2} "
                 + $"todavía por causar). Pagada antes del {delPeriodo.Vencimiento:dd/MM/yyyy}, cubre la cuota el día que vence; la mora corre sólo desde el vencimiento.");
+        // 2026-11-27 (feature 028, T065): la cuota del período que ya va en la libranza o en la nómina propia.
+        var enviada = credito.Status == LoanStatus.Active
+            ? await cuotaEnviada.DeAsync(Payroll.CuotaEnviadaDelCredito.CuotaDelEstado(credito, estado), fecha, ct)
+            : null;
+        if (enviada is not null) avisos.Add(Payroll.TextosDeCuotaEnviada.Frase(enviada));
         var detalle = new DetalleDeObligacionDto(credito.PublicId, credito.Number, linea ?? string.Empty, EstadoEnEspanol(credito.Status), estado.AlturaDeMora.Dias,
             ComprobantesDePago.Exigible(estado, periodoCalendario: calendario), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
             estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
             proxima?.Vencimiento,
-            ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado, calendario), Admitidas(credito, cargado, estado),
+            ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado, calendario),
+            Admitidas(credito, cargado, estado, solicitud.Collector, calendario),
             cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos)
         {
             RecognizedPending = reconocido,
@@ -236,6 +292,7 @@ public sealed class ContratoDeObligacionesDeCartera(
             DueWithoutPeriodInProgress = ComprobantesDePago.Exigible(estado),
             // 2026-11-26 (pedido del dueño): el descuento de intereses por pago anticipado de la línea, que aplica la caja.
             AdvanceDiscountFraction = await aplicacion.DescuentoPorPagoAnticipadoAsync(credito, estado, fecha, ct),
+            SentInstallment = Enviada(enviada),
         };
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractDetailed, "Loan", credito.PublicId, solicitud.Collector,
             new { date = fecha, recordedAsOf = reloj.UtcNow, sha256 = estado.Huella }, ct);
@@ -283,10 +340,14 @@ public sealed class ContratoDeObligacionesDeCartera(
         {
             var credito = await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == solicitud.ObligationPublicId && !l.IsDeleted, ct);
             if (credito is null) return Rechazo<SimulacionDePagoDto>(ErroresDePagos.ObligacionInexistente());
+            // 2026-11-27 (feature 028, E2, T069; R7): si lo recogió el desembolso de otro, el rechazo lleva el sucesor y la regla de lo que gire su pagaduría.
             if (credito.Status is LoanStatus.PendingDisbursement or LoanStatus.PaidOff or LoanStatus.Voided or LoanStatus.Novated)
-                return Rechazo<SimulacionDePagoDto>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+                return Rechazo<SimulacionDePagoDto>(await aplicacion.NoPagableAsync(credito, ct));
             if (await fechas.ValidarAsync(solicitud.Collector.Class, solicitud.ValueDate, solicitud.Amount, ct) is { } fecha)
                 return Rechazo<SimulacionDePagoDto>(fecha);
+            // 2026-11-27 (feature 028, T058): la cancelación salvo la cuota causada, sólo la recogida y Recaudo (también en los pagos anteriores del recibo).
+            foreach (var m in (solicitud.Previous ?? []).Select(x => x.Modality).Prepend(solicitud.Modality))
+                if (ClasesDeMedioDeRecaudo.ValidarModalidad(solicitud.Collector.Class, m) is { } noAdmitida) return Rechazo<SimulacionDePagoDto>(noAdmitida);
             // 2026-11-26 (pedido del dueño): sobre lo que dejan los pagos anteriores del mismo recibo a esta obligación, en su orden.
             var previos = (solicitud.Previous ?? []).Select(x => new PagoPrevioDeDistribucion(ComprobantesDePago.Modalidad(x.Modality), x.Amount,
                 ComprobantesDePago.Eleccion(x.Choice), x.InstallmentNumber)).ToList();
@@ -557,39 +618,15 @@ public sealed class ContratoDeObligacionesDeCartera(
         CancellationToken ct)
     {
         if (pagos.Count == 0) return new Dictionary<Guid, DecisionDeValidacionPrevia>();
-        var publicos = pagos.Select(p => p.ObligationPublicId).Distinct().ToList();
-        var combinaciones = await (from l in db.Loans.AsNoTracking()
-                                   join c in db.CreditLines.AsNoTracking().IgnoreQueryFilters() on l.CreditLineId equals c.Id
-                                   join t in db.LoanTermsVersions.AsNoTracking() on l.Id equals t.LoanId
-                                   join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on l.BranchId equals b.Id
-                                   where publicos.Contains(l.PublicId) && t.VersionNumber == 1
-                                   select new { l.PublicId, c.Code, t.ModalityCode, t.SubsegmentCode, Branch = b.PublicId }).Distinct().ToListAsync(ct);
+        // 2026-11-27 (feature 028, T037): las combinaciones y su PagoAplicado salen de PagosParaLaValidacionPrevia, que comparte la vista previa del desembolso.
+        var combinaciones = await PagosParaLaValidacionPrevia.CombinacionesAsync(db, pagos.Select(p => p.ObligationPublicId).ToList(), ct);
         var decisiones = new Dictionary<Guid, DecisionDeValidacionPrevia>();
-        foreach (var grupo in combinaciones.GroupBy(c => (c.Code, c.ModalityCode, c.SubsegmentCode, c.Branch)))
+        foreach (var (combinacion, obligaciones) in combinaciones)
         {
-            var decision = await validacionPrevia.DecidirAsync([Hecho(recaudador, grupo.Key)], OrigenDeValidacionPrevia.Contrato,
+            var decision = await validacionPrevia.DecidirAsync([PagosParaLaValidacionPrevia.Hecho(recaudador, combinacion)], OrigenDeValidacionPrevia.Contrato,
                 $"el lote de {recaudador.Class}", ct);
-            foreach (var credito in grupo) decisiones[credito.PublicId] = decision;
+            foreach (var credito in obligaciones) decisiones[credito] = decision;
         }
         return decisiones;
     }
-
-    /// <summary>El <c>PagoAplicado</c> de una combinación (sin importes reales: la validación sólo mira hecho, sucursal y dimensiones).</summary>
-    private static MensajeContableDto Hecho(Recaudador recaudador, (string Code, string ModalityCode, string? SubsegmentCode, Guid Branch) c) =>
-        new(
-            new IntegrationEnvelopeV1
-            {
-                MessageId = Guid.Empty, Type = PagoAplicadoV1.Type, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
-                OriginEventKey = ClavesDeEvento.Confirmacion, BranchPublicId = c.Branch,
-            },
-            new PagoAplicadoV1
-            {
-                Dimensions = new LoanFactDimensionsV1
-                {
-                    CreditLineCode = c.Code, ModalityCode = c.ModalityCode, SubsegmentCode = c.SubsegmentCode,
-                    RiskCategory = CategoriaContableDeCartera.CategoriaDeCreditoNuevo, RiskSubcategory = "None", CollectorClass = recaudador.Class.ToString(),
-                    BranchPublicId = c.Branch, ImpairmentModel = "ArrearsAnnex1", RiskSegment = c.ModalityCode, ValueUnit = "Pesos",
-                },
-                Amounts = [new ConceptAmountV1 { Concept = nameof(LoanConcept.Principal), Amount = 1m }],
-            });
 }

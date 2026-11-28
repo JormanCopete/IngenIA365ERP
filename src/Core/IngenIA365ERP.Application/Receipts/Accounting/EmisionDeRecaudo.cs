@@ -49,6 +49,8 @@ public sealed partial class EmisionDeRecaudo(
         PaymentMeansClass.Cash => RolesDeRecaudo.Caja,
         PaymentMeansClass.Transfer or PaymentMeansClass.BankDeposit => RolesDeRecaudo.BancoRecaudo,
         PaymentMeansClass.Check => RolesDeRecaudo.ChequesEnCanje,
+        // 2026-11-27 (feature 028, E4, T086): el cruce interno del desembolso que recoge facturas no mueve dinero: debita el puente de la recogida.
+        PaymentMeansClass.InternalOffset => RolesDeRecaudo.RecogidaEnElDesembolso,
         _ => RolesDeRecaudo.MedioPorCobrar,
     };
 

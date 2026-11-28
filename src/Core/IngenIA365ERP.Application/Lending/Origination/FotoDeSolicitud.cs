@@ -11,6 +11,12 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 /// <summary>Un codeudor o avalista en la <see cref="FotoDeSolicitud"/>.</summary>
 public sealed record ParteEnLaFoto(int PersonId, CreditPartyRole Role, decimal? Ingreso, decimal? Gasto, decimal? CuotasExternas);
 
+/// <summary>
+/// 2026-11-27 (feature 028, T026): un producto que la solicitud recoge, como lo ve la foto: su número visible, el modo, el valor pedido (parcial o abono)
+/// y el tratamiento de la cuota causada. Lo proyectado no está: cambia con los días y no es algo que se corrija. (nuevo)
+/// </summary>
+public sealed record RecogidaEnLaFoto(string Producto, PayoffMode Modo, decimal? Valor, InstallmentTreatment? Cuota = null);
+
 /// <summary>Un dato que cambió entre dos fotos, con su grupo y sus valores crudos (los Id se resuelven al mostrarlos).</summary>
 public sealed record CampoDistinto(GrupoEditableAlDevolver Grupo, string Campo, string? Antes, string? Despues);
 
@@ -64,8 +70,12 @@ public sealed record FotoDeSolicitud(
     public static DateOnly? PrimerPagoSinFecha(DateOnly desembolso, RepaymentPeriodicity periodicidad, int? diaDePago) =>
         periodicidad == RepaymentPeriodicity.SinglePayment ? null : FechasDeVencimiento.Generar(desembolso, periodicidad, 1, diaDePago)[0];
 
-    /// <summary>La foto de la solicitud y sus partes vivas (el solicitante da la capacidad; los demás, los codeudores en su orden).</summary>
-    public static FotoDeSolicitud De(CreditApplication s, IEnumerable<CreditApplicationParty> partes)
+    /// <summary>
+    /// La foto de la solicitud y sus partes vivas (el solicitante da la capacidad; los demás, los codeudores en su orden). 2026-11-27 (feature 028,
+    /// T026): <paramref name="recogidas"/> es el texto estable de lo que recoge (<see cref="TextoDeRecogidas"/>), que sale de sus filas de
+    /// <c>LND_CreditApplicationPayoffs</c> (<see cref="TomarAsync"/>) o de lo que se va a guardar; ya no del JSON <c>PayoffRequest</c>.
+    /// </summary>
+    public static FotoDeSolicitud De(CreditApplication s, IEnumerable<CreditApplicationParty> partes, string? recogidas)
     {
         var vivas = partes.Where(p => !p.IsDeleted).ToList();
         var solicitante = vivas.FirstOrDefault(p => p.Role == CreditPartyRole.Applicant);
@@ -76,22 +86,84 @@ public sealed record FotoDeSolicitud(
         return new FotoDeSolicitud(s.RequestedAmount, s.Installments, s.TermMonths, s.Periodicity, s.AmortizationSystem, s.FirstDueDate,
             s.ExpectedDisbursementDate, s.GraceKind, s.GraceInstallments, s.ExtraordinaryInstallments, s.IsSocialHousing, s.CreditLineId, s.BranchId,
             s.Purpose, s.RepaymentChannel, s.PayrollAgreementId, s.PayrollEmployeeIdentifier, s.SelectedInsurances, solicitante?.MonthlyIncome,
-            solicitante?.MonthlyExpenses, solicitante?.ExternalInstallments, codeudores, s.PayoffRequest, s.PolicyExceptionRequested,
+            solicitante?.MonthlyExpenses, solicitante?.ExternalInstallments, codeudores, recogidas, s.PolicyExceptionRequested,
             s.PolicyExceptionReason, s.PrepaymentChoice, s.AssetValue, s.SupplierPersonId, s.DiscountOptionCode);
     }
 
-    /// <summary>La foto de la solicitud con sus partes leídas de la base.</summary>
+    /// <summary>La foto de la solicitud con sus partes y sus recogidas leídas de la base.</summary>
     public static async Task<FotoDeSolicitud> TomarAsync(IApplicationDbContext db, CreditApplication s, CancellationToken ct)
     {
         var partes = await db.CreditApplicationParties.AsNoTracking().Where(p => p.ApplicationId == s.Id && !p.IsDeleted).ToListAsync(ct);
-        return De(s, partes);
+        return De(s, partes, await RecogidasAsync(db, s.Id, ct));
+    }
+
+    /// <summary>El texto estable de lo que recoge la solicitud, desde sus filas vivas en su orden (nulo si no recoge nada).</summary>
+    public static async Task<string?> RecogidasAsync(IApplicationDbContext db, int solicitudId, CancellationToken ct)
+    {
+        var filas = await db.CreditApplicationPayoffs.AsNoTracking().Where(f => f.CreditApplicationId == solicitudId && !f.IsDeleted)
+            .OrderBy(f => f.Order).ThenBy(f => f.Id)
+            .Select(f => new { f.ProductNumber, f.Mode, f.RequestedAmount, f.InstallmentTreatment }).ToListAsync(ct);
+        return TextoDeRecogidas(filas.Select(f => new RecogidaEnLaFoto(f.ProductNumber, f.Mode, f.RequestedAmount, f.InstallmentTreatment)));
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T026): el texto estable del grupo «Recogidas»: por producto, en su orden, el número, el modo y —en un parcial o un
+    /// abono— el valor pedido; «sin la cuota causada» si la deja (E2). Es lo que se compara al corregir y lo que lee quien decide en «Qué cambió»
+    /// («CR-1 total; CR-2 parcial 400000»). Sin recogidas, nulo: una solicitud que nunca recogió se ve igual que antes de la feature.
+    /// </summary>
+    public static string? TextoDeRecogidas(IEnumerable<RecogidaEnLaFoto> recogidas)
+    {
+        var partes = recogidas.Select(r =>
+        {
+            var modo = r.Modo switch
+            {
+                PayoffMode.Total => "total",
+                PayoffMode.Partial => "parcial",
+                PayoffMode.Installments => "cuotas",
+                PayoffMode.Deposit => "abono",
+                _ => r.Modo.ToString(),
+            };
+            var valor = r.Modo is PayoffMode.Partial or PayoffMode.Deposit && r.Valor is { } v
+                ? " " + v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty;
+            var cuota = r.Cuota == InstallmentTreatment.Exclude ? " sin la cuota causada" : string.Empty;
+            return $"{r.Producto} {modo}{valor}{cuota}";
+        }).ToList();
+        return partes.Count == 0 ? null : string.Join("; ", partes);
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T026): una foto guardada antes de la feature trae en <see cref="Recogidas"/> el JSON de <c>PayoffRequest</c>
+    /// (<c>[{"loanPublicId":…,"mode":"Full","amount":null}]</c>). Para compararla con la de ahora sin falsos cambios, lo pasa al texto estable con los
+    /// números de los créditos, con las reglas de la migración que copió ese JSON a filas: un crédito repetido cuenta una vez, uno que no existe no cuenta,
+    /// <c>Partial</c> es parcial con su valor y lo demás es total. Una foto que ya trae el texto estable (o nada) queda como está.
+    /// </summary>
+    public static async Task<FotoDeSolicitud> NormalizarAsync(IApplicationDbContext db, FotoDeSolicitud foto, CancellationToken ct)
+    {
+        if (foto.Recogidas is not { } texto || !texto.TrimStart().StartsWith('[')) return foto;
+        List<OwnLoanPayoffInput>? viejas;
+        try { viejas = JsonSerializer.Deserialize<List<OwnLoanPayoffInput>>(texto, Json); }
+        catch (JsonException) { return foto; }
+        var lista = (viejas ?? []).Where(v => v is not null).ToList();
+        var ids = lista.Select(v => v.LoanPublicId).Distinct().ToList();
+        var numeros = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.PublicId)).ToDictionaryAsync(l => l.PublicId, l => l.Number, ct);
+        var vistas = new HashSet<Guid>();
+        var recogidas = new List<RecogidaEnLaFoto>();
+        foreach (var v in lista)
+        {
+            if (!numeros.TryGetValue(v.LoanPublicId, out var numero) || !vistas.Add(v.LoanPublicId)) continue;
+            var parcial = string.Equals(v.Mode?.Trim(), "Partial", StringComparison.OrdinalIgnoreCase);
+            recogidas.Add(new RecogidaEnLaFoto(numero, parcial ? PayoffMode.Partial : PayoffMode.Total, parcial ? v.Amount : null));
+        }
+        return foto with { Recogidas = TextoDeRecogidas(recogidas) };
     }
 
     /// <summary>La foto como JSON para <see cref="CreditApplication.ReturnSnapshot"/>.</summary>
     public static async Task<string> SerializarAsync(IApplicationDbContext db, CreditApplication s, CancellationToken ct) =>
         JsonSerializer.Serialize(await TomarAsync(db, s, ct), Json);
 
-    /// <summary>Lee una foto guardada; ilegible, nula (no se muestran cambios).</summary>
+    /// <summary>Lee una foto guardada; ilegible, nula (no se muestran cambios). Las fotos viejas con el JSON de las recogidas se normalizan al compararlas
+    /// (<see cref="NormalizarAsync"/>).</summary>
     public static FotoDeSolicitud? Leer(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;

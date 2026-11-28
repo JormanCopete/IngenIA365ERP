@@ -263,15 +263,36 @@ internal sealed class OriginacionDePrueba : IDisposable
     public EvaluacionDeSolicitud Evaluacion() => new(Db, Simulador(), Validaciones(), Enrutamiento(), G.Reloj);
     public ArmadoDeSolicitud Armado() => new(Db, Simulador(), G.Perfil, G.Alcance, G.Auditoria);
 
-    public CreateCreditApplicationCommandHandler Crear() => new(Db, Armado(), Autorizaciones, G.Actor, G.Reloj);
+    /// <summary>2026-11-27 (feature 028, T023): el único sitio que liquida una recogida, con el motor real (lo usa la recogida de la solicitud).</summary>
+    public Application.Lending.Payoffs.LiquidacionDeRecogida LiquidacionDeRecogida() =>
+        new(Db, new Application.Lending.Engine.CargadorDeReconstruccion(Db,
+                new Application.Lending.Engine.SeriesRegulatoriasDeCartera(L.Valores(), L.Normativa(), new Application.Common.Calendar.CalendarioDeDiasHabiles(Db),
+                    Parametros()), Parametros()),
+            new InteresesAlCancelar(Parametros(), L.Valores()), G.Reloj, Parametros(), CuotaEnviada());
+
+    /// <summary>2026-11-27 (feature 028, T064, T064a): la cuota enviada, con los descuentos de la nómina propia reales sobre la misma base.</summary>
+    public Application.Lending.Payroll.CuotaEnviadaDelCredito CuotaEnviada() =>
+        new(Db, new Application.Payroll.Integration.DescuentosDeNominaParaCartera(Db));
+
+    /// <summary>2026-11-27 (feature 028, T023): la recogida que pide la solicitud (validar, proyectar y guardar sus filas).</summary>
+    public Application.Lending.Payoffs.RecogidasDeLaSolicitud Recogidas() => new(Db, LiquidacionDeRecogida(), Parametros(), G.Reloj,
+        facturas: Recaudo is null ? null : new Application.Lending.Payoffs.RecogidaDeFacturas(Db, Recaudo));
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E4, T090): el puerto de Recaudo de la recogida de facturas (un doble); nulo, la solicitud no recoge facturas (como las pruebas de
+    /// antes).
+    /// </summary>
+    public Application.Common.Integration.Receipts.IRecogidaEnRecaudo? Recaudo { get; set; }
+
+    public CreateCreditApplicationCommandHandler Crear() => new(Db, Armado(), Recogidas(), Autorizaciones, G.Actor, G.Reloj);
     public GruposEditablesDeSolicitud Editables() => new(Parametros());
-    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj, Editables(),
+    public UpdateCreditApplicationCommandHandler Actualizar() => new(Db, Armado(), Recogidas(), Autorizaciones, G.Alcance, G.Auditoria, G.Reloj, Editables(),
         Evaluacion(), Enrutamiento(), G.Intervenciones(), Cerrojo);
     public AttachCreditApplicationDocumentCommandHandler Adjuntar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public RemoveCreditApplicationDocumentCommandHandler Quitar() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public GetCreditApplicationQueryHandler Leer() => new(Db, G.Alcance, G.Auditoria, G.Reloj, Editables());
     public SubmitCreditApplicationCommandHandler Radicar() =>
-        new(Db, Evaluacion(), Enrutamiento(), G.Intervenciones(), new NumeradorDeCartera(Db, Cerrojo), Cerrojo, Autorizaciones, G.Alcance, G.Auditoria,
+        new(Db, Evaluacion(), Recogidas(), Enrutamiento(), G.Intervenciones(), new NumeradorDeCartera(Db, Cerrojo), Cerrojo, Autorizaciones, G.Alcance, G.Auditoria,
             G.Reloj);
     public RecordCreditApplicationAnalysisCommandHandler Analizar() =>
         new(Db, Evaluacion(), Enrutamiento(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Reloj);

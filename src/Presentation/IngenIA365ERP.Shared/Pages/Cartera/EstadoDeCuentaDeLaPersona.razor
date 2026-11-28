@@ -217,7 +217,7 @@
                                         <tbody>
                                             @foreach (var m in MovimientosDeCredito)
                                             {
-                                                <tr><td>@TextosDeCreditos.Fecha(m.Fila.ValueDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(m.Fila.Kind)@(m.Fila.ReversesTransaction is not null ? " (reverso)" : "")</td>
+                                                <tr><td>@TextosDeCreditos.Fecha(m.Fila.ValueDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(m.Fila.Kind)@(m.Fila.ReversesTransaction is not null ? " (reverso)" : "")@(m.Fila.Description is { } d ? $" · {d}" : "")</td>
                                                     <td>@TextosDeCreditos.Concepto(m.Fila.Concept)</td><td class="numero">@(m.Fila.Installment?.ToString() ?? "—")</td><td>@(m.Fila.ReceiptNumber ?? "")</td>
                                                     <td class="numero">@(m.Debito > 0 ? V(m.Debito) : "")</td><td class="numero">@(m.Credito > 0 ? V(m.Credito) : "")</td>
                                                     <td class="numero">@V(m.Saldo)</td></tr>

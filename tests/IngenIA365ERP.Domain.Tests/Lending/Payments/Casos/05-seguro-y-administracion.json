@@ -1,0 +1,72 @@
+// Feature 028 (R4, T061; D13-A): «todo menos la cuota causada» con SEGURO y ADMINISTRACIÓN. El crédito del caso 01 (1.200.000, 3 cuotas de abono
+// constante, 1,5 % MV; vencimientos 15-04, 15-05 y 15-06) con un seguro de vida sobre el monto inicial de 0,1 % mensual (1.200 por cuota, se causa al
+// vencer) y una administración sobre el monto inicial de 0,05 % mensual (600 por cuota, se causa a prorrata de los días del período).
+// P1 (15-04) paga la cuota 1: 400.000 + 18.000 + 1.200 + 600 = 419.800.
+// R (30-04) deja la cuota 2 tal como se envió: no paga su administración ya causada (600 × 15 / 30 = 300) ni su interés; le causa los 6.000 que le
+// faltan del período; el seguro (1.200) y la administración que falta (300) se siguen causando como dice el plan hasta su vencimiento. Lo demás: el
+// capital de la cuota 3, 400.000; su seguro y su administración nunca se causan: la cuota sale del plan. La cuota 2 queda debiendo, al vencer,
+// 400.000 + 12.000 + 1.200 + 600 = 413.800, que su canal paga al peso. Al 14-05 la administración causada es 600 × 29 / 30 = 580. Después del 15-05 no
+// se causa nada más (sin el corte, la cuota 3 causaría su administración y su seguro). Calculado a mano. Pendiente de validar por la contadora.
+{
+  "nombre": "Cancelación salvo la cuota causada: seguro y administración",
+  "condiciones": {
+    "sistema": "ConstantPrincipal", "convencion": "Thirty360", "equivalencia": "Linear",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 3, "periodicidad": "Monthly", "tasaEA": 0.195618, "tasaMV": 0.015,
+    "fechaDesembolso": "2027-03-15", "diaDePago": 15, "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5,
+    "seguros": [
+      { "codigo": "VIDA", "base": "InitialAmount", "tarifa": 0.001, "periodicidad": "Monthly", "computa": true },
+      { "codigo": "ADMON", "base": "InitialAmount", "tarifa": 0.0005, "periodicidad": "Monthly", "computa": false, "clase": "Administration" }
+    ],
+    "causacionDeSeguros": "AtDueDate",
+    "causacionDeAdministracion": "Daily"
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000002805" } ]
+  },
+  "escenarios": [
+    {
+      "nombre": "base",
+      "operaciones": [
+        { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2027-03-15", "registradoEn": "2027-03-15T15:00:00Z" },
+        { "id": "P1", "tipo": "Payment", "modalidad": "PastDue", "valor": 419800, "fechaValor": "2027-04-15", "registradoEn": "2027-04-15T16:00:00Z" },
+        { "id": "R", "tipo": "Payment", "modalidad": "PayoffExceptCurrentInstallment", "valor": 400000, "fechaValor": "2027-04-30", "registradoEn": "2027-04-30T16:00:00Z" },
+        { "id": "P2", "tipo": "Payment", "modalidad": "PastDue", "valor": 413800, "fechaValor": "2027-05-15", "registradoEn": "2027-05-15T16:00:00Z" }
+      ],
+      "pago": "R",
+      "esperado": {
+        "cuota": 2, "cuotaDejada": 2,
+        "lineas": [ { "cuota": 3, "concepto": "Principal", "valor": 400000 } ],
+        "interesFijado": [ { "cuota": 2, "concepto": "CurrentInterest", "valor": 6000 } ],
+        "anticipoUsado": [], "anticipo": 0, "excedente": 0, "aplicado": 400000, "cancela": false,
+        "cuotasDelPlanNuevo": [ 1, 2 ],
+        "avisos": [ "Lending.Payment.CurrentInstallmentLeft" ]
+      },
+      "valor": { "cuota": 2, "paraCancelar": 400000, "quedaEnLaCuota": 413800 },
+      "cierre": {
+        "pago": "P2",
+        "lineas": [
+          { "cuota": 2, "concepto": "Insurance", "valor": 1200 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 },
+          { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "Administration", "valor": 600 }
+        ],
+        "excedente": 0, "cancela": true
+      },
+      "verificaciones": [
+        { "fecha": "2027-05-14", "informacionHasta": "2027-05-14T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 412580,
+          "porCuota": [
+            { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 },
+            { "cuota": 2, "concepto": "Administration", "valor": 580 }
+          ] },
+        { "fecha": "2027-05-15", "informacionHasta": "2027-05-15T10:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 413800,
+          "porCuota": [
+            { "cuota": 2, "concepto": "Principal", "valor": 400000 }, { "cuota": 2, "concepto": "CurrentInterest", "valor": 12000 },
+            { "cuota": 2, "concepto": "Insurance", "valor": 1200 }, { "cuota": 2, "concepto": "Administration", "valor": 600 }
+          ] },
+        { "fecha": "2027-06-20", "informacionHasta": "2027-06-20T23:00:00Z", "cuotasDelPlan": 2, "valorParaCancelar": 0, "porCuota": [] }
+      ]
+    }
+  ]
+}

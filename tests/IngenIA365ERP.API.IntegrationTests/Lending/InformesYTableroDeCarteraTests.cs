@@ -29,10 +29,21 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 {
     private const string Informes = "/api/reports/lending";
 
-    /// <summary>K1, más el estado de cuenta de la persona (<c>person-statement</c>, 2026-11-13), que es de K1 y trae datos del deudor.</summary>
+    /// <summary>
+    /// K1, más el estado de cuenta de la persona (<c>person-statement</c>, 2026-11-13), las recogidas (<c>payoffs</c>, feature 028, T053), que son de K1 y
+    /// traen datos del deudor, y las cinco de la implantación (2026-11-27): el resumen por línea y el cuadre con Contabilidad, agregados, y el detalle,
+    /// las cuotas pendientes y los asociados, con datos del deudor.
+    /// </summary>
     private static readonly string[] VistasDeK1 =
-        ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances", "person-statement"];
-    private static readonly string[] ConDatosDelDeudor = ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation", "person-statement"];
+    [
+        "aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances", "person-statement", "payoffs",
+        "portfolio-summary", "portfolio-detail", "pending-installments", "associates", "accounting-reconciliation",
+    ];
+    private static readonly string[] ConDatosDelDeudor =
+    [
+        "aging", "transactions", "usury", "debtor-messages", "migration-reconciliation", "person-statement", "payoffs", "portfolio-detail",
+        "pending-installments", "associates",
+    ];
 
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
     private static readonly string[] VistasDeK2 = ["payroll-agreements", "payroll-deduction-reconciliation"];
@@ -102,7 +113,8 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         registro.Where(v => VistasDeK4.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 4);
         registro.Where(v => VistasDeK5.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 5);
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
-        delOficial.Should().BeEquivalentTo(["placement", "receipts", "line-balances", "payroll-agreements", "quality", "vintages", "concentration",
+        delOficial.Should().BeEquivalentTo(["placement", "receipts", "line-balances", "portfolio-summary", "accounting-reconciliation", "payroll-agreements",
+                "quality", "vintages", "concentration",
                 // Las de la 014 sin datos del titular (agregadas): sólo piden Lending.Reports.View.
                 "deposits-reconciliation", "liquidity-fund", "deposit-balances", "sicses-fondo-liquidez", "sicses-saldos-diarios", "liquidity-deposit-bands"],
             "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor; la concentración sí, porque por línea, sector y pagaduría es agregada");

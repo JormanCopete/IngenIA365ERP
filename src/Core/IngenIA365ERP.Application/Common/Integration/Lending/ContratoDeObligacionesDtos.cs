@@ -71,7 +71,66 @@ public sealed record ObligacionListadaDto(
     /// <c>DueToday</c>. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
     /// </summary>
     public decimal? DueWithoutPeriodInProgress { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T065; R6, FR-021, FR-023; api.md §4): la cuota del período que ya va en un archivo de libranza o en la nómina propia —en qué
+    /// va, la cuota, la pagaduría, el archivo, el período y el valor—; nula si no hay nada enviado. La caja la avisa en «Todo para cancelar» y en la
+    /// cancelación. Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
+    /// </summary>
+    public CuotaEnviadaDto? SentInstallment { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-023, D4): con <see cref="SentInstallment"/>, lo que dice <c>Pagos.CuotaEnviadaAlCancelar</c> para la línea del
+    /// crédito (<see cref="CuotaEnviadaAlCancelar"/>: <c>Incluir</c>, <c>Excluir</c> o <c>Preguntar</c>); nulo sin nada enviado. La caja no lee parámetros de
+    /// Cartera: lo lee aquí. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public string? SentInstallmentAtPayoff { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E2, T071; FR-019, FR-023): lo que cuesta cancelar todo menos la cuota enviada (la modalidad
+    /// <see cref="ModalidadDePago.PayoffExceptCurrentInstallment"/>) si esa cuota es la causada que la modalidad deja, sigue en su canal sin respuesta y el
+    /// recaudador la admite; nulo si no se puede dejar. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public decimal? PayoffExceptSentInstallmentAmount { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E2, T071): lo que la cuota enviada queda debiendo a su canal si se deja (con <see cref="PayoffExceptSentInstallmentAmount"/>). (nuevo)</summary>
+    public decimal? SentInstallmentLeftAmount { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <see cref="SentInstallmentLeftAmount"/>, la regla con que el contrato dejaría la cuota:
+    /// <c>TalComoSeEnvio</c> (fuera del tope legal del prepago) o <c>Proporcional</c> (dentro del tope —Ley 1555 de 2012— o sin los valores nacionales para
+    /// saberlo). La misma que aplica la modalidad: la caja no la decide. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public string? SentInstallmentLeftRule { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): por qué se deja con el proporcional (<c>WithinLegalPrepaymentCap</c>, <c>LegalPrepaymentCapUnknown</c>). (nuevo)</summary>
+    public string? SentInstallmentLeftRuleReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): con el proporcional, lo que la cuota debería si se dejara tal como se envió —lo que su canal tiene para pagar—;
+    /// la diferencia con <see cref="SentInstallmentLeftAmount"/> es lo que sobra si la paga completa. Igual a ella tal como se envió. (nuevo)
+    /// </summary>
+    public decimal? SentInstallmentAsSentAmount { get; init; }
 }
+
+/// <summary>
+/// 2026-11-27 (feature 028, T065; R6, FR-021; api.md §4): la cuota del período de una obligación que ya salió a su canal: en qué va, la cuota que nombra la
+/// línea o la novedad, su vencimiento, la pagaduría y el convenio, el archivo (número), el período y los valores de la línea (corriente, vencido y total);
+/// en la nómina propia, el período, la corrida y el valor (en <see cref="TotalAmount"/>). <see cref="Explanation"/>, en español. (nuevo)
+/// </summary>
+public sealed record CuotaEnviadaDto(
+    EstadoDeCuotaEnviada State,
+    int? InstallmentNumber,
+    DateOnly? DueDate,
+    string? Paymaster,
+    string? Agreement,
+    string? File,
+    string? Period,
+    decimal? CurrentAmount,
+    decimal? PastDueAmount,
+    decimal? TotalAmount,
+    Guid? PayrollRunPublicId,
+    string Explanation);
 
 // ------------------------------------------------------------------------------------------------------ simular (§3.6) --
 
