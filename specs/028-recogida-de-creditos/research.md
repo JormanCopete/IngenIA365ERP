@@ -233,6 +233,14 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
 - D11 A: `Contabilidad.RecogidaEnUnComprobante` (clave `Accounting.LendingDisbursementWithPayoffsInOneVoucher`), defecto no.
 - D12 A: las garantías del crédito recogido se liberan al girar el crédito nuevo.
 - D13 A: la cuota que se deja queda tal como se envió, con el interés del período completo.
+- **D13 ajustada (2026-11-27, el dueño en la sesión)**: la Ley 1555 de 2012 da el prepago sin penalidad con los intereses liquidados al día del pago. Por
+  eso, **dentro del tope legal del prepago** —y cuando el tope no se puede saber por falta del SMMLV o de `PREPAGO_TOPE_SMMLV` a la fecha del desembolso, el
+  mismo criterio de `InteresesAlCancelar.ModoAsync` (motivos `WithinLegalPrepaymentCap` y `LegalPrepaymentCapUnknown`)— la cuota que se deja lleva el
+  **interés proporcional**: sobre todo el saldo hasta el día de la recogida y, desde ese día hasta su vencimiento, sólo sobre su propio capital. El interés
+  de los días que faltan sobre el capital que se recoge no se cobra (lo reconocido de más al inicio del ciclo o del tramo se devuelve con la misma
+  operación). Si la pagaduría o la nómina pagan la cuota tal como se envió, lo de más lo trata la regla de excedente de H2
+  (`Recogida.GiroPosteriorDeCreditoRecogido`). **Vivienda**: se recoge completa (sin cambio). **Fuera del tope**: D13-A tal como estaba. Independiente de
+  `Recogida.InteresesProporcionales`: sólo el motivo legal cambia la cuota dejada. Implementado en T062a (enmienda E-15).
 
 ## 4. Enmiendas
 
@@ -654,3 +662,45 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   `Account` (FR-126: un hecho no lleva cuentas contables); por lo mismo, el catálogo del puerto lo llama `PayoffDepositFactTypes`.
 - **T083, puerta de E3 (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.265, Application 9.196, Architecture 933 y Shared 790, todas
   verdes. La única que falló fue `LosHechosDeCarteraNoLlevanCuentas` por el nombre del campo nuevo (corregido arriba).
+
+### E-15 — D13 ajustada: la cuota dejada con el interés proporcional dentro del tope legal del prepago (T062a, 2026-11-27)
+- **Quién decide**: `InteresesAlCancelar.CuotaDejadaAsync` (Application; un solo sitio, sin valores legales en Domain) devuelve `ReglaDeCuotaDejada`:
+  `Proporcional` con `WithinLegalPrepaymentCap` o `LegalPrepaymentCapUnknown` (el mismo `TopeAsync` que `ModoAsync`: SMMLV y `PREPAGO_TOPE_SMMLV` a la fecha del
+  desembolso) o `TalComoSeEnvio` (fuera del tope, D13-A). No lee `Recogida.InteresesProporcionales` ni `Pagos.InteresesAlPagarAntesDelVencimiento`. Vivienda no
+  deja cuota (si llegara, `Housing`). `AplicacionDePagos.CuotaDejadaAsync` la usa en el reparto (la recogida y la caja, por el contrato) y en el listado;
+  `LiquidacionDeRecogida` en la proyección, los candidatos y la vista previa: dicen lo mismo.
+- **El motor** recibe la regla en `SolicitudDeDistribucion.CuotaDejadaProporcional` (y `ContenidoDePago`, `DistribucionDePago`). Con ella, lo que se causa en la
+  cuota dejada en la fecha valor es `EstadoDelCredito.InteresPorCausarSobreSuCapital(n)`: la misma proyección de la causación que la cuota completa
+  (`ReconstruccionDeCredito.InteresPorCausarSobreSuCapital`, usura congelada a la fecha) con la base acotada al capital de `n` desde el día siguiente
+  (`EntradaDeReconstruccion.SoloSuCapital`, sólo de la proyección, con su corte de ventana). Lo causado hasta la fecha, sobre todo el saldo, no se toca; la
+  congelación fija el valor. **Lo que se cancela no cambia** (sólo lo que queda en la cuota). Aviso nuevo `Lending.Payment.LeftInstallmentProportional`; la
+  huella de la simulación lleva la regla sólo si es proporcional.
+- **Lo causado de más**: con la causación diaria (también por período calendario, que causa día a día) no hay interés causado adelantado en la deuda; lo que
+  sí está adelantado es lo **reconocido** al inicio del ciclo o del tramo. La reconstrucción cierra ese día lo reconocido del interés de la cuota dejada con el
+  proporcional (`_cierresDeCuota`) y devuelve lo que ya no se causará con la operación de la recogida (`RecognitionRelease` con su `OperacionId`, que viaja en
+  el acompañante `AjusteDeCausacionPorFechaValor` como cualquier devolución de una cancelación). Con D13-A no cambia nada (casos 01–05 intactos).
+- **El sello**: `LeftInstallmentRule = Proporcional` y `LeftInstallmentRuleReason` (nuevo) en la decisión; `Contenido()` lee `Proporcional` (cualquier otro
+  valor, o ninguno, es D13-A: los pagos de antes no cambian). El comprobante repetido lleva los dos avisos.
+- **Lo que se muestra**: `ValorSalvoCuota` y `RecogidaSalvoCuota` ganan `Proporcional`/`Regla`, `QuedaTalComoSeEnvio` y `DeMasSiSePagaComoSeEnvio`. El
+  listado del contrato gana `SentInstallmentLeftRule`, `SentInstallmentLeftRuleReason` y `SentInstallmentAsSentAmount` (opcionales); `currentInstallment` de
+  los candidatos y de la vista previa, `leftRule`, `leftRuleReason` y `leftAsSent`. El texto de la cuota (`TextosDeCuotaEnviada.EnLaRecogida` y
+  `.Proporcional`, y en la caja `CuotaEnviadaEnLaCaja.Aviso`) dice «La cuota N se deja con el interés proporcional (dentro del tope legal del prepago sin
+  penalidad, Ley 1555 de 2012): $X…» y qué pasa con lo de más si su canal la paga completa ($Y): de la pagaduría, según
+  `Recogida.GiroPosteriorDeCreditoRecogido`; de la nómina, vuelve al neto del empleado; en la caja, saldo de la pagaduría. **No se agregó un renglón** a la
+  explicación del interés: la pantalla del desembolso y el detalle ya muestran el texto de la cuota y lo habrían repetido.
+- **La caja sin valores nacionales** no llega a aplicar: el pago de Recaudo sella el tope del prepago y sin SMMLV se rechaza (lo de siempre). El motivo
+  `LegalPrepaymentCapUnknown` lo aplica la recogida (que no sella el tope).
+- **Casos dorados nuevos** (`Domain.Tests/Lending/Payments/Casos/`, el crédito de los casos 01–03: 1.200.000, 3 cuotas de 400.000 de capital, 1,5 % MV, diaria
+  0,0005, 30/360; la cuota 2 vence el 15-05 y su interés del plan es 12.000):
+  - **06, causación diaria**: R el 30-04 → causado 6.000 (800.000 × 0,0005 × 15) + proporcional 3.000 (400.000 × 0,0005 × 15) = 9.000; queda 409.000 (tal como se
+    envió 412.000); se cancelan 400.000. «base»: el canal paga 409.000 y cierra al peso; «pago-por-lo-enviado»: paga 412.000, excedente 3.000; «reverso».
+  - **07, al inicio del ciclo** (reconocido el 16-04: 12.000): igual deuda que 06; de lo reconocido se consumen 6.000 + 3.000 y se devuelven 3.000 el 30-04 con R.
+  - **08, período calendario con reconocimiento el 01-05 (ingreso directo, como COOFLOPAL)**: R el 10-05 → causado 10.000 (25 días sobre 800.000) + 1.000
+    (5 días sobre 400.000) = 11.000; queda 411.000 (tal como se envió 412.000); de lo reconocido (6.000) se consumen 4.000 + 1.000 y se devuelve 1.000 con R.
+    «pago-por-lo-enviado»: excedente 1.000.
+- **Pruebas que cambiaron**: las de la cuota tal como se envió por el contrato (`CancelacionSalvoCuotaEnElContratoTests`, «Con_Excluir…» de
+  `RecogidaConCuotaCausadaTests`) ponen a Ana fuera del tope (`PagosDePrueba.CrearAsync(topeSmmlv: 1m)`, parámetro nuevo); las del proporcional son
+  `CuotaDejadaProporcionalEnElContratoTests`, «Con_Excluir_dentro_del_tope…» y la teoría del listado de la caja (sin tope, dentro y fuera). Las que corrían sin
+  los valores nacionales ya son proporcionales y siguen verdes (liquidación y contrato dicen lo mismo).
+- **Puerta (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.277, Application (filtro `Lending|Receipts.CashDesk|Receipts.Paymasters`)
+  3.145, Architecture 933 y Shared 791, todas verdes.

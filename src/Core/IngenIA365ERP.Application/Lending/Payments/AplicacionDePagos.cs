@@ -51,6 +51,13 @@ public sealed record PagoDistribuido(
     /// decisión (<c>AccrualPeriod</c>) para que la reconstrucción lo repita. (nuevo)
     /// </summary>
     public bool PeriodoCalendario { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): en la cancelación salvo la cuota causada, con qué regla se deja la cuota
+    /// (<see cref="InteresesAlCancelar.CuotaDejadaAsync"/>: proporcional dentro del tope legal del prepago, tal como se envió fuera de él); se sella en la
+    /// decisión (<c>LeftInstallmentRule</c>). En las demás modalidades, tal como se envió (no se mira). (nuevo)
+    /// </summary>
+    public ReglaDeCuotaDejada ReglaDeLaCuotaDejada { get; init; } = ReglaDeCuotaDejada.TalComoSeEnvio;
 }
 
 /// <summary>Un pago que el contrato aplica: quién recauda, la forma, el ítem y la validación previa del lote. (nuevo)</summary>
@@ -197,13 +204,15 @@ public sealed class AplicacionDePagos(
         var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct, recogida);
         // 2026-11-24 (feature 025, fase 5, HU5; D3): si la línea causa por período calendario a la fecha valor (nunca en UVR).
         var calendario = await PeriodoCalendarioAsync(credito, estado, fechaValor, ct);
+        // 2026-11-27 (feature 028, D13 ajustada): con qué regla deja la cuota la cancelación salvo la cuota causada (el motivo legal; la caja y la recogida igual).
+        var dejada = modalidad == PaymentModality.PayoffExceptCurrentInstallment ? await CuotaDejadaAsync(credito, estado, ct) : ReglaDeCuotaDejada.TalComoSeEnvio;
         if (valor <= 0m && modalidad is PaymentModality.FullPayoff or PaymentModality.PastDue or PaymentModality.PayoffExceptCurrentInstallment)
             valor = modalidad switch
             {
                 PaymentModality.FullPayoff => AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, calendario),
                 // 2026-11-27 (feature 028, T058): todo menos la cuota causada, sin aplicar (lo mismo que reparte la modalidad).
                 PaymentModality.PayoffExceptCurrentInstallment =>
-                    AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, cuota, modo.CuotaCompleta, calendario).ParaCancelar,
+                    AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, cuota, modo.CuotaCompleta, calendario, dejada.Proporcional).ParaCancelar,
                 _ => ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
             };
         if (valor <= 0m)
@@ -212,6 +221,7 @@ public sealed class AplicacionDePagos(
         var solicitud = new SolicitudDeDistribucion(modalidad, valor, fechaValor)
         {
             Eleccion = eleccion, Cuota = cuota, CuotaCompleta = modo.CuotaCompleta, PeriodoCalendario = calendario,
+            CuotaDejadaProporcional = dejada.Proporcional,
         };
         // 2026-11-16 (pedido del dueño): el orden de rubros de la empresa a la fecha valor (salvo que la línea tenga su propia lista).
         var prelacion = await PrelacionAsync(condiciones.Prelacion, fechaValor, ct);
@@ -227,7 +237,7 @@ public sealed class AplicacionDePagos(
                 : [];
             return Result.Success(new PagoDistribuido(credito, cargado, estado, d, huella, alternativas, dePreferencia)
             {
-                Intereses = modo, Rubros = prelacion.Rubros, PeriodoCalendario = calendario,
+                Intereses = modo, Rubros = prelacion.Rubros, PeriodoCalendario = calendario, ReglaDeLaCuotaDejada = dejada,
             });
         }
         catch (ReglaDeCarteraException ex)
@@ -268,6 +278,7 @@ public sealed class AplicacionDePagos(
             new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente)
             {
                 Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros, PeriodoCalendario = p.PeriodoCalendario,
+                CuotaDejadaProporcional = d.CuotaDejadaProporcional,
             });
     }
 
@@ -359,8 +370,23 @@ public sealed class AplicacionDePagos(
         ArgumentNullException.ThrowIfNull(estado);
         var modo = await ModoAsync(credito, estado, PaymentModality.PayoffExceptCurrentInstallment, estado.Fecha, ct);
         var calendario = await PeriodoCalendarioAsync(credito, estado, estado.Fecha, ct);
-        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario);
+        // 2026-11-27 (feature 028, D13 ajustada): con la regla con que el contrato la dejaría (la misma de DistribuirAsync).
+        var dejada = await CuotaDejadaAsync(credito, estado, ct);
+        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario, dejada.Proporcional);
         return v.Cuota is null ? null : v;
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con qué regla deja la cuota causada una cancelación salvo la cuota causada de <paramref name="credito"/>
+    /// (<see cref="InteresesAlCancelar.CuotaDejadaAsync"/>: proporcional dentro del tope legal del prepago o sin los valores nacionales para saberlo, tal como se
+    /// envió fuera de él). Un crédito en UVR no deja cuota; un programa sin la pieza de intereses, tal como se envió. La usan el reparto (la recogida y la caja
+    /// por el contrato) y el listado de la caja: dicen lo mismo. (nuevo)
+    /// </summary>
+    public async Task<ReglaDeCuotaDejada> CuotaDejadaAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        return intereses is null || estado.EnUvr ? ReglaDeCuotaDejada.TalComoSeEnvio : await intereses.CuotaDejadaAsync(credito, estado.RulesVersion, ct);
     }
 
     /// <summary>
@@ -497,7 +523,10 @@ public sealed class AplicacionDePagos(
             AccrualPeriod = d.PeriodoCalendario ? Domain.Lending.Parameters.ParametrosDeCartera.PeriodoCalendario : null,
             // 2026-11-27 (feature 028, R4): la cuota que dejó la cancelación salvo la cuota causada (en Installment), con qué regla y el interés del período
             // que se causó en ella; nulos en todo lo demás, así las decisiones de siempre se sellan igual.
-            LeftInstallmentRule = dist.CuotaDejada is null ? null : AplicadorDePagos.ReglaDeLaCuotaDejada,
+            // 2026-11-27 (feature 028, D13 ajustada): tal como se envió o proporcional (dentro del tope legal del prepago), con su motivo.
+            LeftInstallmentRule = dist.CuotaDejada is null ? null
+                : dist.CuotaDejadaProporcional ? AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional : AplicadorDePagos.ReglaDeLaCuotaDejada,
+            LeftInstallmentRuleReason = dist.CuotaDejada is not null && dist.CuotaDejadaProporcional ? d.ReglaDeLaCuotaDejada.Motivo : null,
             LeftInstallmentInterest = dist.CuotaDejada is null ? null : dist.InteresDeLaCuotaDejada.Sum(l => l.Monto),
         };
         var payload = decision.Serializar();
@@ -552,6 +581,7 @@ public sealed class AplicacionDePagos(
                 Eleccion = dist.Eleccion, Cuota = CuotaDeLaDecision(modalidad, pago.InstallmentNumber, dist), CuotaCompleta = d.Intereses.CuotaCompleta,
                 Rubros = d.Rubros,
                 PeriodoCalendario = d.PeriodoCalendario,
+                CuotaDejadaProporcional = dist.CuotaDejadaProporcional,
             });
         var libro = marca >= v ? (await cargador.LibroAsync([credito.Id], marca, ct))[credito.Id] : [];
         var efecto = EfectoEnElLibro.Calcular(entrada, conElPago, id, v, marca, libro, []);
@@ -658,7 +688,10 @@ public sealed class AplicacionDePagos(
                 // 2026-11-16: el comprobante repetido también dice que se cobró la cuota en curso completa.
                 // 2026-11-27 (feature 028, R4): en la cancelación salvo la cuota causada esas filas son el interés del período de la cuota que dejó.
                 .. operacion.PaymentModality == PaymentModality.PayoffExceptCurrentInstallment && decision?.LeftInstallmentRule is not null
-                    ? [AplicadorDePagos.AvisoCuotaCausadaDejada]
+                    ? decision.Contenido().CuotaDejadaProporcional
+                        // 2026-11-27 (feature 028, D13 ajustada): y que la dejó con el interés proporcional.
+                        ? [AplicadorDePagos.AvisoCuotaCausadaDejada, AplicadorDePagos.AvisoCuotaDejadaProporcional]
+                        : [AplicadorDePagos.AvisoCuotaCausadaDejada]
                     : filas.Any(t => t.Kind == LoanTransactionKind.UnaccruedInstallmentInterest) ? [AplicadorDePagos.AvisoInteresDeLaCuotaCompleta] : Array.Empty<string>(),
                 .. decision?.Choice is null && operacion.PaymentModality == PaymentModality.ExtraordinaryPrincipal ? [AplicadorDePagos.AvisoPreferenciaAsumida] : Array.Empty<string>(),
             ]);

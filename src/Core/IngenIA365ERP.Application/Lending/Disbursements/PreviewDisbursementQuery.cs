@@ -146,6 +146,10 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
         {
             Sent = PayoffSentInstallmentDto.De(l.CuotaEnviada),
             Explanation = x.Omitida || !x.Total ? null : segun.ExplicacionDeLaCuota,
+            // 2026-11-27 (feature 028, D13 ajustada): la regla con que se deja la cuota, sólo si se deja.
+            LeftRule = x.ValorDejado is null ? null : l.SalvoCuota?.Regla.Regla,
+            LeftRuleReason = x.ValorDejado is null ? null : l.SalvoCuota?.Regla.Motivo,
+            LeftAsSent = x.ValorDejado is null ? null : l.SalvoCuota?.QuedaTalComoSeEnvio,
         };
     }
 

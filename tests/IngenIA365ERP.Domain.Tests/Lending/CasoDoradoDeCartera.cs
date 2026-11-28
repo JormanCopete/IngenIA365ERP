@@ -591,6 +591,12 @@ public sealed class CasoDoradoDeCartera
         /// </summary>
         public bool PeriodoCalendario { get; set; }
 
+        /// <summary>
+        /// 2026-11-27 (feature 028, D13 ajustada): la cancelación salvo la cuota causada deja la cuota con el interés proporcional, como lo sella su decisión
+        /// (<c>LeftInstallmentRule = Proporcional</c>); sin él, tal como se envió.
+        /// </summary>
+        public bool CuotaDejadaProporcional { get; set; }
+
         /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
         public object? Contenido() => Tipo switch
         {
@@ -598,6 +604,7 @@ public sealed class CasoDoradoDeCartera
                 new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v)
                 {
                     Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros, PeriodoCalendario = PeriodoCalendario,
+                    CuotaDejadaProporcional = CuotaDejadaProporcional,
                 },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
                 new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m)
@@ -650,6 +657,7 @@ public sealed class CasoDoradoDeCartera
             new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor)
             {
                 Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, PeriodoCalendario = PeriodoCalendario,
+                CuotaDejadaProporcional = CuotaDejadaProporcional,
             };
         // US4
         public long? Secuencia { get; set; }

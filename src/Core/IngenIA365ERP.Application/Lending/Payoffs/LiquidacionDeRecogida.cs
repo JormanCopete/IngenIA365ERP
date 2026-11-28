@@ -415,10 +415,12 @@ public sealed record LiquidacionDeCreditoRecogido
     public RecogidaSegunCuota Segun(InstallmentTreatment pedido)
     {
         var tratamiento = TratamientoEfectivo(pedido);
+        // 2026-11-27 (feature 028, D13 ajustada): el texto de la cuota dice la regla con que se deja —con el proporcional, cuánto, por qué y lo que sobraría
+        // si su canal la paga completa—; los renglones del interés de la cuota dejada no van (los reemplaza ese texto, como en D13-A).
         if (tratamiento == InstallmentTreatment.Exclude && SalvoCuota is { } s)
             return new RecogidaSegunCuota(tratamiento, s.ValorARecoger, s.Desglose, new CuotaCausadaDeRecogida(s.Cuota, s.QuedaEnLaCuota, s.Vencimiento),
                 s.Cuota, s.QuedaEnLaCuota, ExplicacionDelInteres.Where(r => r.Cuota != s.Cuota).ToList(),
-                TextosDeCuotaEnviada.EnLaRecogida(s.Cuota, s.QuedaEnLaCuota, tratamiento, CuotaEnviada));
+                TextosDeCuotaEnviada.EnLaRecogida(s.Cuota, s.QuedaEnLaCuota, tratamiento, CuotaEnviada, s.Regla, s.QuedaTalComoSeEnvio));
         return new RecogidaSegunCuota(InstallmentTreatment.Include, ValorARecoger, Desglose, CuotaCausada, null, null, ExplicacionDelInteres,
             CuotaCausada is { } c ? TextosDeCuotaEnviada.EnLaRecogida(c.Numero, c.Valor, InstallmentTreatment.Include, CuotaEnviada) : null);
     }
@@ -429,7 +431,20 @@ public sealed record LiquidacionDeCreditoRecogido
 /// recoge (lo mismo que aplica el contrato con <c>PayoffExceptCurrentInstallment</c>) y su desglose, y lo que la cuota deberá al vencer —lo que su canal paga
 /// para cerrarla al peso—. (nuevo)
 /// </summary>
-public sealed record RecogidaSalvoCuota(int Cuota, DateOnly Vencimiento, decimal ValorARecoger, DesgloseDeRecogida Desglose, decimal QuedaEnLaCuota);
+public sealed record RecogidaSalvoCuota(int Cuota, DateOnly Vencimiento, decimal ValorARecoger, DesgloseDeRecogida Desglose, decimal QuedaEnLaCuota)
+{
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): la regla con que se deja la cuota —tal como se envió (fuera del tope legal del prepago) o con el
+    /// interés proporcional (dentro del tope o sin los valores nacionales para saberlo)—, la misma con que la aplica el contrato. (nuevo)
+    /// </summary>
+    public ReglaDeCuotaDejada Regla { get; init; } = ReglaDeCuotaDejada.TalComoSeEnvio;
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): lo que la cuota debería tal como se envió; igual a <see cref="QuedaEnLaCuota"/> sin el proporcional. (nuevo)</summary>
+    public decimal QuedaTalComoSeEnvio { get; init; } = QuedaEnLaCuota;
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): lo que sobra si el canal paga la cuota tal como se envió (cero sin el proporcional). (nuevo)</summary>
+    public decimal DeMasSiSePagaComoSeEnvio => Math.Max(0m, QuedaTalComoSeEnvio - QuedaEnLaCuota);
+}
 
 /// <summary>
 /// 2026-11-27 (feature 028, E2, T066): lo que se recoge con un tratamiento de la cuota causada: el tratamiento efectivo, el valor y su desglose, la cuota
@@ -519,7 +534,9 @@ public sealed class LiquidacionDeRecogida(
         var devuelto = calendario ? AplicadorDePagos.InteresSinTramo(estado, d) : [];
         // 2026-11-27 (feature 028, E2, T066): Recogida.CuotaCausada con la línea de este crédito, todo menos la cuota causada y la cuota enviada.
         var cuotaCausada = await CuotaCausadaConfiguradaAsync(d, credito.CreditLineId, ct);
-        var salvo = SeRecogeCompleto(estado) ? null : SalvoCuota(estado, modo, calendario, devuelto);
+        // 2026-11-27 (feature 028, D13 ajustada por el dueño): la regla legal con que se deja la cuota (proporcional dentro del tope del prepago).
+        var regla = SeRecogeCompleto(estado) ? ReglaDeCuotaDejada.TalComoSeEnvio : await intereses.CuotaDejadaAsync(credito, estado.RulesVersion, ct);
+        var salvo = SeRecogeCompleto(estado) ? null : SalvoCuota(estado, modo, calendario, devuelto, regla);
         var enviada = await cuotaEnviada.DeAsync(CuotaEnviadaDelCredito.CuotaDelEstado(credito, estado), d, ct);
         decimal S(params LoanConcept[] conceptos) => conceptos.Sum(c => estado.Saldo(c));
         var desglose = new DesgloseDeRecogida(
@@ -559,7 +576,9 @@ public sealed class LiquidacionDeRecogida(
             .Decimal("valor", valor)
             .Texto("cuotaCausada", cuotaCausada)
             .Si(salvo is not null, h => h.Entero("cuotaDejada", salvo!.Cuota).Decimal("valorSalvoCuota", salvo.ValorARecoger)
-                .Decimal("quedaEnLaCuota", salvo.QuedaEnLaCuota))
+                .Decimal("quedaEnLaCuota", salvo.QuedaEnLaCuota)
+                // 2026-11-27 (feature 028, D13 ajustada): la regla proporcional, sólo si la hay (las huellas de antes no cambian).
+                .Si(salvo.Regla.Proporcional, x => x.Texto("reglaDeLaCuotaDejada", salvo.Regla.Regla).Texto("motivoDeLaCuotaDejada", salvo.Regla.Motivo)))
             .Si(enviada is not null, h => h.Enumeracion("envio", (SentInstallmentState?)enviada!.Estado).Entero("archivo", enviada.ArchivoId))
             .Canonico());
 
@@ -604,10 +623,12 @@ public sealed class LiquidacionDeRecogida(
     /// concepto sin lo de la cuota dejada (el capital de las siguientes, por cuota, como la cancelación), lo devuelto por período calendario de las demás y
     /// —lo que cierra al peso con lo que cobra el contrato— el anticipo del crédito que se usa. (nuevo)
     /// </summary>
+    /// <remarks>2026-11-27 (feature 028, D13 ajustada): con la regla legal de la cuota dejada (<see cref="InteresesAlCancelar.CuotaDejadaAsync"/>): lo que se
+    /// recoge no cambia; lo que queda en la cuota sí, y se guarda también lo que debería tal como se envió.</remarks>
     private static RecogidaSalvoCuota? SalvoCuota(EstadoDelCredito estado, ModoDeInteresesAlCancelar modo, bool calendario,
-        IReadOnlyList<LineaDeDistribucion> devuelto)
+        IReadOnlyList<LineaDeDistribucion> devuelto, ReglaDeCuotaDejada regla)
     {
-        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario);
+        var v = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, modo.CuotaCompleta, calendario, regla.Proporcional);
         if (v.Cuota is not { } n || estado.Plan is not { } plan) return null;
         decimal S(params LoanConcept[] conceptos) => conceptos.Sum(c => estado.Saldo(c) - estado.Saldo(c, n));
         var desglose = new DesgloseDeRecogida(
@@ -622,7 +643,10 @@ public sealed class LiquidacionDeRecogida(
         var anticipo = desglose.Total - v.ParaCancelar;
         desglose = anticipo >= 0m ? desglose with { Anticipo = anticipo } : desglose with { OtrosCargos = desglose.OtrosCargos - anticipo };
         var vence = plan.Cuotas.First(c => c.Numero == n).Vencimiento;
-        return new RecogidaSalvoCuota(n, vence, v.ParaCancelar, desglose, v.QuedaEnLaCuota);
+        return new RecogidaSalvoCuota(n, vence, v.ParaCancelar, desglose, v.QuedaEnLaCuota)
+        {
+            Regla = regla, QuedaTalComoSeEnvio = v.QuedaTalComoSeEnvio,
+        };
     }
 
     /// <summary>

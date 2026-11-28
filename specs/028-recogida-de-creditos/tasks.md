@@ -114,6 +114,7 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 - [X] T060 [US4] La reconstrucción respeta la cuota congelada (no causa más interés en `n` hasta su vencimiento) en `Dom/Lending/Replay/ReconstruccionDeCredito.cs` y `EntradaDeReconstruccion.cs`
 - [X] T061 [P] [US4] Casos dorados: causación diaria, al inicio del ciclo, período calendario, con anticipo, con seguro y administración, cuota `n` parcialmente pagada, pago de `n` después (cierra al peso), en `TD/Lending/Payments/Casos/` y `TD/Lending/Payments/CancelacionSalvoCuotaTests.cs`
 - [X] T062 [US4] Créditos en UVR: la modalidad no se ofrece (siempre total con explicación) en `LiquidacionDeRecogida`
+- [X] T062a [US4] D13 ajustada (dueño, 2026-11-27; Ley 1555 de 2012): dentro del tope legal del prepago (o sin los valores nacionales para saberlo) la cuota que se deja lleva el interés **proporcional** —lo causado hasta la fecha sobre todo el saldo y el resto del período sólo sobre su capital—; fuera, D13-A. `InteresesAlCancelar.CuotaDejadaAsync` decide, `SolicitudDeDistribucion.CuotaDejadaProporcional` y `EstadoDelCredito.InteresPorCausarSobreSuCapital` en el motor, sello `LeftInstallmentRule = Proporcional` con `LeftInstallmentRuleReason`, devolución de lo reconocido de más con la operación; liquidación, candidatos, vista previa, listado de la caja y textos; casos dorados 06–08 (E-15)
 
 ## Fase 9 — HU4: cuota enviada, libranza, giro posterior y caja (P1, E2)
 

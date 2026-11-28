@@ -87,8 +87,9 @@ public class RecogidaConCuotaCausadaTests
     [Fact]
     public async Task Con_Excluir_se_recoge_todo_menos_la_cuota_y_su_canal_la_cierra_al_peso()
     {
-        // Con el tope del prepago sembrado: la caja que paga la cuota dejada lo consulta al cancelar.
-        using var p = await PagosDePrueba.CrearAsync();
+        // Con el tope del prepago sembrado: la caja que paga la cuota dejada lo consulta al cancelar. 2026-11-27 (D13 ajustada): fuera del tope (1 SMMLV), la
+        // cuota queda tal como se envió; dentro, con el proporcional (la prueba siguiente).
+        using var p = await PagosDePrueba.CrearAsync(topeSmmlv: 1m);
         Cuota(p, ParametrosDeCartera.CuotaExcluir, p.Credito.CreditLineId);
         await p.CausarHastaAsync(AMitad);
         var estado = await EstadoAsync(p, AMitad);
@@ -119,6 +120,45 @@ public class RecogidaConCuotaCausadaTests
         var cuota = await p.AplicadoAsync(p.Pago(ModalidadDePago.FullPayoff, esperado.QuedaEnLaCuota, VenceLaPrimera));
         (cuota.PaidOff, cuota.Surplus).Should().Be((true, 0m));
         (await p.Db.Loans.AsNoTracking().SingleAsync(x => x.Id == p.Credito.Id)).Status.Should().Be(LoanStatus.PaidOff);
+        await p.ElLibroCuadraAsync();
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, T062a; D13 ajustada por el dueño, Ley 1555 de 2012): dentro del tope legal del prepago la cuota se deja con el interés
+    /// proporcional: lo que se recoge es lo mismo, lo que queda en la cuota es menos que tal como se envió, el texto lo explica con lo que sobraría, el contrato
+    /// cobra exactamente eso y su canal la cierra al peso.
+    /// </summary>
+    [Fact]
+    public async Task Con_Excluir_dentro_del_tope_la_cuota_se_deja_con_el_interes_proporcional()
+    {
+        using var p = await PagosDePrueba.CrearAsync();
+        Cuota(p, ParametrosDeCartera.CuotaExcluir, p.Credito.CreditLineId);
+        await p.CausarHastaAsync(AMitad);
+        var estado = await EstadoAsync(p, AMitad);
+        var esperado = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, cuotaCompleta: false, proporcional: true);
+        var tal = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, cuotaCompleta: false);
+
+        var l = await LiquidarAsync(p, AMitad);
+        var s = l.Segun(l.TratamientoPorDefecto);
+
+        (l.SalvoCuota!.Regla.Regla, l.SalvoCuota.Regla.Motivo)
+            .Should().Be((AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional, Application.Lending.Common.InteresesAlCancelar.MotivoDentroDelTope));
+        (s.Valor, s.ValorDejado).Should().Be((tal.ParaCancelar, (decimal?)esperado.QuedaEnLaCuota), "lo que se recoge no cambia; lo que queda en la cuota sí");
+        (l.SalvoCuota.QuedaTalComoSeEnvio, l.SalvoCuota.DeMasSiSePagaComoSeEnvio).Should().Be((tal.QuedaEnLaCuota, tal.QuedaEnLaCuota - esperado.QuedaEnLaCuota));
+        s.ExplicacionDeLaCuota.Should().Contain("interés proporcional").And.Contain("Ley 1555 de 2012").And.NotContain("tal como se envió")
+            .And.Contain(ErroresDeRecogida.Pesos(esperado.QuedaEnLaCuota).TrimStart('$'));
+        l.Proyeccion(InstallmentTreatment.Exclude).CuotaCausada!.Valor.Should().Be(esperado.QuedaEnLaCuota);
+
+        var recogida = await p.AplicarAsync(p.Pago(ModalidadDePago.PayoffExceptCurrentInstallment, s.Valor, AMitad,
+            clave: RecogidaEnElDesembolso.Clave(Guid.NewGuid(), p.Credito.PublicId), cuota: 1, medio: ClaseDeMedioDeRecaudo.InternalOffset)
+            with { Receipt = new ReferenciaDeRecibo("DS-000001", AMitad, null, null, Application.Lending.Common.InteresesAlCancelar.DocumentoDelDesembolso) },
+            recaudador: RecogidaEnElDesembolso.Recaudador);
+        recogida.Result.Should().Be(ResultadoDelContrato.Applied, $"{recogida.Code}: {recogida.Message}");
+        (recogida.Value!.AppliedAmount, recogida.Value.Surplus, recogida.Value.PaidOff).Should().Be((s.Valor, 0m, false));
+
+        await p.CausarHastaAsync(VenceLaPrimera);
+        var cuota = await p.AplicadoAsync(p.Pago(ModalidadDePago.FullPayoff, esperado.QuedaEnLaCuota, VenceLaPrimera));
+        (cuota.PaidOff, cuota.Surplus).Should().Be((true, 0m), "la cuota dejada con el proporcional se cierra al peso");
         await p.ElLibroCuadraAsync();
     }
 
@@ -175,6 +215,8 @@ public class RecogidaConCuotaCausadaTests
         (cuota.Number, cuota.Choosable, cuota.Treatment, cuota.Parameter).Should().Be((1, true, InstallmentTreatment.Exclude, ParametrosDeCartera.CuotaPreguntar),
             "marcado dejándola, lo marcado se muestra así");
         cuota.Left.Should().Be(l.SalvoCuota!.QuedaEnLaCuota);
+        // 2026-11-27 (D13 ajustada): la regla con que se deja y lo que sería tal como se envió.
+        (cuota.LeftRule, cuota.LeftAsSent).Should().Be((AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional, (decimal?)l.SalvoCuota.QuedaTalComoSeEnvio));
         (cuota.IncludedExplanation, cuota.LeftExplanation).Should().NotBe((null, null));
         producto.ToPayOffExcludingCurrentInstallment.Should().Be(l.SalvoCuota.ValorARecoger);
         producto.SelectedAmount.Should().Be(l.SalvoCuota.ValorARecoger, "con «Preguntar» y la cuota dejada se recoge todo menos ella");
@@ -227,6 +269,11 @@ public class RecogidaConCuotaCausadaTests
         (propuesta.Mode, propuesta.ToApply, propuesta.CurrentInstallment!.Treatment, propuesta.CurrentInstallment.Left)
             .Should().Be(("Total", l.SalvoCuota!.ValorARecoger, "Exclude", (decimal?)l.SalvoCuota.QuedaEnLaCuota));
         propuesta.CurrentInstallment.Explanation.Should().Contain("se deja en el crédito");
+        // 2026-11-27 (D13 ajustada): sin los valores nacionales para saber el tope del prepago, la cuota se deja con el proporcional, y la vista previa lo dice.
+        (propuesta.CurrentInstallment.LeftRule, propuesta.CurrentInstallment.LeftRuleReason)
+            .Should().Be((AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional, Application.Lending.Common.InteresesAlCancelar.MotivoTopeDesconocido));
+        propuesta.CurrentInstallment.LeftAsSent.Should().BeGreaterThan(propuesta.CurrentInstallment.Left!.Value);
+        propuesta.CurrentInstallment.Explanation.Should().Contain("interés proporcional");
         var aplicada = r.Payoffs.Single();
         (aplicada.Applied, aplicada.LeftInstallment, aplicada.LeftInstallmentNumber).Should().Be((l.SalvoCuota.ValorARecoger, (decimal?)l.SalvoCuota.QuedaEnLaCuota, (int?)1));
         r.NetToDisburse.Should().Be(5_000_000m - l.SalvoCuota.ValorARecoger);

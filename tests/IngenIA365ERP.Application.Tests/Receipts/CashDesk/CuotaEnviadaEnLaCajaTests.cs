@@ -79,21 +79,35 @@ public class CuotaEnviadaEnLaCajaTests
         return r.Value!.Obligations.Single(o => o.ObligationPublicId == p.Credito.PublicId);
     }
 
-    [Fact]
-    public async Task El_listado_dice_la_regla_de_la_linea_y_lo_que_cuesta_dejar_la_cuota_enviada()
+    /// <summary>
+    /// 2026-11-27 (D13 ajustada por el dueño): la regla con que se deja la cuota la decide el motivo legal, como en el contrato: sin los valores nacionales
+    /// (tope desconocido) y dentro del tope legal del prepago (880 SMMLV), el proporcional; fuera del tope (1 SMMLV), tal como se envió.
+    /// </summary>
+    [Theory]
+    [InlineData("sin-tope", "Proporcional", "LegalPrepaymentCapUnknown")]
+    [InlineData("dentro-del-tope", "Proporcional", "WithinLegalPrepaymentCap")]
+    [InlineData("fuera-del-tope", "TalComoSeEnvio", null)]
+    public async Task El_listado_dice_la_regla_de_la_linea_y_lo_que_cuesta_dejar_la_cuota_enviada(string tope, string regla, string? motivo)
     {
-        using var p = await PagosDePrueba.CrearAsync(sinTopeDePrepago: true);
+        using var p = await PagosDePrueba.CrearAsync(sinTopeDePrepago: tope == "sin-tope", topeSmmlv: tope == "fuera-del-tope" ? 1m : 880m);
         AlCancelar(p, ParametrosDeCartera.CuotaExcluir);
         await p.CausarHastaAsync(AMitad);
         Enviada(p);
         var cargado = await p.C.Cargador().CargarAsync(p.Credito.Id, null, AMitad, default);
-        var esperado = AplicadorDePagos.ValorParaCancelarSalvoCuota(MotorDeCartera.Reconstruir(cargado!.Entrada!, AMitad), null, cuotaCompleta: false);
+        var estado = MotorDeCartera.Reconstruir(cargado!.Entrada!, AMitad);
+        var proporcional = regla == AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional;
+        var esperado = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, cuotaCompleta: false, proporcional: proporcional);
+        var talComoSeEnvio = AplicadorDePagos.ValorParaCancelarSalvoCuota(estado, null, cuotaCompleta: false);
 
         var o = await ListadoAsync(p);
 
         o.SentInstallment!.InstallmentNumber.Should().Be(1);
         o.SentInstallmentAtPayoff.Should().Be(CuotaEnviadaAlCancelar.Excluir);
         (o.PayoffExceptSentInstallmentAmount, o.SentInstallmentLeftAmount).Should().Be(((decimal?)esperado.ParaCancelar, (decimal?)esperado.QuedaEnLaCuota));
+        (o.SentInstallmentLeftRule, o.SentInstallmentLeftRuleReason).Should().Be((regla, motivo));
+        o.SentInstallmentAsSentAmount.Should().Be(talComoSeEnvio.QuedaEnLaCuota, "lo que la cuota debería tal como se envió");
+        o.PayoffExceptSentInstallmentAmount.Should().Be(talComoSeEnvio.ParaCancelar, "lo que se cancela no cambia con la regla");
+        if (proporcional) o.SentInstallmentLeftAmount.Should().BeLessThan(o.SentInstallmentAsSentAmount!.Value, "el proporcional no cobra los días sobre lo cancelado");
         o.AdmittedModalities.Should().Contain(ModalidadDePago.PayoffExceptCurrentInstallment);
         o.PayoffExceptSentInstallmentAmount.Should().BeLessThan(o.PayoffAmount);
     }

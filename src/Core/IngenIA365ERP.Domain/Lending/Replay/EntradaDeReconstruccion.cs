@@ -213,6 +213,13 @@ public sealed record EntradaDeReconstruccion(
     public IReadOnlyList<AjusteDelCorte> AjustesDelCorte { get; init; } = [];
 
     /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): sólo para la proyección del interés proporcional de la cuota que se deja
+    /// (<see cref="ReconstruccionDeCredito.InteresPorCausarSobreSuCapital"/>): desde el día siguiente a <c>Desde</c>, en la base de la corriente sólo entra el
+    /// capital de <c>Cuota</c>. Nula —toda reconstrucción real— es la de siempre. (nuevo)
+    /// </summary>
+    internal (int Cuota, DateOnly Desde)? SoloSuCapital { get; init; }
+
+    /// <summary>
     /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la
     /// reconstrucción lleva plan y saldos en UVR y devuelve el estado valorado en pesos con la UVR del día (<c>Housing.ReconstruccionEnUvr</c>).
     /// Los montos de la entrada (desembolsos, pagos, saldos iniciales, tolerancias) siguen en pesos: la reconstrucción los convierte a su fecha.

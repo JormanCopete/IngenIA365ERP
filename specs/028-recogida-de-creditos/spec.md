@@ -204,7 +204,10 @@ con «Sí»: se devuelven los 10 días restantes; con «No» se cobra la cuota c
    por qué.
 4. **Dado** «Excluir» la cuota causada y «Sí», **cuando** se recoge, **entonces** la cuota causada queda **tal como se envió** (capital, interés
    del período completo, seguro y administración: D13) y la devolución proporcional sólo alcanza lo causado de las cuotas posteriores; la
-   pantalla explica que el interés de esa cuota se cobra completo porque la pagaduría la paga tal cual.
+   pantalla explica que el interés de esa cuota se cobra completo porque la pagaduría la paga tal cual. **Ajustado el 2026-11-27 (D13 ajustada):**
+   dentro del tope legal del prepago (o sin los valores nacionales para saberlo) la cuota se deja con el interés proporcional —lo causado hasta la
+   fecha sobre todo el saldo y el resto del período sólo sobre su capital—, y la pantalla dice cuánto, por qué y qué pasa con lo que la pagaduría
+   gire de más; fuera del tope, como se describe arriba.
 
 ### HU6 — Recoger aportes y ahorros (P2)
 
@@ -433,7 +436,10 @@ Cada una con la recomendación. Las respuestas se anotan aquí y en `research.md
   **Recomendada: A.**
 - **D13 — El interés de la cuota que se deja («Excluir»).** A: la cuota queda tal como se envió, con el interés del período completo sobre todo
   el saldo; la pagaduría la paga exacta y el crédito cierra al peso. B: se recalcula sobre el capital que queda y lo que la pagaduría gire de
-  más se le devuelve al asociado. **Recomendada: A** (B deja un excedente por cada recogida).
+  más se le devuelve al asociado. **Recomendada: A** (B deja un excedente por cada recogida). **Ajustada por el dueño el 2026-11-27** (Ley 1555 de
+  2012, prepago sin penalidad): dentro del tope legal del prepago, o sin los valores nacionales para saberlo, la cuota lleva el interés proporcional
+  (sobre todo el saldo hasta el día de la recogida y, de ahí a su vencimiento, sólo sobre su capital); fuera del tope, A; vivienda, completa
+  (research §3, enmienda E-15).
 
 ## Fuera de alcance
 

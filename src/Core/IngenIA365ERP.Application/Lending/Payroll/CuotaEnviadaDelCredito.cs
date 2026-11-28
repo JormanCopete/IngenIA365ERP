@@ -274,22 +274,30 @@ public static class TextosDeCuotaEnviada
     /// Qué pasa con la cuota causada en la recogida: con «Excluir», que se deja en el crédito y la paga su canal (el crédito queda cancelado cuando la pague);
     /// con «Incluir» y la cuota enviada, que se recoge completa y qué pasa con lo que el canal descuente después. Nula si se incluye y no hay nada enviado.
     /// </summary>
-    public static string? EnLaRecogida(int cuota, decimal valor, InstallmentTreatment tratamiento, CuotaEnviada? enviada)
+    /// <remarks>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <paramref name="regla"/> proporcional (dentro del tope legal del prepago), la cuota no queda tal
+    /// como se envió: lleva el interés proporcional, y el texto dice cuánto, por qué y qué pasa con lo que sobre si su canal la paga completa
+    /// (<paramref name="comoSeEnvio"/>): de la pagaduría, según <see cref="GiroPosterior"/>; de la nómina, vuelve al neto del empleado; de otro canal, vuelve
+    /// como excedente a quien paga. Sin regla, D13-A como siempre.
+    /// </remarks>
+    public static string? EnLaRecogida(int cuota, decimal valor, InstallmentTreatment tratamiento, CuotaEnviada? enviada, ReglaDeCuotaDejada? regla = null,
+        decimal? comoSeEnvio = null)
     {
         var sujeto = $"La cuota {cuota} por {Pesos(valor)}";
         var donde = enviada is not null && enviada.Estado != SentInstallmentState.None ? $"{sujeto} {DondeVa(enviada)}" : null;
         if (tratamiento == InstallmentTreatment.Exclude)
         {
-            // HU5-4 (D13-A): la cuota queda tal como se envió, con el interés de su período completo.
-            const string TalComoSeEnvio = " Queda tal como se envió, con el interés de su período completo, para que su canal la pague al peso.";
+            // HU5-4 (D13-A): la cuota queda tal como se envió, con el interés de su período completo. 2026-11-27 (D13 ajustada): o con el proporcional.
+            var conLaRegla = regla is { Proporcional: true } ? Proporcional(cuota, valor, enviada, regla, comoSeEnvio)
+                : " Queda tal como se envió, con el interés de su período completo, para que su canal la pague al peso.";
             if (enviada is { EnNominaPropia: true })
                 return $"{donde}: se deja en el crédito y la descontará la nómina; el crédito queda cancelado cuando se apruebe la nómina que la aplica."
-                       + TalComoSeEnvio;
+                       + conLaRegla;
             if (enviada is { Estado: SentInstallmentState.NotDeducted })
-                return $"{donde}: se deja en el crédito y se cobra como cualquier cuota no descontada, con la regla del convenio." + TalComoSeEnvio;
+                return $"{donde}: se deja en el crédito y se cobra como cualquier cuota no descontada, con la regla del convenio." + conLaRegla;
             if (enviada is { EnPagaduria: true })
-                return $"{donde}: se deja en el crédito y la pagará la pagaduría; el crédito queda cancelado cuando la gire." + TalComoSeEnvio;
-            return $"{sujeto} se deja en el crédito: la paga su canal de siempre y el crédito queda cancelado cuando se pague." + TalComoSeEnvio;
+                return $"{donde}: se deja en el crédito y la pagará la pagaduría; el crédito queda cancelado cuando la gire." + conLaRegla;
+            return $"{sujeto} se deja en el crédito: la paga su canal de siempre y el crédito queda cancelado cuando se pague." + conLaRegla;
         }
         if (donde is null) return null;
         return enviada!.Estado switch
@@ -299,6 +307,28 @@ public static class TextosDeCuotaEnviada
                 $"{donde}: se recoge completa; al aprobar la nómina, el descuento de este crédito baja a cero y el neto del empleado sube.",
             SentInstallmentState.NotDeducted => $"{donde}: se recoge completa.",
             _ => $"{donde}: se recoge completa; lo que la pagaduría gire después se tratará según {GiroPosterior}.",
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño; Ley 1555 de 2012): «Se deja con el interés proporcional (dentro del tope legal del prepago sin
+    /// penalidad, Ley 1555 de 2012): $409.000. Si la pagaduría gira la cuota completa ($412.000), los $3.000 de más se tratan según …». (nuevo)
+    /// </summary>
+    public static string Proporcional(int cuota, decimal valor, CuotaEnviada? enviada, ReglaDeCuotaDejada regla, decimal? comoSeEnvio)
+    {
+        ArgumentNullException.ThrowIfNull(regla);
+        var razon = regla.Razon is { } r ? $" ({r})" : string.Empty;
+        var texto = $" La cuota {cuota} se deja con el interés proporcional{razon}: {Pesos(valor)}; el interés de los días que le faltan sobre el capital que se "
+                    + "recoge no se cobra.";
+        if (comoSeEnvio is not { } completa || completa <= valor) return texto;
+        var deMas = completa - valor;
+        return texto + enviada switch
+        {
+            { EnNominaPropia: true } => $" Si la nómina descuenta la cuota completa ({Pesos(completa)}), los {Pesos(deMas)} de más vuelven al neto del empleado al "
+                                        + "aprobarla.",
+            { EnPagaduria: true } => $" Si la pagaduría gira la cuota completa ({Pesos(completa)}), los {Pesos(deMas)} de más se tratan según {GiroPosterior}.",
+            _ => $" Si su canal paga la cuota completa ({Pesos(completa)}), los {Pesos(deMas)} de más no entran al crédito: vuelven como excedente a quien la "
+                 + "pague.",
         };
     }
 

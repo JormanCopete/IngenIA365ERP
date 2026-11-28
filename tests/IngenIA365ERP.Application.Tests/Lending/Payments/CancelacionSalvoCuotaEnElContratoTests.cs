@@ -24,7 +24,9 @@ public class CancelacionSalvoCuotaEnElContratoTests : IAsyncLifetime
     private static readonly Recaudador Recogida = new("CAR", ClaseDeRecaudador.OwnLoanPayoff);
     private PagosDePrueba _p = null!;
 
-    public async Task InitializeAsync() => _p = await PagosDePrueba.CrearAsync();
+    // 2026-11-27 (D13 ajustada): estas pruebas son la cuota tal como se envió (D13-A): el crédito de Ana fuera del tope legal del prepago (1 SMMLV). Las del
+    // proporcional, dentro del tope, arman su propio escenario.
+    public async Task InitializeAsync() => _p = await PagosDePrueba.CrearAsync(topeSmmlv: 1m);
 
     public Task DisposeAsync()
     {

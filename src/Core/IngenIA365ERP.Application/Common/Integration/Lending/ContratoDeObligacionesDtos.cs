@@ -95,6 +95,22 @@ public sealed record ObligacionListadaDto(
 
     /// <summary>2026-11-27 (feature 028, E2, T071): lo que la cuota enviada queda debiendo a su canal si se deja (con <see cref="PayoffExceptSentInstallmentAmount"/>). (nuevo)</summary>
     public decimal? SentInstallmentLeftAmount { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <see cref="SentInstallmentLeftAmount"/>, la regla con que el contrato dejaría la cuota:
+    /// <c>TalComoSeEnvio</c> (fuera del tope legal del prepago) o <c>Proporcional</c> (dentro del tope —Ley 1555 de 2012— o sin los valores nacionales para
+    /// saberlo). La misma que aplica la modalidad: la caja no la decide. Campo nuevo y opcional. (nuevo)
+    /// </summary>
+    public string? SentInstallmentLeftRule { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): por qué se deja con el proporcional (<c>WithinLegalPrepaymentCap</c>, <c>LegalPrepaymentCapUnknown</c>). (nuevo)</summary>
+    public string? SentInstallmentLeftRuleReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): con el proporcional, lo que la cuota debería si se dejara tal como se envió —lo que su canal tiene para pagar—;
+    /// la diferencia con <see cref="SentInstallmentLeftAmount"/> es lo que sobra si la paga completa. Igual a ella tal como se envió. (nuevo)
+    /// </summary>
+    public decimal? SentInstallmentAsSentAmount { get; init; }
 }
 
 /// <summary>

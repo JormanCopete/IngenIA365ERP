@@ -178,6 +178,18 @@ public sealed record DisbursementPayoffInstallmentDto(int Number, DateOnly? DueD
 
     /// <summary>Qué pasa con la cuota en la recogida («se deja en el crédito y la pagará la pagaduría…», «se recoge completa…»).</summary>
     public string? Explanation { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <c>Left</c>, la regla con que se deja (<c>TalComoSeEnvio</c> o <c>Proporcional</c>, dentro del
+    /// tope legal del prepago), su motivo y lo que la cuota debería tal como se envió. (nuevo)
+    /// </summary>
+    public string? LeftRule { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): por qué el proporcional (<c>WithinLegalPrepaymentCap</c>, <c>LegalPrepaymentCapUnknown</c>). (nuevo)</summary>
+    public string? LeftRuleReason { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): lo que la cuota debería tal como se envió (la diferencia con <c>Left</c> es lo que sobraría). (nuevo)</summary>
+    public decimal? LeftAsSent { get; init; }
 }
 
 /// <summary>

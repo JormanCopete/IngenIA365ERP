@@ -72,6 +72,31 @@ public class CuotaEnviadaEnLaCajaTests
         CuotaEnviadaEnLaCaja.Aviso(Credito(CuotaEnviadaEnLaCaja.Incluir), 3).Should().BeNull("sólo se avisa al cancelar");
     }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, T062a; D13 ajustada por el dueño): dentro del tope legal del prepago Cartera deja la cuota con el interés proporcional; el aviso lo
+    /// dice, con lo que sobraría si su canal la paga completa (la pagaduría: saldo de la pagaduría; la nómina: vuelve al neto del empleado).
+    /// </summary>
+    [Fact]
+    public void Con_el_proporcional_el_aviso_dice_la_regla_y_lo_que_sobraria()
+    {
+        var o = Credito(CuotaEnviadaEnLaCaja.Excluir) with
+        {
+            SentInstallmentLeftAmount = 147_000m, SentInstallmentLeftRule = CuotaEnviadaEnLaCaja.Proporcional,
+            SentInstallmentLeftRuleReason = "WithinLegalPrepaymentCap", SentInstallmentAsSentAmount = 150_000m,
+        };
+
+        CuotaEnviadaEnLaCaja.Aviso(o, CuotaEnviadaEnLaCaja.SalvoLaCuota).Should()
+            .Contain("con el interés proporcional (dentro del tope legal del prepago sin penalidad, Ley 1555 de 2012)")
+            .And.Contain("147.000").And.Contain("150.000").And.Contain("3.000").And.Contain("saldo de la pagaduría").And.NotContain("tal como se envió");
+        var nomina = Credito(CuotaEnviadaEnLaCaja.Excluir, nomina: true) with
+        {
+            SentInstallmentLeftAmount = 147_000m, SentInstallmentLeftRule = CuotaEnviadaEnLaCaja.Proporcional, SentInstallmentAsSentAmount = 150_000m,
+        };
+        CuotaEnviadaEnLaCaja.Aviso(nomina, CuotaEnviadaEnLaCaja.SalvoLaCuota).Should().Contain("vuelven al neto del empleado");
+        CuotaEnviadaEnLaCaja.Aviso(Credito(CuotaEnviadaEnLaCaja.Excluir), CuotaEnviadaEnLaCaja.SalvoLaCuota).Should()
+            .Contain("tal como se envió", "fuera del tope legal, como siempre");
+    }
+
     [Fact]
     public void En_la_nomina_propia_el_aviso_dice_que_el_descuento_baja_a_cero()
     {
@@ -90,7 +115,8 @@ public class CuotaEnviadaEnLaCajaTests
             "admittedModalities":[1,2,3,4,5,6,7,8],"blockReasons":[],"hasPaymentAgreement":false,"validationFailed":false,
             "sentInstallment":{"state":1,"installmentNumber":7,"dueDate":"2027-01-01","paymaster":"Secretaría","agreement":"MUN","file":"MUN-000001",
             "period":"enero de 2027","currentAmount":150000,"pastDueAmount":0,"totalAmount":150000,"payrollRunPublicId":null,"explanation":"La cuota 7 ya se envió."},
-            "sentInstallmentAtPayoff":"Excluir","payoffExceptSentInstallmentAmount":1850000,"sentInstallmentLeftAmount":150000}],"lendingStatus":2}
+            "sentInstallmentAtPayoff":"Excluir","payoffExceptSentInstallmentAmount":1850000,"sentInstallmentLeftAmount":150000,
+            "sentInstallmentLeftRule":"Proporcional","sentInstallmentLeftRuleReason":"WithinLegalPrepaymentCap","sentInstallmentAsSentAmount":152000}],"lendingStatus":2}
             """;
 
         var listado = JsonSerializer.Deserialize<ListadoPagableDto>(json, Json)!;
@@ -98,6 +124,8 @@ public class CuotaEnviadaEnLaCajaTests
         var o = listado.Obligations.Should().ContainSingle().Subject;
         (o.SentInstallment!.State, o.SentInstallment.InstallmentNumber, o.SentInstallment.File).Should().Be((1, (int?)7, "MUN-000001"));
         (o.SentInstallmentAtPayoff, o.PayoffExceptSentInstallmentAmount, o.SentInstallmentLeftAmount).Should().Be(("Excluir", (decimal?)1_850_000m, (decimal?)150_000m));
+        (o.SentInstallmentLeftRule, o.SentInstallmentLeftRuleReason, o.SentInstallmentAsSentAmount)
+            .Should().Be(("Proporcional", "WithinLegalPrepaymentCap", (decimal?)152_000m), "la regla con que Cartera deja la cuota (D13 ajustada)");
         CuotaEnviadaEnLaCaja.LaPropone(o).Should().BeTrue();
         CajaClient.Modalidad(8).Should().Be("Todo menos la cuota enviada");
         CajaClient.AyudaDeModalidad(8).Should().Contain("tal como se envió");

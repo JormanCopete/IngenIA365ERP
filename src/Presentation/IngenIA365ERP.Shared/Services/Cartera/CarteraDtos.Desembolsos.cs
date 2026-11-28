@@ -85,6 +85,14 @@ public sealed record CuotaCausadaDelDesembolsoDto(int Number, DateOnly? DueDate,
     public CuotaEnviadaDto? Sent { get; init; }
     public string? Explanation { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <see cref="Left"/>, la regla con que se deja (<c>TalComoSeEnvio</c> o <c>Proporcional</c>, dentro
+    /// del tope legal del prepago), su motivo y lo que la cuota debería tal como se envió. (nuevo)
+    /// </summary>
+    public string? LeftRule { get; init; }
+    public string? LeftRuleReason { get; init; }
+    public decimal? LeftAsSent { get; init; }
+
     /// <summary>¿Se deja a su canal? («todo menos la cuota causada»).</summary>
     public bool SeDeja => Treatment == "Exclude";
 

@@ -19,6 +19,9 @@ public class CancelacionSalvoCuotaTests
 {
     private const string Diaria = "01-ciclo-de-la-cuota-causacion-diaria.json";
     private const string InicioDelCiclo = "02-al-inicio-del-ciclo.json";
+    private const string ProporcionalDiaria = "06-proporcional-causacion-diaria.json";
+    private const string ProporcionalInicioDelCiclo = "07-proporcional-al-inicio-del-ciclo.json";
+    private const string ProporcionalCalendario = "08-proporcional-periodo-calendario.json";
 
     public static IEnumerable<object[]> Escenarios() =>
         CasoDeCancelacionSalvoCuota.Archivos().SelectMany(a =>
@@ -28,7 +31,9 @@ public class CancelacionSalvoCuotaTests
     public void Estan_los_casos_dorados_de_la_cancelacion_salvo_la_cuota_causada()
     {
         CasoDeCancelacionSalvoCuota.Archivos().Select(Path.GetFileName).Should().Equal(
-            Diaria, InicioDelCiclo, "03-periodo-calendario.json", "04-con-anticipo.json", "05-seguro-y-administracion.json");
+            Diaria, InicioDelCiclo, "03-periodo-calendario.json", "04-con-anticipo.json", "05-seguro-y-administracion.json",
+            // 2026-11-27 (D13 ajustada): la cuota dejada con el interés proporcional, dentro del tope legal del prepago.
+            ProporcionalDiaria, ProporcionalInicioDelCiclo, ProporcionalCalendario);
         CasoDeCancelacionSalvoCuota.CargarPorNombre(Diaria).Escenarios.Select(e => e.Nombre).Should().Equal(
             "base", "pago-tardio", "reverso", "otra-cuota-pedida", "fondos-insuficientes");
     }
@@ -51,6 +56,7 @@ public class CancelacionSalvoCuotaTests
         var entrada = caso.Entrada(e.Operaciones, op.RegistradoEn);
         var aplicada = MotorDeCartera.Reconstruir(entrada, op.FechaValor).Pagos[op.Id];
         Comparar(aplicada, e.Esperado, "aplicada");
+        aplicada.CuotaDejadaProporcional.Should().Be(aplicada.CuotaDejada is not null && op.CuotaDejadaProporcional, "la regla de la cuota dejada (D13 ajustada)");
 
         var antes = MotorDeCartera.Reconstruir(entrada with { Operaciones = entrada.Operaciones.Where(o => o.Id != op.Id).ToList() }, op.FechaValor);
         var credito = caso.Condiciones.Credito(caso.Condiciones.RulesVersion);
@@ -62,8 +68,11 @@ public class CancelacionSalvoCuotaTests
 
         if (e.Valor is { } v)
         {
-            var valor = AplicadorDePagos.ValorParaCancelarSalvoCuota(antes, op.Cuota, op.CuotaCompleta, op.PeriodoCalendario);
+            var valor = AplicadorDePagos.ValorParaCancelarSalvoCuota(antes, op.Cuota, op.CuotaCompleta, op.PeriodoCalendario, op.CuotaDejadaProporcional);
             (valor.Cuota, valor.ParaCancelar, valor.QuedaEnLaCuota).Should().Be((v.Cuota, v.ParaCancelar, v.QuedaEnLaCuota), "lo que cuesta sin aplicar");
+            // 2026-11-27 (D13 ajustada): tal como se envió es lo mismo sin la regla proporcional; con ella, lo calculado a mano.
+            valor.QuedaTalComoSeEnvio.Should().Be(v.QuedaTalComoSeEnvio ?? v.QuedaEnLaCuota, "lo que la cuota debería tal como se envió");
+            valor.Proporcional.Should().Be(op.CuotaDejadaProporcional);
             valor.InteresFijado.Sum(l => l.Monto).Should().Be(e.Esperado.InteresFijado.Sum(l => l.Valor), "el interés del período que se causa en la cuota");
             if (v.ParaCancelar > 0m)
             {
@@ -188,6 +197,8 @@ public class CancelacionSalvoCuotaTests
     [Theory]
     [InlineData(Diaria)]
     [InlineData(InicioDelCiclo)]
+    [InlineData(ProporcionalDiaria)]
+    [InlineData(ProporcionalInicioDelCiclo)]
     public void Causar_dia_a_dia_con_la_cuota_dejada_deja_el_libro_de_la_reconstruccion(string archivo)
     {
         var caso = CasoDeCancelacionSalvoCuota.CargarPorNombre(archivo);
@@ -308,6 +319,71 @@ public class CancelacionSalvoCuotaTests
         despues.Pagos["R"].Cancela.Should().BeTrue("la reconstrucción repite la cancelación total");
         despues.Pagos["R"].Avisos.Should().Contain(AplicadorDePagos.AvisoViviendaSeCancelaCompleto);
         despues.ValorParaCancelar.Should().Be(0m);
+    }
+
+    // --------------------------------------------------------------------------------- D13 ajustada: el proporcional --
+
+    /// <summary>
+    /// D13 ajustada (2026-11-27, Ley 1555 de 2012; caso 06): dentro del tope legal del prepago la cuota se deja con el interés proporcional: lo que se causa en
+    /// ella es el de los días que le faltan sobre su propio capital (3.000 = 400.000 × 0,0005 × 15), no sobre todo el saldo (6.000). La diferencia es el
+    /// interés de esos días sobre el capital que se cancela, y no se cobra; lo que cuesta lo demás no cambia.
+    /// </summary>
+    [Fact]
+    public void El_proporcional_no_cobra_los_dias_que_faltan_sobre_el_capital_que_se_cancela()
+    {
+        var caso = CasoDeCancelacionSalvoCuota.CargarPorNombre(ProporcionalDiaria);
+        var e = caso.Escenario("base");
+        var recogida = new DateOnly(2027, 4, 30);
+        var antes = MotorDeCartera.Reconstruir(caso.Entrada(e.Operaciones.Where(o => o.Id is "D1" or "P1").ToList(),
+            new DateTime(2027, 4, 30, 23, 0, 0, DateTimeKind.Utc)), recogida);
+
+        antes.InteresPorCausarDeLaCuotaEnCurso().Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(((int?)2, LoanConcept.CurrentInterest, 6_000m));
+        antes.InteresPorCausarSobreSuCapital(2).Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(((int?)2, LoanConcept.CurrentInterest, 3_000m));
+        antes.InteresPorCausarSobreSuCapital(3).Should().BeEmpty("la cuota 3 no es la del período en curso");
+
+        var tal = AplicadorDePagos.ValorParaCancelarSalvoCuota(antes, null, cuotaCompleta: false);
+        var proporcional = AplicadorDePagos.ValorParaCancelarSalvoCuota(antes, null, cuotaCompleta: false, proporcional: true);
+        proporcional.ParaCancelar.Should().Be(tal.ParaCancelar, "lo que se cancela no cambia");
+        (tal.QuedaEnLaCuota - proporcional.QuedaEnLaCuota).Should().Be(400_000m * 0.0005m * 15, "los 15 días sobre el capital que se cancela");
+        proporcional.QuedaTalComoSeEnvio.Should().Be(tal.QuedaEnLaCuota);
+        proporcional.DeMasSiSePagaComoSeEnvio.Should().Be(3_000m);
+        tal.DeMasSiSePagaComoSeEnvio.Should().Be(0m);
+        // Con la cuota completa pedida por el parámetro, la cuota dejada no la cobra: lo mismo.
+        AplicadorDePagos.ValorParaCancelarSalvoCuota(antes, null, cuotaCompleta: true, proporcional: true).QuedaEnLaCuota.Should().Be(409_000m);
+
+        var estado = MotorDeCartera.Reconstruir(caso.Entrada(e.Operaciones, new DateTime(2027, 5, 14, 23, 0, 0, DateTimeKind.Utc)), new DateOnly(2027, 5, 15),
+            recogida);
+        estado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.UnaccruedInstallmentInterest)
+            .Select(m => (m.Dia, m.Concepto, m.Cuota, m.Monto)).Should().Equal((recogida, LoanConcept.CurrentInterest, (int?)2, 3_000m));
+        estado.Libro.Movimientos.Should().NotContain(m => m.Clase == LoanTransactionKind.Accrual && m.Concepto == LoanConcept.CurrentInterest && m.Dia > recogida,
+            "congelada, la cuota 2 no causa más: su valor queda fijo");
+    }
+
+    /// <summary>
+    /// D13 ajustada (casos 07 y 08): lo reconocido al inicio del ciclo (o del tramo) que la cuota dejada con el proporcional ya no va a causar —lo de los días
+    /// que faltan sobre el capital cancelado— se devuelve el mismo día con la operación que la dejó (<c>RecognitionRelease</c>), que lo lleva a la contabilidad
+    /// en su acompañante; con la cuota tal como se envió (caso 02) no queda nada que devolver.
+    /// </summary>
+    [Theory]
+    [InlineData(ProporcionalInicioDelCiclo, "2027-04-30", LoanConcept.RecognizedInterest, -3_000)]
+    [InlineData(ProporcionalCalendario, "2027-05-10", LoanConcept.RecognizedInterestDirect, -1_000)]
+    [InlineData(InicioDelCiclo, "2027-04-30", LoanConcept.RecognizedInterest, 0)]
+    public void Lo_reconocido_de_mas_se_devuelve_con_la_recogida(string archivo, string fechaTexto, LoanConcept concepto, int devuelto)
+    {
+        var caso = CasoDeCancelacionSalvoCuota.CargarPorNombre(archivo);
+        var e = caso.Escenario("base");
+        var recogida = DateOnly.Parse(fechaTexto, System.Globalization.CultureInfo.InvariantCulture);
+        var estado = MotorDeCartera.Reconstruir(caso.Entrada(e.Operaciones, new DateTime(2027, 5, 14, 23, 0, 0, DateTimeKind.Utc)), new DateOnly(2027, 5, 14),
+            new DateOnly(2027, 3, 15));
+
+        var devoluciones = estado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.RecognitionRelease && m.Cuota == 2).ToList();
+        if (devuelto == 0)
+        {
+            devoluciones.Where(m => m.Dia <= new DateOnly(2027, 5, 14)).Should().BeEmpty("tal como se envió, la cuota consume todo lo reconocido");
+            return;
+        }
+        devoluciones.Select(m => (m.Dia, m.Concepto, m.Monto, m.OperacionId)).Should().Equal((recogida, concepto, (decimal)devuelto, (string?)"R"));
+        estado.Reconocidos.Should().BeEmpty("lo reconocido de la cuota dejada quedó cerrado el día de la recogida");
     }
 
     // ------------------------------------------------------------------------------------------------------------- ayudas --

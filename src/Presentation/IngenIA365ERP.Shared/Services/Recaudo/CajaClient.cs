@@ -65,6 +65,18 @@ public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number
 
     /// <summary>2026-11-27 (feature 028, E2, T071): lo que la cuota enviada queda debiendo a su canal si se deja.</summary>
     public decimal? SentInstallmentLeftAmount { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con qué regla la dejaría Cartera: <c>TalComoSeEnvio</c> (fuera del tope legal del prepago) o
+    /// <c>Proporcional</c> (dentro del tope —Ley 1555 de 2012— o sin los valores nacionales para saberlo); la caja no la decide.
+    /// </summary>
+    public string? SentInstallmentLeftRule { get; init; }
+
+    /// <summary>2026-11-27 (D13 ajustada): por qué el proporcional (<c>WithinLegalPrepaymentCap</c>, <c>LegalPrepaymentCapUnknown</c>).</summary>
+    public string? SentInstallmentLeftRuleReason { get; init; }
+
+    /// <summary>2026-11-27 (D13 ajustada): lo que la cuota debería tal como se envió; con el proporcional, la diferencia es lo que sobraría.</summary>
+    public decimal? SentInstallmentAsSentAmount { get; init; }
 }
 
 /// <summary>
@@ -419,7 +431,8 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         7 => "Valor libre: paga lo vencido por la prelación y el resto queda como anticipo general (como «Anticipo»). Úsela cuando el asociado trae un "
              + "valor que no corresponde a una cuota.",
         8 => "Todo menos la cuota enviada: cancela todo lo que debe el crédito salvo la cuota del período que ya va en el archivo de la pagaduría o en la "
-             + "nómina; esa cuota queda en el crédito tal como se envió y la paga su canal. Úsela para no cobrarle al asociado una cuota que ya le van a descontar.",
+             + "nómina; esa cuota queda en el crédito y la paga su canal (dentro del tope legal del prepago, con el interés proporcional; fuera, tal como se envió). "
+             + "Úsela para no cobrarle al asociado una cuota que ya le van a descontar.",
         _ => "Cómo se aplica el pago al crédito: elija la modalidad y pase el cursor sobre ella para ver cómo funciona.",
     };
 }

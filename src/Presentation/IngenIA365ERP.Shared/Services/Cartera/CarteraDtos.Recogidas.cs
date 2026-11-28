@@ -87,6 +87,17 @@ public sealed record CuotaCausadaDeRecogidaDto(int Number, DateOnly? DueDate, de
     /// <summary>Por qué no se puede dejar aunque la línea lo pida (vivienda, sin cuota causada a la fecha).</summary>
     public string? NotLeftReason { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <see cref="Left"/>, la regla con que se deja: <c>TalComoSeEnvio</c> o <c>Proporcional</c> (dentro
+    /// del tope legal del prepago, Ley 1555 de 2012), su motivo y lo que la cuota debería tal como se envió. (nuevo)
+    /// </summary>
+    public string? LeftRule { get; init; }
+    public string? LeftRuleReason { get; init; }
+    public decimal? LeftAsSent { get; init; }
+
+    /// <summary>2026-11-27 (D13 ajustada): ¿se deja con el interés proporcional? (nuevo)</summary>
+    public bool DejadaConProporcional => LeftRule == TextosDeRecogida.CuotaDejadaProporcional;
+
     /// <summary>Qué pasa con la cuota con el tratamiento <paramref name="tratamiento"/> (nulo, el que rige).</summary>
     public string? Explicacion(int? tratamiento) => tratamiento switch
     {
@@ -355,6 +366,10 @@ public static class TextosDeRecogida
 
     public const int CuotaIncluida = 1;
     public const int CuotaExcluida = 2;
+
+    // 2026-11-27 (feature 028, D13 ajustada por el dueño): con qué regla se deja la cuota causada (LeftInstallmentRule).
+    public const string CuotaDejadaTalComoSeEnvio = "TalComoSeEnvio";
+    public const string CuotaDejadaProporcional = "Proporcional";
 
     // 2026-11-27 (feature 028, E2, T066): SentInstallmentState (en qué va la cuota del período frente a su canal).
     public const int EnvioNinguno = 0;

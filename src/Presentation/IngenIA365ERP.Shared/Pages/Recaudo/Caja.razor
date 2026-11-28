@@ -227,7 +227,7 @@
                                             {
                                                 <label class="campo-check">
                                                     <input type="checkbox" checked="@(item.LoanModality == CuotaEnviadaEnLaCaja.SalvoLaCuota)"
-                                                           data-ayuda="Marcado, se cancela todo menos la cuota enviada: queda en el crédito tal como se envió y la paga su canal. Sin marcar, la cancelación la cobra."
+                                                           data-ayuda="Marcado, se cancela todo menos la cuota enviada: queda en el crédito (con el interés proporcional dentro del tope legal del prepago; fuera, tal como se envió) y la paga su canal. Sin marcar, la cancelación la cobra."
                                                            @onchange="@(e => DejarLaCuota(item, e.Value is true))" />
                                                     Dejar la cuota enviada para que la pague su canal
                                                 </label>

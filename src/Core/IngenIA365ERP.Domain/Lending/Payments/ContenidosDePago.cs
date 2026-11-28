@@ -40,6 +40,13 @@ public sealed record ContenidoDePago(PaymentModality Modalidad, decimal Valor)
     /// (<see cref="SolicitudDeDistribucion.PeriodoCalendario"/>). Falso —un pago anterior que no lo trae— es el ciclo de la cuota. (nuevo)
     /// </summary>
     public bool PeriodoCalendario { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): en la cancelación salvo la cuota causada, la cuota se dejó con el interés proporcional (sellado en su decisión,
+    /// <c>LeftInstallmentRule = Proporcional</c>; <see cref="SolicitudDeDistribucion.CuotaDejadaProporcional"/>). Falso —un pago que no lo trae— es la cuota tal
+    /// como se envió (D13-A). (nuevo)
+    /// </summary>
+    public bool CuotaDejadaProporcional { get; init; }
 }
 
 /// <summary>

@@ -137,11 +137,13 @@ public sealed class HuellaDeCartera
                     (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
                 .Canonico();
         // 2026-11-27 (feature 028, R4): la cuota que deja la cancelación salvo la cuota causada y el interés del período que se causa en ella, sólo si la hay.
+        // 2026-11-27 (feature 028, D13 ajustada): la regla proporcional, sólo si la hay (las huellas de la cuota tal como se envió no cambian).
         if (d.CuotaDejada is { } dejada)
             canonico += "|" + new HuellaDeCartera()
                 .Entero("cuotaDejada", dejada)
                 .Lista("interesDeLaCuotaDejada", Ordenadas(d.InteresDeLaCuotaDejada),
                     (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
+                .Si(d.CuotaDejadaProporcional, x => x.Texto("reglaDeLaCuotaDejada", Payments.AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional))
                 .Canonico();
         return DeTexto($"{rulesVersion}|{canonico}");
     }

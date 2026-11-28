@@ -63,14 +63,16 @@ internal sealed class PagosDePrueba : IDisposable
     /// <summary>
     /// Arma el escenario con el crédito de Ana desembolsado hoy y los valores nacionales del tope de prepago. Con <paramref name="sinTopeDePrepago"/>
     /// no siembra ni el SMMLV ni el límite <c>PREPAGO_TOPE_SMMLV</c> (la recogida no los necesita, decisión del dueño del 2026-10-14).
+    /// 2026-11-27 (feature 028, D13 ajustada): <paramref name="topeSmmlv"/> es el límite en veces el SMMLV; con 880 (el legal) el crédito de Ana está dentro
+    /// del tope del prepago y la cuota que deja una cancelación salvo la cuota causada lleva el interés proporcional; con 1, fuera (tal como se envió).
     /// </summary>
-    public static async Task<PagosDePrueba> CrearAsync(bool sinTopeDePrepago = false, CausacionDePrueba? causacion = null)
+    public static async Task<PagosDePrueba> CrearAsync(bool sinTopeDePrepago = false, CausacionDePrueba? causacion = null, decimal topeSmmlv = 880m)
     {
         var p = new PagosDePrueba(causacion ?? await CausacionDePrueba.CrearAsync());
         if (!sinTopeDePrepago)
             await CopiasDePrueba.SembrarAsync(p.Db, p.G.UtcNow.AddDays(-40),
                 CopiasDePrueba.Copia(CodigosDeValorNacional.Smmlv, string.Empty, new DateOnly(2026, 1, 1), 1_750_905m, p.G.UtcNow.AddDays(-40), unidad: "Pesos"),
-                CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.PrepagoTopeSmmlv, new DateOnly(2026, 1, 1), 880m, p.G.UtcNow.AddDays(-40),
+                CopiasDePrueba.Copia(CodigosDeValorNacional.Limite, CatalogoDeLimitesLegales.PrepagoTopeSmmlv, new DateOnly(2026, 1, 1), topeSmmlv, p.G.UtcNow.AddDays(-40),
                     unidad: "Veces"));
         p.Db.ChangeTracker.Clear();
         p.G.Conceder();

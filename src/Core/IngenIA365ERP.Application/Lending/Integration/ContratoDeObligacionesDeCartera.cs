@@ -152,6 +152,8 @@ public sealed class ContratoDeObligacionesDeCartera(
                 ? await aplicacion.ValorParaCancelarSalvoCuotaAsync(credito, estado, ct)
                 : null;
             if (salvo is not null && enviada!.Cuota is { } cuotaEnviada && cuotaEnviada != salvo.Cuota) salvo = null;
+            // 2026-11-27 (feature 028, D13 ajustada): con qué regla la dejaría el contrato (la misma con que la aplica la modalidad).
+            var regla = salvo is null ? null : await aplicacion.CuotaDejadaAsync(credito, estado, ct);
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado, periodoCalendario: calendario),
                 ComprobantesDePago.CuotaDelCiclo(estado, calendario),
@@ -167,6 +169,9 @@ public sealed class ContratoDeObligacionesDeCartera(
                 SentInstallmentAtPayoff = alCancelar,
                 PayoffExceptSentInstallmentAmount = salvo?.ParaCancelar,
                 SentInstallmentLeftAmount = salvo?.QuedaEnLaCuota,
+                SentInstallmentLeftRule = regla?.Regla,
+                SentInstallmentLeftRuleReason = regla?.Motivo,
+                SentInstallmentAsSentAmount = salvo?.QuedaTalComoSeEnvio,
             });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);

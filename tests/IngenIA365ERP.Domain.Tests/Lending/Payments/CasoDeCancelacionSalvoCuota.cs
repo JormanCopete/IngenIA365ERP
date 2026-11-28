@@ -81,6 +81,9 @@ public sealed class CasoDeCancelacionSalvoCuota
         public int? Cuota { get; set; }
         public decimal ParaCancelar { get; set; }
         public decimal QuedaEnLaCuota { get; set; }
+
+        /// <summary>2026-11-27 (feature 028, D13 ajustada): con el proporcional, lo que la cuota debería si se dejara tal como se envió.</summary>
+        public decimal? QuedaTalComoSeEnvio { get; set; }
     }
 
     public sealed class CierreJson

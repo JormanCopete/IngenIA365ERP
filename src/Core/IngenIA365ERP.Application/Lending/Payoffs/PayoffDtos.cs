@@ -90,6 +90,21 @@ public sealed record PayoffCurrentInstallmentDto(int Number, DateOnly? DueDate, 
 
     /// <summary>Por qué no se puede dejar aunque la línea lo pida (vivienda, sin cuota causada a la fecha); nula si se puede o la línea dice «Incluir».</summary>
     public string? NotLeftReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): con <see cref="Left"/>, la regla con que se deja: <c>TalComoSeEnvio</c> (fuera del tope legal del
+    /// prepago) o <c>Proporcional</c> (dentro del tope —Ley 1555 de 2012— o sin los valores nacionales para saberlo). (nuevo)
+    /// </summary>
+    public string? LeftRule { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada): por qué el proporcional (<c>WithinLegalPrepaymentCap</c>, <c>LegalPrepaymentCapUnknown</c>). (nuevo)</summary>
+    public string? LeftRuleReason { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): lo que la cuota debería tal como se envió; con el proporcional, la diferencia con <see cref="Left"/> es lo que
+    /// sobra si su canal la paga completa. (nuevo)
+    /// </summary>
+    public decimal? LeftAsSent { get; init; }
 }
 
 /// <summary>

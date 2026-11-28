@@ -13,6 +13,8 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 /// </list>
 /// Dejarla sólo se ofrece si Cartera dio lo que cuesta (la cuota sigue en su canal sin respuesta y es la causada del período) y la admite. Puro: lo usa
 /// <c>Pages/Recaudo/Caja.razor</c>. (nuevo)
+/// 2026-11-27 (feature 028, D13 ajustada por el dueño): dentro del tope legal del prepago Cartera la deja con el interés proporcional
+/// (<c>SentInstallmentLeftRule = Proporcional</c>): el aviso lo dice, con lo que sobraría si su canal la paga completa.
 /// </summary>
 public static class CuotaEnviadaEnLaCaja
 {
@@ -61,13 +63,38 @@ public static class CuotaEnviadaEnLaCaja
         var cuota = e.InstallmentNumber is { } n ? $"la cuota {n}" : "la cuota del período";
         var canal = e.EnNominaPropia ? "la nómina" : "la pagaduría";
         if (modalidad == SalvoLaCuota)
-            return $"{e.Explanation} Se cancela todo menos {cuota}: queda en el crédito"
-                   + (o.SentInstallmentLeftAmount is { } queda ? $" por {queda.ToString("C0", Colombia)}" : string.Empty)
-                   + $", tal como se envió, para que la pague {canal}.";
+            return o.SentInstallmentLeftRule == Proporcional
+                ? $"{e.Explanation} Se cancela todo menos {cuota}: queda en el crédito"
+                  + (o.SentInstallmentLeftAmount is { } dejada ? $" por {dejada.ToString("C0", Colombia)}" : string.Empty)
+                  + $", con el interés proporcional ({RazonDelProporcional(o.SentInstallmentLeftRuleReason)}), para que la pague {canal}."
+                  + DeMas(o, e)
+                : $"{e.Explanation} Se cancela todo menos {cuota}: queda en el crédito"
+                  + (o.SentInstallmentLeftAmount is { } queda ? $" por {queda.ToString("C0", Colombia)}" : string.Empty)
+                  + $", tal como se envió, para que la pague {canal}.";
         var despues = e.EnNominaPropia
             ? "Si el crédito queda cancelado antes de aprobar la nómina, su descuento baja a cero con aviso."
             : "Lo que la pagaduría gire después por ella quedará como saldo de la pagaduría.";
         var opcion = OfreceDejarla(o) ? $" Puede dejarla: «{CajaClient.Modalidad(SalvoLaCuota)}»." : string.Empty;
         return $"{e.Explanation} La cancelación la cobra. {despues}{opcion}";
+    }
+
+    /// <summary>2026-11-27 (feature 028, D13 ajustada por el dueño): la regla con que Cartera deja la cuota dentro del tope legal del prepago.</summary>
+    public const string Proporcional = "Proporcional";
+
+    /// <summary>Por qué el proporcional, en palabras.</summary>
+    private static string RazonDelProporcional(string? motivo) => motivo switch
+    {
+        "LegalPrepaymentCapUnknown" => "faltan los valores nacionales para saber si el crédito está fuera del tope legal del prepago",
+        _ => "dentro del tope legal del prepago sin penalidad, Ley 1555 de 2012",
+    };
+
+    /// <summary>Con el proporcional: lo que sobra si su canal paga la cuota completa, tal como se envió.</summary>
+    private static string DeMas(ObligacionPagableDto o, CuotaEnviadaDeLaCajaDto e)
+    {
+        if (o.SentInstallmentAsSentAmount is not { } completa || o.SentInstallmentLeftAmount is not { } dejada || completa <= dejada) return string.Empty;
+        var deMas = (completa - dejada).ToString("C0", Colombia);
+        return e.EnNominaPropia
+            ? $" Si la nómina descuenta la cuota completa ({completa.ToString("C0", Colombia)}), los {deMas} de más vuelven al neto del empleado."
+            : $" Si la pagaduría gira la cuota completa ({completa.ToString("C0", Colombia)}), los {deMas} de más no entran al crédito: quedan como saldo de la pagaduría.";
     }
 }

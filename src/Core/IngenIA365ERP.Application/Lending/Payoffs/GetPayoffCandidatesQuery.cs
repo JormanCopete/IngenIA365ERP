@@ -296,6 +296,10 @@ public sealed class GetPayoffCandidatesQueryHandler(
             IncludedExplanation = incluida.ExplicacionDeLaCuota,
             LeftExplanation = dejada?.ExplicacionDeLaCuota,
             NotLeftReason = l.CuotaCausadaConfigurada != ParametrosDeCartera.CuotaIncluir && !l.AdmiteDejarLaCuota ? l.RecogidoCompletoPorque : null,
+            // 2026-11-27 (feature 028, D13 ajustada): la regla con que se deja (proporcional dentro del tope legal del prepago) y lo que sería tal como se envió.
+            LeftRule = l.SalvoCuota?.Regla.Regla,
+            LeftRuleReason = l.SalvoCuota?.Regla.Motivo,
+            LeftAsSent = l.SalvoCuota?.QuedaTalComoSeEnvio,
         };
     }
 

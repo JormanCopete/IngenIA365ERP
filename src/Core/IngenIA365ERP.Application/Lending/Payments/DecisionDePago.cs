@@ -94,9 +94,20 @@ public sealed record DecisionDePago
     /// 2026-11-27 (feature 028, R4, T059): en la cancelación salvo la cuota causada que dejó la cuota (<see cref="Installment"/>), la regla con que la dejó
     /// (<c>TalComoSeEnvio</c>, D13-A: con el interés del período completo). Nulo en todo lo demás (también si terminó siendo total). Constancia: la
     /// reconstrucción deja la cuota de <see cref="Installment"/> con la única regla que hay. Sin columna nueva. (nuevo)
+    /// 2026-11-27 (feature 028, D13 ajustada por el dueño): o <c>Proporcional</c> —dentro del tope legal del prepago o sin los valores nacionales para saberlo
+    /// (<see cref="LeftInstallmentRuleReason"/>)—: la cuota lleva lo causado hasta la fecha valor sobre todo el saldo y el resto del período sólo sobre su
+    /// capital. Ya no es sólo constancia: la reconstrucción lee <c>Proporcional</c> (<see cref="ContenidoDePago.CuotaDejadaProporcional"/>); cualquier otro
+    /// valor, o ninguno, es <c>TalComoSeEnvio</c>, así los pagos de antes no cambian.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LeftInstallmentRule { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, D13 ajustada): por qué la cuota se dejó con el proporcional (<c>WithinLegalPrepaymentCap</c> o <c>LegalPrepaymentCapUnknown</c>,
+    /// los de <see cref="Common.InteresesAlCancelar"/>). Nulo tal como se envió. Constancia. Sin columna nueva. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LeftInstallmentRuleReason { get; init; }
 
     /// <summary>
     /// 2026-11-27 (feature 028, R4, T059): el interés del período que la cancelación salvo la cuota causada causó en la cuota que dejó (cero si ya estaba causado).
@@ -120,6 +131,8 @@ public sealed record DecisionDePago
             CuotaCompleta = string.Equals(InterestBeforeDueDate, Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta, StringComparison.Ordinal),
             Rubros = OrdenDeRubros.DesdeSellado(AllocationRubrics),
             PeriodoCalendario = string.Equals(AccrualPeriod, Domain.Lending.Parameters.ParametrosDeCartera.PeriodoCalendario, StringComparison.Ordinal),
+            // 2026-11-27 (feature 028, D13 ajustada): la cuota dejada con el interés proporcional.
+            CuotaDejadaProporcional = string.Equals(LeftInstallmentRule, AplicadorDePagos.ReglaDeLaCuotaDejadaProporcional, StringComparison.Ordinal),
         };
 
     /// <summary>
