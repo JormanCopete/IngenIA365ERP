@@ -54,12 +54,14 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
         var plan = new DisbursementScheduleDto(s.Plan.Cuotas.Count, s.TasaPactada,
             s.Plan.Cuotas.Select(c => new DisbursementScheduleLineDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Total)
                 { Administration = c.Administracion }).ToList());
-        var porReconocer = r.Recogidas.Where(x => x.PorReconocer).ToList();
+        var porReconocer = r.Recogidas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)
+            .Concat(r.RecogidasDeCuentas.Where(x => x.PorReconocer).Select(x => x.Diferencia.Total)).ToList();
         return Result.Success(new DisbursementPreviewDto(
             new DisbursementUsuryDto(s.Usura.EfectivaConCargos, s.Usura.Usura, s.Usura.Pasa, s.Usura.UsuraPublicId),
             new DisbursementApprovalDto(r.Solicitud.ApprovalValidUntil, !r.Solicitud.AprobacionVencida(r.FechaValor)),
             new DisbursementCollateralsDto(r.Pendientes.Count == 0, r.Pendientes),
-            r.Recogidas.Select(Recogida).ToList(),
+            // 2026-11-27 (feature 028, E3, T077): las cuentas recogidas, detrás de los créditos.
+            r.Recogidas.Select(x => Recogida(x)).Concat(r.RecogidasDeCuentas.Select(x => Recogida(x))).ToList(),
             r.Tramo,
             r.Bruto,
             r.Neto,
@@ -70,9 +72,35 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
             r.Avisos,
             r.Huella)
         {
-            PayoffDifferences = new DisbursementPayoffDifferencesDto(porReconocer.Count, porReconocer.Sum(x => x.Diferencia.Total), r.RequiereReconocimiento,
-                r.Recogidas.Any(x => x.SobreLaTolerancia)),
+            PayoffDifferences = new DisbursementPayoffDifferencesDto(porReconocer.Count, porReconocer.Sum(), r.RequiereReconocimiento,
+                r.Recogidas.Any(x => x.SobreLaTolerancia) || r.RecogidasDeCuentas.Any(x => x.SobreLaTolerancia)),
         });
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T077, T081; api.md §3): una cuenta recogida como la muestra la vista previa: <c>kind = Account</c>, el producto, el modo
+    /// (por cuotas o abono), lo proyectado, lo de ahora (lo pendiente a la fecha valor o el abono), lo que se consigna, la diferencia con su causa y si se omite.
+    /// Sin mora, intereses ni cuota causada (no es una deuda).
+    /// </summary>
+    public static DisbursementPreviewPayoffDto Recogida(RecogidaDeCuentaEvaluada x)
+    {
+        ArgumentNullException.ThrowIfNull(x);
+        return new DisbursementPreviewPayoffDto(Guid.Empty, x.Number, x.Actual, 0, false)
+        {
+            Kind = nameof(PayoffProductKind.Account),
+            ProductPublicId = x.AccountPublicId,
+            Mode = x.Modo.ToString(),
+            RequestedMode = x.Modo.ToString(),
+            Projected = x.ConProyeccion ? x.Proyectado : null,
+            Current = x.Actual,
+            ToApply = x.AAplicar,
+            Difference = x.ConProyeccion || x.Omitida ? x.Diferencia.Total : null,
+            Causes = RequisitosDelDesembolso.Causas(x.Diferencia.Causa),
+            Detail = Detalle(x.Diferencia.PorConcepto),
+            Omitted = x.Omitida,
+            AboveTolerance = x.SobreLaTolerancia,
+            Warnings = x.Avisos,
+        };
     }
 
     /// <summary>Una recogida como la muestra la vista previa (api.md §3).</summary>
@@ -140,7 +168,7 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
     /// </summary>
     public static PrevalidationDto Prevalidacion(RequisitosEvaluados r)
     {
-        var resultados = new[] { r.Prevalidacion, r.PrevalidacionDeRecogidas }.OfType<ResultadoDeValidacionPreviaDeCartera>()
+        var resultados = new[] { r.Prevalidacion, r.PrevalidacionDeRecogidas, r.PrevalidacionDeCuentas }.OfType<ResultadoDeValidacionPreviaDeCartera>()
             .Where(p => p.Outcome != PrevalidationOutcome.NotApplicable).ToList();
         var aplica = resultados.Count > 0;
         var respondio = resultados.All(p => p.Outcome != PrevalidationOutcome.NoResponse);

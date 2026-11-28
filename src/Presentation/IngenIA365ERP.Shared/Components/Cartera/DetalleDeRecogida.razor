@@ -4,7 +4,49 @@
    concepto (lo devuelto por proporcionales y el anticipo se descuentan), el modo de intereses con su explicación, la cuota causada y qué se hace con
    ella, por qué no se puede recoger y los avisos. No consulta nada: pinta lo que trajo la consulta.
    2026-11-27 (feature 028, E2, T072; HU4): con el tratamiento de la cuota causada que eligió el asesor (o el de la línea): el desglose de todo menos la
-   cuota si se deja, la cuota con lo que deberá, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella. *@
+   cuota si se deja, la cuota con lo que deberá, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella.
+   2026-11-27 (feature 028, E3, T081; HU6): una cuenta de aportes o ahorros muestra sus cuotas pendientes a la fecha (lo que se recoge «por cuotas») y si su
+   línea admite un abono; no tiene intereses ni cuota causada. *@
+@if (Producto.EsCuenta)
+{
+    <div class="form-grid">
+        <div class="campo">
+            <span class="etiqueta-campo">Cuotas pendientes a la fecha</span>
+            @if (Producto.PendingInstallments.Count == 0)
+            {
+                <span class="texto-tenue">Sin cuotas pendientes a la fecha proyectada.</span>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Período</th><th>Vence</th><th class="numero">Pendiente</th></tr></thead>
+                    <tbody>
+                        @foreach (var cuota in Producto.PendingInstallments)
+                        {
+                            <tr><td>@cuota.Period</td><td>@cuota.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeRecogida.Pesos(cuota.Pending)</td></tr>
+                        }
+                        <tr><th colspan="2">Por cuotas</th><th class="numero">@TextosDeRecogida.Pesos(Producto.ToPayOff)</th></tr>
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="campo">
+            <span class="etiqueta-campo">Producto</span>
+            <span>@TextosDeRecogida.ProductoDeCuenta(Producto.AccountProduct) · @Producto.Line</span>
+            <span class="etiqueta-campo">Abono</span>
+            <span>@(Producto.DepositNotAllowedReason ?? "La cuenta admite un abono por el valor que se indique.")</span>
+        </div>
+    </div>
+    @if (!Producto.Eligible && Producto.BlockMessage is { } motivoDeLaCuenta)
+    {
+        <p class="aviso aviso-alerta">@motivoDeLaCuenta</p>
+    }
+    @foreach (var aviso in Producto.Warnings)
+    {
+        <p class="aviso aviso-info">@aviso</p>
+    }
+    return;
+}
 <div class="form-grid">
     <div class="campo">
         <span class="etiqueta-campo">Lo que cuesta recogerlo</span>

@@ -105,6 +105,9 @@ public sealed record RecogidaEvaluada(int LoanId, Guid LoanPublicId, string Numb
     public static ResultadoDeDiferencia SinDiferencia { get; } = new(0m, DesgloseDeRecogida.Vacio, PayoffDifferenceCause.None);
 }
 
+/// <summary>2026-11-27 (feature 028, T035, E3): las recogidas vueltas a evaluar bajo el cerrojo: los créditos y las cuentas. (nuevo)</summary>
+public sealed record RecogidasReevaluadas(IReadOnlyList<RecogidaEvaluada> Creditos, IReadOnlyList<RecogidaDeCuentaEvaluada> Cuentas);
+
 /// <summary>El beneficiario del giro resuelto: la persona del maestro con su copia y la cuenta, tal como se sellará en la orden (I-1). (nuevo)</summary>
 public sealed record BeneficiarioResuelto(
     int PersonId,
@@ -151,6 +154,16 @@ public sealed record RequisitosEvaluados
     public required bool MoraSobreIntereses { get; init; }
     public required IReadOnlyList<GarantiaPendienteDto> Pendientes { get; init; }
     public required IReadOnlyList<RecogidaEvaluada> Recogidas { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T077; HU6): las cuentas de aportes y ahorros que recoge el desembolso, aparte de los créditos (se consignan por
+    /// <see cref="RecogidaDeCuentas"/>, no por el contrato de obligaciones). Vacía sin ellas. (nuevo)
+    /// </summary>
+    public IReadOnlyList<RecogidaDeCuentaEvaluada> RecogidasDeCuentas { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, E3, T080): la validación previa de las consignaciones de las cuentas recogidas; nula sin ellas. (nuevo)</summary>
+    public ResultadoDeValidacionPreviaDeCartera? PrevalidacionDeCuentas { get; init; }
+
     public BeneficiarioResuelto? Beneficiario { get; init; }
 
     /// <summary>2026-11-23 (descuento condicionado): la compra del bien con la parte que paga el fondo; nula en los demás créditos.</summary>
@@ -175,11 +188,11 @@ public sealed record RequisitosEvaluados
 
     public bool EsElPrimero => CreditoId is null;
 
-    /// <summary>Lo que se aplica a los productos recogidos (los omitidos no suman).</summary>
-    public decimal Recogido => Recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
+    /// <summary>Lo que se aplica a los productos recogidos (los omitidos no suman). 2026-11-27 (feature 028, E3): también lo que se consigna en cuentas.</summary>
+    public decimal Recogido => Recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar) + RecogidasDeCuentas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
 
     /// <summary>2026-11-27 (feature 028, FR-015): hay una diferencia o un producto omitido: confirmar exige reconocerlo. (nuevo)</summary>
-    public bool RequiereReconocimiento => Recogidas.Any(r => r.PorReconocer);
+    public bool RequiereReconocimiento => Recogidas.Any(r => r.PorReconocer) || RecogidasDeCuentas.Any(r => r.PorReconocer);
     public decimal Neto => Bruto - Recogido;
     public decimal Desembolsado => YaDesembolsado + Bruto;
 
@@ -230,7 +243,8 @@ public sealed class RequisitosDelDesembolso(
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
     IDateTimeService reloj,
-    Housing.LectorDeVivienda? vivienda = null)
+    Housing.LectorDeVivienda? vivienda = null,
+    RecogidaDeCuentas? cuentas = null)
 {
     /// <summary>El permiso que desembolsa (y cuyo monto operativo se mira).</summary>
     public const string PermisoDeDesembolsar = "Lending.Disbursements.Execute";
@@ -352,7 +366,7 @@ public sealed class RequisitosDelDesembolso(
         // mismo orden de siempre.
         var bloqueosDeRecogidas = new List<Error>();
         var avisosDeRecogidas = new List<string>();
-        var (recogidas, tolerancia) = await RecogidasAsync(s, pedidas.Value, creditoId is null, fechaValor, bloqueosDeRecogidas, avisosDeRecogidas, ct);
+        var (recogidas, deCuentas, tolerancia) = await RecogidasAsync(s, pedidas.Value, creditoId is null, fechaValor, bloqueosDeRecogidas, avisosDeRecogidas, ct);
         // Un producto omitido (ya cancelado) no libera nada: ya no estaba.
         var recogidasQueLiberan = recogidas.Where(r => !r.Omitida).Select(r => new RecogidaEnLaValidacion(r.LoanId, r.Number, r.Total, r.AAplicar)).ToList();
         var medida = await concentracion.ValidarAsync(s.ApplicantPersonId, bruto, conGarantia, fechaValor, s.Id,
@@ -371,12 +385,13 @@ public sealed class RequisitosDelDesembolso(
         // 7. Recogidas (evaluadas con la concentración, arriba).
         bloqueosHallados.AddRange(bloqueosDeRecogidas);
         avisos.AddRange(avisosDeRecogidas);
-        var recogido = recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
-        if (recogidas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
+        // 2026-11-27 (feature 028, E3): lo que se consigna en cuentas también sale del giro.
+        var recogido = recogidas.Where(r => !r.Omitida).Sum(r => r.AAplicar) + deCuentas.Where(r => !r.Omitida).Sum(r => r.AAplicar);
+        if (recogidas.Count + deCuentas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
 
         // 7b. 2026-11-23 (descuento condicionado): el giro al proveedor por el valor del bien; el fondo pone la diferencia.
-        var compra = await CompraAsync(s, personas, creditoId, aprobado, bruto, e.Form, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas.Count,
-            bloqueosHallados, ct);
+        var compra = await CompraAsync(s, personas, creditoId, aprobado, bruto, e.Form, beneficiario.IsSuccess ? beneficiario.Value : null,
+            recogidas.Count + deCuentas.Count, bloqueosHallados, ct);
 
         // 8. Validación previa contable.
         // Origen pantalla (T0655, §13.2): bloquea sólo con Contabilidad.FaltaDeRegla o .PoliticaSinRespuesta en «Bloquear»; la alerta la levanta
@@ -392,9 +407,15 @@ public sealed class RequisitosDelDesembolso(
         // 2026-11-27 (feature 028, T037; FR-027a): los PagoAplicado con que el contrato aplicará las recogidas (clase OwnLoanPayoff), con la misma pregunta
         // que hace el contrato al aplicar; lo que bloquearía allá se ve aquí, antes de confirmar. No se sella en el desembolso.
         var prevalidacionDeRecogidas = await PrevalidacionDeRecogidasAsync(s, recogidas, bloqueosHallados, avisos, ct);
+        // 2026-11-27 (feature 028, E3, T080; FR-027a): las consignaciones de las cuentas recogidas, con la misma pregunta que haría el contrato de cuentas
+        // (AporteRecibido o ConsignacionEnCuentaAplicada con la clase OwnLoanPayoff); su resultado se sella en cada consignación.
+        ResultadoDeValidacionPreviaDeCartera? prevalidacionDeCuentas = null;
+        if (deCuentas.Count > 0 && cuentas is not null)
+            (deCuentas, prevalidacionDeCuentas) = await cuentas.ValidacionPreviaAsync(deCuentas, s.ApplicantPersonId, s.Number ?? s.PublicId.ToString("N"),
+                bloqueosHallados, avisos, ct);
 
         var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e.Form, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion,
-            compra?.Subsidio ?? 0m);
+            compra?.Subsidio ?? 0m, deCuentas);
         return Result.Success(new RequisitosEvaluados
         {
             Solicitud = s,
@@ -413,6 +434,8 @@ public sealed class RequisitosDelDesembolso(
             MoraSobreIntereses = moraSobreIntereses,
             Pendientes = pendientes,
             Recogidas = recogidas,
+            RecogidasDeCuentas = deCuentas,
+            PrevalidacionDeCuentas = prevalidacionDeCuentas,
             Beneficiario = beneficiario.IsSuccess ? beneficiario.Value : null,
             Compra = compra,
             SucursalPublicId = sucursal.IsSuccess ? sucursal.Value : null,
@@ -551,35 +574,37 @@ public sealed class RequisitosDelDesembolso(
     /// cuerpo es opcional y, si viene, debe ser la de la solicitud (<c>Lending.Payoff.MustMatchApplication</c>). Cada una se evalúa con
     /// <see cref="EvaluarRecogidasAsync"/>. Devuelve también la tolerancia leída (nula si no hay recogidas o el parámetro está vacío).
     /// </summary>
-    private async Task<(IReadOnlyList<RecogidaEvaluada> Recogidas, decimal? Tolerancia)> RecogidasAsync(CreditApplication s, IReadOnlyList<PayoffInput> pedidas,
-        bool primerTramo, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
+    private async Task<(IReadOnlyList<RecogidaEvaluada> Recogidas, IReadOnlyList<RecogidaDeCuentaEvaluada> Cuentas, decimal? Tolerancia)> RecogidasAsync(
+        CreditApplication s, IReadOnlyList<PayoffInput> pedidas, bool primerTramo, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
     {
         var autorizadas = primerTramo ? await AutorizadasAsync(s.Id, ct) : [];
         if (pedidas.Count > 0 && !Coinciden(pedidas, autorizadas))
             hallados.Add(ErroresDeRecogida.DebeCoincidirConLaSolicitud(autorizadas.Select(Descripcion).ToList()));
-        if (autorizadas.Count == 0) return ([], null);
+        if (autorizadas.Count == 0) return ([], [], null);
         var contexto = await ContextoAsync(s, fecha, ct);
-        return (await EvaluarRecogidasAsync(s, autorizadas, contexto, fecha, hallados, avisos, ct), contexto.Tolerancia);
+        var (creditos, deCuentas) = await EvaluarRecogidasAsync(s, autorizadas, contexto, fecha, hallados, avisos, ct);
+        return (creditos, deCuentas, contexto.Tolerancia);
     }
 
     /// <summary>
     /// 2026-11-27 (feature 028, T035): vuelve a evaluar las recogidas de <paramref name="r"/> con lo de ahora y las mismas reglas. El comando la llama bajo el
     /// cerrojo, después de la puesta al día: si lo que se aplica cambió desde la vista previa, se pide otra (<c>Lending.Disbursement.PreviewChanged</c>). Falla
-    /// con el primer bloqueo que aparezca.
+    /// con el primer bloqueo que aparezca. 2026-11-27 (feature 028, E3, T077): también las cuentas (sin volver a preguntar la validación previa: se sella la de la
+    /// vista previa).
     /// </summary>
-    public async Task<Result<IReadOnlyList<RecogidaEvaluada>>> ReevaluarRecogidasAsync(RequisitosEvaluados r, CancellationToken ct)
+    public async Task<Result<RecogidasReevaluadas>> ReevaluarRecogidasAsync(RequisitosEvaluados r, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(r);
-        if (!r.EsElPrimero || r.Recogidas.Count == 0) return Result.Success<IReadOnlyList<RecogidaEvaluada>>([]);
+        if (!r.EsElPrimero || r.Recogidas.Count + r.RecogidasDeCuentas.Count == 0) return Result.Success(new RecogidasReevaluadas([], []));
         var autorizadas = await AutorizadasAsync(r.Solicitud.Id, ct);
         var contexto = await ContextoAsync(r.Solicitud, r.FechaValor, ct);
         var hallados = new List<Error>();
-        var nuevas = await EvaluarRecogidasAsync(r.Solicitud, autorizadas, contexto, r.FechaValor, hallados, [], ct);
-        return hallados.Count > 0 ? Result.Failure<IReadOnlyList<RecogidaEvaluada>>(hallados[0]) : Result.Success(nuevas);
+        var (creditos, deCuentas) = await EvaluarRecogidasAsync(r.Solicitud, autorizadas, contexto, r.FechaValor, hallados, [], ct);
+        return hallados.Count > 0 ? Result.Failure<RecogidasReevaluadas>(hallados[0]) : Result.Success(new RecogidasReevaluadas(creditos, deCuentas));
     }
 
-    /// <summary>Una recogida autorizada por la solicitud y su crédito (nulo si no existe).</summary>
-    private sealed record RecogidaAutorizada(CreditApplicationPayoff Fila, Loan? Credito);
+    /// <summary>Una recogida autorizada por la solicitud y su crédito o su cuenta (nulos si no existen).</summary>
+    private sealed record RecogidaAutorizada(CreditApplicationPayoff Fila, Loan? Credito, Domain.Entities.Lending.Deposits.Accounts.MemberAccount? Cuenta = null);
 
     /// <summary>Con qué se evalúan las recogidas a la fecha valor: <c>Recogida.AlDesembolsar</c> de la línea del crédito nuevo, la tolerancia y la elección.</summary>
     private sealed record ContextoDeRecogidas(bool MantenerLoProyectado, decimal? Tolerancia, EleccionDeAbono Eleccion);
@@ -593,7 +618,13 @@ public sealed class RequisitosDelDesembolso(
         var creditos = ids.Count == 0
             ? new Dictionary<int, Loan>()
             : await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.Id)).ToDictionaryAsync(l => l.Id, ct);
-        return filas.Select(f => new RecogidaAutorizada(f, f.LoanId is { } id ? creditos.GetValueOrDefault(id) : null)).ToList();
+        // 2026-11-27 (feature 028, E3, T077): las cuentas de las filas de cuentas.
+        var idsDeCuenta = filas.Where(f => f.AccountId != null).Select(f => f.AccountId!.Value).Distinct().ToList();
+        var deCuentas = idsDeCuenta.Count == 0
+            ? new Dictionary<int, Domain.Entities.Lending.Deposits.Accounts.MemberAccount>()
+            : await db.MemberAccounts.AsNoTracking().IgnoreQueryFilters().Where(a => idsDeCuenta.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+        return filas.Select(f => new RecogidaAutorizada(f, f.LoanId is { } id ? creditos.GetValueOrDefault(id) : null,
+            f.AccountId is { } cuenta ? deCuentas.GetValueOrDefault(cuenta) : null)).ToList();
     }
 
     /// <summary>
@@ -627,14 +658,31 @@ public sealed class RequisitosDelDesembolso(
     /// </list>
     /// Se aplica como cancelación si lo que se aplica cubre lo que cuesta recogerlo; si no, como abono con la elección del deudor (D7).
     /// </summary>
-    private async Task<IReadOnlyList<RecogidaEvaluada>> EvaluarRecogidasAsync(CreditApplication s, IReadOnlyList<RecogidaAutorizada> autorizadas,
-        ContextoDeRecogidas contexto, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
+    private async Task<(IReadOnlyList<RecogidaEvaluada> Creditos, IReadOnlyList<RecogidaDeCuentaEvaluada> Cuentas)> EvaluarRecogidasAsync(CreditApplication s,
+        IReadOnlyList<RecogidaAutorizada> autorizadas, ContextoDeRecogidas contexto, DateOnly fecha, List<Error> hallados, List<string> avisos, CancellationToken ct)
     {
         var resultado = new List<RecogidaEvaluada>(autorizadas.Count);
+        var deCuentas = new List<RecogidaDeCuentaEvaluada>();
         var enMora = new List<RecogidaEnMoraDto>();
         var sobreLaTolerancia = new List<(string Numero, decimal Diferencia)>();
-        foreach (var (fila, credito) in autorizadas)
+        var cuentasSobreLaTolerancia = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (fila, credito, cuenta) in autorizadas)
         {
+            // 2026-11-27 (feature 028, E3, T077; HU6): una cuenta de aportes o ahorros se evalúa con RecogidaDeCuentas (lo pendiente a la fecha valor o el abono,
+            // su diferencia, su omisión y las reglas de su línea) y se consigna aparte de los créditos.
+            if (fila.ProductKind == PayoffProductKind.Account && cuentas is not null)
+            {
+                var deLaCuenta = await cuentas.EvaluarAsync(fila, cuenta, s.ApplicantPersonId, fecha, contexto.MantenerLoProyectado, contexto.Tolerancia, hallados,
+                    avisos, ct);
+                if (deLaCuenta is null) continue;
+                if (deLaCuenta.SobreLaTolerancia)
+                {
+                    sobreLaTolerancia.Add((deLaCuenta.Number, deLaCuenta.Diferencia.Total));
+                    cuentasSobreLaTolerancia.Add(deLaCuenta.Number);
+                }
+                deCuentas.Add(deLaCuenta);
+                continue;
+            }
             if (fila.ProductKind != PayoffProductKind.Loan)
             {
                 hallados.Add(ErroresDeRecogida.ClaseNoAdmitida(fila.ProductKind));
@@ -726,8 +774,9 @@ public sealed class RequisitosDelDesembolso(
             resultado.Add(evaluada);
         }
         if (enMora.Count > 0) hallados.Add(ErroresDeDesembolso.RequiereReestructuracion(enMora));
-        if (sobreLaTolerancia.Count > 0) hallados.Add(ErroresDeRecogida.DiferenciaSobreLaTolerancia(contexto.Tolerancia!.Value, sobreLaTolerancia));
-        return resultado;
+        if (sobreLaTolerancia.Count > 0)
+            hallados.Add(ErroresDeRecogida.DiferenciaSobreLaTolerancia(contexto.Tolerancia!.Value, sobreLaTolerancia, cuentasSobreLaTolerancia));
+        return (resultado, deCuentas);
     }
 
     /// <summary>Un producto ya cancelado: no se recoge, la diferencia es todo lo proyectado (el neto sube) y la causa, <c>ProductClosed</c>.</summary>
@@ -772,8 +821,8 @@ public sealed class RequisitosDelDesembolso(
     }
 
     /// <summary>
-    /// La lista del cuerpo es la autorizada (D9): los mismos productos, del mismo modo y, en un parcial o un abono, con el mismo valor. Las cuentas (E3) se
-    /// compararán por su identificador cuando lleguen.
+    /// La lista del cuerpo es la autorizada (D9): los mismos productos, del mismo modo y, en un parcial o un abono, con el mismo valor. 2026-11-27 (feature
+    /// 028, E3): las cuentas, por su <c>PublicId</c>.
     /// </summary>
     private static bool Coinciden(IReadOnlyList<PayoffInput> pedidas, IReadOnlyList<RecogidaAutorizada> autorizadas)
     {
@@ -781,7 +830,7 @@ public sealed class RequisitosDelDesembolso(
             {
                 PayoffProductKind.Loan => a.Credito?.PublicId.ToString("N"),
                 PayoffProductKind.CommercialReceivable => a.Fila.CommercialReceivableReference,
-                _ => a.Fila.AccountId?.ToString(CultureInfo.InvariantCulture),
+                _ => a.Cuenta?.PublicId.ToString("N") ?? a.Fila.AccountId?.ToString(CultureInfo.InvariantCulture),
             }, a.Fila.Mode, a.Fila.RequestedAmount))
             .Order(StringComparer.Ordinal).ToList();
         var delCuerpo = pedidas.Select(p => Llave(p.Kind, p.Kind == PayoffProductKind.CommercialReceivable ? p.Reference?.Trim() : p.ProductPublicId?.ToString("N"),
@@ -794,11 +843,14 @@ public sealed class RequisitosDelDesembolso(
             + (modo is PayoffMode.Partial or PayoffMode.Deposit && valor is { } v ? decimal.Round(v, 2).ToString("0.00", CultureInfo.InvariantCulture) : string.Empty);
     }
 
-    /// <summary>Cómo nombra el error de la lista una recogida autorizada: «número total» o «número parcial $valor».</summary>
-    private static string Descripcion(RecogidaAutorizada a) =>
-        a.Fila.Mode == PayoffMode.Partial && a.Fila.RequestedAmount is { } valor
-            ? $"{a.Fila.ProductNumber} parcial {ErroresDeRecogida.Pesos(valor)}"
-            : $"{a.Fila.ProductNumber} total";
+    /// <summary>Cómo nombra el error de la lista una recogida autorizada: «número total», «número parcial $valor», «número por cuotas» o «número abono $valor».</summary>
+    private static string Descripcion(RecogidaAutorizada a) => a.Fila.Mode switch
+    {
+        PayoffMode.Partial when a.Fila.RequestedAmount is { } valor => $"{a.Fila.ProductNumber} parcial {ErroresDeRecogida.Pesos(valor)}",
+        PayoffMode.Deposit when a.Fila.RequestedAmount is { } abono => $"{a.Fila.ProductNumber} abono {ErroresDeRecogida.Pesos(abono)}",
+        PayoffMode.Installments => $"{a.Fila.ProductNumber} por cuotas",
+        _ => $"{a.Fila.ProductNumber} total",
+    };
 
     /// <summary>Las causas de una diferencia por su nombre (<c>Payments</c>, <c>Accrual</c>…), en el orden de las banderas.</summary>
     public static IReadOnlyList<string> Causas(PayoffDifferenceCause causa) =>
@@ -890,8 +942,13 @@ public sealed class RequisitosDelDesembolso(
     /// La huella de la vista previa (<c>expectedPreviewSha256</c>): lo que, si cambia, cambia lo que se confirma. 2026-11-27 (feature 028, T033): por cada
     /// recogida, además de lo que se aplica, cómo se aplica, la diferencia con su causa y si se omite (sin recogidas, la huella de siempre).
     /// </summary>
+    /// <remarks>
+    /// 2026-11-27 (feature 028, E3, T077): con cuentas recogidas suma, por cuenta, el modo, lo que se consigna, las cuotas que cubre, la diferencia con su
+    /// causa y la omisión (sin cuentas, la huella de siempre).
+    /// </remarks>
     private static string Huella(CreditApplication s, int? credito, int tramo, decimal bruto, DateOnly fecha, DisbursementForm forma,
-        BeneficiarioResuelto? beneficiario, IReadOnlyList<RecogidaEvaluada> recogidas, SimulacionCalculada sim, decimal subsidio) =>
+        BeneficiarioResuelto? beneficiario, IReadOnlyList<RecogidaEvaluada> recogidas, SimulacionCalculada sim, decimal subsidio,
+        IReadOnlyList<RecogidaDeCuentaEvaluada>? cuentas = null) =>
         new HuellaDeCartera()
             .Identificador("application", s.PublicId)
             .Entero("loan", credito)
@@ -907,15 +964,23 @@ public sealed class RequisitosDelDesembolso(
                 .Logico("omitted", r.Omitida)
                 // 2026-11-27 (feature 028, E2, T066): la cuota que se deja a su canal (sin ella, la huella de siempre).
                 .Si(r.CuotaDejada is not null, x => x.Entero("leftInstallment", r.CuotaDejada).Decimal("leftAmount", r.ValorDejado ?? 0m)))
+            .Si(cuentas is { Count: > 0 }, h => h.Lista("accountPayoffs", cuentas!.OrderBy(c => c.AccountId), (x, c) => x
+                .Identificador("account", c.AccountPublicId).Enumeracion("mode", (PayoffMode?)c.Modo).Decimal("amount", c.AAplicar)
+                .Textos("installments", c.Cuotas.Select(q => q.ToString("N"))).Decimal("difference", c.Diferencia.Total)
+                .Enumeracion("causes", (PayoffDifferenceCause?)c.Diferencia.Causa).Logico("omitted", c.Omitida)))
             .Texto("simulation", sim.Huella)
             .Si(subsidio > 0m, h => h.Decimal("subsidy", subsidio))
             .Calcular();
 
-    /// <summary>2026-11-27 (feature 028, T035): la huella de <paramref name="r"/> con otras recogidas (las que se releen bajo el cerrojo). (nuevo)</summary>
-    public static string HuellaCon(RequisitosEvaluados r, IReadOnlyList<RecogidaEvaluada> recogidas)
+    /// <summary>
+    /// 2026-11-27 (feature 028, T035): la huella de <paramref name="r"/> con otras recogidas (las que se releen bajo el cerrojo). 2026-11-27 (E3): y otras
+    /// cuentas. (nuevo)
+    /// </summary>
+    public static string HuellaCon(RequisitosEvaluados r, IReadOnlyList<RecogidaEvaluada> recogidas, IReadOnlyList<RecogidaDeCuentaEvaluada>? cuentas = null)
     {
         ArgumentNullException.ThrowIfNull(r);
-        return Huella(r.Solicitud, r.CreditoId, r.Tramo, r.Bruto, r.FechaValor, r.Forma, r.Beneficiario, recogidas, r.Simulacion, r.Subsidio);
+        return Huella(r.Solicitud, r.CreditoId, r.Tramo, r.Bruto, r.FechaValor, r.Forma, r.Beneficiario, recogidas, r.Simulacion, r.Subsidio,
+            cuentas ?? r.RecogidasDeCuentas);
     }
 
     /// <summary>

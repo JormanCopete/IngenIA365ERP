@@ -120,11 +120,13 @@ public static class ErroresDeRecogida
     public const string CodigoModoNoAdmitido = "Lending.Payoff.ModeNotAdmitted";
     public const string CodigoNetoNoPositivo = "Lending.Payoff.NetNotPositive";
 
-    /// <summary>En la entrega E1 sólo se recogen créditos: una cuenta o una factura todavía no (llegan con E3 y E4).</summary>
+    /// <summary>
+    /// En la entrega E1 sólo se recogían créditos; desde E3 (2026-11-27, T077) también las cuentas de aportes y ahorros. Una factura todavía no (llega con E4).
+    /// </summary>
     public static Error ClaseNoAdmitida(PayoffProductKind clase) => new ErrorConDatos(CodigoProductoNoAdmitido,
         clase == PayoffProductKind.Account
-            ? "Por ahora el crédito nuevo sólo recoge créditos: las cuentas de aportes y ahorros se recogerán en otra entrega."
-            : "Por ahora el crédito nuevo sólo recoge créditos: las facturas a crédito se recogerán en otra entrega.",
+            ? "La recogida de cuentas de aportes y ahorros no está disponible aquí."
+            : "Por ahora el crédito nuevo no recoge facturas a crédito: se recogerán en otra entrega.",
         new { kind = clase.ToString() });
 
     /// <summary>La línea del crédito nuevo admite recoger créditos, pero no de ese modo (<c>Recogida.ProductosAdmitidos</c>).</summary>
@@ -164,10 +166,12 @@ public static class ErroresDeRecogida
         new { count = productos, total });
 
     /// <summary>Una diferencia pasa de <c>Recogida.ToleranciaDeDiferencia</c>: hay que devolver la solicitud y volver a mostrarle al asociado lo que recibe.</summary>
-    public static Error DiferenciaSobreLaTolerancia(decimal tolerancia, IReadOnlyList<(string Numero, decimal Diferencia)> productos) => new ErrorConDatos(
+    /// <remarks>2026-11-27 (feature 028, E3): los números de <paramref name="cuentas"/> se nombran como cuentas.</remarks>
+    public static Error DiferenciaSobreLaTolerancia(decimal tolerancia, IReadOnlyList<(string Numero, decimal Diferencia)> productos,
+        IReadOnlyCollection<string>? cuentas = null) => new ErrorConDatos(
         CodigoDiferenciaSobreLaTolerancia,
         $"Lo que se recoge cambió más de {Pesos(tolerancia)} desde la proyección de la solicitud en "
-        + string.Join(", ", productos.Select(p => $"el crédito {p.Numero} ({Pesos(p.Diferencia)})"))
+        + string.Join(", ", productos.Select(p => $"{(cuentas?.Contains(p.Numero) == true ? "la cuenta" : "el crédito")} {p.Numero} ({Pesos(p.Diferencia)})"))
         + ". Devuelva la solicitud para corregirla y mostrarle al asociado lo que recibe.",
         new { tolerance = tolerancia, products = productos.Select(p => new { number = p.Numero, difference = p.Diferencia }).ToList() });
 
@@ -196,6 +200,80 @@ public static class ErroresDeRecogida
     public static Error TratamientoNoAdmitido(string numero) => new ErrorConDatos(CodigoTratamientoNoAdmitido,
         $"La línea del crédito {numero} recoge la cuota causada completa (parámetro Recogida.CuotaCausada = Incluir): no se puede dejar a su canal.",
         new { number = numero });
+
+    // 2026-11-27 (feature 028, E3, T077–T078; HU6): los de recoger aportes y ahorros. (nuevo)
+
+    /// <summary>El motivo de una cuenta de aportes cuya línea no admite aportes extraordinarios (no admite un abono).</summary>
+    public const string MotivoSinAbono = "DepositNotAllowed";
+
+    /// <summary>La cooperativa no recoge ese producto con la línea del crédito nuevo (HU6-1: de fábrica, «la cooperativa no los recoge»).</summary>
+    public static BloqueoDeRecogida CuentaNoAdmitida(string numero, ProductoDeRecogida producto) => new(CodigoProductoNoAdmitido, MotivoNoAdmitido,
+        $"La cooperativa no recoge {TextoDelProducto(producto)} con el crédito nuevo (parámetro Recogida.ProductosAdmitidos): la cuenta {numero} no se puede "
+        + "recoger.");
+
+    /// <summary>La cuenta no recibe consignaciones: sólo se recoge una cuenta activa o inactiva.</summary>
+    public static BloqueoDeRecogida CuentaNoOperable(string numero, MemberAccountStatus estado) => new(CodigoNoPagable, MotivoNoActivo, estado switch
+    {
+        MemberAccountStatus.Closed => $"La cuenta {numero} ya está cancelada.",
+        MemberAccountStatus.Opening => $"La cuenta {numero} sigue en apertura: sólo se recoge una cuenta activa.",
+        _ => $"La cuenta {numero} está «{estado}»: sólo se recoge una cuenta activa o inactiva.",
+    });
+
+    public static BloqueoDeRecogida TitularFallecido(string numero) => new(CodigoNoPagable, MotivoNoActivo,
+        $"El titular de la cuenta {numero} figura como fallecido: la cuenta no recibe operaciones.");
+
+    /// <summary>HU6-2: una línea de aportes que no admite extraordinarios no admite un abono libre.</summary>
+    public static BloqueoDeRecogida SinAbonoEnLaLinea(string numero, string linea) => new(CodigoModoNoAdmitido, MotivoSinAbono,
+        $"La línea de aportes {linea} no admite aportes extraordinarios: la cuenta {numero} sólo se recoge por sus cuotas pendientes.");
+
+    /// <summary>Por cuotas, sin cuotas pendientes a la fecha: no hay nada que recoger.</summary>
+    public static BloqueoDeRecogida SinCuotasPendientes(string numero, DateOnly fecha) => new(CodigoNoPagable, MotivoSinSaldo,
+        $"La cuenta {numero} no tiene cuotas pendientes al {fecha:dd/MM/yyyy}: no hay nada que recoger por cuotas.");
+
+    /// <summary>HU6-4: un CDAT no es una deuda y no se recoge.</summary>
+    public static Error CdatNoSeRecoge(string numero) => new ErrorConDatos(CodigoProductoNoAdmitido,
+        $"La cuenta {numero} es un CDAT: no es una deuda y no se recoge con un crédito nuevo.", new { number = numero, reason = MotivoNoAdmitido });
+
+    /// <summary>HU6-3: el modo no lo tiene el producto (el ahorro contractual, sólo cuotas) o no lo admite la línea del crédito nuevo.</summary>
+    public static Error ModoDeCuentaNoAdmitido(string numero, ProductoDeRecogida producto, PayoffMode modo, IReadOnlyList<PayoffMode> admitidos) =>
+        new ErrorConDatos(CodigoModoNoAdmitido,
+            (ProductosAdmitidos.ModosPosibles[producto].Contains(modo)
+                ? $"La línea del crédito nuevo no admite recoger la cuenta {numero} {TextoDelModo(modo)}."
+                : $"La cuenta {numero} es de {TextoDelProducto(producto)}: no se recoge {TextoDelModo(modo)}.")
+            + (admitidos.Count > 0 ? $" Admite: {string.Join(", ", admitidos.Select(TextoDelModo))}." : string.Empty),
+            new { number = numero, mode = modo.ToString(), admittedModes = admitidos.Select(m => m.ToString()).ToList() });
+
+    /// <summary>La cuenta de una recogida autorizada ya no existe o no es del solicitante como titular.</summary>
+    public static Error CuentaNoAutorizada(Guid cuenta, string numero) => new ErrorConDatos(ErroresDeDesembolso.CodigoRecogidaNoAutorizada,
+        $"La cuenta {numero} ya no es del solicitante como titular: no se recoge. Devuelva la solicitud para corregir lo que recoge.",
+        new { accountPublicId = cuenta, number = numero });
+
+    /// <summary>Defensa del desembolso (H4): la cuenta recibió algo distinto de lo evaluado; nada queda hecho.</summary>
+    public static Error ConsignadoDistinto(Guid cuenta, string numero, decimal evaluado, decimal consignado) => new ErrorConDatos(CodigoAplicadoDistinto,
+        $"A la cuenta {numero} se le consignaron {Pesos(consignado)} y se habían evaluado {Pesos(evaluado)}: el desembolso no se hizo. Pida otra vez la "
+        + "vista previa y confirme.",
+        new { accountPublicId = cuenta, number = numero, expected = evaluado, applied = consignado });
+
+    /// <summary>El error de la consignación (o de su reverso) con la cuenta: el mismo código, el mensaje precedido por la cuenta.</summary>
+    public static Error ConLaCuenta(Error error, Guid cuenta, string numero)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return error is ErrorConDatos { Data: not null } conDatos
+            ? new ErrorConDatos(error.Code, $"Cuenta {numero}: {error.Message}", conDatos.Data)
+            : new ErrorConDatos(error.Code, $"Cuenta {numero}: {error.Message}", new { accountPublicId = cuenta, number = numero });
+    }
+
+    /// <summary>El producto en palabras («aportes», «ahorro a la vista»…).</summary>
+    public static string TextoDelProducto(ProductoDeRecogida producto) => producto switch
+    {
+        ProductoDeRecogida.Creditos => "créditos",
+        ProductoDeRecogida.Aportes => "aportes",
+        ProductoDeRecogida.AhorroALaVista => "ahorro a la vista",
+        ProductoDeRecogida.AhorroPermanente => "ahorro permanente",
+        ProductoDeRecogida.AhorroContractual => "ahorro contractual",
+        ProductoDeRecogida.FacturasComerciales => "facturas a crédito",
+        _ => producto.ToString(),
+    };
 }
 
 /// <summary>

@@ -17,11 +17,14 @@
    dejó de ser del deudor (se canceló) no tumba la consulta.
    2026-11-27 (feature 028, E2, T072; HU4): la cuota causada. La forma de pago avisa si la cuota del período ya va en la libranza o en la nómina; con
    «Preguntar» (Recogida.CuotaCausada) el asesor elige por crédito «Incluir la cuota» o «Dejarla a su canal», y lo que cuesta recogerlo, el total y el neto
-   siguen esa elección; el detalle explica qué pasa con la cuota en cada caso. *@
+   siguen esa elección; el detalle explica qué pasa con la cuota en cada caso.
+   2026-11-27 (feature 028, E3, T081; HU6): también las cuentas del titular (aportes, ahorro a la vista, permanente y contractual; nunca el CDAT), con sus
+   modos —por cuotas (lo pendiente a la fecha) o abono (con su valor)—; de fábrica se ven sin poder marcarse («La cooperativa no los recoge»). *@
 <div class="info-card">
     <h4>Productos que recoge</h4>
     <p class="texto-apoyo">
-        Marque los créditos del deudor que el crédito nuevo cancela o abona con su desembolso. Los valores son una proyección a la fecha de desembolso:
+        Marque los créditos del deudor que el crédito nuevo cancela o abona con su desembolso y, si la cooperativa los recoge, las cuotas de aportes y
+        ahorros o un abono a ellos. Los valores son una proyección a la fecha de desembolso:
         al desembolsar se vuelven a calcular y se muestran las diferencias.
     </p>
     <div class="form-grid">
@@ -55,7 +58,7 @@
         {
             @if (r.Products.Count == 0)
             {
-                <p class="texto-tenue">@(r.Person?.Nombre ?? "El deudor") no tiene créditos vivos como deudor.</p>
+                <p class="texto-tenue">@(r.Person?.Nombre ?? "El deudor") no tiene créditos vivos como deudor ni cuentas que se puedan recoger.</p>
             }
             else
             {
@@ -66,7 +69,7 @@
                     <table class="data-grid">
                         <thead>
                             <tr>
-                                <th>Recoger</th><th>Crédito</th><th>Línea</th><th>Forma de pago</th><th class="numero">Días de mora</th>
+                                <th>Recoger</th><th>Producto</th><th>Línea</th><th>Forma de pago</th><th class="numero">Días de mora</th>
                                 <th class="numero">Cuota</th><th class="numero">Para recoger</th><th>Modo</th><th></th>
                             </tr>
                         </thead>
@@ -78,10 +81,12 @@
                                 <tr>
                                     <td>
                                         <input type="checkbox" checked="@(marcada is not null)" disabled="@(!p.Eligible || SoloLectura)"
-                                               title="@(p.Eligible ? "Recoger este crédito" : p.BlockMessage)" aria-label="@($"Recoger el crédito {p.Number}")"
+                                               title="@(p.Eligible ? (p.EsCuenta ? "Recoger esta cuenta" : "Recoger este crédito") : p.BlockMessage)"
+                                               aria-label="@($"Recoger {(p.EsCuenta ? "la cuenta" : "el crédito")} {p.Number}")"
                                                @onchange="@(e => MarcarAsync(p, e.Value is true))" />
                                     </td>
                                     <td>
+                                        @if (p.EsCuenta) { <span class="texto-tenue">@TextosDeRecogida.ProductoDeCuenta(p.AccountProduct) </span> }
                                         @p.Number
                                         @if (p.Origin is 2 or 4) { <span class="texto-tenue"> (@TextosDeRecogida.Origen(p.Origin))</span> }
                                     </td>
@@ -99,11 +104,11 @@
                                     <td>
                                         @if (!p.Eligible)
                                         {
-                                            <span class="texto-alerta">@TextosDeRecogida.Motivo(p.BlockReason)</span>
+                                            <span class="texto-alerta">@TextosDeRecogida.Motivo(p.BlockReason, p.Kind)</span>
                                         }
                                         else if (marcada is { } m)
                                         {
-                                            <select class="e-input" value="@m.Mode" disabled="@(!p.AdmiteParcial || SoloLectura)" aria-label="@($"Modo de recogida del crédito {p.Number}")"
+                                            <select class="e-input" value="@m.Mode" disabled="@(p.AdmittedModes.Count < 2 || SoloLectura)" aria-label="@($"Modo de recogida de {p.Number}")"
                                                     @onchange="@(e => CambiarModoAsync(p, LeerEntero(e.Value) ?? TextosDeRecogida.ModoTotal))">
                                                 @foreach (var modo in p.AdmittedModes)
                                                 {
@@ -118,6 +123,12 @@
                                                     <option value="@TextosDeRecogida.CuotaIncluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaIncluida)</option>
                                                     <option value="@TextosDeRecogida.CuotaExcluida">@TextosDeRecogida.OpcionDeCuota(TextosDeRecogida.CuotaExcluida)</option>
                                                 </select>
+                                            }
+                                            @if (m.Mode == TextosDeRecogida.ModoAbono)
+                                            {
+                                                <input class="e-input" type="number" min="1" step="1000" disabled="@SoloLectura"
+                                                       value="@m.Amount?.ToString(CultureInfo.InvariantCulture)" aria-label="@($"Valor del abono a la cuenta {p.Number}")"
+                                                       @onchange="@(e => CambiarValorAsync(p, LeerDecimal(e.Value)))" />
                                             }
                                             @if (m.Mode == TextosDeRecogida.ModoParcial)
                                             {
@@ -273,15 +284,15 @@
             .Select(m =>
             {
                 var p = vigentes[m.ProductPublicId];
-                return p.CuotaElegible ? m with { ToPayOff = p.ParaRecoger(m.InstallmentTreatment) } : m with { ToPayOff = p.ToPayOff, InstallmentTreatment = null };
+                return p.CuotaElegible ? m with { ToPayOff = p.ParaRecoger(m.InstallmentTreatment) } : m with { ToPayOff = p.ToPayOff, InstallmentTreatment = null, Kind = p.Kind };
             }).ToList();
         var quitadas = _marcadas.Count - siguen.Count;
         _marcadas.Clear();
         _marcadas.AddRange(siguen);
         if (quitadas > 0)
             await Notification.WarningAsync(quitadas == 1
-                ? "Un crédito marcado ya no se puede recoger con estas condiciones y se desmarcó."
-                : $"{quitadas} créditos marcados ya no se pueden recoger con estas condiciones y se desmarcaron.");
+                ? "Un producto marcado ya no se puede recoger con estas condiciones y se desmarcó."
+                : $"{quitadas} productos marcados ya no se pueden recoger con estas condiciones y se desmarcaron.");
         await AvisarAsync();
     }
 
@@ -298,7 +309,9 @@
         if (marcar && p.Eligible)
         {
             var modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoTotal) ? TextosDeRecogida.ModoTotal : p.AdmittedModes.FirstOrDefault();
-            _marcadas.Add(new RecogidaMarcada(p.ProductPublicId, p.Number, modo, modo == TextosDeRecogida.ModoParcial ? p.ToPayOff : null, p.ToPayOff));
+            // 2026-11-27 (feature 028, E3): una cuenta se marca por cuotas si lo admite (si no, abono, con el valor por digitar).
+            if (p.EsCuenta) modo = p.AdmittedModes.Contains(TextosDeRecogida.ModoCuotas) && p.ToPayOff > 0m ? TextosDeRecogida.ModoCuotas : p.AdmittedModes.FirstOrDefault();
+            _marcadas.Add(new RecogidaMarcada(p.ProductPublicId, p.Number, modo, modo == TextosDeRecogida.ModoParcial ? p.ToPayOff : null, p.ToPayOff, Kind: p.Kind));
         }
         await AvisarAsync();
     }
@@ -307,7 +320,11 @@
     {
         var i = _marcadas.FindIndex(m => m.ProductPublicId == p.ProductPublicId);
         if (i < 0 || !p.AdmittedModes.Contains(modo)) return;
-        _marcadas[i] = _marcadas[i] with { Mode = modo, Amount = modo == TextosDeRecogida.ModoParcial ? _marcadas[i].Amount ?? p.ToPayOff : null };
+        _marcadas[i] = _marcadas[i] with
+        {
+            Mode = modo,
+            Amount = modo == TextosDeRecogida.ModoParcial ? _marcadas[i].Amount ?? p.ToPayOff : modo == TextosDeRecogida.ModoAbono ? _marcadas[i].Amount : null,
+        };
         await AvisarAsync();
     }
 
@@ -326,10 +343,10 @@
         if (i < 0) return;
         if (valor is not > 0m)
         {
-            await Notification.WarningAsync("El valor parcial es mayor que cero.");
+            await Notification.WarningAsync(p.EsCuenta ? "El valor del abono es mayor que cero." : "El valor parcial es mayor que cero.");
             return;
         }
-        if (valor > p.ToPayOff)
+        if (!p.EsCuenta && valor > p.ToPayOff)
         {
             await Notification.WarningAsync($"El valor parcial pasa de lo que cuesta recoger el crédito {p.Number}: se toma {TextosDeRecogida.Pesos(p.ToPayOff)}.");
             valor = p.ToPayOff;

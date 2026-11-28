@@ -133,15 +133,15 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 ## Fase 10 — HU6: aportes y ahorros (P2, E3)
 
-- [ ] T075 [US6] Exploración: orden de cerrojos del cruce del retiro frente al desembolso (créditos → personas → cuentas); anotar el resultado en `research.md` R13 antes de construir
-- [ ] T076 [US6] `ConsignacionEnCuentas.ClaseDeMedio` admite `CAR`/`OwnLoanPayoff`/`InternalOffset` sólo por el camino interno en `App/Lending/Deposits/Contributions/ConsignacionEnCuentas.cs`; prueba de que `IContratoDeCuentas` la sigue rechazando
-- [ ] T077 [US6] `RecogidaDeCuentas` (modos `Installments` y `Deposit`, clave `CAR:{op:N}:{cuenta:N}`) en `App/Lending/Payoffs/RecogidaDeCuentas.cs`; llamada desde `ExecuteLoanDisbursementCommand`
-- [ ] T078 [US6] Candidatos de cuentas (aportes, ahorro a la vista, permanente, contractual; sin CDAT) con sus cuotas en `GetPayoffCandidatesQuery`
-- [ ] T079 [US6] Anulación por `ReversionDeCuentas` con `{clave}:reverso` en `VoidPendingLoanCommand.cs`
-- [ ] T080 [US6] Contabilidad: la consignación por recogida debita el mismo puente; completitud de la matriz para los productos admitidos en `App/Accounting/Lending/Consultas/GetLendingRulesCompletenessQuery.cs`
-- [ ] T081 [US6] Las cuentas en `ProductosParaRecoger.razor` y `Desembolsos.razor`
-- [ ] T082 [P] [US6] Pruebas: cuotas de aportes, extraordinario admitido y no admitido, ahorro contractual sólo cuotas, anulación, contabilidad, en `TA/Lending/Payoffs/RecogidaDeCuentasTests.cs`
-- [ ] T083 Puerta de E3: build y suites verdes; commit
+- [X] T075 [US6] Exploración: orden de cerrojos del cruce del retiro frente al desembolso (créditos → personas → cuentas); anotar el resultado en `research.md` R13 antes de construir
+- [X] T076 [US6] `ConsignacionEnCuentas.ClaseDeMedio` admite `CAR`/`OwnLoanPayoff`/`InternalOffset` sólo por el camino interno en `App/Lending/Deposits/Contributions/ConsignacionEnCuentas.cs`; prueba de que `IContratoDeCuentas` la sigue rechazando
+- [X] T077 [US6] `RecogidaDeCuentas` (modos `Installments` y `Deposit`, clave `CAR:{op:N}:{cuenta:N}`) en `App/Lending/Payoffs/RecogidaDeCuentas.cs`; llamada desde `ExecuteLoanDisbursementCommand`
+- [X] T078 [US6] Candidatos de cuentas (aportes, ahorro a la vista, permanente, contractual; sin CDAT) con sus cuotas en `GetPayoffCandidatesQuery`
+- [X] T079 [US6] Anulación por `ReversionDeCuentas` con `{clave}:reverso` en `VoidPendingLoanCommand.cs`
+- [X] T080 [US6] Contabilidad: la consignación por recogida debita el mismo puente; completitud de la matriz para los productos admitidos en `App/Accounting/Lending/Consultas/GetLendingRulesCompletenessQuery.cs`
+- [X] T081 [US6] Las cuentas en `ProductosParaRecoger.razor` y `Desembolsos.razor`
+- [X] T082 [P] [US6] Pruebas: cuotas de aportes, extraordinario admitido y no admitido, ahorro contractual sólo cuotas, anulación, contabilidad, en `TA/Lending/Payoffs/RecogidaDeCuentasTests.cs`
+- [X] T083 Puerta de E3: build y suites verdes; commit
 
 ## Fase 11 — HU7: facturas a crédito de Comercial (P3, E4)
 

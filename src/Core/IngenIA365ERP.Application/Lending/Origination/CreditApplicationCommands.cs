@@ -70,12 +70,18 @@ public sealed class CreditApplicationInputValidator : AbstractValidator<CreditAp
             .WithMessage("Un producto está dos veces entre los que recoge la solicitud.");
         RuleForEach(x => x.Payoffs).ChildRules(p =>
         {
-            p.RuleFor(y => y.Kind).Equal(PayoffProductKind.Loan)
-                .WithMessage("Por ahora el crédito nuevo sólo recoge créditos: las cuentas de aportes y ahorros y las facturas llegan en otra entrega.");
-            p.RuleFor(y => y.ProductPublicId).NotEmpty().WithMessage("Indique el crédito que recoge.");
-            p.RuleFor(y => y.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).WithMessage("Un crédito se recoge total o parcial.");
-            p.RuleFor(y => y.Amount).NotNull().GreaterThan(0m).When(y => y.Mode == PayoffMode.Partial)
-                .WithMessage("Una recogida parcial lleva un valor mayor que cero.");
+            // 2026-11-27 (feature 028, E3, T078): también cuentas de aportes y ahorros, por cuotas o como abono; las facturas llegan con E4.
+            p.RuleFor(y => y.Kind).Must(k => k is PayoffProductKind.Loan or PayoffProductKind.Account)
+                .WithMessage("Por ahora el crédito nuevo recoge créditos y cuentas de aportes y ahorros: las facturas llegan en otra entrega.");
+            p.RuleFor(y => y.ProductPublicId).NotEmpty().WithMessage("Indique el producto que recoge.");
+            p.RuleFor(y => y.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).When(y => y.Kind == PayoffProductKind.Loan)
+                .WithMessage("Un crédito se recoge total o parcial.");
+            p.RuleFor(y => y.Mode).Must(m => m is PayoffMode.Installments or PayoffMode.Deposit).When(y => y.Kind == PayoffProductKind.Account)
+                .WithMessage("Una cuenta se recoge por sus cuotas pendientes o con un abono.");
+            p.RuleFor(y => y.Amount).NotNull().GreaterThan(0m).When(y => y.Mode is PayoffMode.Partial or PayoffMode.Deposit)
+                .WithMessage("Una recogida parcial o un abono lleva un valor mayor que cero.");
+            p.RuleFor(y => y.InstallmentTreatment).Null().When(y => y.Kind == PayoffProductKind.Account)
+                .WithMessage("La cuota causada sólo aplica a la recogida de un crédito.");
             p.RuleFor(y => y.Amount).PrecisionScale(18, 2, true).When(y => y.Amount is not null);
             // 2026-11-27 (feature 028, E2, T066): «todo menos la cuota causada» (Recogida.CuotaCausada) sólo en una recogida total; si la línea del crédito lo
             // admite lo decide RecogidasDeLaSolicitud.

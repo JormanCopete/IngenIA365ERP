@@ -267,6 +267,13 @@ public sealed record PayoffDeductionV1
     /// <summary>2026-11-27 (feature 028, T045): quien paga la recogida (el deudor del crédito nuevo), el tercero del puente; ausente = el deudor.</summary>
     public Guid? PayerPersonPublicId { get; init; }
 
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T080): en una cuenta, el hecho con que la cuenta recibió la recogida —<c>AporteRecibido</c> en aportes,
+    /// <c>ConsignacionEnCuentaAplicada</c> en ahorros—: el comprobante del desembolso cruza el puente con el tipo de cruce del mapeo de ese hecho, como lo
+    /// debita la consignación. Ausente en un crédito (cruza como el <c>PagoAplicado</c>). Opcional y aditivo dentro de la v1. (nuevo)
+    /// </summary>
+    public string? DepositFactType { get; init; }
+
     /// <summary>La clase del producto con el defecto de los mensajes de antes: ausente es un crédito. Método, no propiedad: no viaja en el JSON.</summary>
     public string ClaseDeProducto() => string.IsNullOrWhiteSpace(ProductKind) ? Credito : ProductKind.Trim();
 }

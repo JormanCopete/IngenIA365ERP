@@ -248,7 +248,7 @@
                         <ul>
                             @foreach (var o in hecho.OmittedPayoffs)
                             {
-                                <li>Crédito @o.Number@(o.Projected is { } proyectado ? $" (proyectado {TextosDeOriginacion.Pesos(proyectado)})" : ""): @(string.IsNullOrWhiteSpace(o.Reason) ? "ya estaba cancelado" : o.Reason)</li>
+                                <li>@TextosDeDesembolso.ClaseDeProducto(o.Kind) @o.Number@(o.Projected is { } proyectado ? $" (proyectado {TextosDeOriginacion.Pesos(proyectado)})" : ""): @(string.IsNullOrWhiteSpace(o.Reason) ? "ya estaba cancelado" : o.Reason)</li>
                             }
                         </ul>
                     }

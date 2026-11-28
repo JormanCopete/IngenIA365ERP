@@ -384,9 +384,12 @@ public static class ConsultasDeSolicitudes
         var filas = await (from f in db.CreditApplicationPayoffs.AsNoTracking()
                            join l in db.Loans.AsNoTracking().IgnoreQueryFilters() on f.LoanId equals l.Id into creditos
                            from l in creditos.DefaultIfEmpty()
+                           // 2026-11-27 (feature 028, E3, T078): la cuenta de una recogida de aportes o ahorros.
+                           join a in db.MemberAccounts.AsNoTracking().IgnoreQueryFilters() on f.AccountId equals a.Id into cuentas
+                           from a in cuentas.DefaultIfEmpty()
                            where f.CreditApplicationId == s.Id && !f.IsDeleted
                            orderby f.Order, f.Id
-                           select new { Fila = f, LoanPublicId = l == null ? (Guid?)null : l.PublicId })
+                           select new { Fila = f, LoanPublicId = l == null ? (Guid?)null : l.PublicId, AccountPublicId = a == null ? (Guid?)null : a.PublicId })
             .ToListAsync(ct);
         if (filas.Count == 0) return [];
         var enOtras = await Payoffs.RecogidasDeLaSolicitud.EnOtrasSolicitudesAsync(db,
@@ -406,7 +409,8 @@ public static class ConsultasDeSolicitudes
         return filas.Select(x =>
         {
             var f = x.Fila;
-            return new CreditApplicationPayoffDto(f.ProductKind, x.LoanPublicId, f.CommercialReceivableReference, f.ProductNumber, f.Mode, f.RequestedAmount,
+            return new CreditApplicationPayoffDto(f.ProductKind, f.ProductKind == PayoffProductKind.Account ? x.AccountPublicId : x.LoanPublicId,
+                f.CommercialReceivableReference, f.ProductNumber, f.Mode, f.RequestedAmount,
                 f.ProjectedAmount, Payoffs.PayoffBreakdownDto.De(f.Desglose()), f.InstallmentTreatment, f.InterestMode,
                 f.CurrentInstallmentNumber is { } numero ? CuotaProyectada(f, numero, deArchivo) : null,
                 f.ProjectedDate, f.RecordedAsOf, f.TieneProyeccion,

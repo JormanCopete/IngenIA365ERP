@@ -14,10 +14,19 @@ public sealed record RecogidaEnMoraDto(Guid LoanPublicId, string Number, int Day
 /// <summary>Un crédito recogido en el desembolso: lo aplicado y su comprobante de aplicación (<c>OwnLoanPayoff</c>).</summary>
 public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, decimal Applied, Guid ReceiptOperationPublicId)
 {
-    /// <summary>2026-11-27 (feature 028, api.md §3): la clase del producto; en la entrega E1, siempre <c>Loan</c>. (nuevo)</summary>
+    /// <summary>2026-11-27 (feature 028, api.md §3): la clase del producto: <c>Loan</c> o, desde E3, <c>Account</c>. (nuevo)</summary>
     public string Kind { get; init; } = "Loan";
 
-    /// <summary>2026-11-27 (feature 028): cómo se aplicó: <c>Total</c> (cancelación) o <c>Partial</c> (lo exigible y el resto a capital). (nuevo)</summary>
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3): el producto recogido (en una cuenta, su <c>PublicId</c>; <see cref="LoanPublicId"/> va vacío). Nulo en un crédito: es
+    /// <see cref="LoanPublicId"/>. (nuevo)
+    /// </summary>
+    public Guid? ProductPublicId { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028): cómo se aplicó: <c>Total</c> (cancelación) o <c>Partial</c> (lo exigible y el resto a capital); en una cuenta (E3),
+    /// <c>Installments</c> o <c>Deposit</c>. (nuevo)
+    /// </summary>
     public string Mode { get; init; } = "Total";
 
     /// <summary>2026-11-27 (feature 028): lo que proyectó la solicitud; nulo si la solicitud no traía proyección. (nuevo)</summary>
@@ -46,7 +55,14 @@ public sealed record DisbursementPayoffDto(Guid LoanPublicId, string Number, dec
 }
 
 /// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
-public sealed record DisbursementOmittedPayoffDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason);
+public sealed record DisbursementOmittedPayoffDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason)
+{
+    /// <summary>2026-11-27 (feature 028, E3): <c>Loan</c> o <c>Account</c>. (nuevo)</summary>
+    public string Kind { get; init; } = "Loan";
+
+    /// <summary>2026-11-27 (feature 028, E3): en una cuenta, su <c>PublicId</c> (<see cref="LoanPublicId"/> va vacío). (nuevo)</summary>
+    public Guid? ProductPublicId { get; init; }
+}
 
 /// <summary>La orden de giro en la respuesta del desembolso.</summary>
 public sealed record DisbursementOrderRefDto(Guid PublicId, string Number, string Status);

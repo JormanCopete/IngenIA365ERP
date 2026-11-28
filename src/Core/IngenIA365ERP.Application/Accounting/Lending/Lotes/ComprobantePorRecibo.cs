@@ -148,8 +148,15 @@ public static class DesembolsoConSusRecogidas
     {
         if (unidad.Count == 0 || unidad.Any(m => m.Envelope.Kind == IntegrationMessageKind.Informational)) return null;
         var principal = ConstructorDeLineasDeCartera.Principal(unidad.Select(HechoDeCartera.De).ToList());
-        return principal?.Contenido is PagoAplicadoV1 pago
-               && string.Equals(pago.Collector.CollectorClass, ConstructorDeLineasDeCartera.ClaseDeLaRecogidaPropia, StringComparison.Ordinal)
+        // 2026-11-27 (feature 028, E3, T080): también la consignación de una cuenta recogida (AporteRecibido o ConsignacionEnCuentaAplicada de OwnLoanPayoff).
+        var clase = principal?.Contenido switch
+        {
+            PagoAplicadoV1 pago => pago.Collector.CollectorClass,
+            AporteRecibidoV1 aporte => aporte.Collector.CollectorClass,
+            ConsignacionEnCuentaAplicadaV1 consignacion => consignacion.Collector.CollectorClass,
+            _ => null,
+        };
+        return principal is not null && string.Equals(clase, ConstructorDeLineasDeCartera.ClaseDeLaRecogidaPropia, StringComparison.Ordinal)
             ? (principal.Sobre.Origin.PublicId, principal.Sobre.Origin.OperationDate)
             : null;
     }

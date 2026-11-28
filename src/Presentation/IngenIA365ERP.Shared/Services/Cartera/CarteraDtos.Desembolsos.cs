@@ -148,7 +148,11 @@ public sealed record RecogidaAplicadaDto(Guid LoanPublicId, string Number, decim
 }
 
 /// <summary>2026-11-27 (feature 028, FR-012): un producto autorizado que ya estaba cancelado al desembolsar: no se recogió. (nuevo)</summary>
-public sealed record RecogidaOmitidaDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason);
+public sealed record RecogidaOmitidaDto(Guid LoanPublicId, string Number, decimal? Projected, string Reason)
+{
+    /// <summary>2026-11-27 (feature 028, E3, T081): <c>Loan</c> o <c>Account</c>. (nuevo)</summary>
+    public string Kind { get; init; } = "Loan";
+}
 
 public sealed record ReferenciaDeOrdenDto(Guid PublicId, string Number, string Status);
 

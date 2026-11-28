@@ -159,7 +159,22 @@ public sealed record ProductoParaRecogerDto(
     /// <summary>El desglose con el tratamiento elegido (como <see cref="ParaRecoger"/>).</summary>
     public DesgloseDeRecogidaDto Desglose(int? elegido) =>
         CuotaElegible && elegido == TextosDeRecogida.CuotaExcluida && BreakdownExcludingCurrentInstallment is { } d ? d : Breakdown;
+
+    /// <summary>2026-11-27 (feature 028, E3, T081): en una cuenta, su producto (<c>Aportes</c>, <c>AhorroALaVista</c>…); nulo en un crédito. (nuevo)</summary>
+    public string? AccountProduct { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E3, T081): en una cuenta, las cuotas pendientes a la fecha proyectada (lo que se recoge «por cuotas»). (nuevo)</summary>
+    public IReadOnlyList<CuotaDeCuentaParaRecogerDto> PendingInstallments { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, E3, T081; HU6-2): por qué la cuenta no admite un abono; nulo si lo admite. (nuevo)</summary>
+    public string? DepositNotAllowedReason { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E3): ¿es una cuenta de aportes o ahorros? (nuevo)</summary>
+    public bool EsCuenta => Kind == TextosDeRecogida.ClaseCuenta;
 }
+
+/// <summary>2026-11-27 (feature 028, E3, T081): una cuota pendiente de una cuenta que se recoge por cuotas. (nuevo)</summary>
+public sealed record CuotaDeCuentaParaRecogerDto(Guid InstallmentPublicId, string Period, DateOnly DueDate, decimal Pending);
 
 /// <summary>
 /// 2026-11-27 (feature 028, T051; HU5): un renglón de la explicación del interés de una recogida: su clase (<c>Accrued</c>, <c>FullInstallment</c>,
@@ -205,14 +220,19 @@ public sealed record ProductosParaRecogerDto(
 /// Lo que la pantalla marca en la tabla de productos para recoger y lo que devuelve al que la contiene: el producto, el modo y el valor del parcial, y
 /// lo que la tabla ya sabe de él (número y valor a recoger) para mostrarlo sin volver a consultar. (nuevo)
 /// </summary>
-public sealed record RecogidaMarcada(Guid ProductPublicId, string Number, int Mode, decimal? Amount, decimal ToPayOff, int? InstallmentTreatment = null)
+public sealed record RecogidaMarcada(Guid ProductPublicId, string Number, int Mode, decimal? Amount, decimal ToPayOff, int? InstallmentTreatment = null,
+    int Kind = TextosDeRecogida.ClaseCredito)
 {
     /// <summary>
-    /// Lo que pide el servidor (en E1, siempre un crédito). 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada elegido, sólo en una
-    /// recogida total.
+    /// Lo que pide el servidor. 2026-11-27 (feature 028, E2, T066): con el tratamiento de la cuota causada elegido, sólo en una recogida total. 2026-11-27
+    /// (E3, T081): una cuenta, por cuotas o con el valor del abono.
     /// </summary>
-    public RecogidaElegidaRequest ComoPedido() => new(TextosDeRecogida.ClaseCredito, ProductPublicId, Mode, Mode == TextosDeRecogida.ModoParcial ? Amount : null,
+    public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
+        Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? Amount : null,
         InstallmentTreatment: Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null);
+
+    /// <summary>Lo que se recoge de lo marcado: por cuotas, lo pendiente; como abono o parcial, el valor; total, lo que cuesta recogerlo.</summary>
+    public decimal Valor => Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? Amount ?? 0m : ToPayOff;
 }
 
 /// <summary>
@@ -241,6 +261,15 @@ public sealed record SeleccionDeRecogida(IReadOnlyList<RecogidaMarcada> Marcadas
         foreach (var m in marcadas)
         {
             if (!porProducto.TryGetValue(m.ProductPublicId, out var p) || !p.AdmittedModes.Contains(m.Mode)) continue;
+            // 2026-11-27 (feature 028, E3, T081): una cuenta, lo pendiente a la fecha (por cuotas) o el abono; no libera cuotas de crédito.
+            if (p.EsCuenta)
+            {
+                var deLaCuenta = m.Mode == TextosDeRecogida.ModoCuotas ? p.ToPayOff : m.Amount ?? 0m;
+                if (deLaCuenta <= 0m) continue;
+                total += deLaCuenta;
+                contadas++;
+                continue;
+            }
             // 2026-11-27 (feature 028, E2, T066): una recogida total con la cuota causada dejada a su canal recoge todo menos ella.
             total += m.Mode == TextosDeRecogida.ModoTotal ? p.ParaRecoger(m.InstallmentTreatment) : Math.Min(m.Amount ?? 0m, p.ToPayOff);
             if (m.Mode == TextosDeRecogida.ModoTotal) liberadas += p.Installment ?? 0m;
@@ -289,11 +318,18 @@ public sealed record RecogidaDeSolicitudDto(
     public RecogidaElegidaRequest ComoPedido() => new(Kind, ProductPublicId, Mode,
         Mode is TextosDeRecogida.ModoParcial or TextosDeRecogida.ModoAbono ? RequestedAmount : null, Reference, InstallmentTreatment);
 
-    /// <summary>Como lo marca la tabla de productos al abrir la corrección (sólo créditos; con el tratamiento de la cuota causada que guardó).</summary>
-    public RecogidaMarcada? ComoMarcada() => Kind == TextosDeRecogida.ClaseCredito && ProductPublicId is { } producto
-        ? new RecogidaMarcada(producto, Number, Mode, Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount,
-            Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null)
-        : null;
+    /// <summary>
+    /// Como lo marca la tabla de productos al abrir la corrección (créditos con el tratamiento de la cuota causada que guardó; 2026-11-27, E3: también
+    /// cuentas, por cuotas o con su abono).
+    /// </summary>
+    public RecogidaMarcada? ComoMarcada() => Kind switch
+    {
+        TextosDeRecogida.ClaseCredito when ProductPublicId is { } producto => new RecogidaMarcada(producto, Number, Mode,
+            Mode == TextosDeRecogida.ModoParcial ? RequestedAmount : null, ProjectedAmount, Mode == TextosDeRecogida.ModoTotal ? InstallmentTreatment : null),
+        TextosDeRecogida.ClaseCuenta when ProductPublicId is { } cuenta => new RecogidaMarcada(cuenta, Number, Mode,
+            Mode == TextosDeRecogida.ModoAbono ? RequestedAmount : null, ProjectedAmount, Kind: TextosDeRecogida.ClaseCuenta),
+        _ => null,
+    };
 }
 
 /// <summary>2026-11-27 (feature 028, HU2, T029): lo que recoge la solicitud en total, el neto a girar, D y R (<c>payoffSummary</c>).</summary>
@@ -335,6 +371,28 @@ public static class TextosDeRecogida
         ClaseCuenta => "Cuenta",
         ClaseFactura => "Factura a crédito",
         _ => "—",
+    };
+
+    /// <summary>2026-11-27 (feature 028, E3, T081): el producto de una cuenta (el nombre de <c>Recogida.ProductosAdmitidos</c>) en palabras.</summary>
+    public static string ProductoDeCuenta(string? producto) => producto switch
+    {
+        "Aportes" => "Aportes",
+        "AhorroALaVista" => "Ahorro a la vista",
+        "AhorroPermanente" => "Ahorro permanente",
+        "AhorroContractual" => "Ahorro contractual",
+        _ => "Cuenta",
+    };
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T081; HU6-1): el motivo corto de un producto que no se recoge; en una cuenta que la cooperativa no admite, «La cooperativa
+    /// no los recoge».
+    /// </summary>
+    public static string Motivo(string? motivo, int clase) => clase != ClaseCuenta ? Motivo(motivo) : motivo switch
+    {
+        "NotAdmitted" => "La cooperativa no los recoge",
+        "NoBalance" => "Sin cuotas pendientes",
+        "NotActive" => "No recibe operaciones",
+        _ => Motivo(motivo),
     };
 
     public static string Modo(int? modo) => modo switch
@@ -412,6 +470,7 @@ public static class TextosDeRecogida
         "NotActive" => "No está vigente",
         "NotAdmitted" => "La línea no lo admite",
         "NotSettled" => "No se pudo liquidar",
+        "DepositNotAllowed" => "La línea no admite abonos",
         _ => motivo,
     };
 

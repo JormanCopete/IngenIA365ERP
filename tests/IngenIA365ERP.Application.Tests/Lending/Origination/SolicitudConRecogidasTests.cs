@@ -290,8 +290,15 @@ public sealed class SolicitudConRecogidasTests : IAsyncLifetime
 
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Partial)] }).IsValid
             .Should().BeFalse("un parcial lleva valor");
+        // 2026-11-27 (feature 028, E3, T078): una cuenta se recoge por cuotas o con un abono (con valor); las facturas siguen fuera.
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Account, credito, PayoffMode.Deposit, 1m)] }).IsValid
-            .Should().BeFalse("en E1 sólo se recogen créditos");
+            .Should().BeTrue("desde E3 se recogen cuentas");
+        v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Account, credito, PayoffMode.Deposit)] }).IsValid
+            .Should().BeFalse("un abono lleva valor");
+        v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Account, credito, PayoffMode.Total)] }).IsValid
+            .Should().BeFalse("una cuenta no se recoge total");
+        v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.CommercialReceivable, null, PayoffMode.Total, Reference: "FE-1")] })
+            .IsValid.Should().BeFalse("las facturas llegan con E4");
         v.Validate(_o.Solicitud() with { Payoffs = [new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Total), new PayoffInput(PayoffProductKind.Loan, credito, PayoffMode.Total)] })
             .IsValid.Should().BeFalse("un producto no va dos veces");
         // 2026-11-27 (feature 028, E2, T066): dejar la cuota causada se pide en una recogida total (si la línea lo admite lo decide la recogida de la solicitud).

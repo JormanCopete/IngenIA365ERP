@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Entities.Lending.Payoffs;
@@ -13,19 +14,29 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Lending.Payoffs;
 
 /// <summary>
-/// Un crédito que la solicitud recoge, ya validado y proyectado a la fecha proyectada de desembolso (feature 028, HU2, T023): el crédito, cómo se recoge,
-/// el valor pedido de un parcial, su liquidación y lo que guarda la solicitud (<see cref="ProyeccionDeRecogida"/>). (nuevo)
+/// Un producto que la solicitud recoge, ya validado y proyectado a la fecha proyectada de desembolso (feature 028, HU2, T023): el producto, cómo se recoge,
+/// el valor pedido de un parcial o un abono y lo que guarda la solicitud (<see cref="ProyeccionDeRecogida"/>); de un crédito, además, el crédito y su
+/// liquidación. 2026-11-27 (feature 028, E3, T078): también una cuenta de aportes o ahorros (<see cref="Cuenta"/>). (nuevo)
 /// </summary>
-public sealed record RecogidaPreparada(Loan Credito, PayoffMode Modo, decimal? ValorPedido, LiquidacionDeCreditoRecogido Liquidacion,
-    ProyeccionDeRecogida Proyeccion)
+public sealed record RecogidaPreparada(ProductoRecogido Producto, PayoffMode Modo, decimal? ValorPedido, ProyeccionDeRecogida Proyeccion)
 {
-    public ProductoRecogido Producto => ProductoRecogido.Credito(Credito.Id, Credito.Number);
+    /// <summary>El crédito recogido (nulo en una cuenta).</summary>
+    public Loan? Credito { get; init; }
 
-    /// <summary>Lo que se proyecta recoger: todo en un total; en un parcial, el valor pedido (topado en lo que cuesta recogerlo).</summary>
+    /// <summary>La liquidación del crédito recogido (nula en una cuenta).</summary>
+    public LiquidacionDeCreditoRecogido? Liquidacion { get; init; }
+
+    /// <summary>2026-11-27 (feature 028, E3): la cuenta recogida (nula en un crédito). (nuevo)</summary>
+    public MemberAccount? Cuenta { get; init; }
+
+    /// <summary>
+    /// Lo que se proyecta recoger: todo en un total; en un parcial, el valor pedido (topado en lo que cuesta recogerlo); en una cuenta, lo pendiente a D (por
+    /// cuotas) o el abono pedido.
+    /// </summary>
     public decimal ValorProyectado => Proyeccion.Desglose.Total;
 
     /// <summary>Cómo la ve la foto de la solicitud (producto, modo, valor pedido y cuota causada).</summary>
-    public RecogidaEnLaFoto EnLaFoto => new(Credito.Number, Modo, ValorPedido, Proyeccion.TratamientoDeCuota);
+    public RecogidaEnLaFoto EnLaFoto => new(Producto.Numero, Modo, ValorPedido, Proyeccion.TratamientoDeCuota);
 }
 
 /// <summary>
@@ -54,7 +65,8 @@ public sealed record RecogidasPreparadas(IReadOnlyList<RecogidaPreparada> Recogi
 /// a proyectar con lo de ahora para que quien decide vea lo vigente (<see cref="ReproyectarAsync"/>).
 /// <para>Las reglas, en este orden, con su código (<c>Lending.Payoff.*</c>):</para>
 /// <list type="number">
-/// <item>en la entrega E1 sólo se recogen créditos (las cuentas llegan con E3 y las facturas con E4): <c>ProductNotAdmitted</c>;</item>
+/// <item>en la entrega E1 sólo se recogían créditos; desde E3 (T078) también cuentas de aportes y ahorros, que valida <see cref="RecogidaDeCuentas.ValidarAsync"/>
+/// (del solicitante como <b>titular</b>, admitidas, en un modo que el producto y su línea admiten); las facturas llegan con E4: <c>ProductNotAdmitted</c>;</item>
 /// <item>el crédito existe y es del <b>solicitante como deudor</b>: si no, <c>NotOfApplicant</c> (también si es codeudor);</item>
 /// <item>la línea de la solicitud lo admite (<c>Recogida.ProductosAdmitidos</c>, <see cref="AdmisionDeRecogidaVigente"/>): <c>ProductNotAdmitted</c>; y en
 /// ese modo: <c>ModeNotAdmitted</c>;</item>
@@ -71,7 +83,8 @@ public sealed class RecogidasDeLaSolicitud(
     IApplicationDbContext db,
     LiquidacionDeRecogida liquidacion,
     ReglasDeParametrosDeCartera parametros,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    RecogidaDeCuentas? cuentas = null)
 {
     /// <summary>
     /// Las recogidas que pide el cuerpo de la solicitud, validadas y proyectadas. Sin recogidas, <see cref="RecogidasPreparadas.Ninguna"/>: así se quitan
@@ -103,16 +116,18 @@ public sealed class RecogidasDeLaSolicitud(
         var filas = await (from f in db.CreditApplicationPayoffs.AsNoTracking()
                            join l in db.Loans.AsNoTracking() on f.LoanId equals l.Id into creditos
                            from l in creditos.DefaultIfEmpty()
+                           join a in db.MemberAccounts.AsNoTracking() on f.AccountId equals a.Id into deCuentas
+                           from a in deCuentas.DefaultIfEmpty()
                            where f.CreditApplicationId == s.Id && !f.IsDeleted
                            orderby f.Order, f.Id
-                           select new { Fila = f, LoanPublicId = l == null ? (Guid?)null : l.PublicId })
+                           select new { Fila = f, LoanPublicId = l == null ? (Guid?)null : l.PublicId, AccountPublicId = a == null ? (Guid?)null : a.PublicId })
             .ToListAsync(ct);
         var conProyeccion = filas.Where(f => f.Fila.TieneProyeccion).Select(f => f.Fila.ProjectedDate).ToList();
         var d = conProyeccion.Count > 0 ? conProyeccion.Max() : s.ExpectedDisbursementDate ?? hoy;
         if (d < hoy) d = hoy;
         if (filas.Count == 0) return Result.Success(RecogidasPreparadas.Ninguna(d, reloj.UtcNow));
-        var pedidas = filas.Select(f => new PayoffInput(f.Fila.ProductKind, f.LoanPublicId, f.Fila.Mode, f.Fila.RequestedAmount,
-            f.Fila.CommercialReceivableReference, f.Fila.InstallmentTreatment)).ToList();
+        var pedidas = filas.Select(f => new PayoffInput(f.Fila.ProductKind, f.Fila.ProductKind == PayoffProductKind.Account ? f.AccountPublicId : f.LoanPublicId,
+            f.Fila.Mode, f.Fila.RequestedAmount, f.Fila.CommercialReceivableReference, f.Fila.InstallmentTreatment)).ToList();
         // 2026-11-27 (feature 028, E2, T066): al volver a proyectar lo guardado, la cuota causada sigue el parámetro de hoy sin rechazar (una «Excluir» guardada
         // con la línea ya en «Incluir» se incluye): lo que se radica es lo que la solicitud tenía.
         return await ProyectarAsync(pedidas, s.ApplicantPersonId, s.CreditLineId, s.RequestedAmount, d, null, estricto: false, ct);
@@ -144,24 +159,41 @@ public sealed class RecogidasDeLaSolicitud(
     private async Task<Result<RecogidasPreparadas>> ProyectarAsync(IReadOnlyList<PayoffInput> pedidas, int solicitanteId, int lineaId, decimal monto,
         DateOnly d, DateTime? r, bool estricto, CancellationToken ct)
     {
-        if (pedidas.FirstOrDefault(p => p.Kind != PayoffProductKind.Loan) is { } otro)
+        // 2026-11-27 (feature 028, E3, T078): las cuentas de aportes y ahorros se recogen desde E3; las facturas, con E4.
+        if (pedidas.FirstOrDefault(p => p.Kind == PayoffProductKind.CommercialReceivable || p.Kind == PayoffProductKind.Account && cuentas is null) is { } otro)
             return Falla(ErroresDeRecogida.ClaseNoAdmitida(otro.Kind));
-        var repetido = pedidas.GroupBy(p => p.ProductPublicId).FirstOrDefault(g => g.Count() > 1);
+        var repetido = pedidas.GroupBy(p => (p.Kind, p.ProductPublicId)).FirstOrDefault(g => g.Count() > 1);
         if (repetido is not null)
-            return Falla(ErroresDeLineasDeCredito.Invalido("payoffs", "Un crédito está dos veces entre los que recoge la solicitud: déjelo una sola vez."));
+            return Falla(ErroresDeLineasDeCredito.Invalido("payoffs", repetido.Key.Kind == PayoffProductKind.Account
+                ? "Una cuenta está dos veces entre las que recoge la solicitud: déjela una sola vez."
+                : "Un crédito está dos veces entre los que recoge la solicitud: déjelo una sola vez."));
 
-        var publicos = pedidas.Select(p => p.ProductPublicId).OfType<Guid>().ToList();
+        var publicos = pedidas.Where(p => p.Kind == PayoffProductKind.Loan).Select(p => p.ProductPublicId).OfType<Guid>().ToList();
         var creditos = await db.Loans.AsNoTracking().Where(l => publicos.Contains(l.PublicId) && !l.IsDeleted).ToDictionaryAsync(l => l.PublicId, ct);
         var nombre = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == solicitanteId).FirstOrDefaultAsync(ct) is { } persona
             ? ReferenciasDeGobierno.Nombre(persona)
             : "el solicitante";
         var admision = await AdmisionDeRecogidaVigente.LeerAsync(parametros, d, lineaId, ct);
         var modos = AdmisionDeRecogidaVigente.Modos(admision, ProductoDeRecogida.Creditos);
+        var deCuentas = await CuentasAsync(pedidas, d, ct);
 
         var preparadas = new List<RecogidaPreparada>(pedidas.Count);
         DateTime? informacion = r;
         foreach (var p in pedidas)
         {
+            if (p.Kind == PayoffProductKind.Account)
+            {
+                // 2026-11-27 (feature 028, E3, T078; HU6): la cuenta es del solicitante como titular; lo demás (admitida, modo, abono, cuotas, reparto) lo dice
+                // RecogidaDeCuentas. Lo proyectado va a capital: lo pendiente a D por cuotas o el abono pedido.
+                if (p.ProductPublicId is not { } cuentaPublica || !deCuentas.TryGetValue(cuentaPublica, out var c) || c.Cuenta.HolderPersonId != solicitanteId)
+                    return Falla(ErroresDeRecogida.NoEsDelSolicitante(nombre));
+                if (await cuentas!.ValidarAsync(c, p.Mode, p.Amount, admision, d, ct) is { } noSeRecoge) return Falla(noSeRecoge);
+                var valor = c.Valor(p.Mode, p.Amount);
+                var deLaCuenta = new ProyeccionDeRecogida(d, r ?? reloj.UtcNow, new DesgloseDeRecogida(Capital: valor), c.Huella(d, p.Mode, p.Amount));
+                preparadas.Add(new RecogidaPreparada(ProductoRecogido.Cuenta(c.Cuenta.Id, c.Cuenta.Number), p.Mode,
+                    p.Mode == PayoffMode.Deposit ? p.Amount : null, deLaCuenta) { Cuenta = c.Cuenta });
+                continue;
+            }
             if (p.ProductPublicId is not { } publico || !creditos.TryGetValue(publico, out var credito) || credito.DebtorPersonId != solicitanteId)
                 return Falla(ErroresDeRecogida.NoEsDelSolicitante(nombre));
             if (modos.Count == 0) return Falla(ErroresDeRecogida.NoAdmitido(credito.Number).ComoError());
@@ -193,7 +225,8 @@ public sealed class RecogidasDeLaSolicitud(
                 // proyecta como total (casos límite de la spec).
                 proyeccion = proyeccion with { Desglose = new DesgloseDeRecogida(Capital: p.Amount.Value) };
             }
-            preparadas.Add(new RecogidaPreparada(credito, p.Mode, p.Mode == PayoffMode.Partial ? p.Amount : null, l, proyeccion));
+            preparadas.Add(new RecogidaPreparada(ProductoRecogido.Credito(credito.Id, credito.Number), p.Mode, p.Mode == PayoffMode.Partial ? p.Amount : null,
+                proyeccion) { Credito = credito, Liquidacion = l });
         }
 
         var total = preparadas.Sum(x => x.ValorProyectado);
@@ -220,6 +253,15 @@ public sealed class RecogidasDeLaSolicitud(
                 select new { LoanId = f.LoanId!.Value, s.Id, s.Number })
             .ToListAsync(ct);
         return filas.GroupBy(f => f.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.Id).First().Number ?? string.Empty);
+    }
+
+    /// <summary>2026-11-27 (feature 028, E3, T078): las cuentas pedidas (vivas, por su PublicId), leídas a D por <see cref="RecogidaDeCuentas"/>.</summary>
+    private async Task<Dictionary<Guid, CuentaRecogible>> CuentasAsync(IReadOnlyList<PayoffInput> pedidas, DateOnly d, CancellationToken ct)
+    {
+        var publicas = pedidas.Where(p => p.Kind == PayoffProductKind.Account).Select(p => p.ProductPublicId).OfType<Guid>().Distinct().ToList();
+        if (publicas.Count == 0 || cuentas is null) return [];
+        var leidas = await db.MemberAccounts.AsNoTracking().Where(a => publicas.Contains(a.PublicId) && !a.IsDeleted).ToListAsync(ct);
+        return (await cuentas.LeerAsync(leidas, d, ct)).ToDictionary(c => c.Cuenta.PublicId);
     }
 
     private static DateTime Utc(DateTime instante) =>

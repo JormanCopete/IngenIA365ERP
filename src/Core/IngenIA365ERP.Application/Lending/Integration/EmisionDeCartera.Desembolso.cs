@@ -195,10 +195,22 @@ public sealed partial class EmisionDeCartera
                      where creditos.Contains(l.PublicId)
                      select new { l.PublicId, Sucursal = b.PublicId })
                 .ToDictionaryAsync(x => x.PublicId, x => x.Sucursal, ct);
+        // 2026-11-27 (feature 028, E3, T080): la sucursal contable de la oficina de cada cuenta recogida (la de las dimensiones de su consignación).
+        var cuentas = recogidas.Where(r => r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado && r.BranchPublicId is null && r.AccountRef is not null)
+            .Select(r => r.AccountRef!.AccountPublicId).Distinct().ToList();
+        var deCuentas = cuentas.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await (from a in db.MemberAccounts.AsNoTracking().IgnoreQueryFilters()
+                     join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on a.BranchId equals b.Id
+                     where cuentas.Contains(a.PublicId)
+                     select new { a.PublicId, Sucursal = b.PublicId })
+                .ToDictionaryAsync(x => x.PublicId, x => x.Sucursal, ct);
         return recogidas.Select(r => r with
         {
             ProductKind = r.ClaseDeProducto(),
-            BranchPublicId = r.BranchPublicId ?? (sucursales.TryGetValue(r.Loan.LoanPublicId, out var s) ? s : null),
+            BranchPublicId = r.BranchPublicId ?? (r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado
+                ? r.AccountRef is { } cuenta && deCuentas.TryGetValue(cuenta.AccountPublicId, out var c) ? c : null
+                : sucursales.TryGetValue(r.Loan.LoanPublicId, out var s) ? s : null),
             PayerPersonPublicId = r.PayerPersonPublicId ?? deudorPublicId,
         }).ToList();
     }

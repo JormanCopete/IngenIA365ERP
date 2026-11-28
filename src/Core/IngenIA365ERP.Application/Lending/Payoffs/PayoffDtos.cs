@@ -93,8 +93,8 @@ public sealed record PayoffCurrentInstallmentDto(int Number, DateOnly? DueDate, 
 }
 
 /// <summary>
-/// Un producto del deudor que el crédito nuevo podría recoger (api.md §1): en E1 sólo créditos (<see cref="PayoffProductKind.Loan"/>); las cuentas
-/// llegan con E3 y las facturas con E4. Trae lo que cuesta recogerlo a D con lo conocido hasta R, su desglose, el modo de intereses, la cuota causada, la
+/// Un producto del deudor que el crédito nuevo podría recoger (api.md §1): créditos (<see cref="PayoffProductKind.Loan"/>) y, desde E3, cuentas de aportes y
+/// ahorros del titular (<see cref="PayoffProductKind.Account"/>, sin el CDAT); las facturas llegan con E4. Trae lo que cuesta recogerlo a D con lo conocido hasta R, su desglose, el modo de intereses, la cuota causada, la
 /// huella de la liquidación, si se puede recoger (y por qué no) y, si la consulta trajo una selección, lo que se recoge de él. (nuevo)
 /// </summary>
 public sealed record PayoffCandidateDto(
@@ -151,7 +151,25 @@ public sealed record PayoffCandidateDto(
 
     /// <summary>2026-11-27 (feature 028, E2, T066): con qué tratamiento de la cuota causada se marcó (nulo si no se marcó). (nuevo)</summary>
     public InstallmentTreatment? SelectedInstallmentTreatment { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T078; HU6): en una cuenta, su producto como lo nombra <c>Recogida.ProductosAdmitidos</c> (<c>Aportes</c>,
+    /// <c>AhorroALaVista</c>, <c>AhorroPermanente</c>, <c>AhorroContractual</c>); nulo en un crédito. (nuevo)
+    /// </summary>
+    public string? AccountProduct { get; init; }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T078): en una cuenta, las cuotas pendientes que vencen a la fecha proyectada o antes (lo que se recoge «por cuotas»: su suma
+    /// es <see cref="ToPayOff"/>). (nuevo)
+    /// </summary>
+    public IReadOnlyList<PayoffAccountInstallmentDto> PendingInstallments { get; init; } = [];
+
+    /// <summary>2026-11-27 (feature 028, E3, T078; HU6-2): por qué la cuenta no admite un abono (la línea de aportes sin extraordinarios); nulo si lo admite. (nuevo)</summary>
+    public string? DepositNotAllowedReason { get; init; }
 }
+
+/// <summary>2026-11-27 (feature 028, E3, T078): una cuota pendiente de una cuenta que se recoge por cuotas: su período, su vencimiento y lo que se debe. (nuevo)</summary>
+public sealed record PayoffAccountInstallmentDto(Guid InstallmentPublicId, string Period, DateOnly DueDate, decimal Pending);
 
 /// <summary>
 /// 2026-11-27 (feature 028, T051; HU5): un renglón de la explicación del interés de una recogida: su clase (<c>Accrued</c>, <c>FullInstallment</c>,

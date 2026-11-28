@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Ledger;
+using IngenIA365ERP.Application.Lending.Payoffs;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -47,7 +48,8 @@ public sealed class VoidPendingLoanCommandHandler(
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<VoidPendingLoanCommand, Result<VoidedLoanDto>>
+    IDateTimeService reloj,
+    Payoffs.RecogidaDeCuentas? recogidaDeCuentas = null) : IRequestHandler<VoidPendingLoanCommand, Result<VoidedLoanDto>>
 {
     public async Task<Result<VoidedLoanDto>> Handle(VoidPendingLoanCommand request, CancellationToken ct)
     {
@@ -72,9 +74,15 @@ public sealed class VoidPendingLoanCommandHandler(
                 .Where(o => prefijos.Any(p => o.IdempotencyKey!.StartsWith(p, StringComparison.Ordinal)))
                 .ToList();
 
+            // 2026-11-27 (feature 028, E3, T079): las consignaciones de recogida en cuentas de aportes y ahorros, con la clave CAR del desembolso.
+            var consignaciones = await Payoffs.RecogidaDeCuentas.VivasAsync(db, desembolsos.Select(d => d.PublicId).ToList(), ct);
+
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync([leido.DebtorPersonId], ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCreditosAsync(recogidas.Select(r => r.LoanId).Append(leido.Id).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
+            // Las cuentas después de los créditos (el orden fijo, research E-14).
+            if (consignaciones.Count > 0)
+                await cerrojo.BloquearCuentasAsync(consignaciones.Select(c => c.CuentaId).Distinct().Order().ToList(), ModoDeEspera.Esperar, ct);
 
             var credito = await db.Loans.FirstAsync(l => l.Id == leido.Id, ct);
             if (credito.Status != LoanStatus.PendingDisbursement || desembolsos.Any(d => d.ReversedByOperationId is null))
@@ -91,8 +99,18 @@ public sealed class VoidPendingLoanCommandHandler(
                         : new Error(respuesta.Code, respuesta.Message));
                 reversos.Add(respuesta.Value.OperationPublicId);
             }
+            // 2026-11-27 (feature 028, E3, T079): cada consignación de recogida se reversa por ReversionDeCuentas con {clave}:reverso; la primera que no se
+            // reversa aborta todo.
+            if (consignaciones.Count > 0)
+            {
+                if (recogidaDeCuentas is null) return Falla(ErroresDeRecogida.ClaseNoAdmitida(PayoffProductKind.Account));
+                var deCuentas = await recogidaDeCuentas.ReversarAsync(consignaciones, request.Reason.Trim(), ct);
+                if (deCuentas.IsFailure) return Falla(deCuentas.Error);
+                reversos.AddRange(deCuentas.Value.Select(x => x.Reverso));
+            }
+
             // 2026-11-27 (feature 028, T040): la fila de cada recogida reversada queda marcada con la clave de su reverso (las de antes de la 028 no la tienen).
-            var claves = recogidas.Select(r => r.IdempotencyKey!).ToList();
+            var claves = recogidas.Select(r => r.IdempotencyKey!).Concat(consignaciones.Select(c => c.Clave)).ToList();
             if (claves.Count > 0)
                 foreach (var fila in await db.DisbursementPayoffs.Where(f => claves.Contains(f.IdempotencyKey) && !f.Omitted).ToListAsync(ct))
                     fila.Reversar(reloj.UtcNow, ClavesDeRecaudador.Reverso(fila.IdempotencyKey));

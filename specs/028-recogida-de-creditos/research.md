@@ -168,7 +168,7 @@ combinación **sólo** por el camino interno (el puerto público la sigue rechaz
 (`ElOrdenDelCerrojoEsPersonaYLuegoSusCuentas`). La anulación reversa por `ReversionDeCuentas` con `{clave}:reverso`. Contabilidad: la
 consignación sale con su hecho de siempre y debita el mismo puente `RecaudoPorAplicar`/`OwnLoanPayoff` (como el cruce del retiro,
 `ConstructorDeLineasDeCartera.Captaciones.cs:33-34`). Riesgo a verificar al empezar la entrega: el orden de cerrojos del cruce del retiro
-(cuentas y créditos) frente al del desembolso, para no abrir un interbloqueo.
+(cuentas y créditos) frente al del desembolso, para no abrir un interbloqueo. 2026-11-27 (T075): verificado, sin riesgo; el orden y la decisión en la enmienda E-14.
 
 ### R14 — Facturas a crédito por un recibo sin caja (HU7)
 **Decisión**: puerto nuevo `IRecogidaEnRecaudo` en `Common/Integration/Receipts`, implementado por Recaudo sobre `AplicacionNoInteractiva` con un
@@ -603,3 +603,54 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   `Shared/Services/Recaudo/CuotaEnviadaEnLaCaja`. La pantalla no tiene carga nueva (todo llega con «lo que puede pagar»): ninguna zona nueva de `IndicadorDeCarga`.
 - **Pendiente o dudoso**: lo que la pagaduría gire por un crédito cancelado **en caja** (no recogido) sigue yendo a saldo de la pagaduría (el parámetro es de la
   recogida); el reverso del pago que cerró la cuota dejada no la desmarca; la cuota descontada pendiente de giro sólo se avisa en caja (vencida, no se deja).
+### E-14 — Aportes y ahorros en el desembolso (T075–T083, 2026-11-27)
+- **T075, el cerrojo (sin riesgo de interbloqueo)**: el orden fijo de `ICerrojoDeCartera` es setup → personas → créditos → cuentas → numeración, y lo siguen
+  todos los caminos que tocan cuentas: el contrato de cuentas (setup, titulares, cuentas con las de los titulares embargados), la liquidación del retiro
+  (setup, retirado y codeudores, créditos, cuentas) y el débito automático (setup, titular, crédito y cuenta con `Saltar`). El desembolso toma setup → deudores
+  (el solicitante, que es el titular de las cuentas recogidas, y las partes) → créditos (recogidos y del tramo) → **las cuentas recogidas y, si el titular tiene
+  un embargo vigente, todas las suyas** (la consignación recalcula el embargo y reescribe los bloqueos de todas sus cuentas: `CuentasDeLasPersonasEmbargadasAsync`,
+  como el contrato), **antes de la puesta al día y de numerar nada**. Ningún camino toma una persona o un crédito después de una cuenta
+  (`ElOrdenDelCerrojoEsPersonaYLuegoSusCuentas` lo vigila por método), y la numeración (crédito, operación, pago, operación de cuenta) va siempre al final y en
+  el mismo orden relativo que el retiro (pago antes que la operación de cuenta). La anulación toma setup → deudor → créditos → cuentas de las consignaciones.
+- **T076, el camino interno**: `ConsignacionEnCurso.Interna` (init, que `ContratoDeCuentasDeCartera` nunca enciende) y `ConsignacionEnCuentas.ClaseDeMedio(…,
+  interna)`: sólo con él, `OwnLoanPayoff` admite `InternalOffset` (y nada más). El puerto público sigue rechazando `CAR` por el registro de recaudadores y, si
+  llegara, por la clase de medio; la clave `CAR:{op:N}:{cuenta:N}` ya la admitía el validador (es la gramática de la recogida).
+- **T077, `RecogidaDeCuentas`** (`Lending/Payoffs`): lee las cuentas a D (`CuentaRecogible`: producto, línea, cuotas pendientes que vencen a D o antes, si la
+  línea admite abono, bloqueo por estado —sólo activa o inactiva— o titular fallecido), valida (CDAT, admitida, modo del producto y de la línea, abono > 0, cuotas
+  pendientes, y el **reparto de la consignación sin escribir** —`ConsignacionEnCuentas.RepartirAsync`— para el límite de participación y el excedente), evalúa al
+  desembolsar y consigna. **Por cuotas va `SpecificInstallments` con las cuotas pendientes a la fecha valor** (exactas, no «todas las pendientes»: el reparto de
+  `Installments` tomaría también las que vencen después); **el abono va `Free`** (extraordinario en aportes, saldo en ahorros). Las cuentas van **aparte de los
+  créditos**: `RequisitosEvaluados.RecogidasDeCuentas` (y `PrevalidacionDeCuentas`), `RecogidaDeCuentaEvaluada`; `Recogido`, el neto, el reconocimiento, la
+  tolerancia, la huella (`accountPayoffs`, sólo si hay cuentas: sin ellas la huella no cambia) y la relectura bajo el cerrojo (`RecogidasReevaluadas`) las
+  cuentan. Una cuenta cancelada o por cuotas sin nada pendiente se **omite** (como un crédito ya cancelado: el neto sube y se reconoce); la diferencia de una
+  cuenta es por pagos (menos) o por las cuotas que vencieron desde la proyección (más, `Accrual`). La consignación sella la validación previa de la vista previa
+  (un hecho representativo por línea, naturaleza, clase, oficina y embargo, con `ContratoDeCuentasDeCartera.Representativo` y el recaudador `CAR`). La concentración
+  y las validaciones de la solicitud (R8) no cambian: una cuenta no es exposición ni libera cuotas de crédito.
+- **La consignación guarda en la transacción del desembolso** (`ConsignacionEnCuentas.AplicarAsync` llama a `SaveChanges`): el crédito nuevo y su operación se
+  guardan antes de lo que decía el comentario de E1, pero todo sigue en la misma `TransaccionExplicita` y una falla la revierte entera.
+- **Las filas `LND_DisbursementPayoffs`** de una cuenta: `ProductoRecogido.Cuenta`, el modo `Installments`/`Deposit`, sin tratamiento de cuota ni modo de
+  intereses, `AccountOperationId` la operación de la cuenta. **La respuesta y la vista previa** llevan la cuenta con `kind = Account`, `productPublicId` (y
+  `loanPublicId` vacío), y en `/disbursements` `accountOperationPublicId` (también en el campo del comprobante); `omittedPayoffs[]` gana `kind` y `productPublicId`.
+- **`PayoffDeductionV1.DepositFactType`** (nuevo, opcional, aditivo): el hecho con que la cuenta recibió la recogida (`AporteRecibido` o
+  `ConsignacionEnCuentaAplicada`); el DS cruza el puente con el mapeo de ese hecho (`Partida.HechoDelCruce`), el **número de la cuenta como cruce**
+  (`Partida.Cuenta`, no `Credito`), la sucursal de la oficina de la cuenta (la completa `RecogidasDelHechoAsync`) y el deudor como tercero: las mismas
+  dimensiones con que la consignación debita `RecaudoPorAplicar`/`OwnLoanPayoff`. El fallo `PayoffKindNotSupported` queda sólo para las facturas (E4). El DRV
+  (reverso del desembolso) lo espeja igual.
+- **El giro nuevo y la conciliación**: `RecogidaEnElDesembolso.VivasAsync` suma las consignaciones vivas (`RecogidaDeCuentas.VivasAsync`), así el giro nuevo
+  las vuelve a descontar (H6) y `RecogidoQueEsperaElGiroAsync` las espera en el puente.
+- **T079**: la anulación reversa cada consignación viva por `ReversionDeCuentas` (`{clave}:reverso`, `OperacionDeCuentaReversada` con la clase `OwnLoanPayoff`
+  del original) y marca sus filas.
+- **T080, completitud**: Contabilidad no lee parámetros de Cartera; el catálogo del puerto `IDimensionesDeCartera` gana `PayoffDepositFactTypes` (los hechos de
+  la consignación de los productos que `Recogida.ProductosAdmitidos` admite, general o de alguna línea de colocación activa) y la completitud pide su **mapeo con
+  la clase `OwnLoanPayoff`** (sale en `unmappedOperations` si el general resuelve y el de la clase no). La regla `RecaudoPorAplicar`/`OwnLoanPayoff` ya se pedía
+  siempre. Con `Accounting.LendingDisbursementWithPayoffsInOneVoucher`, `ComprobantePorRecibo.Recogida` junta también la consignación de una cuenta recogida.
+- **Pantallas (T081)**: `ProductosParaRecoger` lista las cuentas (producto, cuotas pendientes en el detalle, modo cuotas/abono con su valor; de fábrica «La
+  cooperativa no los recoge»), `RecogidaMarcada` gana `Kind` y el resumen suma lo pendiente o el abono sin liberar cuotas de crédito; `LoQueRecoge` ya era
+  genérico; `RecogidasDelDesembolso` y el resultado del desembolso dicen «Se consigna» y lo consignado. Sin zonas de carga nuevas (todo llega con la consulta).
+- **Pendiente o dudoso**: el recorrido completo del comando del desembolso con cuentas (orden por bruto − aplicado con la consignación) no tiene prueba unitaria:
+  el escenario de desembolso y el de cuentas son bases distintas; va con la e2e T098. La operación de la cuenta lleva el recibo del desembolso
+  (`ReceiptNumber`) y el motivo «Por el desembolso … del crédito …» (`ConsignacionEnCurso.Motivo`, sólo por el camino interno), que ve el libro de la cuenta.
+- **El nombre `DepositFactType`** (no `AccountFactType`): `LosHechosDeCarteraNoLlevanCuentas` rechaza en los contratos de Cartera toda propiedad que empiece por
+  `Account` (FR-126: un hecho no lleva cuentas contables); por lo mismo, el catálogo del puerto lo llama `PayoffDepositFactTypes`.
+- **T083, puerta de E3 (2026-11-27)**: `dotnet build IngenIA365ERP.slnx -m:1` sin errores; Domain 3.265, Application 9.196, Architecture 933 y Shared 790, todas
+  verdes. La única que falló fue `LosHechosDeCarteraNoLlevanCuentas` por el nombre del campo nuevo (corregido arriba).

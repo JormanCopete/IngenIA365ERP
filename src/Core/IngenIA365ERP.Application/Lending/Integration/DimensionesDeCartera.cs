@@ -22,7 +22,7 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// Sin el alcance de oficinas de Cartera: los puertos para otros módulos no lo aplican (T62). (nuevo)
 /// </summary>
 public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVigente normativa, SaldosContablesDeCartera saldos, IDateTimeService reloj,
-    Accrual.LectorDePoliticaDeReconocimiento? politica = null)
+    Accrual.LectorDePoliticaDeReconocimiento? politica = null, Common.ReglasDeParametrosDeCartera? parametros = null)
     : IDimensionesDeCartera
 {
     public async Task<CatalogoDeDimensionesDeCarteraDto> CatalogoAsync(CancellationToken ct)
@@ -30,6 +30,7 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
         var lineas = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => !l.IsDeleted)
             .Select(l => new
             {
+                l.Id,
                 l.Code,
                 l.Name,
                 l.Status,
@@ -59,7 +60,31 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
             modalidades,
             Enum.GetNames<LoanConcept>(),
             Enum.GetNames<ClaseDeRecaudador>(),
-            CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type).ToList());
+            CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type).ToList())
+        {
+            PayoffDepositFactTypes = await HechosDeLasCuentasRecogidasAsync(
+                lineas.Where(l => l.Nature == LineNature.Placement && l.Status == CreditLineStatus.Active).Select(l => l.Id).ToList(), ct),
+        };
+    }
+
+    /// <summary>
+    /// 2026-11-27 (feature 028, E3, T080): los hechos con que se consignan las cuentas que la cooperativa recoge con un crédito nuevo (<c>Recogida.ProductosAdmitidos</c>
+    /// general o de alguna línea de colocación activa, a hoy): <c>AporteRecibido</c> si admite aportes y <c>ConsignacionEnCuentaAplicada</c> si admite algún
+    /// ahorro. Vacío de fábrica (sólo créditos) o sin el lector de parámetros.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> HechosDeLasCuentasRecogidasAsync(IReadOnlyList<int> lineasDeColocacion, CancellationToken ct)
+    {
+        if (parametros is null) return [];
+        var hoy = reloj.HoyLocal;
+        var admisiones = new List<Domain.Lending.Payoffs.AdmisionDeRecogida> { await Payoffs.AdmisionDeRecogidaVigente.LeerAsync(parametros, hoy, null, ct) };
+        foreach (var linea in lineasDeColocacion) admisiones.Add(await Payoffs.AdmisionDeRecogidaVigente.LeerAsync(parametros, hoy, linea, ct));
+        var hechos = new List<string>();
+        if (admisiones.Any(a => a.Admite(Domain.Lending.Payoffs.ProductoDeRecogida.Aportes)))
+            hechos.Add(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.AporteRecibidoV1.Type);
+        if (admisiones.Any(a => a.Admite(Domain.Lending.Payoffs.ProductoDeRecogida.AhorroALaVista) || a.Admite(Domain.Lending.Payoffs.ProductoDeRecogida.AhorroPermanente)
+                                || a.Admite(Domain.Lending.Payoffs.ProductoDeRecogida.AhorroContractual)))
+            hechos.Add(IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionEnCuentaAplicadaV1.Type);
+        return hechos;
     }
 
     public async Task<IReadOnlyList<CombinacionDeCarteraEnUsoDto>> CombinacionesEnUsoAsync(DateOnly fecha, CancellationToken ct)

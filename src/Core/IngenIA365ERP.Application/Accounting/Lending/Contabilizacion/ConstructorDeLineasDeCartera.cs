@@ -490,16 +490,19 @@ public static partial class ConstructorDeLineasDeCartera
 
         /// <summary>
         /// 2026-11-27 (feature 028, T046): las recogidas que el comprobante del desembolso (o de su reverso) asienta. En especie no hay giro ni recogidas.
-        /// En E1 sólo se recogen créditos: otra clase de producto (aportes, ahorro, una factura, que llegan con E2 y E4) es un fallo con su código y no
-        /// se asienta (el hecho sigue cuadrando: «desembolso por girar» no la descuenta).
+        /// En E1 sólo se recogían créditos; desde E3 (T080) también cuentas de aportes y ahorros. Otra clase de producto (una factura, que llega con E4) es
+        /// un fallo con su código y no se asienta (el hecho sigue cuadrando: «desembolso por girar» no la descuenta).
         /// </summary>
         private IReadOnlyList<PayoffDeductionV1> RecogidasContables(IReadOnlyList<PayoffDeductionV1>? recogidas, InKindDisbursementV1? especie)
         {
             if (especie is not null || recogidas is not { Count: > 0 }) return [];
-            foreach (var otra in recogidas.Where(r => r.ClaseDeProducto() != PayoffDeductionV1.Credito))
+            foreach (var otra in recogidas.Where(r => !Asentable(r)))
                 fallos.Add(new FalloDeCartera(AccountingErrors.LendingPayoffKindNotSupported(otra.ClaseDeProducto()), hecho.Tipo, R.RecaudoPorAplicar,
                     null, null, []));
-            return recogidas.Where(r => r.ClaseDeProducto() == PayoffDeductionV1.Credito && r.Amount != 0m).ToList();
+            return recogidas.Where(r => Asentable(r) && r.Amount != 0m).ToList();
+
+            static bool Asentable(PayoffDeductionV1 r) => r.ClaseDeProducto() == PayoffDeductionV1.Credito
+                                                          || r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado && r.AccountRef is not null;
         }
 
         /// <summary>
@@ -508,12 +511,21 @@ public static partial class ConstructorDeLineasDeCartera
         /// recogido, el pagador (el deudor) como tercero, el crédito recogido como documento cruce y el tipo de cruce del mapeo de ese recibo. Un mensaje
         /// de antes, sin sucursal ni pagador, toma la del desembolso y su deudor.
         /// </summary>
-        private Lado PuenteDeLaRecogida(LoanFactDimensionsV1 d, PayoffDeductionV1 r, Guid deudor) =>
-            new(R.RecaudoPorAplicar,
-                new ValoresDeCartera(CollectorClass: ClaseDeLaRecogidaPropia,
-                    BranchPublicId: r.BranchPublicId is { } s && s != Guid.Empty ? s : Sucursal(d.BranchPublicId)),
-                null, Texto(r.Loan.LoanNumber), r.PayerPersonPublicId is { } p && p != Guid.Empty ? p : deudor,
-                HechoDelCruce: PagoAplicadoV1.Type);
+        /// <remarks>
+        /// 2026-11-27 (feature 028, E3, T080; FR-027): en una cuenta recogida, el cruce es el número de la cuenta y su tipo, el del mapeo del hecho de la
+        /// consignación (<c>AporteRecibido</c> o <c>ConsignacionEnCuentaAplicada</c> con la clase <c>OwnLoanPayoff</c>), como lo debita la consignación; la
+        /// sucursal, la de la oficina de la cuenta.
+        /// </remarks>
+        private Lado PuenteDeLaRecogida(LoanFactDimensionsV1 d, PayoffDeductionV1 r, Guid deudor)
+        {
+            var valores = new ValoresDeCartera(CollectorClass: ClaseDeLaRecogidaPropia,
+                BranchPublicId: r.BranchPublicId is { } s && s != Guid.Empty ? s : Sucursal(d.BranchPublicId));
+            var pagador = r.PayerPersonPublicId is { } p && p != Guid.Empty ? p : deudor;
+            return r.ClaseDeProducto() == PayoffDeductionV1.CuentaDelAsociado
+                ? new Lado(R.RecaudoPorAplicar, valores, null, null, pagador, Cuenta: Texto(r.AccountRef?.AccountNumber),
+                    HechoDelCruce: Texto(r.DepositFactType) ?? IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.ConsignacionEnCuentaAplicadaV1.Type)
+                : new Lado(R.RecaudoPorAplicar, valores, null, Texto(r.Loan.LoanNumber), pagador, HechoDelCruce: PagoAplicadoV1.Type);
+        }
 
         /// <summary>
         /// 2026-11-25 (feature 026): el cargo masivo debita el capital (su regla de saldo, con el deudor) y acredita la contrapartida del cargo de la línea

@@ -141,7 +141,7 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
             .Select(x => new ReglaDeCarteraNoElegibleDto(x.Regla.PublicId, x.Regla.Operation, x.Regla.Role,
                 cuentas.GetValueOrDefault(x.Regla.AccountId)?.Code ?? string.Empty, x.Reparo!))
             .ToList();
-        var sinMapeo = await SinMapeoAsync(ct);
+        var sinMapeo = await SinMapeoAsync(catalogo.PayoffDepositFactTypes, ct);
         var avisos = Avisos(reglas, cuentas).Concat(AvisosDeCaptaciones(catalogo.CreditLines, vigentes, cuentas)).ToList();
 
         var porTipo = new Dictionary<string, int>(StringComparer.Ordinal)
@@ -267,14 +267,27 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
             .ToList();
     }
 
-    private async Task<List<HechoSinMapeoDto>> SinMapeoAsync(CancellationToken ct)
+    /// <remarks>
+    /// 2026-11-27 (feature 028, E3, T080): si la cooperativa recoge cuentas con un crédito nuevo (<see cref="CatalogoDeDimensionesDeCarteraDto.PayoffDepositFactTypes"/>),
+    /// el hecho de su consignación tiene que resolver su tipo de comprobante y de cruce con la clase de la recogida propia (<c>OwnLoanPayoff</c>): el
+    /// comprobante del desembolso cruza el puente con ese mapeo. Sale si el general resuelve y el de la clase no (sin el general ya sale arriba).
+    /// </remarks>
+    private async Task<List<HechoSinMapeoDto>> SinMapeoAsync(IReadOnlyList<string> hechosDeCuentasRecogidas, CancellationToken ct)
     {
         var mapeos = await tipos.CargarAsync(ct);
-        return OperacionesDeCartera.DeNegocio
+        var sinMapeo = OperacionesDeCartera.DeNegocio
             .Select(o => (Operacion: o.Codigo, Resultado: mapeos.Resolver(o.Codigo, null)))
             .Where(x => x.Resultado.IsFailure)
             .Select(x => new HechoSinMapeoDto(x.Operacion, null, x.Resultado.Error.Code, x.Resultado.Error.Message))
             .ToList();
+        var clase = nameof(ClaseDeRecaudador.OwnLoanPayoff);
+        foreach (var hecho in hechosDeCuentasRecogidas.Distinct(StringComparer.Ordinal))
+        {
+            if (mapeos.Resolver(hecho, null).IsFailure) continue;
+            var conLaClase = mapeos.Resolver(hecho, clase);
+            if (conLaClase.IsFailure) sinMapeo.Add(new HechoSinMapeoDto(hecho, clase, conLaClase.Error.Code, conLaClase.Error.Message));
+        }
+        return sinMapeo;
     }
 
     private static IEnumerable<AvisoDeCompletitudDeCarteraDto> Avisos(IReadOnlyList<LendingPostingRule> reglas, IReadOnlyDictionary<int, ChartOfAccount> cuentas)

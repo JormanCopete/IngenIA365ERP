@@ -6,7 +6,8 @@
    neto sube) o requiere reestructuración, y una fila desplegable con la diferencia por concepto, la cuota causada y los avisos. No consulta nada: pinta
    lo que trajo la vista previa (su zona de carga es la de la pantalla).
    2026-11-27 (feature 028, E2, T072; HU4): la cuota causada que se deja a su canal («todo menos la cuota causada») va en el modo y en el detalle, con lo que
-   debe, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella. *@
+   debe, la cuota enviada a la pagaduría o a la nómina y qué pasa con ella.
+   2026-11-27 (feature 028, E3, T081; HU6): las cuentas de aportes y ahorros que recoge, por cuotas o como abono, con lo que se les consigna. *@
 @if (Recogidas.Count > 0)
 {
     <h4>Lo que recoge</h4>
@@ -66,10 +67,21 @@
                                 {
                                     <p class="texto-tenue">@(r.Projected is null ? "La solicitud no guardó proyección: no hay con qué comparar." : "Ningún concepto cambió desde la proyección.")</p>
                                 }
-                                <p class="texto-apoyo">
-                                    Para cancelar a la fecha valor: @TextosDeOriginacion.Pesos(r.ToPayOff) · días de mora: @r.DaysPastDue
-                                    @if (r.InterestMode is { } modo) { <span> · @TextosDeRecogida.ModoDeIntereses(modo)</span> }
-                                </p>
+                                @if (r.Kind == "Account")
+                                {
+                                    @* 2026-11-27 (feature 028, E3, T081): una cuenta recibe una consignación por sus cuotas pendientes o un abono. *@
+                                    <p class="texto-apoyo">
+                                        @(r.Mode == "Installments" ? "Cuotas pendientes a la fecha valor" : "Abono pedido"): @TextosDeOriginacion.Pesos(r.Current) ·
+                                        se consigna @TextosDeOriginacion.Pesos(r.ToApply) con el desembolso.
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p class="texto-apoyo">
+                                        Para cancelar a la fecha valor: @TextosDeOriginacion.Pesos(r.ToPayOff) · días de mora: @r.DaysPastDue
+                                        @if (r.InterestMode is { } modo) { <span> · @TextosDeRecogida.ModoDeIntereses(modo)</span> }
+                                    </p>
+                                }
                                 @* 2026-11-27 (feature 028, T051): el interés de lo de ahora, renglón a renglón con los días que cuenta el servidor; lo reconocido
                                    que se libera va aparte porque no cambia lo que se recoge. *@
                                 @foreach (var renglon in r.InterestExplanation.Where(x => !x.EsInformativo))

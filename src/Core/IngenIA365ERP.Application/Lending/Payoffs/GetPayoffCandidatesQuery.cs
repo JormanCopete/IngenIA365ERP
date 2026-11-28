@@ -78,12 +78,16 @@ public sealed class GetPayoffCandidatesQueryValidator : AbstractValidator<GetPay
             .WithMessage("Un producto está marcado dos veces.");
         RuleForEach(x => x.Selected).ChildRules(p =>
         {
-            p.RuleFor(x => x.Kind).Equal(PayoffProductKind.Loan)
-                .WithMessage("Por ahora sólo se recogen créditos: las cuentas de aportes y ahorros y las facturas llegan en otra entrega.");
-            p.RuleFor(x => x.ProductPublicId).NotEmpty().WithMessage("Indique el crédito marcado.");
-            p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).WithMessage("Un crédito se recoge total o parcial.");
-            p.RuleFor(x => x.Amount).NotNull().GreaterThan(0m).When(x => x.Mode == PayoffMode.Partial)
-                .WithMessage("Una recogida parcial lleva un valor mayor que cero.");
+            // 2026-11-27 (feature 028, E3, T078): también cuentas de aportes y ahorros, por cuotas o como abono; las facturas llegan con E4.
+            p.RuleFor(x => x.Kind).Must(k => k is PayoffProductKind.Loan or PayoffProductKind.Account)
+                .WithMessage("Por ahora se recogen créditos y cuentas de aportes y ahorros: las facturas llegan en otra entrega.");
+            p.RuleFor(x => x.ProductPublicId).NotEmpty().WithMessage("Indique el producto marcado.");
+            p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Total or PayoffMode.Partial).When(x => x.Kind == PayoffProductKind.Loan)
+                .WithMessage("Un crédito se recoge total o parcial.");
+            p.RuleFor(x => x.Mode).Must(m => m is PayoffMode.Installments or PayoffMode.Deposit).When(x => x.Kind == PayoffProductKind.Account)
+                .WithMessage("Una cuenta se recoge por sus cuotas pendientes o con un abono.");
+            p.RuleFor(x => x.Amount).NotNull().GreaterThan(0m).When(x => x.Mode is PayoffMode.Partial or PayoffMode.Deposit)
+                .WithMessage("Una recogida parcial o un abono lleva un valor mayor que cero.");
             p.RuleFor(x => x.InstallmentTreatment).IsInEnum().When(x => x.InstallmentTreatment is not null);
         });
         RuleFor(x => x.NewLoan!.Amount).GreaterThan(0m).When(x => x.NewLoan is not null).WithMessage("El monto del crédito nuevo es mayor que cero.");
@@ -102,7 +106,8 @@ public sealed class GetPayoffCandidatesQueryHandler(
     LendingAuditEmitter auditoria,
     IDateTimeService reloj,
     IBlobStore store,
-    IAttachmentCipher? cifrado = null) : IRequestHandler<GetPayoffCandidatesQuery, Result<PayoffCandidatesDto>>
+    IAttachmentCipher? cifrado = null,
+    RecogidaDeCuentas? cuentas = null) : IRequestHandler<GetPayoffCandidatesQuery, Result<PayoffCandidatesDto>>
 {
     public const int MaximoDeMarcados = 50;
 
@@ -168,6 +173,9 @@ public sealed class GetPayoffCandidatesQueryHandler(
                 cuotas.TryGetValue(credito.Id, out var cuota) ? cuota : null, enOtras.GetValueOrDefault(credito.Id), ct);
             productos.Add(producto);
         }
+        // 2026-11-27 (feature 028, E3, T078; HU6): las cuentas vivas del titular (aportes y ahorros, nunca el CDAT), con sus cuotas pendientes a D; de fábrica
+        // se ven sin poder marcarse («la cooperativa no los recoge»).
+        productos.AddRange(await CuentasAsync(request.PersonPublicId, d, admision, ct));
 
         var resumen = Resumen(request, productos, persona.Nombre);
         if (resumen.IsFailure) return Result.Failure<PayoffCandidatesDto>(resumen.Error);
@@ -222,6 +230,53 @@ public sealed class GetPayoffCandidatesQueryHandler(
     }
 
     /// <summary>
+    /// 2026-11-27 (feature 028, E3, T078; HU6, FR-001, FR-002): las cuentas vivas (activas o inactivas) de la persona como <b>titular</b> dentro del alcance de
+    /// oficina y línea de quien consulta —aportes, ahorro a la vista, permanente y contractual; un CDAT no aparece (no es una deuda, HU6-4)—, con sus cuotas
+    /// pendientes a D, lo que cuesta recogerlas por cuotas, los modos que admiten la línea del crédito nuevo (<c>Recogida.ProductosAdmitidos</c>) y la de la
+    /// cuenta (el abono en aportes, sólo con extraordinarios) y, si no se puede marcar, por qué: de fábrica, «la cooperativa no los recoge». Ver saldos de la
+    /// persona queda en la auditoría.
+    /// </summary>
+    private async Task<IReadOnlyList<PayoffCandidateDto>> CuentasAsync(Guid persona, DateOnly d, AdmisionDeRecogida admision, CancellationToken ct)
+    {
+        if (cuentas is null) return [];
+        var titular = await db.People.AsNoTracking().Where(p => p.PublicId == persona).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        if (titular is null) return [];
+        var ambito = await alcance.ObtenerAsync(ct);
+        var vivas = RecogidaDeCuentas.Vivas;
+        var leidas = (await db.MemberAccounts.AsNoTracking()
+                .Where(a => a.HolderPersonId == titular && !a.IsDeleted && vivas.Contains(a.Status))
+                .PorOficinaYLinea(ambito, a => a.BranchId, a => a.CreditLineId)
+                .ToListAsync(ct))
+            .Where(a => ProductosAdmitidos.DeCuenta(a.Nature, a.DepositClass) is not null)
+            .OrderBy(a => a.Nature).ThenBy(a => a.Number, StringComparer.Ordinal)
+            .ToList();
+        if (leidas.Count == 0) return [];
+
+        var resultado = new List<PayoffCandidateDto>(leidas.Count);
+        foreach (var c in await cuentas.LeerAsync(leidas, d, ct))
+        {
+            var producto = c.Producto!.Value;
+            var modos = c.Admitidos(admision);
+            var bloqueo = c.Bloqueo
+                          ?? (!admision.Admite(producto) ? ErroresDeRecogida.CuentaNoAdmitida(c.Cuenta.Number, producto)
+                              : modos.Count == 0 ? ErroresDeRecogida.SinAbonoEnLaLinea(c.Cuenta.Number, c.CodigoDeLinea)
+                              : modos.All(m => m == PayoffMode.Installments) && c.Pendiente <= 0m ? ErroresDeRecogida.SinCuotasPendientes(c.Cuenta.Number, d)
+                              : null);
+            resultado.Add(new PayoffCandidateDto(PayoffProductKind.Account, c.Cuenta.PublicId, c.Cuenta.Number, c.Linea, null, c.Cuenta.ContributionPaymentChannel,
+                c.Cuotas.Where(q => q.EnMoraEl(d)).Select(q => d.DayNumber - q.Cuota.DueDate.DayNumber).DefaultIfEmpty(0).Max(), c.Cuenta.ContributionInstallmentAmount, bloqueo is null, bloqueo?.Motivo, modos, c.Pendiente,
+                PayoffBreakdownDto.De(new DesgloseDeRecogida(Capital: c.Pendiente)), null, null, null, null, null, c.Huella(d), [])
+            {
+                BlockMessage = bloqueo?.Mensaje,
+                AccountProduct = producto.ToString(),
+                PendingInstallments = c.Cuotas.Select(q => new PayoffAccountInstallmentDto(q.Cuota.PublicId, q.Cuota.Periodo, q.Cuota.DueDate, q.Pendiente)).ToList(),
+                DepositNotAllowedReason = c.MotivoSinAbono,
+            });
+        }
+        await auditoria.EmitirSaldosDePersonaVistosAsync(persona, "payoff-candidates", new { accounts = resultado.Count, date = d }, ct);
+        return resultado;
+    }
+
+    /// <summary>
     /// 2026-11-27 (feature 028, E2, T066; api.md §1 <c>currentInstallment</c>): la cuota causada como la ve el asesor: con el tratamiento que rige, si la elige,
     /// la enviada, lo que deja debiendo si se deja y qué pasa con ella en cada caso. Sin cuota causada ni dejada, nula. Lo usa también la vista previa del
     /// desembolso. (nuevo)
@@ -261,14 +316,31 @@ public sealed class GetPayoffCandidatesQueryHandler(
             var i = productos.FindIndex(p => p.Kind == marcado.Kind && p.ProductPublicId == marcado.ProductPublicId);
             if (i < 0) return Result.Failure<(IReadOnlyList<PayoffCandidateDto>, PayoffSummaryDto)>(ErroresDeRecogida.NoEsDelSolicitante(persona));
             var p = productos[i];
+            var nombre = p.Kind == PayoffProductKind.Account ? $"La cuenta {p.Number}" : $"El crédito {p.Number}";
             if (!p.Eligible)
             {
-                avisos.Add($"El crédito {p.Number} está marcado pero no se puede recoger: {p.BlockMessage}");
+                avisos.Add($"{nombre} está {(p.Kind == PayoffProductKind.Account ? "marcada" : "marcado")} pero no se puede recoger: {p.BlockMessage}");
                 continue;
             }
             if (!p.AdmittedModes.Contains(marcado.Mode))
             {
-                avisos.Add($"El crédito {p.Number} está marcado {TextoDelModo(marcado.Mode)}, pero la línea del crédito nuevo no admite recogerlo así.");
+                avisos.Add(p.Kind == PayoffProductKind.Account
+                    ? $"{nombre} está marcada {TextoDelModo(marcado.Mode)}, pero no admite recogerla así."
+                    : $"{nombre} está marcado {TextoDelModo(marcado.Mode)}, pero la línea del crédito nuevo no admite recogerlo así.");
+                continue;
+            }
+            if (p.Kind == PayoffProductKind.Account)
+            {
+                // 2026-11-27 (feature 028, E3, T078): una cuenta, por sus cuotas pendientes a D o con el abono pedido; no libera cuotas de crédito.
+                if (marcado.Mode == PayoffMode.Installments && p.ToPayOff <= 0m)
+                {
+                    avisos.Add($"{nombre} no tiene cuotas pendientes a la fecha: no se recoge nada por cuotas.");
+                    continue;
+                }
+                var deLaCuenta = marcado.Mode == PayoffMode.Installments ? p.ToPayOff : marcado.Amount ?? 0m;
+                total += deLaCuenta;
+                contados++;
+                productos[i] = p with { Selected = true, SelectedMode = marcado.Mode, SelectedAmount = deLaCuenta };
                 continue;
             }
             // 2026-11-27 (feature 028, E2, T066): con «Preguntar», dejar la cuota causada recoge todo menos ella.
@@ -337,6 +409,8 @@ public sealed class GetPayoffCandidatesQueryHandler(
     {
         PayoffMode.Total => "para recoger total",
         PayoffMode.Partial => "para recoger parcial",
+        PayoffMode.Installments => "para recoger por cuotas",
+        PayoffMode.Deposit => "para recibir un abono",
         _ => $"como {modo}",
     };
 

@@ -74,13 +74,16 @@ public sealed class RecogidaEnElDesembolso(IContratoDeObligaciones contrato)
             pagos.AddRange(deEste.Where(o => DesembolsoDeLaClave(o.IdempotencyKey) == desembolso)
                 .Select(o => (o.Id, o.LoanId, o.PublicId, o.Amount - (o.ExcessAmount ?? 0m))));
         }
-        if (pagos.Count == 0) return [];
+        // 2026-11-27 (feature 028, E3, T077): también las consignaciones vivas en cuentas de aportes y ahorros (detrás de los créditos).
+        var deCuentas = (await RecogidaDeCuentas.VivasAsync(db, desembolsos, ct)).Select(c => RecogidaDeCuentas.ComoDeduccion(c)).ToList();
+        if (pagos.Count == 0) return deCuentas;
 
         var ids = pagos.Select(p => p.LoanId).Distinct().ToList();
         var recogidos = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => new LoanRefV1 { LoanPublicId = l.PublicId, LoanNumber = l.Number }, ct);
         return pagos.OrderBy(p => p.Id)
             .Select(p => new PayoffDeductionV1 { Loan = recogidos[p.LoanId], OperationPublicId = p.PublicId, Amount = p.Aplicado })
+            .Concat(deCuentas)
             .ToList();
     }
 
