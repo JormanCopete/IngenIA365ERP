@@ -64,6 +64,8 @@
     private static readonly (string Clave, string Nombre, string Descripcion)[] VistasFijas =
     [
         (ContabilidadClient.Vistas.BalanceDePrueba, "Balance de prueba", "Saldo inicial, débitos, créditos y saldo final por cuenta al nivel elegido; con «Con terceros» abre cada auxiliar por tercero. Los débitos y los créditos deben sumar igual."),
+        (ContabilidadClient.Vistas.BalanceDePruebaDetallado, "Balance de prueba detallado", "El balance de prueba con cada cuenta de movimiento abierta debajo, en plano, por tercero, documento cruce (facturas, cuentas por cobrar) y centro de costo, según lo que maneje la cuenta. Un clic en un renglón abre el libro auxiliar."),
+        (ContabilidadClient.Vistas.SaldosPorCuenta, "Saldos por cuenta", "Elija la cuenta en «Filtros» (rama del plan, o «Cuenta desde» y «Cuenta hasta»): cada cuenta de movimiento con su saldo inicial, débitos, créditos y saldo final, y debajo el detalle por tercero, documento cruce y centro de costo."),
         (ContabilidadClient.Vistas.LibroDiario, "Libro diario", "Los comprobantes contabilizados del rango con todas sus líneas, en orden de fecha y número."),
         (ContabilidadClient.Vistas.LibroMayor, "Libro mayor y balances", "Saldo anterior, movimientos del período y nuevo saldo por cuenta al nivel elegido (por defecto, subcuenta)."),
         (ContabilidadClient.Vistas.RelacionDeComprobantes, "Relación de comprobantes", "Un renglón por comprobante: fecha, tipo, número, origen, estado, totales y quién registró y contabilizó."),
@@ -104,7 +106,7 @@
         _filtros.From ??= new DateOnly(_filtros.To.Value.Year, 1, 1);
         _aplicados = _filtros.Copia();
         // El saldo diario promedio exige una cuenta: sin ella no se consulta solo al entrar.
-        if (_vista != ContabilidadClient.Vistas.SaldoDiarioPromedio || _aplicados.AccountPublicId is not null) await CargarAsync();
+        if (!ExigeCuenta(_vista) || TieneCuenta(_aplicados)) await CargarAsync();
     }
 
     private void CambiarVista(string? vista)
@@ -126,10 +128,12 @@
 
     private async Task CargarAsync()
     {
-        if (_vista == ContabilidadClient.Vistas.SaldoDiarioPromedio && _aplicados.AccountPublicId is null)
+        if (ExigeCuenta(_vista) && !TieneCuenta(_aplicados))
         {
             _tabla = null;
-            await Notification.WarningAsync("El saldo diario promedio es de una cuenta: elija la rama del plan en los filtros.");
+            await Notification.WarningAsync(_vista == ContabilidadClient.Vistas.SaldosPorCuenta
+                ? "Elija la cuenta a consultar en los filtros: la rama del plan o «Cuenta desde»."
+                : "El saldo diario promedio es de una cuenta: elija la rama del plan en los filtros.");
             return;
         }
         using var carga = _carga.Iniciar();
@@ -151,7 +155,12 @@
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 
-    private static bool AbreAuxiliar(string vista) => vista is "trial-balance" or "general-ledger" or "pending-documents";
+    private static bool AbreAuxiliar(string vista) => vista is "trial-balance" or "general-ledger" or "pending-documents" or "trial-balance-detailed" or "account-balances";
+
+    /// <summary>Las vistas que exigen una cuenta (la rama del plan o «Cuenta desde»): sin ella no se consultan.</summary>
+    private static bool ExigeCuenta(string vista) => vista is ContabilidadClient.Vistas.SaldoDiarioPromedio or ContabilidadClient.Vistas.SaldosPorCuenta;
+
+    private bool TieneCuenta(FiltrosDeInformeModelo f) => f.AccountPublicId is not null || (_vista == ContabilidadClient.Vistas.SaldosPorCuenta && !string.IsNullOrWhiteSpace(f.AccountFrom));
 
     private Task AbrirAuxiliarAsync(FilaReporteDto fila)
     {
@@ -167,7 +176,7 @@
 
     private string Descripcion(string vista) => VistasDisponibles.FirstOrDefault(v => v.Clave == vista).Descripcion ?? string.Empty;
 
-    private string TextoVacio() => _vista == ContabilidadClient.Vistas.SaldoDiarioPromedio && _aplicados.AccountPublicId is null
-        ? "Elija la cuenta en «Filtros» (rama del plan) y pulse «Consultar»."
+    private string TextoVacio() => ExigeCuenta(_vista) && !TieneCuenta(_aplicados)
+        ? "Elija la cuenta en «Filtros» (rama del plan o «Cuenta desde») y pulse «Consultar»."
         : "Elija el rango y pulse «Consultar».";
 }
