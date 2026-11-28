@@ -29,10 +29,14 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 {
     private const string Informes = "/api/reports/lending";
 
-    /// <summary>K1, más el estado de cuenta de la persona (<c>person-statement</c>, 2026-11-13), que es de K1 y trae datos del deudor.</summary>
+    /// <summary>
+    /// K1, más el estado de cuenta de la persona (<c>person-statement</c>, 2026-11-13) y las recogidas (<c>payoffs</c>, feature 028, T053), que son de K1 y
+    /// traen datos del deudor.
+    /// </summary>
     private static readonly string[] VistasDeK1 =
-        ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances", "person-statement"];
-    private static readonly string[] ConDatosDelDeudor = ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation", "person-statement"];
+        ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances", "person-statement", "payoffs"];
+    private static readonly string[] ConDatosDelDeudor =
+        ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation", "person-statement", "payoffs"];
 
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
     private static readonly string[] VistasDeK2 = ["payroll-agreements", "payroll-deduction-reconciliation"];

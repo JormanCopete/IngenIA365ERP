@@ -200,8 +200,11 @@ public sealed class RecogidaConCuotaEnviadaTests(CentralIdentityApiFixture fx)
                 .Sum(p => p.GetProperty("lines").GetInt32()).Should().Be(0, "el giro levantó el pendiente");
             (await CarteraE2E.GetAsync(http, adm, $"{NoAplicados}?agreementPublicId={esc.Convenio}&status=Open")).GetProperty("items").GetArrayLength()
                 .Should().Be(0, "nada quedó como no aplicado");
-            var vinculo = (await CarteraE2E.GetAsync(http, esc.Usuarios.Jefe.Token, $"{DesembolsoE2E.Creditos}/{nuevo}")).GetProperty("paidOff").EnumerateArray()
-                .Single(p => p.GetProperty("loanPublicId").GetGuid() == dejada);
+            (await CarteraE2E.GetAsync(http, esc.Usuarios.Jefe.Token, $"{DesembolsoE2E.Creditos}/{nuevo}")).GetProperty("paidOff").EnumerateArray()
+                .Should().Contain(p => p.GetProperty("loanPublicId").GetGuid() == dejada, "el crédito nuevo dice lo que recogió");
+            // La cuota dejada la muestra el detalle del recogido, en «recogido por» (E-12).
+            var vinculo = (await CarteraE2E.GetAsync(http, esc.Usuarios.Jefe.Token, $"{DesembolsoE2E.Creditos}/{dejada}")).GetProperty("paidOffBy").EnumerateArray()
+                .Single(p => p.GetProperty("loanPublicId").GetGuid() == nuevo);
             vinculo.GetProperty("leftInstallmentNumber").GetInt32().Should().Be(1);
             vinculo.GetProperty("leftInstallmentSettledAt").ValueKind.Should().Be(JsonValueKind.String, "la cuota dejada quedó pagada por su canal");
         }
