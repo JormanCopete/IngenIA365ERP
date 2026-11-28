@@ -1,0 +1,221 @@
+@page "/implantacion/cotejo/cuentas"
+@page "/implantacion/cotejo/terceros"
+@page "/implantacion/cotejo/creditos"
+@page "/implantacion/cotejo/cuentas-de-asociados"
+@page "/implantacion/cotejo/asociados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Implantacion
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject CotejoClient Cotejos
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>@($"Cotejo: {_def.Titulo} - IngenIA365ERP")</PageTitle>
+
+@* Cotejo con cifras de referencia (implantación, 2026-11-28): se sube el archivo con las cifras que trae la cooperativa, el ERP calcula las suyas
+   al corte y muestra qué cuadra, qué difiere y qué está de un solo lado; primero el resumen por grupo (un clic abre el detalle de ese grupo) y el
+   detalle completo, también sólo lo que no cuadra. Nada se guarda: cambiar de vista o exportar vuelve a subir el mismo archivo. Una opción por
+   área, cada una con su permiso. El inventario se coteja en /inventario/cifras-de-referencia. *@
+<PermissionGate Required="@_def.Permiso" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cotejo: @_def.Titulo</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_ocupado" OnClick="@PlantillaAsync">Plantilla Excel</SfButton>
+            @if (_tabla is not null)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => ExportarAsync("xlsx"))">Exportar a Excel</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@(() => ExportarAsync("pdf"))">PDF</SfButton>
+            }
+        </div>
+    </div>
+
+    <p class="texto-apoyo">@_def.Ayuda</p>
+    <p class="texto-tenue">
+        Otras opciones:
+        @foreach (var o in Opciones.Where(o => o.Clave != _def.Clave))
+        {
+            <a class="enlace" href="@($"/implantacion/cotejo/{o.Clave}")">@o.Titulo</a><span> · </span>
+        }
+        <a class="enlace" href="/inventario/cifras-de-referencia">Inventario</a>
+    </p>
+
+    <div class="toolbar">
+        <label class="campo">Corte
+            <input type="date" class="e-input" @bind="_corte" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+        </label>
+        <label class="campo">Archivo de cifras de referencia
+            <InputFile OnChange="@ArchivoElegido" accept=".xlsx,.csv,.txt" />
+        </label>
+        @if (_def.Contable)
+        {
+            <label class="campo campo-casilla">
+                <input type="checkbox" @bind="_debitoMenosCredito" /> El archivo trae débito menos crédito
+            </label>
+        }
+        @if (_def.ConImportes)
+        {
+            <label class="campo">Tolerancia (pesos)
+                <input type="number" min="0" max="1000" step="1" class="e-input" @bind="_tolerancia" />
+            </label>
+        }
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _contenido is null)" OnClick="@(() => CotejarAsync(detalle: false, grupo: null))">Cotejar</SfButton>
+    </div>
+
+    @if (_errores.Count > 0)
+    {
+        <p class="texto-alerta">@_errores.Count error(es) en el archivo. Corríjalos y vuelva a cotejar: no se cotejó nada.</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _errores) { <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_tabla is not null)
+    {
+        <div class="toolbar">
+            <SfButton CssClass="@(_detalle ? "e-outline" : "e-primary")" Disabled="@_carga.Activa" OnClick="@(() => CotejarAsync(detalle: false, grupo: null))">Resumen</SfButton>
+            <SfButton CssClass="@(_detalle && _grupo is null ? "e-primary" : "e-outline")" Disabled="@_carga.Activa" OnClick="@(() => CotejarAsync(detalle: true, grupo: null))">Detalle completo</SfButton>
+            @if (_detalle)
+            {
+                <label class="campo campo-casilla">
+                    <input type="checkbox" checked="@_soloDiferencias" @onchange="@(e => CambiarSoloDiferenciasAsync(e.Value is true))" /> Sólo lo que no cuadra
+                </label>
+            }
+            @if (_grupo is not null)
+            {
+                <span class="texto-tenue">Detalle de <strong>@_grupo</strong></span>
+            }
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cotejando…">
+        <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Descargue la plantilla, llénela con las cifras de referencia, súbala, elija el corte y pulse «Cotejar»."
+                        FilasClicables="@(!_detalle)" EsClicable="@(f => !_detalle && TablaDeReporte.Oculto(_tabla, f, "_grupo") is not null)" FilaElegida="@AbrirGrupoAsync" />
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private sealed record Opcion(string Clave, string Titulo, string Permiso, bool Contable, bool ConImportes, string Ayuda);
+
+    private static readonly IReadOnlyList<Opcion> Opciones =
+    [
+        new("cuentas", "Balance por cuenta", "Implantacion.Cotejo.Contabilidad", true, true,
+            "Compare el saldo de cada cuenta al corte con el de las cifras de referencia, del nivel que traiga el archivo: cada código se compara con la suma de su rama."),
+        new("terceros", "Saldos por tercero", "Implantacion.Cotejo.Contabilidad", true, true,
+            "Compare los saldos por cuenta y tercero. Las filas del archivo con la misma cuenta y tercero se suman."),
+        new("creditos", "Cartera por crédito", "Implantacion.Cotejo.Cartera", false, true,
+            "Compare crédito por crédito capital, intereses, otros cargos, días de mora y calificación con lo que muestra el estado de cuenta al corte."),
+        new("cuentas-de-asociados", "Aportes y ahorros por cuenta", "Implantacion.Cotejo.Captaciones", false, true,
+            "Compare el saldo de cada cuenta de aportes, ahorro o CDAT al corte."),
+        new("asociados", "Asociados", "Implantacion.Cotejo.Asociados", false, false,
+            "Compare que cada asociado exista en el ERP con el mismo estado (activo o retirado) al corte."),
+    ];
+
+    private Opcion _def = Opciones[0];
+    private readonly EstadoDeCarga _carga = new();
+    private bool _ocupado;
+    private DateOnly _corte = DateOnly.FromDateTime(DateTime.Today);
+    private bool _debitoMenosCredito;
+    private decimal _tolerancia;
+    private string? _nombre;
+    private byte[]? _contenido;
+    private List<ErrorDeFilaDto> _errores = [];
+    private TablaReporteDto? _tabla;
+    private bool _detalle;
+    private string? _grupo;
+    private bool _soloDiferencias;
+
+    protected override void OnParametersSet()
+    {
+        var ruta = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+        var clave = ruta[(ruta.LastIndexOf('/') + 1)..];
+        var nueva = Opciones.FirstOrDefault(o => o.Clave == clave) ?? Opciones[0];
+        if (nueva != _def)
+        {
+            _def = nueva;
+            _tabla = null;
+            _errores = [];
+            _nombre = null;
+            _contenido = null;
+        }
+    }
+
+    private async Task PlantillaAsync()
+    {
+        _ocupado = true;
+        try
+        {
+            var r = await Cotejos.PlantillaAsync(_def.Clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ArchivoElegido(InputFileChangeEventArgs e)
+    {
+        _errores = [];
+        _tabla = null;
+        try
+        {
+            using var ms = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            _contenido = ms.ToArray();
+            _nombre = e.File.Name;
+        }
+        catch (IOException ex)
+        {
+            _contenido = null;
+            _nombre = null;
+            await Notification.ErrorAsync($"No se pudo leer el archivo (máximo 10 MB): {ex.Message}");
+        }
+    }
+
+    private ConsultaDeCotejo Consulta(bool detalle, string? grupo) =>
+        new(_corte, detalle, grupo, detalle && _soloDiferencias, _debitoMenosCredito, _tolerancia);
+
+    private async Task CotejarAsync(bool detalle, string? grupo)
+    {
+        if (_contenido is null || _nombre is null) return;
+        using var carga = _carga.Iniciar();
+        _errores = [];
+        var r = await Cotejos.CotejarAsync(_def.Clave, _nombre, _contenido, Consulta(detalle, grupo));
+        if (!r.IsSuccess)
+        {
+            _errores = r.ErroresDeFila();
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cotejar.");
+            return;
+        }
+        _tabla = r.Value;
+        _detalle = detalle;
+        _grupo = grupo;
+    }
+
+    private Task AbrirGrupoAsync(FilaReporteDto fila) =>
+        TablaDeReporte.Oculto(_tabla, fila, "_grupo") is { } grupo ? CotejarAsync(detalle: true, grupo: grupo) : Task.CompletedTask;
+
+    private async Task CambiarSoloDiferenciasAsync(bool valor)
+    {
+        _soloDiferencias = valor;
+        await CotejarAsync(_detalle, _grupo);
+    }
+
+    private async Task ExportarAsync(string formato)
+    {
+        if (_contenido is null || _nombre is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Cotejos.ExportarAsync(_def.Clave, _nombre, _contenido, Consulta(_detalle, _grupo), formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

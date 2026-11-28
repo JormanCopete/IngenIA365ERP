@@ -32,6 +32,11 @@ public class LaContabilidadNoTieneCuentasEnCodigo
         Path.Combine("Transport", "Imports", "PlantillaDeConductores.cs"),
         Path.Combine("Transport", "Imports", "PlantillaDeDocumentosDeVehiculo.cs"),
         Path.Combine("Platform", "Connectors", "PlatformConnectorsFeature.cs"),
+        // Cotejo con cifras de referencia (2026-11-28): los ejemplos de la hoja de instrucciones de sus plantillas —un código de cuenta como el que
+        // trae el archivo de la cooperativa (110505, 13050501), saldos, un número de crédito y un documento—. El código no usa ninguna cuenta: las
+        // del archivo se buscan en el plan.
+        Path.Combine("Implantacion", "Cotejo", "FuentesContables.cs"),
+        Path.Combine("Implantacion", "Cotejo", "FuentesDeCartera.cs"),
     };
 
     [Fact]

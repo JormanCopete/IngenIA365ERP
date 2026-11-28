@@ -478,6 +478,12 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `inventory.products-update` y el formulario (`/inventario/actualizacion-masiva`) terminan ahí; el formulario arma filas de la
   plantilla y corre por `EjecutorDeImportacion.EjecutarFilasAsync`, con la misma revisión, el mismo todo o nada y la misma auditoría.
   **Este repositorio es público**: `tools/implantacion/cooperativas/*/` lleva documentos y saldos y no se sube.
+- **Cotejo con cifras de referencia (2026-11-28, implantación)**: menú «Implantación», `/implantacion/cotejo/{cuentas|terceros|creditos|cuentas-de-asociados|asociados}`,
+  un permiso por área (`Implantacion.Cotejo.Contabilidad/.Cartera/.Captaciones/.Asociados`, los siembra la API). Se sube el archivo de la cooperativa,
+  el ERP calcula al corte y dice partida por partida cuadra / diferencia / sólo en el ERP / sólo en la referencia; resumen por grupo, detalle y Excel.
+  **Sin estado y sin migración**: no guarda el archivo; cada cotejo deja `Implantacion.Cotejo.Realizado` con la huella SHA-256. Motor puro
+  `Application/Implantacion/Cotejo/MotorDeCotejo` y una `IFuenteDeCotejo` por opción, que leen por los puntos únicos de siempre (`MovimientosContables`,
+  `CarteraAlCorte`, el libro de cuentas). Receta: `docs/manual/cotejo-cifras-de-referencia.md`.
 - **Canal IngenIA Conecta (feature 028, `specs/028-canal-conecta/`)**: la facturación electrónica sale por Conecta,
   la plataforma propia de facturación (repositorio hermano `Conecta365`, que este repositorio **no** modifica).
   Por cooperativa hay tres modos:

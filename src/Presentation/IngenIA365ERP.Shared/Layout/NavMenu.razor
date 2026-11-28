@@ -1010,6 +1010,26 @@
             <NavLink href="/maestros/actividades-culturales" class="nav-subitem">Act. Culturales</NavLink>
             <NavLink href="/maestros/convenios" class="nav-subitem">Convenios</NavLink>
         </NavMenuGroup>
+
+        @* Implantación (2026-11-28): el cotejo de las cifras del ERP contra las cifras de referencia que trae la cooperativa, una opción por área
+           con su permiso. El inventario tiene el suyo en Inventario › Cifras de referencia. *@
+        <PermissionGate Required="Implantacion.Cotejo.Contabilidad" AnyOf="@(new[] { "Implantacion.Cotejo.Cartera", "Implantacion.Cotejo.Captaciones", "Implantacion.Cotejo.Asociados" })">
+            <NavMenuGroup Icon="e-check" Title="Implantación" Expanded="SidebarOpen">
+                <PermissionGate Required="Implantacion.Cotejo.Contabilidad">
+                    <NavLink href="/implantacion/cotejo/cuentas" class="nav-subitem">Cotejo del balance por cuenta</NavLink>
+                    <NavLink href="/implantacion/cotejo/terceros" class="nav-subitem">Cotejo de saldos por tercero</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Implantacion.Cotejo.Cartera">
+                    <NavLink href="/implantacion/cotejo/creditos" class="nav-subitem">Cotejo de cartera por crédito</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Implantacion.Cotejo.Captaciones">
+                    <NavLink href="/implantacion/cotejo/cuentas-de-asociados" class="nav-subitem">Cotejo de aportes y ahorros</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Implantacion.Cotejo.Asociados">
+                    <NavLink href="/implantacion/cotejo/asociados" class="nav-subitem">Cotejo de asociados</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        </PermissionGate>
         }
 
         <div class="nav-section">
