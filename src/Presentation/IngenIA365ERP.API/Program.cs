@@ -486,7 +486,9 @@ try
     // aqui y solo aqui, esperando DatabaseReadiness; ElectronicInvoicing:Processor:Enabled = false lo deja registrado sin arrancar (la
     // fixture de pruebas conduce las pasadas a mano).
     builder.Services.AddElectronicInvoicing(builder.Configuration,
-        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady);
+        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady,
+        // Feature 028: el canal CONECTA (validez legal) sólo se registra en el proceso de producción.
+        procesoDeProduccion: builder.Environment.IsProduction());
     if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
 

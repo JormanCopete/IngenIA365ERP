@@ -23,7 +23,8 @@ public sealed record QuienDeclara(ActorKind Kind, int? UserId, string Name);
 /// y la contingencia 03 (<c>OpenContingencyCommand</c>, <c>CloseContingencyCommand</c>) son de T726, que reusa <see cref="CerrarAsync"/>.
 /// (nuevo)
 /// </summary>
-public sealed class ContingenciaDeLaDian(IApplicationDbContext db, ILectorDeParametros parametros, IAlertas alertas)
+public sealed class ContingenciaDeLaDian(IApplicationDbContext db, ILectorDeParametros parametros, IAlertas alertas,
+    Channels.ICanalesDeEmision? canales = null)
 {
     /// <summary>La norma que se anota si <c>Dian.PlazoContingenciaHoras</c> no tiene vigencia guardada (se usa su defecto seguro).</summary>
     public const string FuenteDelDefecto = "Defecto seguro del parámetro Dian.PlazoContingenciaHoras (sin vigencia registrada)";
@@ -65,6 +66,14 @@ public sealed class ContingenciaDeLaDian(IApplicationDbContext db, ILectorDePara
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(canal);
         ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+
+        // Feature 028 (D8): un canal que no transmite la contingencia 03 nunca tiene evento 03. Así no cambia la numeración (tipo de
+        // contingencia del POS, bloqueo del tipo normal en oficina, resolución de contingencia) por un evento que nadie podría transmitir: las
+        // ventas siguen con su número normal y quedan en cola hasta que el canal vuelva.
+        if (canales is not null && canales.Codigos.Contains(canal, StringComparer.OrdinalIgnoreCase)
+            && !canales.Resolver(canal).Capacidades.ContingenciaDelFacturador)
+            return Common.Models.Result.Failure<DianContingencyEvent>(ErroresDeContingencias.NotSupportedByChannel(canal));
+
         var abierta = await db.DianContingencyEvents
             .Where(e => e.Type == ContingencyType.Issuer03 && e.Status == ContingencyEventStatus.Open && e.ChannelCode == canal)
             .Select(e => (Guid?)e.PublicId)

@@ -18,8 +18,16 @@ namespace IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 /// </summary>
 public sealed record DocumentoElectronicoCanonico
 {
-    /// <summary>La versión del esquema que escribe este programa.</summary>
+    /// <summary>La versión del esquema que escribe este programa para los canales que no piden más datos.</summary>
     public const int VersionDelEsquema = 1;
+
+    /// <summary>
+    /// Feature 028: la v2 agrega, <b>sin tocar la v1</b>, los datos que pide IngenIA Conecta y la v1 no trae: nombres y apellidos de la
+    /// persona natural y el municipio y el departamento por nombre. Esos campos llevan <c>JsonIgnore(WhenWritingNull)</c>: una v1 da los
+    /// mismos bytes y el mismo SHA-256 que antes. Qué versión se construye lo decide el canal sellado (<see cref="EsquemaDelCanonico"/>),
+    /// así reconstruir una versión ya emitida da siempre el mismo resultado. (nuevo)
+    /// </summary>
+    public const int VersionConDatosDeConecta = 2;
 
     public int SchemaVersion { get; init; } = VersionDelEsquema;
 
@@ -94,8 +102,17 @@ public sealed record PagoCanonico(
     [property: JsonConverter(typeof(EscalaDeMonto))] decimal Amount,
     string? Reference);
 
-/// <summary>Dirección de una parte. (nuevo)</summary>
-public sealed record DireccionCanonica(string? Line, string? CityDaneCode, string? CountryCode);
+/// <summary>
+/// Dirección de una parte. <see cref="CityName"/>, <see cref="DepartmentCode"/> y <see cref="DepartmentName"/> sólo en el esquema v2
+/// (feature 028); nulos, no se escriben. (nuevo)
+/// </summary>
+public sealed record DireccionCanonica(
+    string? Line,
+    string? CityDaneCode,
+    string? CountryCode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CityName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DepartmentCode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DepartmentName = null);
 
 /// <summary>
 /// Emisor o contraparte (contracts/dian.md §4.2, <c>issuer</c> y <c>counterparty</c>). En el emisor <see cref="Role"/>,
@@ -120,6 +137,14 @@ public sealed record ParteCanonica
     public string PersonTypeCode { get; init; } = string.Empty;
 
     public string Name { get; init; } = string.Empty;
+
+    /// <summary>Esquema v2 (feature 028): nombres de la persona natural; nulo en jurídica y en v1, y entonces no se escribe.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GivenNames { get; init; }
+
+    /// <summary>Esquema v2 (feature 028): apellidos de la persona natural; nulo en jurídica y en v1, y entonces no se escribe.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FamilyNames { get; init; }
 
     public IReadOnlyList<string> Responsibilities { get; init; } = [];
 

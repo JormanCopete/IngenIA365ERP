@@ -29,6 +29,10 @@
     <ProjectReference Include="..\..\src\Presentation\IngenIA365ERP.API\IngenIA365ERP.API.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Feature 028 (T050): el Conecta falso de las pruebas unitarias, el mismo archivo. -->
+    <Compile Include="..\IngenIA365ERP.Application.Tests\ElectronicInvoicing\Canales\Conecta\ConectaStubHandler.cs" Link="ElectronicInvoicing\ConectaStubHandler.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!--
       Limita cuantas clases de prueba corren a la vez. NO es una preferencia de
       estilo: cada clase con fixture levanta TRES contenedores (base de datos,

@@ -27,7 +27,9 @@ public sealed record VigenciaDeEmisionDto(
     DateOnly ValidFrom,
     DateOnly? ValidTo,
     string Reason,
-    string? CreatedByName);
+    string? CreatedByName,
+    Guid? ChannelTenantId = null,
+    string? ChannelEndpoint = null);
 
 public sealed record CapacidadesDelCanalDto(
     IReadOnlyList<string> DocumentKinds,
@@ -39,7 +41,17 @@ public sealed record CapacidadesDelCanalDto(
     bool QueriesNumberingRanges,
     bool IssuerContingency);
 
-public sealed record CanalDisponibleDto(string ChannelCode, string Name, CapacidadesDelCanalDto Capabilities);
+/// <summary>
+/// Un canal de la instalación. Feature 028: el ambiente que exige (nulo = cualquiera), sus extremos (claves, nunca URL) y si emite con
+/// validez legal (pide el permiso de producción y la confirmación escrita).
+/// </summary>
+public sealed record CanalDisponibleDto(
+    string ChannelCode,
+    string Name,
+    CapacidadesDelCanalDto Capabilities,
+    string? RequiredEnvironment = null,
+    IReadOnlyList<string>? Endpoints = null,
+    bool IsProduction = false);
 
 public sealed record CredencialDelCanalDto(string? Key, bool Configured, DateTime? VerifiedAt);
 
@@ -69,7 +81,10 @@ public sealed record ConfiguracionDeEmisionRequest(
     string? IssuerBusinessName = null,
     string? IssuerAddress = null,
     string? IssuerMunicipalityDaneCode = null,
-    string? IssuerEmail = null);
+    string? IssuerEmail = null,
+    Guid? ChannelTenantId = null,
+    string? ChannelEndpoint = null,
+    string? ConfirmProduction = null);
 
 public sealed record MensajeDelCanalDto(string Rule, string Kind, string Text, string? Translation);
 

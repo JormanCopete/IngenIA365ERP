@@ -5,9 +5,9 @@
 > Contingencias DIAN**. Para el administrador que configura, el responsable de facturación que vigila la bandeja y la
 > contadora. El índice del módulo está en [comercial.md](comercial.md).
 
-> **Importante: hoy no hay facturación electrónica con validez fiscal.** La cooperativa no tiene todavía un proveedor
-> tecnológico contratado y el ERP no tiene instalado ningún canal real. En producción la emisión funciona sobre el
-> **canal simulado**: todo documento sale con la leyenda **«SIN VALIDEZ FISCAL»**, **no llega a la DIAN** y su resultado
+> **Importante: hoy no hay facturación electrónica con validez fiscal.** El canal real, IngenIA Conecta (ver «Los modos de
+> IngenIA Conecta»), ya está en el ERP, pero no se puede activar hasta que Conecta acepte el número que asigna el ERP.
+> Mientras tanto, en producción la emisión funciona sobre el **canal simulado**: todo documento sale con la leyenda **«SIN VALIDEZ FISCAL»**, **no llega a la DIAN** y su resultado
 > (validado, rechazado, en contingencia) lo decide el simulador. Sirve para aprender, parametrizar y probar el circuito
 > completo, no para facturar ante la DIAN. Mientras tanto, si la cooperativa está obligada a facturar electrónicamente,
 > su facturación con validez fiscal tiene que seguir saliendo por el medio que use hoy.
@@ -227,8 +227,44 @@ Lo que **no** pasa al canal real:
   canal ya se retiró, **del mismo ambiente** y con su resolución asociada al canal vigente. Como el simulado sólo trabaja
   en «Habilitación (pruebas)» y el real irá en «Producción», lo pendiente del simulado no se puede pasar al real.
 
-Hoy el ERP no trae ningún adaptador de proveedor tecnológico ni el servicio central de software propio: esos pasos
-quedan para cuando el dueño elija el proveedor.
+## Los modos de IngenIA Conecta (feature 028)
+
+El canal real es **IngenIA Conecta**, la plataforma de facturación electrónica de IngenIA365. Conecta firma y transmite
+con su motor propio o con un proveedor tecnológico, y eso es transparente para el ERP. En «Canal» de la vigencia hay
+tres modos:
+
+| Modo | Para qué | Validez fiscal |
+|---|---|---|
+| **SIMULADO · Canal simulado** | Aprender y ensayar sin red | Ninguna |
+| **CONECTA-PRUEBAS · IngenIA Conecta – pruebas** | Habilitación: el ERP habla con Conecta y Conecta con el ambiente de pruebas del proveedor o de la DIAN | Ninguna: «SIN VALIDEZ FISCAL» |
+| **CONECTA · IngenIA Conecta – producción** | Facturar ante la DIAN | **Sí** |
+
+Al elegir un modo de Conecta, el ambiente se fija solo y aparecen dos datos más:
+
+- **Cooperativa en Conecta**: el identificador que da Conecta;
+- **Servicio**: los que la instalación tenga habilitados, p. ej. `QA` o `PDN`.
+
+La credencial no se escribe en la pantalla: la carga soporte en el almacén de secretos. «Verificar credencial»
+comprueba en Conecta:
+
+- que la cooperativa existe;
+- que está en el ambiente del modo (habilitación para pruebas, producción para real);
+- que su NIT es el del emisor;
+- que no le falta nada para emitir.
+
+El modo **real** sólo aparece en la instalación de producción. Para activarlo hace falta:
+
+- el permiso «Activar la emisión con validez legal»;
+- escribir **PRODUCCION**;
+- resoluciones reales asociadas a ese canal.
+
+Las resoluciones de pruebas y las reales nunca se mezclan: cada una tiene su ambiente y sólo numera documentos de su
+ambiente.
+
+Mientras Conecta no responda, las ventas siguen numerándose y quedan pendientes en la bandeja; se envían solas cuando
+vuelva. Con Conecta todavía no hay contingencia de papel (tipo 03).
+
+La receta técnica completa está en `docs/operaciones/conecta-puesta-en-marcha.md`.
 
 ## Reglas importantes
 

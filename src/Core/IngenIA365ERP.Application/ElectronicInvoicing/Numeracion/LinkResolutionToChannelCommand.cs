@@ -133,7 +133,7 @@ public sealed class LinkResolutionToChannelCommandHandler(
 
         var contexto = new ContextoDeCanal(cooperativa.Value, configuracion?.IssuerTaxId ?? string.Empty, configuracion?.IssuerCheckDigit ?? string.Empty,
             configuracion?.Mode ?? EmissionMode.TechnologyProvider, resolucion.Environment, software ?? configuracion?.SoftwareId,
-            configuracion?.TestSetId, null, null, resuelta.Value);
+            configuracion?.TestSetId, null, null, resuelta.Value, configuracion is null ? null : ContextoDeCanal.ParametrosDe(configuracion));
         var resultado = await adaptador.ConsultarRangosAsync(contexto, ct);
         var clave = RangosDelCanal.ClaveTecnica(resultado, resolucion.Prefix, resolucion.ResolutionNumber);
         return clave is null

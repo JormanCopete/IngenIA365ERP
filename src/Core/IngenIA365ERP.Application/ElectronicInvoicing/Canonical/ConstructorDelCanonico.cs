@@ -147,6 +147,7 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
         var fecha = entrada.OperationDate;
         var faltan = new List<DatoFaltante>();
         var esNota = EsNota(entrada.Kind);
+        var esquema = EsquemaDelCanonico.Para(contexto.Configuracion.ChannelCode);
 
         // ---- tipo de documento (§4.3)
         var tipo = catalogo.TipoDeDocumento(entrada.Kind, contexto.Contingencia, fecha);
@@ -171,7 +172,7 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
 
         // ---- partes
         var emisor = Emisor(contexto, catalogo, fecha, faltan);
-        var contraparte = Contraparte(entrada, catalogo, fecha, faltan);
+        var contraparte = Contraparte(entrada, catalogo, fecha, faltan, esquema);
 
         // ---- líneas, impuestos y retenciones
         var lineas = new List<LineaCanonica>();
@@ -238,6 +239,7 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
 
         var documento = new DocumentoElectronicoCanonico
         {
+            SchemaVersion = esquema,
             Kind = entrada.Kind,
             DianDocumentTypeCode = tipo!.Codigo,
             OperationTypeCode = tipo.TipoDeOperacion,
@@ -437,7 +439,8 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
         };
     }
 
-    private static ParteCanonica Contraparte(EntradaDeDocumentoElectronico entrada, CatalogoDian catalogo, DateOnly fecha, List<DatoFaltante> faltan)
+    private static ParteCanonica Contraparte(EntradaDeDocumentoElectronico entrada, CatalogoDian catalogo, DateOnly fecha, List<DatoFaltante> faltan,
+        int esquema)
     {
         var rol = entrada.Kind is ElectronicDocumentKind.SupportDocument or ElectronicDocumentKind.SupportDocumentAdjustmentNote
             ? RolProveedor
@@ -481,9 +484,13 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
             ? catalogo.ResponsabilidadesDe(new MarcasTributarias(foto.IsLargeContributor, foto.IsSelfWithholder, foto.IsVatWithholdingAgent, foto.IsSimpleTaxRegime), fecha)
             : foto.Responsibilities.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        var v2 = esquema >= DocumentoElectronicoCanonico.VersionConDatosDeConecta;
+        var nombres = v2 ? NombresDePersona.Separar(foto.OrganizationType, foto.LegalName, foto.FirstName, foto.LastName) : null;
         return new ParteCanonica
         {
             Role = rol,
+            GivenNames = nombres?.Nombres,
+            FamilyNames = nombres?.Apellidos,
             IsFinalConsumer = consumidorFinal is not null
                 && string.Equals(foto.TaxId.Trim(), consumidorFinal.Numero, StringComparison.Ordinal)
                 && string.Equals(foto.IdTypeCode, consumidorFinal.TipoDeIdentificacion, StringComparison.Ordinal),
@@ -496,7 +503,10 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
             TaxSchemeCode = string.IsNullOrWhiteSpace(foto.TaxSchemeCode)
                 ? catalogo.EsquemaTributarioDe(foto.IsVatResponsible, fecha) ?? string.Empty
                 : foto.TaxSchemeCode,
-            Address = new DireccionCanonica(foto.Address?.Trim(), foto.MunicipalityDaneCode, foto.CountryCode ?? catalogo.PaisPorDefecto(fecha)),
+            Address = v2
+                ? new DireccionCanonica(foto.Address?.Trim(), foto.MunicipalityDaneCode, foto.CountryCode ?? catalogo.PaisPorDefecto(fecha),
+                    Texto(foto.CityName), NombresDePersona.Departamento(foto.MunicipalityDaneCode), Texto(foto.DepartmentName))
+                : new DireccionCanonica(foto.Address?.Trim(), foto.MunicipalityDaneCode, foto.CountryCode ?? catalogo.PaisPorDefecto(fecha)),
             Ciiu = foto.CiiuCode,
             Phone = foto.Phone,
             ReceptionEmail = foto.Email,
@@ -605,6 +615,8 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
         }
         return new BloquePosCanonico(pos?.CashRegisterPlate, pos?.Location, pos?.CashierName, pos?.CashRegisterTypeCode, contexto.SoftwarePos);
     }
+
+    private static string? Texto(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 
     private static string Fecha(DateOnly fecha) => fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }

@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Enums.Dian;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing;
 
@@ -36,6 +37,13 @@ public static class ErroresDeNumeracionYConfiguracion
     public const string SettingsOverlapsCode = "ElectronicInvoicing.Settings.Overlaps";
     public const string SettingsMissingCode = "ElectronicInvoicing.Settings.Missing";
     public const string CredentialMismatchCode = "ElectronicInvoicing.CredentialMismatch";
+
+    // Feature 028 (contracts/canal-conecta.md §9).
+    public const string ChannelEnvironmentMismatchCode = "ElectronicInvoicing.Settings.ChannelEnvironmentMismatch";
+    public const string ProductionChannelNotAllowedHereCode = "ElectronicInvoicing.Settings.ProductionChannelNotAllowedHere";
+    public const string EndpointUnknownCode = "ElectronicInvoicing.Settings.EndpointUnknown";
+    public const string ChannelTenantRequiredCode = "ElectronicInvoicing.Settings.ChannelTenantRequired";
+    public const string ProductionConfirmationRequiredCode = "ElectronicInvoicing.Settings.ProductionConfirmationRequired";
 
     /// <summary>Sin resolución vigente del tipo, de ese prefijo y ambiente, o no asociada al canal sellado a la fecha.</summary>
     public static Error ResolutionUnavailable(string tipo, string prefijo, string ambiente, DateOnly fecha, string canal) =>
@@ -145,4 +153,35 @@ public static class ErroresDeNumeracionYConfiguracion
         new ErrorConDatos(CredentialMismatchCode,
             $"La credencial del canal no está en el secreto de la instalación o no corresponde a esta cooperativa (se esperaba la clave «{clave}»).",
             new { credentialKey = clave });
+    // ------------------------------------------------------------------------------- canales con parámetros (028) --
+
+    public static Error ChannelEnvironmentMismatch(string canal, DianEnvironment exigido) =>
+        new ErrorConDatos(ChannelEnvironmentMismatchCode,
+            exigido == DianEnvironment.Production
+                ? $"El canal {canal} emite con validez legal: sólo se configura en el ambiente de producción."
+                : $"El canal {canal} es de pruebas: sólo se configura en el ambiente de pruebas.",
+            new { channelCode = canal, requiredEnvironment = exigido.ToString() });
+
+    public static Error ProductionChannelNotAllowedHere(string canal) =>
+        new ErrorConDatos(ProductionChannelNotAllowedHereCode,
+            $"El canal {canal} emite con validez legal y esta instalación no es la de producción: aquí sólo se usan los modos de pruebas.",
+            new { channelCode = canal });
+
+    public static Error EndpointUnknown(string canal, string? extremo, IReadOnlyList<string> admitidos) =>
+        new ErrorConDatos(EndpointUnknownCode,
+            string.IsNullOrWhiteSpace(extremo)
+                ? $"Elija el servicio al que se conecta el canal {canal} ({string.Join(", ", admitidos)})."
+                : $"El servicio «{extremo}» no está habilitado para el canal {canal} en esta instalación (admitidos: {string.Join(", ", admitidos)}).",
+            new { channelCode = canal, endpoint = extremo, allowed = admitidos });
+
+    public static Error ChannelTenantRequired(string canal) =>
+        new ErrorConDatos(ChannelTenantRequiredCode, $"Indique el identificador de la cooperativa en el servicio del canal {canal}.",
+            new { channelCode = canal });
+
+    public static Error ProductionConfirmationRequired(string canal, bool faltaPermiso) =>
+        new ErrorConDatos(ProductionConfirmationRequiredCode,
+            faltaPermiso
+                ? $"Activar el canal {canal} (validez legal) exige el permiso {Channels.ReglasDeParametrosDelCanal.PermisoDeProduccion}."
+                : $"Para activar el canal {canal}, que emite con validez legal, escriba {Channels.ReglasDeParametrosDelCanal.Confirmacion} en la confirmación.",
+            new { channelCode = canal, permission = Channels.ReglasDeParametrosDelCanal.PermisoDeProduccion, missingPermission = faltaPermiso });
 }
