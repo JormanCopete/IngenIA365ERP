@@ -755,3 +755,16 @@ El dueño respondió «OK con las recomendadas» (citado por la sesión coordina
   Cambiaron, por las facturas admitidas desde E4: los validadores de la solicitud y de la consulta de productos (ya no rechazan facturas), la semilla de medios
   (dos medios), `LosEnumsDelContratoNumeranComoElDominio` y `EnumeracionesDelComercioTests` (`InternalOffset = 22` en `PaymentMeansClass`), los textos de clases de
   medio y la marca de una factura al corregir en Shared.
+
+### E-17 — El anticipo que usa una cancelación, en Contabilidad (fase 13, T096, 2026-11-28)
+- **Lo que destapó la e2e.** `RecogidaDeCreditosTests` recoge un crédito con un anticipo de la caja: el puente de la recogida propia no quedaba en cero. El
+  `PagoAplicado` de una cancelación que usa el anticipo (D7 de la 013) lleva en `amounts` el capital completo y el anticipo usado como importe positivo de
+  `Advance` con `reasonCode = AdvanceUsed` (`EmisionDeCartera.PagoAplicadoAsync`); `ConstructorDeLineasDeCartera.Pago` lo asentaba como cualquier concepto
+  (débito al puente, crédito al rol de saldo), o sea como un anticipo **recibido**: el puente quedaba con dos veces el anticipo de más y el pasivo con el deudor
+  sin bajar. No es de la 028: pasa igual en la caja (clase `Receipts`) desde la fase 9 de la 013, y ningún caso dorado lo cubría (el 06 es `AnticipoAplicado`).
+- **El arreglo, sólo en Contabilidad.** Con `reasonCode = AdvanceUsed` el constructor asienta al revés: débito al anticipo y crédito al puente del recaudo,
+  que así queda con lo recibido de verdad. El contrato no cambia (el valor vive como `PagoAplicadoV1.AnticipoUsado` y el emisor lo usa) y los mensajes ya
+  guardados se contabilizan bien al reprocesarlos. El reverso ya estaba bien: `ReversionDePago.RestituidoPorElReverso` invierte el signo del anticipo.
+- Caso dorado nuevo `70-recogida-de-un-credito-con-anticipo` (puente 1.000.000 al débito y 100.000 al crédito, anticipo 100.000 al débito, capital 1.000.000).
+- **Para el diagnóstico antes de promover**: los comprobantes `RC`/`RR` ya contabilizados de cancelaciones con anticipo (pagos con un importe `Advance`
+  `AdvanceUsed`) tienen el puente y el anticipo descuadrados por dos veces el anticipo usado; se corrigen con un comprobante de ajuste de la contadora.

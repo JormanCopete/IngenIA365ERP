@@ -163,7 +163,7 @@ public sealed partial class EmisionDeCartera
             AmountReceived = p.Recibido,
             Surplus = p.Excedente,
             Dimensions = dimensiones,
-            Amounts = Montos(aplicados, f => -f.Monto, f => f.Clase == LoanTransactionKind.AdvanceApplied ? "AdvanceUsed" : null),
+            Amounts = Montos(aplicados, f => -f.Monto, f => f.Clase == LoanTransactionKind.AdvanceApplied ? PagoAplicadoV1.AnticipoUsado : null),
             Reallocations = p.Reasignaciones,
             PrepaymentChoice = p.Eleccion?.ToString(),
             NewPlan = p.PlanNuevo,

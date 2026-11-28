@@ -632,7 +632,14 @@ public static partial class ConstructorDeLineasDeCartera
                     continue;
                 }
                 var saldo = Saldo(x.Dimensions, a, x.Loan, x.DebtorPersonPublicId);
-                if (saldo is not null) Asentar(Recaudo(x.Dimensions, a, x.Loan, x.Collector.CollectorClass, x.Collector.PayerPersonPublicId), saldo, a.Amount);
+                if (saldo is null) continue;
+                var recaudo = Recaudo(x.Dimensions, a, x.Loan, x.Collector.CollectorClass, x.Collector.PayerPersonPublicId);
+                // 2026-11-28 (feature 028, T096; FR-027): el anticipo que usó una cancelación (D7 de la 013, reasonCode AdvanceUsed) no es dinero recibido:
+                // baja el pasivo con el deudor (débito al anticipo) y lo que cubrió sale del puente del recaudo, que así queda con lo recibido de verdad.
+                // Hasta hoy se asentaba como un anticipo recibido: el puente quedaba con dos veces el anticipo de más y el anticipo, sin bajar (lo destapó la
+                // e2e de la recogida de un crédito con anticipo, cuyo puente no quedaba en cero).
+                if (a.ReasonCode == PagoAplicadoV1.AnticipoUsado) Asentar(saldo, recaudo, a.Amount);
+                else Asentar(recaudo, saldo, a.Amount);
             }
             Reasignaciones(x.Reallocations, x.Dimensions, x.Loan, x.DebtorPersonPublicId);
         }
