@@ -142,9 +142,11 @@ public sealed class CanalConecta : ICanalDeEmisionElectronica, IDeclaraParametro
             if (respuesta.StatusCode == HttpStatusCode.Conflict)
             {
                 var problema = ProblemaConecta.Leer(await respuesta.Content.ReadAsStringAsync(ct));
-                // Pedido D1: el número ya está en Conecta con otra clave. «Ya existe» no es un error (regla 3): se consulta.
-                if (problema?.Type?.Contains("number-conflict", StringComparison.OrdinalIgnoreCase) == true)
-                    return await ConsultarEstadoAsync(Referencia(documento), contexto, ct);
+                // Pedido D1: el número ya está en Conecta con otra clave. «Ya existe» no es un error (regla 3): se consulta. Pero sólo se adopta
+                // si es este documento: un número que ocupa otro (emitido desde Conecta, o una resolución del ERP que se cruza con su
+                // contador) no se toma como propio.
+                if (problema?.EsDelTipo("number-conflict") == true || problema?.Type?.Contains("number-conflict", StringComparison.OrdinalIgnoreCase) == true)
+                    return await AdoptarSiEsElMismoAsync(sesion, documento, problema, cronometro, ct);
                 return TraductorDeResultadosConecta.DeError(respuesta.StatusCode, problema, cronometro.ElapsedMilliseconds);
             }
             if (!respuesta.IsSuccessStatusCode)
@@ -184,6 +186,29 @@ public sealed class CanalConecta : ICanalDeEmisionElectronica, IDeclaraParametro
             var resultado = await EsperarDecisionAsync(sesion, emitido.Id, emitido.QrUrl, cronometro, ct);
             return avisos.Count == 0 ? resultado : resultado with { Mensajes = [.. avisos, .. resultado.Mensajes] };
         }
+    }
+
+    /// <summary>
+    /// Ante <c>number-conflict</c>: busca el documento que ocupa el número y lo adopta sólo si su total a pagar es el de este documento. Si
+    /// no se ve todavía (la carrera la detectó el índice de Conecta), queda en proceso y se consulta después.
+    /// </summary>
+    private async Task<ResultadoDeCanal> AdoptarSiEsElMismoAsync(Sesion sesion, DocumentoElectronicoCanonico documento, ProblemaConecta problema,
+        Stopwatch cronometro, CancellationToken ct)
+    {
+        var (existente, sinDoc) = await BuscarPorNumeroAsync(sesion, Referencia(documento), cronometro, ct);
+        if (sinDoc is not null)
+            return sinDoc.Outcome == ChannelOutcome.NotFound
+                ? ResultadoDeCanal.Sin(ChannelOutcome.InProcess, cronometro.ElapsedMilliseconds,
+                    new MensajeDelCanal(TraductorDeResultadosConecta.ReglaNotificacion, TipoDeMensajeDelCanal.Notificacion,
+                        $"CONECTA: {problema.Texto}", "Conecta dice que el número ya está en uso, pero todavía no lo muestra: se consulta en seguida."))
+                : sinDoc;
+        if (existente!.Totals is { } totales && totales.PayableAmount != documento.Totals.Payable)
+            return Invalido(TraductorDeResultadosConecta.ReglaNumeroOcupado,
+                string.Create(CultureInfo.InvariantCulture,
+                    $"CONECTA: el número {documento.Number.Full} lo ocupa en Conecta otro documento ({existente.Id:D}, {existente.Status}, total {totales.PayableAmount:0.00}; el del ERP es {documento.Totals.Payable:0.00})."),
+                "El número ya lo usa en Conecta otro documento: no se adopta como propio. Revise la numeración del ERP frente al contador de Conecta y avise a soporte.",
+                cronometro, existente.Id);
+        return await InterpretarAsync(sesion, existente, null, cronometro, ct);
     }
 
     /// <summary>Consulta hasta <c>SyncWaitSeconds</c> por el id (consultar no es reenviar). Sin decisión, <c>InProcess</c> con la referencia.</summary>
@@ -408,11 +433,20 @@ public sealed class CanalConecta : ICanalDeEmisionElectronica, IDeclaraParametro
             if (!Opciones.ConectaAceptaNumeroDelErp)
                 fallas.Add(Falla(ReglaNumeracionDelErp,
                     "Conecta todavía no acepta el número que asigna el ERP (pedido D1 de la feature 028): el canal no se puede activar."));
+            else if (tenant?.Resolutions is { } resoluciones)
+                foreach (var prefijo in (panorama?.NumberingLinks ?? []).Select(l => l.Prefix).Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (!resoluciones.Any(r => string.Equals(r.Prefix, prefijo, StringComparison.OrdinalIgnoreCase) && r.ClientAssignsNumber))
+                        fallas.Add(Falla(TraductorDeResultadosConecta.ReglaNumeracionDelCliente,
+                            $"El prefijo {prefijo} no recibe en Conecta el número del ERP (clientAssignsNumber apagado): pídalo al administrador de Conecta."));
 
             var canal = panorama?.Current is { } c
                 ? $"{(c.Kind == "ExternalProvider" ? $"proveedor {c.ProviderCode}" : "motor propio")}"
                 : "sin canal";
-            var prefijos = string.Join(", ", (panorama?.NumberingLinks ?? []).Select(l => l.Prefix).Distinct(StringComparer.Ordinal));
+            // Con cada prefijo, el contador de Conecta: la numeración del ERP no debe ocupar números que Conecta ya usó.
+            var prefijos = string.Join(", ", (panorama?.NumberingLinks ?? []).Select(l => l.Prefix).Distinct(StringComparer.Ordinal)
+                .Select(p => tenant?.Resolutions?.FirstOrDefault(r => string.Equals(r.Prefix, p, StringComparison.OrdinalIgnoreCase)) is { } r
+                    ? string.Create(CultureInfo.InvariantCulture, $"{p} (va en {r.CurrentNumber})")
+                    : p));
             var resumen = $"Conecta ({sesion.Clave}) · cooperativa {tenant?.LegalName ?? sesion.Tenant.ToString("D")} · {ambiente} · {canal}" +
                 (prefijos.Length > 0 ? $" · prefijos enlazados: {prefijos}" : string.Empty);
 

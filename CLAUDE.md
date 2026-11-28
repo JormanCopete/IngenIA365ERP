@@ -489,8 +489,9 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
 
   El client id y el secret van **sólo** en el Secret `erp-fe-credenciales` (`{tenant}.{canal}.json`). La vigencia
   guarda el tenant de Conecta y la **clave** de un extremo de la lista blanca de `appsettings`, nunca la URL, así el
-  secreto no viaja a un host leído de la base. El ERP sigue numerando. Conecta hoy exige `number = null`: hasta que
-  acepte el número del ERP (pedido D1, `pedido-a-conecta.md`), la verificación falla y la guardia bloquea. §15 de
+  secreto no viaja a un host leído de la base. El ERP sigue numerando: Conecta lo acepta desde su v0.1.4
+  (2026-11-28, pedido D1) en los prefijos con `clientAssignsNumber`, y la compuerta `ConectaAceptaNumeroDelErp` está encendida sólo
+  para `CONECTA-PRUEBAS` en PDN. Un 409 de número ocupado sólo se adopta si el total coincide. §15 de
   `dian.md` se reescribió: el «servicio central» de la 010 se retiró y Conecta hace de software propio o de
   proveedor.
 - **Reportes**: QuestPDF (16 reportes)

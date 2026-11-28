@@ -4,11 +4,12 @@ Feature 028 (`specs/028-canal-conecta/`). Receta para emitir las facturas y nota
 Conecta: primero en **pruebas** (`CONECTA-PRUEBAS`), después en **producción** (`CONECTA`). El modo `SIMULADO` sigue
 igual.
 
-> **Bloqueo vigente (D1).** Hoy Conecta no acepta el número que asigna el ERP (exige `number = null`). Mientras no
-> despliegue la «numeración del cliente» (`specs/028-canal-conecta/pedido-a-conecta.md`), la opción
-> `ElectronicInvoicing:Channels:{canal}:ConectaAceptaNumeroDelErp` queda en `false`. Con ella apagada, «Verificar
-> credencial» falla con `CONECTA-NUMERACION-DEL-ERP` y la guardia no deja emitir. No la encienda antes: Conecta
-> numeraría distinto al ERP.
+> **Numeración del ERP (D1).** Conecta acepta el número que asigna el ERP desde su v0.1.4 (2026-11-28), sólo en los
+> prefijos con `clientAssignsNumber = true` (lo enciende el administrador de Conecta:
+> `PUT /v1/tenants/{id}/numbering-resolutions/{family}/{prefix}/client-numbering`). En el ERP lo habilita, por canal,
+> `ElectronicInvoicing:Channels:{canal}:ConectaAceptaNumeroDelErp`: encendida para `CONECTA-PRUEBAS` en PDN y apagada
+> para `CONECTA` hasta terminar las pruebas en habilitación. Apagada, «Verificar credencial» falla con
+> `CONECTA-NUMERACION-DEL-ERP`.
 
 ## 0. Qué es cada modo
 
@@ -28,7 +29,11 @@ repositorio.
    `266f0ee4-20b4-4676-8d76-946ade8e62b4`.
 2. Revisar el canal de emisión: `GET /v1/tenants/{id}/emission-channel` debe responder `missing` vacío, en el
    ambiente correcto (`Habilitation` para pruebas, `Production` para real).
-3. Revisar que cada prefijo que el ERP va a usar esté registrado y, con proveedor, enlazado (`provider-numberings`).
+3. Revisar que cada prefijo que el ERP va a usar esté registrado y, con proveedor, enlazado (`provider-numberings`), con
+   `clientAssignsNumber = true`, y anotar **su contador** (`currentNumber`).
+   - **La numeración del ERP debe arrancar por encima de ese contador.** Los números que Conecta ya usó están ocupados: el
+     ERP no los adopta (`CONECTA-NUMERO-OCUPADO`). Ejemplo: COOFLOPAL `SETT` iba en 98597 el 2026-11-28, así que el ERP
+     arranca en 98598. «Verificar credencial» muestra el contador de cada prefijo.
 4. Crear un **cliente API** (`POST /v1/api-clients`, rol `Operator`, scopes `documents:read` y `documents:write`,
    lista blanca de IP si se quiere). Conecta muestra el secreto **una sola vez**: se carga directo en el paso 2.
    Nunca se usa un cliente con `tenants:admin`.
@@ -77,7 +82,9 @@ relee en a lo sumo 5 minutos, sin reiniciar.
 
 Lista de chequeo, **todas** antes de empezar:
 
-- [ ] D1 desplegado en Conecta y `ConectaAceptaNumeroDelErp = true` en el overlay de PDN.
+- [x] D1 desplegado en Conecta (v0.1.4, 2026-11-28).
+- [ ] `ElectronicInvoicing__Channels__CONECTA__ConectaAceptaNumeroDelErp=true` en el overlay de PDN y los prefijos reales con
+  `clientAssignsNumber`.
 - [ ] Pruebas del paso 4 bien en `CONECTA-PRUEBAS` (factura, nota crédito y nota débito), con el contador.
 - [ ] Puntos «por cotejar» revisados con el contador (`specs/028-canal-conecta/contracts/canal-conecta.md` §4):
   régimen 48/49, tarifa 0 = exento, escala del descuento, referencia de la nota y correo del adquirente.
@@ -117,7 +124,7 @@ Lo numerado antes en pruebas **no pasa** a producción: sigue por su canal y su 
   # PDN
   ElectronicInvoicing__Channels__CONECTA_PRUEBAS__Endpoints__PDN=https://conecta.ingenia365.com
   ElectronicInvoicing__Channels__CONECTA__Endpoints__PDN=https://conecta.ingenia365.com
-  # cuando Conecta despliegue D1 (por canal)
+  # D1 (por canal): encendido en PDN para CONECTA-PRUEBAS desde el 2026-11-28
   ElectronicInvoicing__Channels__CONECTA_PRUEBAS__ConectaAceptaNumeroDelErp=true
   ```
 
@@ -133,7 +140,10 @@ Lo numerado antes en pruebas **no pasa** a producción: sigue por su canal y su 
 | `CONECTA-CREDENCIAL` / `CONECTA-TOKEN` | Falta el archivo del Secret o Conecta no acepta el client id o el secreto | Recargar el Secret (paso 2) |
 | `CONECTA-PERMISO` | El cliente no puede emitir para ese tenant (tenant, rol o IP) | Revisar el cliente API en Conecta |
 | `CONECTA-NUMERACION` / `CONECTA-CANAL` | Numeración agotada o no enlazada, o canal de Conecta no listo | Revisar en Conecta |
-| `CONECTA-NUMERACION-DEL-ERP` | D1 pendiente | Esperar el despliegue de Conecta |
+| `CONECTA-NUMERACION-DEL-ERP` | La compuerta del canal está apagada | Encender `ConectaAceptaNumeroDelErp` del canal en el overlay |
+| `CONECTA-NUMERACION-CLIENTE` | El prefijo no tiene `clientAssignsNumber` en Conecta | Pedirlo al administrador de Conecta |
+| `CONECTA-FUERA-DE-RANGO` | El número no cae en una resolución vigente de Conecta | Revisar rango y fechas en Conecta y en el ERP |
+| `CONECTA-NUMERO-OCUPADO` | Otro documento ya usa ese número en Conecta | **Detener**: la numeración del ERP se cruza con el contador de Conecta; avisar a soporte |
 | `CONECTA-NUMERO` | Conecta numeró distinto al ERP | **Detener** y avisar a soporte: no corregir a mano |
 | `CONECTA-AMBIENTE` | El tenant de Conecta está en otro ambiente que el modo | Revisar el tenant o la vigencia |
 | `CONECTA-TOTALES` (aviso) | Conecta calculó otro total | Revisar el documento; si hace falta, caso b |

@@ -46,6 +46,9 @@ public static class TraductorDeResultadosConecta
     public const string ReglaRechazo = "CONECTA-RECHAZO";
     public const string ReglaNotificacion = "CONECTA-NOTIFICACION";
     public const string ReglaConflicto = "CONECTA-CONFLICTO";
+    public const string ReglaNumeracionDelCliente = "CONECTA-NUMERACION-CLIENTE";
+    public const string ReglaFueraDeRango = "CONECTA-FUERA-DE-RANGO";
+    public const string ReglaNumeroOcupado = "CONECTA-NUMERO-OCUPADO";
 
     /// <summary>El ambiente de Conecta que corresponde al del ERP: <c>Testing</c> ↔ <c>Habilitation</c>.</summary>
     public static string Ambiente(DianEnvironment ambiente) => ambiente == DianEnvironment.Production ? "Production" : "Habilitation";
@@ -83,6 +86,12 @@ public static class TraductorDeResultadosConecta
             403 => Con(ChannelOutcome.ChannelUnavailable, Rechazo(ReglaPermiso, texto,
                 "La credencial del ERP no puede emitir para esta cooperativa en Conecta (tenant, rol o IP): revísela con el administrador de Conecta.")),
             404 => Con(ChannelOutcome.ChannelUnavailable, Rechazo(ReglaTenant, texto, "Conecta no conoce a la cooperativa configurada.")),
+            409 when problema?.EsDelTipo("numbering-out-of-range") == true => Con(ChannelOutcome.ChannelUnavailable, Rechazo(ReglaFueraDeRango, texto,
+                $"El número {problema.Prefix}{problema.Number} no cae en una numeración vigente de Conecta (rango o fechas): revise la resolución en " +
+                "Conecta y en el ERP. Conecta no consumió nada; el documento sigue pendiente.")),
+            400 when problema?.EsDelTipo("client-numbering") == true => Con(ChannelOutcome.ChannelUnavailable, Rechazo(ReglaNumeracionDelCliente, texto,
+                $"El prefijo {problema.Prefix} no tiene encendida en Conecta la numeración del emisor (clientAssignsNumber): pídala al " +
+                "administrador de Conecta. El documento sigue pendiente.")),
             409 when Contiene(problema, "idempotencia") => Con(ChannelOutcome.InvalidData, Rechazo(ReglaClave, texto,
                 "Conecta recibió la misma clave para otro documento: es un defecto, avise a soporte.")),
             409 when Contiene(problema, "numeración") || problema?.Prefix is not null => Con(ChannelOutcome.ChannelUnavailable, Rechazo(ReglaNumeracion, texto,

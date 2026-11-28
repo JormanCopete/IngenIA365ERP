@@ -170,7 +170,11 @@ public sealed record PanoramaDelCanalConecta(
     IReadOnlyList<string>? Missing);
 
 /// <summary><c>TenantDetail</c> (<c>GET /v1/tenants/{id}</c>), lo que el ERP lee.</summary>
-public sealed record TenantConecta(Guid Id, string Nit, string? Dv, string LegalName, string Environment, IReadOnlyList<string>? MissingToIssue);
+public sealed record TenantConecta(Guid Id, string Nit, string? Dv, string LegalName, string Environment, IReadOnlyList<string>? MissingToIssue,
+    IReadOnlyList<ResolucionConecta>? Resolutions = null);
+
+/// <summary><c>NumberingResolutionSummary</c>, lo que el ERP lee: el prefijo y si recibe el número del emisor (pedido D1).</summary>
+public sealed record ResolucionConecta(string Prefix, bool ClientAssignsNumber, long RangeFrom, long RangeTo, long CurrentNumber);
 
 /// <summary>La respuesta del token (OAuth 2.0).</summary>
 public sealed record TokenConecta(
@@ -184,7 +188,9 @@ public sealed record TokenConecta(
 public sealed record ProblemaConecta(
     string? Type,
     string? Title,
-    int? Status,
+    // Conecta repite «status» en el 409 de número ocupado: el código HTTP y el estado del documento existente. Se lee sin tipo para que el
+    // problema no quede ilegible por el choque (lo que diga no se usa).
+    JsonElement? Status,
     string? Detail,
     string? DianCode,
     string? DianMessage,
@@ -193,7 +199,9 @@ public sealed record ProblemaConecta(
     IReadOnlyList<string>? Errors,
     string? Provider,
     string? Prefix,
-    string? TraceId)
+    string? TraceId,
+    Guid? DocumentId = null,
+    long? Number = null)
 {
     /// <summary>Lee el cuerpo como Problem Details; nulo si no lo es.</summary>
     public static ProblemaConecta? Leer(string? cuerpo)
@@ -208,6 +216,11 @@ public sealed record ProblemaConecta(
             return null;
         }
     }
+
+    /// <summary>¿El <c>type</c> estable de Conecta termina en <paramref name="sufijo"/>? (p. ej. <c>number-conflict</c>).</summary>
+    public bool EsDelTipo(string sufijo) =>
+        Type?.TrimEnd('/').EndsWith("/" + sufijo, StringComparison.OrdinalIgnoreCase) == true
+        || string.Equals(Type, sufijo, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>El texto para la pantalla: el detalle, o el título.</summary>
     public string Texto => !string.IsNullOrWhiteSpace(Detail) ? Detail! : Title ?? "Conecta respondió un error sin detalle.";

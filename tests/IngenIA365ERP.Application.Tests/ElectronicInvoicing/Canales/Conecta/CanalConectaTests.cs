@@ -357,6 +357,8 @@ public class CanalConectaTests
     [InlineData(HttpStatusCode.UnprocessableEntity, "{\"title\":\"El documento no supera el validador local.\",\"ruleIds\":[\"FAJ43\",\"FAK24\"]}", ChannelOutcome.InvalidData, "FAJ43")]
     [InlineData(HttpStatusCode.UnprocessableEntity, "{\"title\":\"proveedor\",\"provider\":\"factible\",\"errors\":[\"apellidos obligatorio\"]}", ChannelOutcome.InvalidData, "CONECTA-VALIDACION")]
     [InlineData(HttpStatusCode.TooManyRequests, "{\"title\":\"límite\"}", ChannelOutcome.ChannelUnavailable, "CONECTA-LIMITE")]
+    [InlineData(HttpStatusCode.Conflict, "{\"type\":\"https://conecta.ingenia365.com/problemas/numbering-out-of-range\",\"title\":\"El número no está en una numeración vigente.\",\"status\":409,\"prefix\":\"SETT\",\"number\":98594}", ChannelOutcome.ChannelUnavailable, "CONECTA-FUERA-DE-RANGO")]
+    [InlineData(HttpStatusCode.BadRequest, "{\"type\":\"https://conecta.ingenia365.com/problemas/client-numbering\",\"title\":\"Este prefijo no recibe el número del emisor.\",\"status\":400,\"prefix\":\"SETT\"}", ChannelOutcome.ChannelUnavailable, "CONECTA-NUMERACION-CLIENTE")]
     [InlineData(HttpStatusCode.ServiceUnavailable, "", ChannelOutcome.InProcess, "CONECTA-SERVIDOR")]
     public async Task Los_errores_de_Conecta_se_traducen_a_su_resultado(HttpStatusCode codigo, string cuerpo, ChannelOutcome esperado, string regla)
     {
@@ -383,7 +385,65 @@ public class CanalConectaTests
         r.Outcome.Should().Be(ChannelOutcome.Validated, "el número ya está en Conecta: se responde lo que diga la consulta");
     }
 
+    /// <summary>El cuerpo real del 409 de Conecta v0.1.4: «status» va dos veces (el código HTTP y el estado del existente).</summary>
+    private static string NumeroOcupado(Guid? id, string? estado) =>
+        "{\"type\":\"https://conecta.ingenia365.com/problemas/number-conflict\",\"title\":\"El número ya lo usa otro documento.\",\"status\":409," +
+        "\"prefix\":\"SETT\",\"number\":98594,\"documentId\":" + (id is null ? "null" : $"\"{id:D}\"") + ",\"status\":" +
+        (estado is null ? "null" : $"\"{estado}\"") + "}";
+
+    [Fact]
+    public async Task El_409_real_de_Conecta_con_status_repetido_se_lee_y_adopta_el_documento_propio()
+    {
+        var d = Factura();
+        var canal = ConectaDePrueba.Canal(_stub);
+        var primero = await canal.EmitirAsync(d, ConectaDePrueba.Contexto(Cooperativa, d), default);
+        _stub.RespuestasDeEmision.Enqueue((HttpStatusCode.Conflict, NumeroOcupado(Guid.Parse(primero.ExternalReference!), "Rendered")));
+
+        var r = await canal.EmitirAsync(d, ConectaDePrueba.Contexto(Cooperativa, d, version: 2), default);
+
+        r.Outcome.Should().Be(ChannelOutcome.Validated, string.Join(" | ", r.Mensajes.Select(m => m.Texto)));
+    }
+
+    [Fact]
+    public async Task Un_numero_que_ocupa_otro_documento_en_Conecta_no_se_adopta()
+    {
+        var ajeno = new ConectaStubHandler.Doc { Numero = "SETT98594", Prefijo = "SETT", Consecutivo = 98594, Total = 123_456m };
+        _stub.PorId[ajeno.Id] = ajeno;
+        _stub.RespuestasDeEmision.Enqueue((HttpStatusCode.Conflict, NumeroOcupado(ajeno.Id, "Rendered")));
+        var d = Factura();
+
+        var r = await ConectaDePrueba.Canal(_stub).EmitirAsync(d, ConectaDePrueba.Contexto(Cooperativa, d), default);
+
+        r.Outcome.Should().Be(ChannelOutcome.InvalidData);
+        r.UniqueCode.Should().BeNull("el CUFE de otro documento nunca se toma como propio");
+        r.Mensajes.Should().Contain(m => m.Regla == TraductorDeResultadosConecta.ReglaNumeroOcupado);
+    }
+
+    [Fact]
+    public async Task Un_numero_ocupado_que_Conecta_todavia_no_muestra_queda_en_proceso()
+    {
+        _stub.RespuestasDeEmision.Enqueue((HttpStatusCode.Conflict, NumeroOcupado(null, null)));
+        var d = Factura();
+
+        var r = await ConectaDePrueba.Canal(_stub).EmitirAsync(d, ConectaDePrueba.Contexto(Cooperativa, d), default);
+
+        r.Outcome.Should().Be(ChannelOutcome.InProcess);
+    }
+
     // ------------------------------------------------------------------------------------------ verificación --
+
+    [Fact]
+    public async Task Verificar_falla_si_un_prefijo_enlazado_no_recibe_el_numero_del_ERP_y_muestra_el_contador()
+    {
+        var bien = await ConectaDePrueba.Canal(_stub).ProbarAsync(ContextoDeVerificacion(), default);
+        bien.Mensajes.Single().Texto.Should().Contain("SETT (va en 98597)");
+
+        _stub.Resoluciones[0] = ("SETT", 98597, false);
+        var r = await ConectaDePrueba.Canal(_stub).ProbarAsync(ContextoDeVerificacion(), default);
+
+        r.Outcome.Should().Be(ChannelOutcome.ChannelUnavailable);
+        r.Mensajes.Should().Contain(m => m.Regla == TraductorDeResultadosConecta.ReglaNumeracionDelCliente);
+    }
 
     private ContextoDeCanal ContextoDeVerificacion() => ConectaDePrueba.Contexto(Cooperativa, Factura());
 

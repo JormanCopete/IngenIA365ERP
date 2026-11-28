@@ -100,7 +100,7 @@ fiscal no los guarda.
 | Conecta (`InvoiceRequest`) | ERP (canónico) | Regla |
 |---|---|---|
 | `tenantId` | `ChannelTenantId` de la vigencia | |
-| `prefix` / `number` | `number.prefix` / `number.consecutive` | **D1**: hoy Conecta exige `number = null` |
+| `prefix` / `number` | `number.prefix` / `number.consecutive` | **D1**: Conecta lo acepta desde la v0.1.4 (2026-11-28) en los prefijos con `clientAssignsNumber` |
 | `issueDate` | fecha local de `issuedAt` | La hora la pone Conecta al firmar |
 | `operationType` | `operationTypeCode` | |
 | `invoiceType` | `dianDocumentTypeCode` | 01; la 04 la decide Conecta |
@@ -175,7 +175,9 @@ Igual que la factura, más:
 | 409 «Numeración agotada o no vigente» | `ChannelUnavailable`, regla `CONECTA-NUMERACION`, `data.prefix` | Configuración en Conecta; cuenta para el circuito |
 | 409 «El canal de emisión del tenant no está listo» o prefijo sin enlace | `ChannelUnavailable`, regla `CONECTA-CANAL` | |
 | 409 «Clave de idempotencia reutilizada para otro tipo de documento» | `InvalidData`, regla `CONECTA-CLAVE` | Defecto |
-| 409 `number-conflict` (pedido D1) | consulta por número (§7) | Regla 3 |
+| 409 `…/number-conflict` (pedido D1; extensiones `documentId`, `prefix`, `number` y un segundo `status`, el del existente) | consulta por número (§7) y **adopta sólo si el total a pagar es el del ERP**; si no, `InvalidData`, regla `CONECTA-NUMERO-OCUPADO`; si todavía no se ve, `InProcess` | Regla 3. El `status` repetido no rompe la lectura: el adaptador lo lee sin tipo |
+| 409 `…/numbering-out-of-range` | `ChannelUnavailable`, regla `CONECTA-FUERA-DE-RANGO` | Conecta no consume nada; el documento sigue pendiente |
+| 400 `…/client-numbering` (prefijo sin la bandera) | `ChannelUnavailable`, regla `CONECTA-NUMERACION-CLIENTE` | Configuración en Conecta |
 | 413 | `InvalidData` | |
 | 422 validador local (`ruleIds[]`) | `InvalidData`; un `MensajeDelCanal(Rechazo)` por `ruleId` con `detail` | `RejectedBy = Channel` |
 | 422 traducción al proveedor (`provider`, `errors[]`) | `InvalidData`; un mensaje por error | |
@@ -247,7 +249,8 @@ Campos que se trasladan al resultado:
    - que el ambiente del canal vigente sea el del modo;
    - que `missing` esté vacío;
    - que el NIT del tenant sea `IssuerTaxId` de la vigencia;
-   - con D1 disponible, que el prefijo admita la numeración del cliente.
+   - con la compuerta encendida, que cada prefijo enlazado tenga `resolutions[].clientAssignsNumber` (si no, `CONECTA-NUMERACION-CLIENTE`); el resumen
+     muestra el contador de cada prefijo («SETT (va en 98597)»).
 
 Devuelve `Validated` con un resumen («Conecta PDN · tenant 266f… · Habilitation · proveedor factible · prefijos
 enlazados: SETT») que la pantalla muestra. Si algo falla, devuelve `ChannelUnavailable` con un mensaje por cada falla.

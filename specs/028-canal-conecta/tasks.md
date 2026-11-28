@@ -106,8 +106,15 @@ lo pida.
   - `DocumentosElectronicosTests.Una_resolucion_de_1_a_10…` cae en la nota crédito con
     `Payments.CashSessionRequired` (regla de caja, no de este cambio). **Falla igual en `develop` d810d07f sin la
     028** (corrida de control del 2026-11-27): es preexistente.
-- [ ] T052 Prueba manual en Conecta QA y en Conecta PDN con el tenant en habilitación. **Bloqueada por D1** (Conecta
-  debe aceptar el número del ERP) y por el cliente API de COOFLOPAL: factura, nota crédito y nota débito en `SETT`,
+- [x] T051b D1 en Conecta (v0.1.4, 2026-11-28). Ajustes del adaptador al contrato final:
+  - el 409 `number-conflict` trae `status` dos veces y ya no deja ilegible el problema;
+  - el número ocupado por otro documento no se adopta (`CONECTA-NUMERO-OCUPADO`);
+  - `numbering-out-of-range` y `client-numbering` tienen su regla;
+  - la verificación exige `clientAssignsNumber` y muestra el contador.
+
+  GitOps `0c23c4e` enciende la compuerta sólo para `CONECTA-PRUEBAS` en PDN.
+- [ ] T052 Prueba manual en Conecta PDN con el tenant en habilitación. Ya no la bloquea D1; falta el cliente API de
+  COOFLOPAL, desplegar la 028 y numerar `SETT` desde 98598: factura, nota crédito y nota débito en `SETT`,
   latencia con varias cajas, resultados en la receta
 - [ ] T053 Cotejo con el contador (tarifa 0 = exento, escala del descuento, `referencedInvoice.id`, régimen 48/49, correo
   del adquirente), con `/preview` de Conecta, antes del modo real

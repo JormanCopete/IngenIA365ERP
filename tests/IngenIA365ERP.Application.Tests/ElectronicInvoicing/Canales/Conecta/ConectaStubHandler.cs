@@ -43,6 +43,9 @@ public sealed class ConectaStubHandler : HttpMessageHandler
     public string AmbienteDelTenant { get; set; } = "Habilitation";
     public string NitDelTenant { get; set; } = "900123456";
     public List<string> Faltantes { get; } = [];
+
+    /// <summary>Las resoluciones que devuelve <c>GET /v1/tenants/{id}</c>: prefijo, contador y si recibe el número del emisor (D1).</summary>
+    public List<(string Prefijo, long Contador, bool DelCliente)> Resoluciones { get; } = [("SETT", 98597, true)];
     public int TokensEmitidos { get; private set; }
 
     /// <summary>Cuántas consultas tarda en decidir un documento nuevo (0 = decide en la primera).</summary>
@@ -88,7 +91,17 @@ public sealed class ConectaStubHandler : HttpMessageHandler
                 missing = Faltantes,
             });
         if (request.Method == HttpMethod.Get && ruta.StartsWith("/v1/tenants/", StringComparison.Ordinal))
-            return Json(HttpStatusCode.OK, new { id = Guid.NewGuid(), nit = NitDelTenant, dv = "7", legalName = "COOPERATIVA DE PRUEBA", environment = AmbienteDelTenant, missingToIssue = Array.Empty<string>() });
+            return Json(HttpStatusCode.OK, new
+            {
+                id = Guid.NewGuid(), nit = NitDelTenant, dv = "7", legalName = "COOPERATIVA DE PRUEBA", environment = AmbienteDelTenant,
+                missingToIssue = Array.Empty<string>(),
+                resolutions = Resoluciones.Select(r => new
+                {
+                    family = "Invoice", resolutionNumber = "18760000001", prefix = r.Prefijo, rangeFrom = 1L, rangeTo = 5000000L,
+                    validFrom = "2019-01-19", validTo = "2030-01-19", currentNumber = r.Contador, status = "Active", hasTechnicalKey = true,
+                    clientAssignsNumber = r.DelCliente,
+                }).ToArray(),
+            });
         return new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 
