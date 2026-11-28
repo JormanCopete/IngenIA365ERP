@@ -4,11 +4,14 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.ElectronicInvoicing.Channels;
 using IngenIA365ERP.Application.ElectronicInvoicing.Numeracion;
+using IngenIA365ERP.Application.Lending.Adapters;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Enums.Dian;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing.Settings;
 
@@ -33,7 +36,10 @@ public sealed record ConfigureEmissionCommand(
     string? IssuerBusinessName = null,
     string? IssuerAddress = null,
     string? IssuerMunicipalityDaneCode = null,
-    string? IssuerEmail = null)
+    string? IssuerEmail = null,
+    Guid? ChannelTenantId = null,
+    string? ChannelEndpoint = null,
+    string? ConfirmProduction = null)
     : IRequest<Result<ElectronicEmissionSettingDto>>, IConMotivo, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -56,10 +62,17 @@ public sealed class ConfigureEmissionCommandValidator : ValidadorConMotivo<Confi
         RuleFor(x => x.IssuerMunicipalityDaneCode).Matches("^[0-9]{5}$").When(x => !string.IsNullOrWhiteSpace(x.IssuerMunicipalityDaneCode))
             .WithMessage("El municipio del emisor es el código DIVIPOLA de 5 dígitos.");
         RuleFor(x => x.IssuerEmail).MaximumLength(150).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.IssuerEmail));
+        RuleFor(x => x.ChannelEndpoint).MaximumLength(40);
+        RuleFor(x => x.ConfirmProduction).MaximumLength(20);
     }
 }
 
-public sealed class ConfigureEmissionCommandHandler(IApplicationDbContext db, ICanalesDeEmision canales, ICurrentTenantService tenant)
+public sealed class ConfigureEmissionCommandHandler(
+    IApplicationDbContext db,
+    ICanalesDeEmision canales,
+    ICurrentTenantService tenant,
+    IOptions<CanalesExternosOptions>? procesoDelCanal = null,
+    IPermissionChecker? permisos = null)
     : IRequestHandler<ConfigureEmissionCommand, Result<ElectronicEmissionSettingDto>>
 {
     public async Task<Result<ElectronicEmissionSettingDto>> Handle(ConfigureEmissionCommand request, CancellationToken ct)
@@ -74,6 +87,33 @@ public sealed class ConfigureEmissionCommandHandler(IApplicationDbContext db, IC
             return Falla(ErroresDeNumeracionYConfiguracion.SimulatedInProduction());
         if (request.EmailDeliveryBy == EmailDeliveryBy.Channel && !capacidades.PuedeEnviarCorreo)
             return Falla(ErroresDeNumeracionYConfiguracion.ChannelCannotSendEmail(canal));
+
+        // Feature 028 (contracts/canal-conecta.md §9): un canal con parámetros exige su ambiente, su tenant y un extremo de la lista blanca; uno
+        // de producción, además, un proceso de producción, el permiso propio y la confirmación escrita.
+        Guid? tenantDelCanal = null;
+        string? extremo = null;
+        if (canales.Resolver(canal) is IDeclaraParametrosDelCanal parametros)
+        {
+            // Sin la opción del proceso se asume pruebas: el defecto seguro es no permitir la validez legal.
+            var procesoDePruebas = procesoDelCanal?.Value.AmbienteDePruebas ?? true;
+            if (!ReglasDeParametrosDelCanal.AdmitidoEnEsteProceso(parametros, procesoDePruebas))
+                return Falla(ErroresDeNumeracionYConfiguracion.ProductionChannelNotAllowedHere(canal));
+            if (!ReglasDeParametrosDelCanal.AmbienteAdmitido(parametros, request.Environment))
+                return Falla(ErroresDeNumeracionYConfiguracion.ChannelEnvironmentMismatch(canal, parametros.AmbienteExigido));
+            if (request.ChannelTenantId is not { } t || t == Guid.Empty)
+                return Falla(ErroresDeNumeracionYConfiguracion.ChannelTenantRequired(canal));
+            if (!ReglasDeParametrosDelCanal.ExtremoAdmitido(parametros, request.ChannelEndpoint))
+                return Falla(ErroresDeNumeracionYConfiguracion.EndpointUnknown(canal, request.ChannelEndpoint, parametros.Extremos));
+            if (parametros.EsDeProduccion)
+            {
+                var conPermiso = permisos is not null && await permisos.HasPermissionAsync(ReglasDeParametrosDelCanal.PermisoDeProduccion, ct);
+                if (!conPermiso) return Falla(ErroresDeNumeracionYConfiguracion.ProductionConfirmationRequired(canal, faltaPermiso: true));
+                if (!string.Equals(request.ConfirmProduction?.Trim(), ReglasDeParametrosDelCanal.Confirmacion, StringComparison.Ordinal))
+                    return Falla(ErroresDeNumeracionYConfiguracion.ProductionConfirmationRequired(canal, faltaPermiso: false));
+            }
+            tenantDelCanal = t;
+            extremo = parametros.Extremos.First(e => string.Equals(e, request.ChannelEndpoint!.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
 
         var existentes = await db.ElectronicEmissionSettings.OrderBy(s => s.ValidFrom).ToListAsync(ct);
         if (existentes.Any(s => s.ValidFrom >= request.ValidFrom)) return Falla(ErroresDeNumeracionYConfiguracion.SettingsOverlaps(request.ValidFrom));
@@ -100,6 +140,8 @@ public sealed class ConfigureEmissionCommandHandler(IApplicationDbContext db, IC
                 && anterior.SoftwareId == software && anterior.TestSetId == testSet ? anterior.TestSetAcceptedAt : null,
             CredentialKey = CredencialesDeCanal.ClaveDe(cooperativa.Value, canal),
             CredentialVerifiedAt = null,
+            ChannelTenantId = tenantDelCanal,
+            ChannelEndpoint = extremo,
             EmailDeliveryBy = request.EmailDeliveryBy,
             IssuerTaxId = Dato(request.IssuerTaxId, anterior?.IssuerTaxId, empresa?.TaxId),
             IssuerCheckDigit = Dato(request.IssuerCheckDigit, anterior?.IssuerCheckDigit, empresa?.TaxIdCheckDigit),

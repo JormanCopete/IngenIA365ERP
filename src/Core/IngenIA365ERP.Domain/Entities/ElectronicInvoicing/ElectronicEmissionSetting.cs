@@ -21,7 +21,7 @@ public class ElectronicEmissionSetting : AuditableEntity
 {
     public EmissionMode Mode { get; set; }
 
-    /// <summary>Clave del adaptador en mayúsculas (<c>SIMULADO</c>, la del proveedor, <c>SERVICIO-CENTRAL</c>; máx. 40).</summary>
+    /// <summary>Clave del adaptador en mayúsculas (<c>SIMULADO</c>, <c>CONECTA-PRUEBAS</c>, <c>CONECTA</c>; máx. 40).</summary>
     public string ChannelCode { get; set; } = string.Empty;
 
     public DianEnvironment Environment { get; set; } = DianEnvironment.Testing;
@@ -44,6 +44,19 @@ public class ElectronicEmissionSetting : AuditableEntity
 
     /// <summary>Lo escribe <c>VerifyChannelCredentialCommand</c>.</summary>
     public DateTime? CredentialVerifiedAt { get; set; }
+
+    /// <summary>
+    /// Feature 028: el tenant del canal externo (en IngenIA Conecta, el <c>tenantId</c> de la cooperativa). No es secreto: con él solo no
+    /// se emite, hace falta la credencial del Secret, cuyo token limita los tenants operables. Nulo en <c>SIMULADO</c>.
+    /// </summary>
+    public Guid? ChannelTenantId { get; set; }
+
+    /// <summary>
+    /// Feature 028: la <b>clave</b> del extremo del canal (<c>QA</c>, <c>PDN</c>; máx. 40) en la lista blanca de
+    /// <c>ElectronicInvoicing:Channels:{canal}:Endpoints</c>, nunca la URL: así la credencial no viaja a un host leído de la base. Nulo en
+    /// <c>SIMULADO</c>.
+    /// </summary>
+    public string? ChannelEndpoint { get; set; }
 
     /// <summary><c>Channel</c> sólo si <c>CapacidadesDelCanal</c> lo ofrece.</summary>
     public EmailDeliveryBy EmailDeliveryBy { get; set; } = EmailDeliveryBy.Erp;

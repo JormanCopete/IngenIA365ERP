@@ -68,7 +68,7 @@ public sealed class CanalDePrueba(string codigo, CapacidadesDelCanal capacidades
 }
 
 /// <summary>El registro de canales de prueba. (Los códigos son los que se pasan.)</summary>
-public sealed class CanalesDePrueba(params CanalDePrueba[] canales) : ICanalesDeEmision
+public sealed class CanalesDePrueba(params ICanalDeEmisionElectronica[] canales) : ICanalesDeEmision
 {
     public ICanalDeEmisionElectronica Resolver(string channelCode) =>
         canales.FirstOrDefault(c => string.Equals(c.ChannelCode, channelCode, StringComparison.OrdinalIgnoreCase))
@@ -101,7 +101,7 @@ public sealed class EmisionDePrueba
 
     public ICredencialesDeCanal Credenciales { get; } = Substitute.For<ICredencialesDeCanal>();
 
-    public EmisionDePrueba(params CanalDePrueba[] otros)
+    public EmisionDePrueba(params ICanalDeEmisionElectronica[] otros)
     {
         Canales = new CanalesDePrueba([Simulado, Proveedor, .. otros]);
         Reloj.HoyLocal.Returns(Hoy);
@@ -115,8 +115,9 @@ public sealed class EmisionDePrueba
 
     public LectorDeParametros Lector() => new(Db);
 
-    public GuardiaDeEmisionFiscal Guardia(EntregaDelComercio entrega = EntregaDelComercio.I4, bool conCanales = true) =>
-        new(Lector(), Db, conCanales ? Canales : null, entrega);
+    public GuardiaDeEmisionFiscal Guardia(EntregaDelComercio entrega = EntregaDelComercio.I4, bool conCanales = true, bool procesoDePruebas = true) =>
+        new(Lector(), Db, conCanales ? Canales : null, entrega,
+            Microsoft.Extensions.Options.Options.Create(new global::IngenIA365ERP.Application.Lending.Adapters.CanalesExternosOptions { AmbienteDePruebas = procesoDePruebas }));
 
     /// <summary>Fija <c>Dian.ObligadaAFacturar</c> desde el 1 de enero.</summary>
     public void Obligada(bool obligada)

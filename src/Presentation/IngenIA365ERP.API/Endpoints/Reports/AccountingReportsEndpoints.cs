@@ -92,6 +92,20 @@ public class AccountingReportsEndpoints : ICarterModule
             .RequirePermission("Accounting.Reports.View")
             .RequirePermissionWhenExporting("Accounting.Reports.Export");
 
+        // 2026-11-27 (pedido del dueño): el balance de prueba con cada auxiliar abierto en plano por tercero, documento cruce y centro de costo,
+        // y los saldos de una cuenta (o rango) con el mismo detalle; la cuenta es obligatoria en el segundo.
+        group.MapGet("/trial-balance-detailed", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new DetailedTrialBalanceQuery(q.ToFiltros(), false), ct), q.Format, "balance-de-prueba-detallado"))
+            .WithName("Reportes_Contabilidad_TrialBalanceDetailed")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        group.MapGet("/account-balances", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new DetailedTrialBalanceQuery(q.ToFiltros(), true), ct), q.Format, "saldos-por-cuenta"))
+            .WithName("Reportes_Contabilidad_AccountBalances")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
         // El libro auxiliar interactivo: `node` (tipo:clave) dice desde dónde se profundiza; sin él, las clases.
         group.MapGet("/ledger", async ([AsParameters] FiltrosQuery q, string? node, ISender sender, CancellationToken ct) =>
                 await EntregaDeInformes.EntregarAsync(await sender.Send(new LedgerQuery(q.ToFiltros(), node), ct), q.Format, "libro-auxiliar"))

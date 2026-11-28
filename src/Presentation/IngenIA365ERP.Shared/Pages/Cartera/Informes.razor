@@ -28,6 +28,11 @@
     <div class="page-header">
         <h3>Informes de cartera</h3>
         <div class="toolbar">
+            @* 2026-11-27: del resumen de saldos por línea al detalle de todos los créditos, con los mismos filtros. *@
+            @if (_vista?.Key == VistaResumen && _vistas.Any(v => v.Key == VistaDetalle))
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-list-unordered" Disabled="@_carga.Activa" OnClick="@(() => AbrirDetalleAsync(null))">Ver el detalle de todas las líneas</SfButton>
+            }
             @if (_tabla is not null && _vista is not null && PuedeExportar)
             {
                 <PermissionGate Required="Lending.Reports.Export">
@@ -343,6 +348,9 @@
         "payment-agreements" => [("Proposed", "Propuesto"), ("Approved", "Aprobado"), ("Rejected", "Rechazado"), ("Cancelled", "Anulado")],
         "prior-notices" => [("Pending", "Pendiente"), ("InProgress", "En curso"), ("Valid", "Vigente"), ("Closed", "Cerrado")],
         // Feature 014, US17 (T222): los estados de una cuenta de captación o de aportes.
+        // 2026-11-27: las cuotas pendientes (vencidas o por vencer) y los asociados (activos o retirados).
+        "pending-installments" => [("PastDue", "Vencidas"), ("Upcoming", "Por vencer")],
+        "associates" => [("Active", "Activos"), ("Withdrawn", "Retirados")],
         "deposit-accounts-by-status" => [("Active", "Activa"), ("Inactive", "Inactiva"), ("Matured", "Vencida"), ("Closing", "En cancelación"),
             ("Closed", "Cancelada")],
         _ => [("Queued", "En cola"), ("Deferred", "Diferido"), ("Excluded", "Excluido"), ("Sent", "Enviado"), ("Delivered", "Entregado"),
@@ -350,7 +358,20 @@
     };
 
     /// <summary>La tabla trae con qué profundizar: el crédito, la operación o el mensaje.</summary>
-    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje" or "_documento" or "_cuenta");
+    private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_credito" or "_mensaje" or "_documento" or "_cuenta" or "_linea");
+
+    /// <summary>2026-11-27: el resumen de saldos por línea y su detalle por crédito (una fila del resumen abre el detalle de su línea).</summary>
+    private const string VistaResumen = "portfolio-summary";
+    private const string VistaDetalle = "portfolio-detail";
+
+    /// <summary>Pasa al detalle por crédito con los mismos filtros: de una línea, o de todas si <paramref name="linea"/> es nula.</summary>
+    private async Task AbrirDetalleAsync(string? linea)
+    {
+        await CambiarVista(VistaDetalle);
+        if (linea is null) _filtros.Otros.Remove("line");
+        else _filtros.Otros["line"] = linea;
+        await AplicarAsync();
+    }
 
     /// <summary>El año que propone el filtro: el del mes anterior, o el anterior en la exógena (anual).</summary>
     private string AnioPorDefecto => (_vista?.Key?.StartsWith("exogena-", StringComparison.Ordinal) == true
@@ -361,6 +382,7 @@
     private string? Destino(FilaReporteDto fila)
     {
         if (_tabla is null) return null;
+        if (_vista?.Key == VistaResumen && TablaDeReporte.Oculto(_tabla, fila, "_linea") is { } linea && Guid.TryParse(linea, out _)) return VistaDetalle;
         if (TablaDeReporte.Oculto(_tabla, fila, "_credito") is { } credito && Guid.TryParse(credito, out var c)) return $"/cartera/creditos/{c}";
         // Feature 014, US17 (T222): una fila con cuenta de captación o de aportes abre su ficha.
         if (TablaDeReporte.Oculto(_tabla, fila, "_cuenta") is { } cuenta && Guid.TryParse(cuenta, out var a)) return $"/cartera/ahorros/{a}";
@@ -371,10 +393,15 @@
         return null;
     }
 
-    private Task Profundizar(FilaReporteDto fila)
+    private async Task Profundizar(FilaReporteDto fila)
     {
-        if (Destino(fila) is { } ruta) Navigation.NavigateTo(ruta);
-        return Task.CompletedTask;
+        if (Destino(fila) is not { } ruta) return;
+        if (ruta == VistaDetalle && _tabla is not null)
+        {
+            await AbrirDetalleAsync(TablaDeReporte.Oculto(_tabla, fila, "_linea"));
+            return;
+        }
+        Navigation.NavigateTo(ruta);
     }
 
     private async Task AplicarAsync()

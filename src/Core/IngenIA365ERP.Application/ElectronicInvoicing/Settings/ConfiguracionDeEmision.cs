@@ -28,7 +28,9 @@ public sealed record ElectronicEmissionSettingDto(
     DateOnly ValidFrom,
     DateOnly? ValidTo,
     string Reason,
-    string? CreatedByName);
+    string? CreatedByName,
+    Guid? ChannelTenantId = null,
+    string? ChannelEndpoint = null);
 
 /// <summary>Las capacidades de un canal para la pantalla (api.md §24.1, <c>availableChannels[].capabilities</c>). (nuevo)</summary>
 public sealed record CapacidadesDelCanalDto(
@@ -41,8 +43,17 @@ public sealed record CapacidadesDelCanalDto(
     bool QueriesNumberingRanges,
     bool IssuerContingency);
 
-/// <summary>Un canal disponible en la instalación. (nuevo)</summary>
-public sealed record CanalDisponibleDto(string ChannelCode, string Name, CapacidadesDelCanalDto Capabilities);
+/// <summary>
+/// Un canal disponible en la instalación. Feature 028: el ambiente que exige, sus extremos (claves, nunca URL) y si emite con validez legal
+/// (entonces pide el permiso de producción y la confirmación). (nuevo)
+/// </summary>
+public sealed record CanalDisponibleDto(
+    string ChannelCode,
+    string Name,
+    CapacidadesDelCanalDto Capabilities,
+    string? RequiredEnvironment = null,
+    IReadOnlyList<string>? Endpoints = null,
+    bool IsProduction = false);
 
 /// <summary>El estado de la credencial del canal vigente: la clave derivada, si está en el secreto y cuándo se verificó. (nuevo)</summary>
 public sealed record CredencialDelCanalDto(string? Key, bool Configured, DateTime? VerifiedAt);
@@ -68,7 +79,7 @@ public static class ConfiguracionDeEmision
     public static ElectronicEmissionSettingDto ADto(ElectronicEmissionSetting s) => new(
         s.PublicId, s.Mode, s.ChannelCode, s.Environment, s.SoftwareId, s.TestSetId, s.TestSetAcceptedAt, s.EmailDeliveryBy, s.IsEnabled,
         s.CredentialVerifiedAt, s.IssuerTaxId, s.IssuerCheckDigit, s.IssuerBusinessName, s.IssuerAddress, s.IssuerMunicipalityDaneCode,
-        s.IssuerEmail, s.ValidFrom, s.ValidTo, s.Reason, s.CreatedBy);
+        s.IssuerEmail, s.ValidFrom, s.ValidTo, s.Reason, s.CreatedBy, s.ChannelTenantId, s.ChannelEndpoint);
 
     public static CanalDisponibleDto Canal(ICanalDeEmisionElectronica canal)
     {
@@ -77,11 +88,13 @@ public static class ConfiguracionDeEmision
             .OrderBy(t => t).Select(t => t.ToString()).ToList();
         var eventos = c.Tipos.Where(t => t is ElectronicDocumentKind.RadianEvent030 or ElectronicDocumentKind.RadianEvent032)
             .OrderBy(t => t).Select(t => t.ToString()).ToList();
+        var parametros = canal as IDeclaraParametrosDelCanal;
         var nombre = string.Equals(canal.ChannelCode, GuardiaDeEmisionFiscal.CanalSimulado, StringComparison.OrdinalIgnoreCase)
             ? "Canal simulado (sólo pruebas)"
-            : canal.ChannelCode;
+            : parametros?.Nombre ?? canal.ChannelCode;
         return new CanalDisponibleDto(canal.ChannelCode, nombre,
             new CapacidadesDelCanalDto(documentos, eventos, c.AceptaNumeroDelErp, c.EsAsincrono, c.DevuelvePdf, c.PuedeEnviarCorreo,
-                c.ConsultaRangos, c.ContingenciaDelFacturador));
+                c.ConsultaRangos, c.ContingenciaDelFacturador),
+            parametros?.AmbienteExigido.ToString(), parametros?.Extremos, parametros?.EsDeProduccion ?? false);
     }
 }

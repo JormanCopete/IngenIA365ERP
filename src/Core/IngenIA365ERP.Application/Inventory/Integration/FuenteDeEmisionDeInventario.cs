@@ -88,6 +88,7 @@ public sealed class FuenteDeEmisionDeInventario(
         var impuestos = await db.DocumentTaxLines.AsNoTracking().Where(t => t.DocumentId == d.Id && !t.IsDeleted).OrderBy(t => t.Id).ToListAsync(ct);
         var pagos = await db.DocumentPayments.AsNoTracking().Where(p => p.DocumentId == d.Id && !p.IsDeleted).OrderBy(p => p.LineNumber).ToListAsync(ct);
         var fotos = await db.DocumentPartySnapshots.AsNoTracking().Where(f => f.DocumentId == d.Id && !f.IsDeleted).ToListAsync(ct);
+        var municipios = await MunicipiosAsync(fotos.Select(f => f.MunicipalityDaneCode), ct);
 
         // Lo que el documento referencia: el corregido (NoteOf, el documento es el destino) y las remisiones (FromShipment).
         var origenes = await db.DocumentLinks.AsNoTracking()
@@ -113,7 +114,7 @@ public sealed class FuenteDeEmisionDeInventario(
             DueDate = d.DueDate,
             Currency = d.Currency,
             ExchangeRate = d.ExchangeRate,
-            Contrapartes = fotos.Select(Foto).ToList(),
+            Contrapartes = fotos.Select(f => ConMunicipio(Foto(f), municipios)).ToList(),
             Lineas = lineas.Select(l => new LineaDeEntrada(
                 l.LineNumber,
                 productos.TryGetValue(l.ProductId, out var p) ? p.Code : string.Empty,
@@ -155,6 +156,27 @@ public sealed class FuenteDeEmisionDeInventario(
         });
     }
 
+    /// <summary>
+    /// Feature 028: municipio y departamento por nombre, de DIVIPOLA (<c>COR_Cities</c>), por el código de la copia fiscal. Es un catálogo
+    /// fijo, así que la misma copia da el mismo resultado (la reconstrucción del canónico es determinista). (nuevo)
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, (string Ciudad, string Departamento)>> MunicipiosAsync(IEnumerable<string?> codigos, CancellationToken ct)
+    {
+        var buscados = codigos.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).Distinct(StringComparer.Ordinal).ToList();
+        if (buscados.Count == 0) return new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        var filas = await db.Cities.AsNoTracking()
+            .Where(c => c.DaneCode != null && buscados.Contains(c.DaneCode))
+            .Select(c => new { c.DaneCode, c.Name, Departamento = c.Department.Name })
+            .ToListAsync(ct);
+        return filas.GroupBy(f => f.DaneCode!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => (g.OrderBy(x => x.Name, StringComparer.Ordinal).First().Name, g.First().Departamento), StringComparer.Ordinal);
+    }
+
+    private static FotoFiscalDeEntrada ConMunicipio(FotoFiscalDeEntrada foto, IReadOnlyDictionary<string, (string Ciudad, string Departamento)> municipios) =>
+        foto.MunicipalityDaneCode is { } codigo && municipios.TryGetValue(codigo.Trim(), out var m)
+            ? foto with { CityName = foto.CityName ?? m.Ciudad, DepartmentName = foto.DepartmentName ?? m.Departamento }
+            : foto;
+
     private static FotoFiscalDeEntrada Foto(DocumentPartySnapshot f) => new()
     {
         Version = f.Version,
@@ -163,8 +185,12 @@ public sealed class FuenteDeEmisionDeInventario(
         TaxId = f.TaxId,
         CheckDigit = f.CheckDigit,
         LegalName = f.LegalName,
+        FirstName = f.FirstName,
+        LastName = f.LastName,
         Address = f.Address,
         MunicipalityDaneCode = f.MunicipalityDaneCode,
+        CityName = f.CityName,
+        DepartmentName = f.DepartmentName,
         CountryCode = f.CountryCode,
         Email = f.Email,
         Phone = f.Phone,

@@ -72,6 +72,23 @@ public class FacturacionElectronicaClientTests
     }
 
     [Fact]
+    public async Task Configurar_Conecta_manda_la_cooperativa_el_servicio_y_la_confirmacion_nunca_una_URL_ni_un_secreto()
+    {
+        _servidor.Responder = _ => ServidorDeIntegracion.Json(HttpStatusCode.Created, VigenciaJson());
+        var tenant = Guid.Parse("266f0ee4-20b4-4676-8d76-946ade8e62b4");
+
+        await _cliente.ConfigurarAsync(new ConfiguracionDeEmisionRequest(
+            Mode: "TechnologyProvider", ChannelCode: "CONECTA", Environment: "Production", SoftwareId: null, TestSetId: null,
+            EmailDeliveryBy: "Erp", IsEnabled: true, ValidFrom: new DateOnly(2026, 12, 1), Reason: "Paso a producción",
+            ChannelTenantId: tenant, ChannelEndpoint: "PDN", ConfirmProduction: "PRODUCCION"), new ClaveDeOperacion());
+
+        var cuerpo = _servidor.Vistas.Single().Cuerpo;
+        cuerpo.Should().Contain("\"channelTenantId\":\"266f0ee4-20b4-4676-8d76-946ade8e62b4\"").And.Contain("\"channelEndpoint\":\"PDN\"")
+            .And.Contain("\"confirmProduction\":\"PRODUCCION\"");
+        cuerpo.Should().NotContain("http").And.NotContain("secret", "la URL la fija la instalación y el secreto vive en el Secret");
+    }
+
+    [Fact]
     public async Task La_configuracion_vigente_y_verificar_la_credencial()
     {
         _servidor.Responder = r => r.RequestUri!.AbsolutePath.EndsWith("verify-credential", StringComparison.Ordinal)

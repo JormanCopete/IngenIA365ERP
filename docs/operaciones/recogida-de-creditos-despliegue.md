@@ -131,6 +131,48 @@ ORDER BY s.Status, s.Number;
 
 Anote cuántas hay por estado: la verificación (§3) compara contra este número.
 
+### 1.3 Cancelaciones que usaron el anticipo, ya contabilizadas (enmienda E-17)
+
+Este defecto **no es de la 028**: viene de la 013 y afecta también a la caja. La 028 lo corrige hacia adelante. Cuando una cancelación usaba el
+anticipo del crédito, el comprobante (`RC`, `RR` o el del recibo) lo asentaba como un anticipo **recibido**. Pasaba en la caja con F7, en un pago que
+cancela y en una recogida. El resultado: el puente del recaudo quedaba con **dos veces el anticipo usado** de más, y el anticipo (el pasivo con el
+deudor) no bajaba.
+
+Desde la 028 el comprobante debita el anticipo y acredita el puente. Lo ya contabilizado **no se corrige solo**: lo ajusta la contadora con un
+comprobante manual por cada fila de esta consulta, por dos veces el anticipo usado (débito al puente, crédito al anticipo, con el deudor como tercero).
+El valor del anticipo usado está en el comprobante (la línea del anticipo) y en el mensaje (`amounts` con `reasonCode = AdvanceUsed`).
+
+PostgreSQL:
+
+```sql
+SELECT ap."LoanNumber"            AS credito,
+       ap."OperationDate"         AS fecha,
+       ap."SourceDocumentTypeCode" AS tipo,
+       ap."SourceDocumentNumber"  AS documento,
+       ap."AccountingDocumentId"  AS comprobante_id,
+       m."PublicId"               AS mensaje
+FROM dbo."ACC_LendingPostings" ap
+JOIN dbo."COR_IntegrationMessages" m ON m."PublicId" = ap."MessagePublicId"
+WHERE ap."MessageType" = 'PagoAplicado' AND ap."AccountingDocumentId" IS NOT NULL
+  AND m."PayloadJson" LIKE '%AdvanceUsed%'
+ORDER BY ap."OperationDate", ap."LoanNumber";
+```
+
+SQL Server:
+
+```sql
+SELECT ap.LoanNumber AS credito, ap.OperationDate AS fecha, ap.SourceDocumentTypeCode AS tipo, ap.SourceDocumentNumber AS documento,
+       ap.AccountingDocumentId AS comprobante_id, m.PublicId AS mensaje
+FROM dbo.ACC_LendingPostings ap
+JOIN dbo.COR_IntegrationMessages m ON m.PublicId = ap.MessagePublicId
+WHERE ap.MessageType = 'PagoAplicado' AND ap.AccountingDocumentId IS NOT NULL
+  AND m.PayloadJson LIKE '%AdvanceUsed%'
+ORDER BY ap.OperationDate, ap.LoanNumber;
+```
+
+Si un pago así **se reversa después** del despliegue, el reverso queda bien (ya invertía el signo del anticipo). El ajuste de la contadora sigue
+haciendo falta, porque corrige el comprobante original.
+
 ## 2. Después de desplegar: qué configurar (por cooperativa)
 
 Nada es obligatorio: de fábrica la recogida de créditos funciona como antes, ahora con pantalla. Lo que cada cooperativa decide:

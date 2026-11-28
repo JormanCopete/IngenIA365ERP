@@ -157,10 +157,10 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 ## Fase 12 — Cierre
 
-- [ ] T092 [P] Manual `docs/manual/cartera-recogida-de-creditos.md` (vender, radicar, desembolsar, parámetros, cuota causada, contabilidad, informe) y enlace en `docs/manual/cartera.md`
-- [ ] T093 [P] Actualizar `docs/manual/cartera-desembolso-y-garantias.md` §5, `docs/manual/cartera-libranza-y-pagadurias.md` (crédito cerrado con cuota enviada), el manual de caja (F7) y `docs/manual/cartera-integracion-contable.md` (el puente cuadra solo)
-- [ ] T094 [P] Revisar que ninguna pantalla, informe ni manual nuevo nombre el sistema anterior
-- [ ] T095 Viñeta de la 028 en `CLAUDE.md` y totales remedidos (rutas, páginas, reportes, pruebas)
+- [X] T092 [P] Manual `docs/manual/cartera-recogida-de-creditos.md` (vender, radicar, desembolsar, parámetros, cuota causada, contabilidad, informe) y enlace en `docs/manual/cartera.md`
+- [X] T093 [P] Actualizar `docs/manual/cartera-desembolso-y-garantias.md` §5, `docs/manual/cartera-libranza-y-pagadurias.md` (crédito cerrado con cuota enviada), el manual de caja (F7) y `docs/manual/cartera-integracion-contable.md` (el puente cuadra solo)
+- [X] T094 [P] Revisar que ninguna pantalla, informe ni manual nuevo nombre el sistema anterior
+- [X] T095 Viñeta de la 028 en `CLAUDE.md` y totales remedidos (rutas, páginas, reportes, pruebas)
 
 ## Fase 13 — Pruebas de punta a punta (una sola vez, al final)
 
