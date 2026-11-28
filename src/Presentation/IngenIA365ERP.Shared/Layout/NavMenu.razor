@@ -956,6 +956,13 @@
             <PermissionGate Required="Core.Associates.View">
                 <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
             </PermissionGate>
+            @* 2026-11-28 (pedido del dueño): el listado completo de asociados del centro de informes de Cartera, que se consulta solo al entrar.
+               Son datos personales: pide ver informes de Cartera y Lending.Loans.Read, como la vista. *@
+            <PermissionGate Required="Lending.Reports.View">
+                <PermissionGate Required="Lending.Loans.Read">
+                    <NavLink href="/cartera/informes?vista=associates" class="nav-subitem" Match="NavLinkMatch.All">Listado de asociados</NavLink>
+                </PermissionGate>
+            </PermissionGate>
             @* Beneficiarios no tiene pagina ni API todavia (venia asi desde la primera version); el enlace vuelve con la pantalla. *@
         </NavMenuGroup>
 
