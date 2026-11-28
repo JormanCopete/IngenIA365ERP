@@ -108,6 +108,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
         // Saldos por línea: el libro con el alcance de la petición; la carga, que es de toda la cooperativa, recortada aquí por oficina y línea.
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/LineBalancesReportQuery.cs",
+        // 2026-11-27 (implantación): el resumen de saldos, el detalle por crédito y las cuotas pendientes leen los créditos por
+        // AmbitoDeInformeDeCartera (CarteraAlCorte); los asociados, por las oficinas del alcance; el cuadre con Contabilidad, por la conciliación
+        // contable, que ya aplica el alcance de quien consulta.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PortfolioReportQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/AssociatesAndReconciliationReportQueries.cs",
         // K2 (US10, bloque B; T0818): los archivos de descuento y sus líneas (por los créditos de sus líneas, el 404 fuera), los no aplicados, lo
         // pendiente de giro y las dos vistas de la libranza.
         "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileQueries.cs",
