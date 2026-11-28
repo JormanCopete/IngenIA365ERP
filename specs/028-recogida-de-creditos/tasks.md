@@ -164,10 +164,10 @@ debita 2.300.000 al mismo puente; saldo del puente 0.
 
 ## Fase 13 — Pruebas de punta a punta (una sola vez, al final)
 
-- [ ] T096 Ampliar `TI/Lending/DesembolsoYRecogidaTests.cs`: candidatos → solicitud con proyección → decisión → pago en caja → vista previa con diferencia → desembolso → comprobantes DS/RC con el puente en cero → resultado de Tesorería → liberación de garantías
-- [ ] T097 [P] e2e de libranza: crédito con cuota enviada recogido con `Excluir` y con `Incluir` + `AlCreditoNuevo` en `TI/Lending/RecogidaConCuotaEnviadaTests.cs`
-- [ ] T098 [P] e2e de aportes y facturas (E3, E4) en `TI/Lending/RecogidaDeOtrosProductosTests.cs`
-- [ ] T099 Correr las e2e de Cartera, Recaudo y Contabilidad en PostgreSQL y SQL Server; anotar resultados en `CLAUDE.md`
+- [X] T096 Ampliar `TI/Lending/DesembolsoYRecogidaTests.cs`: candidatos → solicitud con proyección → decisión → pago en caja → vista previa con diferencia → desembolso → comprobantes DS/RC con el puente en cero → resultado de Tesorería → liberación de garantías
+- [X] T097 [P] e2e de libranza: crédito con cuota enviada recogido con `Excluir` y con `Incluir` + `AlCreditoNuevo` en `TI/Lending/RecogidaConCuotaEnviadaTests.cs`
+- [X] T098 [P] e2e de aportes y facturas (E3, E4) en `TI/Lending/RecogidaDeOtrosProductosTests.cs`
+- [X] T099 Correr las e2e de Cartera, Recaudo y Contabilidad en PostgreSQL y SQL Server; anotar resultados en `CLAUDE.md` (2026-11-28: PostgreSQL completa y SQL Server Lending/Receipts/Accounting/Transport; las 028 verdes en los dos motores, lo que falla también falla en develop; las cifras las anota en `CLAUDE.md` la sesión coordinadora)
 - [ ] T100 PR a `develop`; CI verde; avisar a la sesión coordinadora con el diagnóstico que debe correr antes de promover (desembolsos con recogidas y solicitudes con `PayoffRequest` en DEV, QA y PDN)
 
 ## Dependencias
